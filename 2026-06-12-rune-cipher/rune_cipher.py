@@ -516,7 +516,11 @@ def bigram_score(text: str) -> float:
 
 
 def combined_score(text: str) -> float:
-    """Combined scoring: lower frequency + higher bigrams = better.
+    """Combined scoring: normalized frequency + bigrams + trigrams + common words.
+    
+    Uses normalized frequency (divided by sqrt of text length) to reduce
+    small-sample bias, plus bonuses for common English bigrams, trigrams,
+    and words. Lower score = more English-like.
     
     Args:
         text: Text to score.
@@ -524,7 +528,41 @@ def combined_score(text: str) -> float:
     Returns:
         Combined score (lower = more English-like).
     """
-    return frequency_score(text) - bigram_score(text) * 2
+    text_lower = text.lower()
+    letters = [ch for ch in text_lower if ch.isalpha()]
+    if not letters:
+        return float('inf')
+    
+    total = len(letters)
+    counts = Counter(letters)
+    
+    # Frequency score normalized by sqrt(N) to reduce small-sample bias
+    freq_score = 0.0
+    for letter, expected_freq in ENGLISH_FREQ.items():
+        actual_freq = (counts.get(letter, 0) / total) * 100
+        freq_score += (actual_freq - expected_freq) ** 2
+    normalized_freq = freq_score / math.sqrt(total)
+    
+    # Bigram and trigram bonuses
+    bigram_count = bigram_score(text)
+    trigrams = [''.join(letters[i:i+3]) for i in range(len(letters) - 2)]
+    trigram_count = sum(1 for t in trigrams if t in COMMON_TRIGRAMS)
+    
+    # Common word matching — very effective for short texts
+    words = text_lower.split()
+    common_words = {'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all',
+                    'can', 'her', 'was', 'one', 'our', 'out', 'has', 'had',
+                    'his', 'how', 'its', 'may', 'new', 'now', 'old', 'see',
+                    'way', 'who', 'did', 'get', 'let', 'say', 'she', 'too',
+                    'use', 'at', 'be', 'by', 'he', 'in', 'is', 'it', 'of',
+                    'on', 'or', 'so', 'to', 'up', 'we', 'an', 'do', 'if',
+                    'me', 'my', 'no', 'as', 'am', 'go', 'a', 'i', 'world',
+                    'hello', 'from', 'this', 'that', 'with', 'they', 'have',
+                    'been', 'would', 'make', 'like', 'time', 'just', 'know',
+                    'take', 'into', 'over', 'good', 'some', 'could'}
+    word_count = sum(1 for w in words if w in common_words)
+    
+    return normalized_freq - bigram_count * 4 - trigram_count * 8 - word_count * 30
 
 
 def crack_caesar(ciphertext: str) -> list:
@@ -964,16 +1002,11 @@ def interactive():
                 
                 if cipher in ('atbash', 'rot13') and len(sub) >= 2:
                     text = ' '.join(sub[1:])
+                    # Both atbash and rot13 are self-inverse, so encrypt == decrypt
                     if cipher == 'atbash':
                         result = atbash_encrypt(text)
                     else:
                         result = rot13_encrypt(text)
-                    if action == 'decrypt':
-                        # Both are self-inverse for practical purposes
-                        if cipher == 'atbash':
-                            result = atbash_encrypt(text)
-                        else:
-                            result = rot13_encrypt(text)
                     current_text = result
                     print_runic_box(result, f"{cipher.title()} — {action.title()}ed")
                     print(f"\n  ASCII: {result}")

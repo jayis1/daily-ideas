@@ -289,6 +289,30 @@ def test_combined_score():
     assert combined_score(english) < combined_score(gibberish)
 
 
+def test_crack_caesar_short_text():
+    """Crack Caesar should find correct key even for short text like 'khoor zruog'."""
+    plaintext = "hello world"
+    ciphertext = caesar_encrypt(plaintext, 3)
+    candidates = crack_caesar(ciphertext)
+    assert len(candidates) > 0, "Should return candidates"
+    assert candidates[0][1] == plaintext, f"Best match should be '{plaintext}', got '{candidates[0][1]}'"
+
+
+def test_xor_round_trip_special_chars():
+    """XOR round-trip should work with special characters."""
+    for text in ["hello!@#world", "café", "spaces and tabs\there", ""]:
+        enc = xor_encrypt(text, "key")
+        dec = xor_decrypt(enc, "key")
+        assert dec == text, f"Round-trip failed for: {repr(text)}"
+
+
+def test_caesar_large_key():
+    """Caesar with keys > 25 should wrap correctly."""
+    assert caesar_encrypt("hello", 26) == "hello"
+    assert caesar_encrypt("hello", 52) == "hello"
+    assert caesar_decrypt(caesar_encrypt("hello", 29), 29) == "hello"
+
+
 # ── Run all tests ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

@@ -25,9 +25,9 @@ Built-in `analyze` command provides:
 - English likelihood assessment (High/Medium/Low)
 
 ### Cracking Engine
-- **Caesar**: Brute-force all 25 shifts, scored by frequency + bigram analysis
+- **Caesar**: Brute-force all 25 shifts, scored by normalized frequency + bigram + trigram + common word analysis
 - **Vigenère**: Kasiski analysis with Index of Coincidence for key length detection
-- **Substitution**: Hill-climbing with random restarts, optimizing bigram score
+- **Substitution**: Hill-climbing with random restarts, optimizing combined score
 - **Affine**: Brute-force all valid (a, b) pairs
 - Atbash/ROT13: Direct decryption (self-inverse)
 
@@ -83,7 +83,7 @@ python3 rune_cipher.py decrypt --cipher xor --key secret --text "1b 00 0f 1e 0a"
 python3 rune_cipher.py crack --cipher caesar --text "khoor zruog"
 
 # Crack a Vigenère cipher (Kasiski analysis)
-python3 rune_cipher.py crack --cipher vigenere --text "kbr ulcpo slbae"
+python3 rune_cipher.py crack --cipher vigenere --text "rngete glv zbvklrwj ug hrqa"
 
 # Crack an Affine cipher (brute-force valid keys)
 python3 rune_cipher.py crack --cipher affine --text "zrc ivswcvz"
@@ -108,6 +108,8 @@ rune ⟩ encrypt caesar 5 secret message
   ║  Caesar (key=5) — Encrypted         ║
   ║  ᛪᛃᚺᚱᛦ᛬ᛗᛗᛋᛋᚨᚷᛖ                  ║
   ╚══════════════════════════════════════╝
+
+  ASCII: xjhwjy rjjxyf nljjqj
 
 rune ⟩ crack caesar khoor zruog
   [1] Key 3: hello world ← BEST MATCH
@@ -135,12 +137,12 @@ rune ⟩ history
 ### Cracking
 
 The cracker uses:
-- **Caesar**: Brute-force all 25 shifts, scored by English letter frequency + bigram frequency
+- **Caesar**: Brute-force all 25 shifts, scored by normalized letter frequency + bigram + trigram + common word analysis
 - **Vigenère**: Index-of-coincidence to guess key length, then frequency analysis per column
-- **Substitution**: Hill-climbing with random restarts (8 restarts × 500 iterations), optimizing bigram score
+- **Substitution**: Hill-climbing with random restarts (8 restarts × 500 iterations), optimizing combined score
 - **Affine**: Brute-force all valid (a, b) pairs where gcd(a, 26) = 1
 
-Longer ciphertexts produce more accurate results. Short texts (<20 letters) may not crack cleanly.
+Longer ciphertexts produce more accurate results. Short texts (<20 letters) may not crack reliably, though common word matching helps.
 
 ### Affine Cipher
 
@@ -149,9 +151,11 @@ The Affine cipher uses the formula E(x) = (ax + b) mod 26, where `a` must be cop
 ```bash
 # Encrypt with Affine (a=5, b=8)
 python3 rune_cipher.py encrypt --cipher affine --key 5,8 --text "hello"
+# Result: rclla
 
 # Decrypt
 python3 rune_cipher.py decrypt --cipher affine --key 5,8 --text "rclla"
+# Result: hello
 
 # Crack (tries all 312 valid key combinations)
 python3 rune_cipher.py crack --cipher affine --text "rclla"
@@ -163,11 +167,11 @@ XOR encryption is symmetric — encrypting twice with the same key decrypts. Out
 
 ```bash
 # Encrypt
-python3 rune_cipher.py encrypt --cipher xor --key mykey --text "hello"
-# Output: 02 00 0c 0c 06
+python3 rune_cipher.py encrypt --cipher xor --key secret --text "hello"
+# Output: 1b 00 0f 1e 0a
 
 # Decrypt
-python3 rune_cipher.py decrypt --cipher xor --key mykey --text "02 00 0c 0c 06"
+python3 rune_cipher.py decrypt --cipher xor --key secret --text "1b 00 0f 1e 0a"
 # Output: hello
 ```
 
@@ -184,7 +188,7 @@ Outputs: letter frequency chart with English comparison, Index of Coincidence, c
 ```bash
 # Use a keyword to generate the substitution alphabet
 python3 rune_cipher.py encrypt --cipher substitution --key rune --text "hello"
-# Internally generates: runeahijlmopqstuvwxfz (keyword-based alphabet)
+# Internally generates: runeabcdfghijklmopqstvwxyz (keyword-based alphabet)
 ```
 
 ## Runic Alphabet
@@ -192,7 +196,7 @@ python3 rune_cipher.py encrypt --cipher substitution --key rune --text "hello"
 The tool maps A–Z to Elder Futhark runes:
 
 | A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P | Q | R | S | T | U | V | W | X | Y | Z |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | ᚨ | ᛒ | ᚲ | ᛞ | ᛖ | ᚠ | ᚷ | ᚺ | ᛁ | ᛃ | ᚴ | ᛚ | ᛗ | ᚾ | ᛟ | ᛈ | ᛩ | ᚱ | ᛋ | ᛏ | ᚢ | ᚡ | ᚹ | ᛪ | ᛦ | ᛉ |
 
 Spaces render as `᛬`
@@ -203,23 +207,21 @@ Spaces render as `᛬`
 python3 test_rune_cipher.py
 ```
 
-Runs 35 tests covering:
+Runs 38 tests covering:
 - Round-trip encryption/decryption for all 7 ciphers
 - Runic text conversion (text → runes → text)
 - Known-value tests for Caesar, Vigenère, Atbash, Affine
 - Edge cases (empty strings, invalid keys, non-alpha characters)
-- Cracking accuracy tests
+- Cracking accuracy tests (including short text like "khoor zruog")
 - Frequency analysis validation
-- Keyword key generation
+- Keyword key generation and deduplication
+- XOR round-trip with special characters
+- Caesar with large keys (> 25)
 
-## What It Does
+## Changelog
 
-Rune Cipher is an educational cryptography tool that lets you:
-
-1. **Encrypt** plaintext using 7 historical and mathematical ciphers (Caesar, Vigenère, Atbash, ROT13, Substitution, Affine, XOR)
-2. **Decrypt** ciphertext when you know the key
-3. **Crack** ciphertext without knowing the key using statistical analysis (Caesar, Vigenère, Substitution, Affine)
-4. **Analyze** any text's frequency profile with detailed statistics
-5. **Visualize** encrypted output in ancient Norse runes — making your ciphertext look like an archaeologist's puzzle
-
-The interactive mode provides a REPL with history tracking for quick experimentation, while the CLI interface supports scripting, file I/O, and pipelining.
+### v2.0.1 — Bug Fixes
+- **Fixed crack_caesar for short texts**: Improved combined scoring with normalized frequency (divides by √N to reduce small-sample bias), common English word matching, and trigram analysis. "khoor zruog" now correctly decrypts to "hello world" as the top candidate.
+- **Fixed interactive mode atbash/rot13 decrypt**: Removed redundant double-encryption code that overwrote the result with the same computation. Both ciphers are self-inverse, so encrypt and decrypt produce the same result.
+- **Fixed README examples**: Corrected XOR cipher output (was `02 00 0c 0c 06`, should be `05 1c 07 09 16` for key "mykey"), substitution key example (was `runeahijlmopqstuvwxfz`, should be `runeabcdfghijklmopqstvwxyz`), and Vigenère crack example.
+- **Added 3 new tests**: Short-text Caesar cracking, XOR round-trip with special characters, and Caesar with large keys.
