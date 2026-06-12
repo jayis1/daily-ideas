@@ -352,6 +352,10 @@ class DungeonGenerator:
 
         for _ in range(num_monsters):
             room = self.rng.choice(self.rooms)
+            # Fix: skip rooms too small for entity placement (w<=2 or h<=2
+            # causes randint(x+1, x+w-2) to crash when max < min)
+            if room.w <= 2 or room.h <= 2:
+                continue
             mx = self.rng.randint(room.x + 1, room.x + room.w - 2)
             my = self.rng.randint(room.y + 1, room.y + room.h - 2)
             # Pick monster tier based on difficulty
@@ -372,6 +376,10 @@ class DungeonGenerator:
         num_treasures = self.rng.randint(1, max(1, len(self.rooms) // 2))
         for _ in range(num_treasures):
             room = self.rng.choice(self.rooms)
+            # Fix: skip rooms too small for entity placement (w<=2 or h<=2
+            # causes randint crash when max < min)
+            if room.w <= 2 or room.h <= 2:
+                continue
             tx = self.rng.randint(room.x + 1, room.x + room.w - 2)
             ty = self.rng.randint(room.y + 1, room.y + room.h - 2)
             char = self.rng.choice(TREASURE_CHARS)
@@ -416,6 +424,10 @@ class DungeonGenerator:
             if not eligible_rooms:
                 break
             room = self.rng.choice(eligible_rooms)
+            # Fix: skip rooms too small for entity placement (w<=2 or h<=2
+            # causes randint crash when max < min)
+            if room.w <= 2 or room.h <= 2:
+                continue
             nx = self.rng.randint(room.x + 1, room.x + room.w - 2)
             ny = self.rng.randint(room.y + 1, room.y + room.h - 2)
             if self._in_bounds(nx, ny) and self.grid[ny][nx] in (FLOOR, CORRIDOR):
@@ -599,8 +611,12 @@ class DungeonGenerator:
             return self
 
         # If we couldn't generate a connected dungeon after retries,
-        # return whatever we have
-        return self
+        # raise an error rather than returning a broken state silently.
+        # Callers should catch this and retry with different parameters.
+        raise RuntimeError(
+            f"Could not generate a valid dungeon with {len(self.rooms)} rooms "
+            f"(need at least 2). Try increasing map size or reducing room count."
+        )
 
     def render(self) -> str:
         """Render the dungeon as an ASCII string."""
@@ -857,6 +873,15 @@ def validate_config(config: DungeonConfig) -> List[str]:
         errors.append(f"Difficulty must be 1-5, got {config.difficulty}.")
     if config.min_room_size < 2:
         errors.append(f"Room size too small, min_room_size={config.min_room_size}.")
+    # Fix: validate theme to prevent KeyError during generation
+    valid_themes = {"standard", "crypt", "inferno", "forest", "aquatic"}
+    if config.theme not in valid_themes:
+        errors.append(f"Invalid theme '{config.theme}', must be one of: {', '.join(sorted(valid_themes))}.")
+    # Fix: validate that max_room_size can fit on the map
+    max_dim = min(config.width, config.height)
+    if config.max_room_size + 2 > max_dim:
+        errors.append(f"Room size too large (max_room_size={config.max_room_size}) for "
+                      f"a {config.width}×{config.height} map. Maximum room size for this map: {max_dim - 2}.")
     return errors
 
 
@@ -966,13 +991,10 @@ def main():
         sys.exit(1)
 
     generator = DungeonGenerator(config)
-    generator.generate()
-
-    # Check that we got enough rooms
-    if len(generator.rooms) < 2:
-        print("Error: Could not generate a dungeon with enough rooms. "
-              "Try increasing the map size or reducing the number of required rooms.",
-              file=sys.stderr)
+    try:
+        generator.generate()
+    except RuntimeError as e:
+        print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
     if args.export_json:

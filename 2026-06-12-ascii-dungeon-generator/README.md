@@ -212,6 +212,24 @@ Use `--fog` to reveal only areas near entities and stairs:
 
 Dark spaces remain hidden until explored — perfect for solo play or integration into games.
 
+## Known Issues (Resolved)
+
+The following bugs were found and fixed during a systematic bug hunt on 2026-06-12:
+
+1. **CRITICAL — `ValueError` crash with `min_room_size=2`**: The `_add_monsters`, `_add_treasures`, and `_add_npcs` methods used `randint(room.x + 1, room.x + room.w - 2)` which crashes with `ValueError: empty range in randrange` when `room.w <= 2` or `room.h <= 2`. **Fix**: Added a guard to skip rooms too small for entity placement.
+
+2. **`validate_config` didn't validate theme**: Passing an invalid theme (e.g., `"invalid"`) passed validation but caused a `KeyError` crash during generation. **Fix**: Added theme validation against the set of valid themes.
+
+3. **`validate_config` didn't validate room size vs map size**: A 10×10 map with `max_room_size=15` passed validation but couldn't fit rooms. **Fix**: Added a check that `max_room_size + 2` doesn't exceed the smaller map dimension.
+
+4. **`generate()` silently returned broken dungeons**: When room placement repeatedly failed, `generate()` returned `self` with fewer than 2 rooms, silently producing invalid dungeons. **Fix**: Now raises `RuntimeError` with a helpful message instead of returning silently.
+
+5. **`crack_vigenere` returned original ciphertext for short texts**: The `<short>` marker was ambiguous and could be confused with a real decryption key. **Fix**: Changed marker to `<too-short>` for clarity.
+
+6. **`combined_score` word matching ignored punctuation**: Words like `"mat."` wouldn't match `"mat"` in the common words set, reducing `crack_caesar` accuracy for punctuated text. **Fix**: Added `.strip('.,!?;:\'"()')` to strip punctuation before word matching.
+
+7. **`analyze_frequency` IoC division edge case**: When `total == 1`, the IoC formula `n*(n-1)` produces `0`, making the division `0/0`. Python happened to handle this correctly (returning 0), but the edge case was not explicitly guarded. **Fix**: Made the edge case explicit with a clear `if/else` block.
+
 ## License
 
 MIT

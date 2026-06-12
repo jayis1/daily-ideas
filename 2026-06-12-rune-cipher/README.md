@@ -220,6 +220,11 @@ Runs 38 tests covering:
 
 ## Changelog
 
+### v2.0.2 — Bug Hunt Fixes (2026-06-12)
+- **Fixed `crack_vigenere` short-text marker**: Changed `<short>` to `<too-short>` to avoid confusion with a real decryption key.
+- **Fixed `combined_score` punctuation handling**: Words with trailing punctuation (e.g., `"mat."`) now correctly match common words like `"mat"` by stripping punctuation before comparison.
+- **Fixed `analyze_frequency` IoC edge case**: Made the division-by-zero guard for `total <= 1` explicit with a clear `if/else` block instead of a ternary that relied on Python's `0/0 → 0.0` behavior.
+
 ### v2.0.1 — Bug Fixes
 - **Fixed crack_caesar for short texts**: Improved combined scoring with normalized frequency (divides by √N to reduce small-sample bias), common English word matching, and trigram analysis. "khoor zruog" now correctly decrypts to "hello world" as the top candidate.
 - **Fixed interactive mode atbash/rot13 decrypt**: Removed redundant double-encryption code that overwrote the result with the same computation. Both ciphers are self-inverse, so encrypt and decrypt produce the same result.

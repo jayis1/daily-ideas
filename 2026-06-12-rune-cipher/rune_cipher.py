@@ -549,7 +549,8 @@ def combined_score(text: str) -> float:
     trigram_count = sum(1 for t in trigrams if t in COMMON_TRIGRAMS)
     
     # Common word matching — very effective for short texts
-    words = text_lower.split()
+    # Fix: strip punctuation from words so "mat." matches "mat"
+    words = [w.strip('.,!?;:\'"()') for w in text_lower.split()]
     common_words = {'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all',
                     'can', 'her', 'was', 'one', 'our', 'out', 'has', 'had',
                     'his', 'how', 'its', 'may', 'new', 'now', 'old', 'see',
@@ -600,7 +601,9 @@ def crack_vigenere(ciphertext: str, max_key_len: int = 10) -> list:
     """
     ciphertext_clean = ''.join(ch for ch in ciphertext.lower() if ch.isalpha())
     if len(ciphertext_clean) < 12:
-        return [("<short>", ciphertext)]
+        # Fix: return an informative marker instead of the original ciphertext,
+        # so users don't confuse it with a successful decryption
+        return [("<too-short>", ciphertext)]
     
     def find_key_length_candidates(text, max_len):
         """Use Index of Coincidence to find likely key lengths."""
@@ -749,7 +752,11 @@ def analyze_frequency(text: str) -> dict:
     freq = {ch: round((counts.get(ch, 0) / total) * 100, 2) for ch in string.ascii_lowercase}
     
     # Index of Coincidence
-    ic = sum(c * (c - 1) for c in counts.values()) / (total * (total - 1)) if total > 1 else 0
+    # Fix: handle edge case where n <= 1 (division by zero in n*(n-1))
+    if total > 1:
+        ic = sum(c * (c - 1) for c in counts.values()) / (total * (total - 1))
+    else:
+        ic = 0.0
     
     # Bigrams
     bigrams = [''.join(letters[i:i+2]) for i in range(len(letters) - 1)]
