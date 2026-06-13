@@ -3,9 +3,11 @@
 Wave Synth — Terminal Audio Waveform Synthesizer
 
 Generate, visualize, mix, and export audio waveforms entirely from the command line.
-Supports sine, square, sawtooth, triangle, noise, and harmonic waveforms with
-real-time ASCII visualization, envelope shaping, filters, and WAV export.
+Supports sine, square, sawtooth, triangle, noise, harmonic, and chirp waveforms with
+real-time ASCII visualization, envelope shaping, filters, effects, and WAV export.
 """
+
+__version__ = "1.1.0"
 
 import argparse
 import math
@@ -14,6 +16,7 @@ import wave
 import random
 import sys
 import copy
+import os
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
@@ -30,27 +33,34 @@ NOTE_FREQS = {
     'Eb0': 19.42, 'E0': 20.60, 'F0': 21.83, 'F#0': 23.12, 'Gb0': 23.12,
     'G0': 24.50, 'G#0': 25.96, 'Ab0': 25.96, 'A0': 27.50, 'A#0': 29.14,
     'Bb0': 29.14, 'B0': 30.87,
-    'C1': 32.70, 'C#1': 34.65, 'D1': 36.71, 'D#1': 38.89, 'E1': 41.20,
-    'F1': 43.65, 'F#1': 46.25, 'G1': 49.00, 'G#1': 51.91, 'A1': 55.00,
-    'A#1': 58.27, 'B1': 61.74,
-    'C2': 65.41, 'C#2': 69.30, 'D2': 73.42, 'D#2': 77.78, 'E2': 82.41,
-    'F2': 87.31, 'F#2': 92.50, 'G2': 98.00, 'G#2': 103.83, 'A2': 110.00,
-    'A#2': 116.54, 'B2': 123.47,
-    'C3': 130.81, 'C#3': 138.59, 'D3': 146.83, 'D#3': 155.56, 'E3': 164.81,
-    'F3': 174.61, 'F#3': 185.00, 'G3': 196.00, 'G#3': 207.65, 'A3': 220.00,
-    'A#3': 233.08, 'B3': 246.94,
-    'C4': 261.63, 'C#4': 277.18, 'D4': 293.66, 'D#4': 311.13, 'E4': 329.63,
-    'F4': 349.23, 'F#4': 369.99, 'G4': 392.00, 'G#4': 415.30, 'A4': 440.00,
-    'A#4': 466.16, 'B4': 493.88,
-    'C5': 523.25, 'C#5': 554.37, 'D5': 587.33, 'D#5': 622.25, 'E5': 659.25,
-    'F5': 698.46, 'F#5': 739.99, 'G5': 783.99, 'G#5': 830.61, 'A5': 880.00,
-    'A#5': 932.33, 'B5': 987.77,
-    'C6': 1046.50, 'C#6': 1108.73, 'D6': 1174.66, 'D#6': 1244.51, 'E6': 1318.51,
-    'F6': 1396.91, 'F#6': 1479.98, 'G6': 1567.98, 'G#6': 1661.22, 'A6': 1760.00,
-    'A#6': 1864.92, 'B6': 1975.53,
-    'C7': 2093.00, 'C#7': 2217.46, 'D7': 2349.32, 'D#7': 2489.02, 'E7': 2637.02,
-    'F7': 2793.83, 'F#7': 2959.96, 'G7': 3135.96, 'G#7': 3322.44, 'A7': 3520.00,
-    'A#7': 3729.81, 'B7': 3951.07,
+    'C1': 32.70, 'C#1': 34.65, 'Db1': 34.65, 'D1': 36.71, 'D#1': 38.89,
+    'Eb1': 38.89, 'E1': 41.20, 'F1': 43.65, 'F#1': 46.25, 'Gb1': 46.25,
+    'G1': 49.00, 'G#1': 51.91, 'Ab1': 51.91, 'A1': 55.00, 'A#1': 58.27,
+    'Bb1': 58.27, 'B1': 61.74,
+    'C2': 65.41, 'C#2': 69.30, 'Db2': 69.30, 'D2': 73.42, 'D#2': 77.78,
+    'Eb2': 77.78, 'E2': 82.41, 'F2': 87.31, 'F#2': 92.50, 'Gb2': 92.50,
+    'G2': 98.00, 'G#2': 103.83, 'Ab2': 103.83, 'A2': 110.00, 'A#2': 116.54,
+    'Bb2': 116.54, 'B2': 123.47,
+    'C3': 130.81, 'C#3': 138.59, 'Db3': 138.59, 'D3': 146.83, 'D#3': 155.56,
+    'Eb3': 155.56, 'E3': 164.81, 'F3': 174.61, 'F#3': 185.00, 'Gb3': 185.00,
+    'G3': 196.00, 'G#3': 207.65, 'Ab3': 207.65, 'A3': 220.00, 'A#3': 233.08,
+    'Bb3': 233.08, 'B3': 246.94,
+    'C4': 261.63, 'C#4': 277.18, 'Db4': 277.18, 'D4': 293.66, 'D#4': 311.13,
+    'Eb4': 311.13, 'E4': 329.63, 'F4': 349.23, 'F#4': 369.99, 'Gb4': 369.99,
+    'G4': 392.00, 'G#4': 415.30, 'Ab4': 415.30, 'A4': 440.00, 'A#4': 466.16,
+    'Bb4': 466.16, 'B4': 493.88,
+    'C5': 523.25, 'C#5': 554.37, 'Db5': 554.37, 'D5': 587.33, 'D#5': 622.25,
+    'Eb5': 622.25, 'E5': 659.25, 'F5': 698.46, 'F#5': 739.99, 'Gb5': 739.99,
+    'G5': 783.99, 'G#5': 830.61, 'Ab5': 830.61, 'A5': 880.00, 'A#5': 932.33,
+    'Bb5': 932.33, 'B5': 987.77,
+    'C6': 1046.50, 'C#6': 1108.73, 'Db6': 1108.73, 'D6': 1174.66, 'D#6': 1244.51,
+    'Eb6': 1244.51, 'E6': 1318.51, 'F6': 1396.91, 'F#6': 1479.98, 'Gb6': 1479.98,
+    'G6': 1567.98, 'G#6': 1661.22, 'Ab6': 1661.22, 'A6': 1760.00, 'A#6': 1864.92,
+    'Bb6': 1864.92, 'B6': 1975.53,
+    'C7': 2093.00, 'C#7': 2217.46, 'Db7': 2217.46, 'D7': 2349.32, 'D#7': 2489.02,
+    'Eb7': 2489.02, 'E7': 2637.02, 'F7': 2793.83, 'F#7': 2959.96, 'Gb7': 2959.96,
+    'G7': 3135.96, 'G#7': 3322.44, 'Ab7': 3322.44, 'A7': 3520.00, 'A#7': 3729.81,
+    'Bb7': 3729.81, 'B7': 3951.07,
     'C8': 4186.01,
 }
 
@@ -60,6 +70,10 @@ NOTE_FREQS = {
 def generate_sine(freq: float, duration: float, amplitude: float = 1.0,
                   sample_rate: int = SAMPLE_RATE) -> List[float]:
     """Generate a sine wave."""
+    if freq <= 0:
+        raise ValueError(f"Frequency must be positive, got {freq}")
+    if duration <= 0:
+        raise ValueError(f"Duration must be positive, got {duration}")
     n_samples = int(duration * sample_rate)
     return [amplitude * math.sin(2 * math.pi * freq * i / sample_rate)
             for i in range(n_samples)]
@@ -68,6 +82,10 @@ def generate_sine(freq: float, duration: float, amplitude: float = 1.0,
 def generate_square(freq: float, duration: float, amplitude: float = 1.0,
                     sample_rate: int = SAMPLE_RATE) -> List[float]:
     """Generate a square wave."""
+    if freq <= 0:
+        raise ValueError(f"Frequency must be positive, got {freq}")
+    if duration <= 0:
+        raise ValueError(f"Duration must be positive, got {duration}")
     n_samples = int(duration * sample_rate)
     return [amplitude * (1.0 if math.sin(2 * math.pi * freq * i / sample_rate) >= 0 else -1.0)
             for i in range(n_samples)]
@@ -76,6 +94,10 @@ def generate_square(freq: float, duration: float, amplitude: float = 1.0,
 def generate_sawtooth(freq: float, duration: float, amplitude: float = 1.0,
                      sample_rate: int = SAMPLE_RATE) -> List[float]:
     """Generate a sawtooth wave."""
+    if freq <= 0:
+        raise ValueError(f"Frequency must be positive, got {freq}")
+    if duration <= 0:
+        raise ValueError(f"Duration must be positive, got {duration}")
     n_samples = int(duration * sample_rate)
     return [amplitude * (2.0 * ((freq * i / sample_rate) % 1.0) - 1.0)
             for i in range(n_samples)]
@@ -84,6 +106,10 @@ def generate_sawtooth(freq: float, duration: float, amplitude: float = 1.0,
 def generate_triangle(freq: float, duration: float, amplitude: float = 1.0,
                      sample_rate: int = SAMPLE_RATE) -> List[float]:
     """Generate a triangle wave."""
+    if freq <= 0:
+        raise ValueError(f"Frequency must be positive, got {freq}")
+    if duration <= 0:
+        raise ValueError(f"Duration must be positive, got {duration}")
     n_samples = int(duration * sample_rate)
     result = []
     for i in range(n_samples):
@@ -99,6 +125,8 @@ def generate_noise(duration: float, amplitude: float = 1.0,
                   sample_rate: int = SAMPLE_RATE,
                   seed: Optional[int] = None) -> List[float]:
     """Generate white noise."""
+    if duration <= 0:
+        raise ValueError(f"Duration must be positive, got {duration}")
     if seed is not None:
         random.seed(seed)
     n_samples = int(duration * sample_rate)
@@ -108,18 +136,55 @@ def generate_noise(duration: float, amplitude: float = 1.0,
 def generate_harmonic(freq: float, duration: float, amplitude: float = 1.0,
                       harmonics: Optional[List[Tuple[int, float]]] = None,
                       sample_rate: int = SAMPLE_RATE) -> List[float]:
-    """Generate a wave with harmonic overtones. harmonics is a list of (harmonic_number, relative_amplitude)."""
+    """Generate a wave with harmonic overtones.
+
+    harmonics is a list of (harmonic_number, relative_amplitude).
+    """
+    if freq <= 0:
+        raise ValueError(f"Frequency must be positive, got {freq}")
+    if duration <= 0:
+        raise ValueError(f"Duration must be positive, got {duration}")
     if harmonics is None:
         harmonics = [(1, 1.0), (2, 0.5), (3, 0.25), (4, 0.125)]
     n_samples = int(duration * sample_rate)
     result = [0.0] * n_samples
     total_amp = sum(a for _, a in harmonics)
+    if total_amp == 0:
+        total_amp = 1.0  # Avoid division by zero
     for h_num, h_amp in harmonics:
         h_freq = freq * h_num
         if h_freq > sample_rate / 2:
             continue  # Skip above Nyquist
         for i in range(n_samples):
             result[i] += (amplitude * h_amp / total_amp) * math.sin(2 * math.pi * h_freq * i / sample_rate)
+    return result
+
+
+def generate_chirp(start_freq: float, end_freq: float, duration: float,
+                   amplitude: float = 1.0, sample_rate: int = SAMPLE_RATE,
+                   method: str = 'linear') -> List[float]:
+    """Generate a chirp (frequency sweep) from start_freq to end_freq.
+
+    method: 'linear' for linear frequency sweep, 'exponential' for exponential.
+    """
+    if start_freq <= 0 or end_freq <= 0:
+        raise ValueError(f"Frequencies must be positive, got start={start_freq}, end={end_freq}")
+    if duration <= 0:
+        raise ValueError(f"Duration must be positive, got {duration}")
+    n_samples = int(duration * sample_rate)
+    result = []
+    for i in range(n_samples):
+        t = i / sample_rate
+        frac = i / max(n_samples - 1, 1)
+        if method == 'exponential':
+            ratio = end_freq / start_freq
+            phase = 2 * math.pi * start_freq * duration * (
+                ratio ** (t / duration) - 1
+            ) / (math.log(ratio) * duration) if ratio != 1.0 else 2 * math.pi * start_freq * t
+        else:
+            # Linear sweep
+            phase = 2 * math.pi * (start_freq * t + (end_freq - start_freq) * t * t / (2 * duration))
+        result.append(amplitude * math.sin(phase))
     return result
 
 
@@ -130,19 +195,31 @@ WAVE_GENERATORS = {
     'triangle': generate_triangle,
     'noise': lambda f, d, a, sr=SAMPLE_RATE: generate_noise(d, a, sr),
     'harmonic': generate_harmonic,
+    'chirp': None,  # Handled specially — needs start/end freq
 }
+
+# Wave types that don't need a frequency parameter
+NO_FREQ_WAVES = {'noise'}
 
 
 def resolve_freq(note_or_freq: str) -> float:
-    """Resolve a note name (e.g. 'A4') or frequency string to a float."""
-    note = note_or_freq.strip().upper()
-    if note in NOTE_FREQS:
-        return NOTE_FREQS[note]
+    """Resolve a note name (e.g. 'A4', 'Eb3') or frequency string to a float.
+
+    Supports sharps (#) and flats (b) in note names, e.g. 'C#4', 'Eb3'.
+    """
+    raw = note_or_freq.strip()
+    # Try direct lookup first (preserves case-sensitive keys like 'Eb3')
+    if raw in NOTE_FREQS:
+        return NOTE_FREQS[raw]
+    # Try uppercase version (handles 'c4' -> 'C4', 'a#4' -> 'A#4')
+    upper = raw.upper()
+    if upper in NOTE_FREQS:
+        return NOTE_FREQS[upper]
     try:
-        return float(note_or_freq)
+        return float(raw)
     except ValueError:
-        raise ValueError(f"Unknown note or frequency: {note_or_freq!r}. "
-                         f"Examples: 'A4', 'C#5', '440', '261.63'")
+        raise ValueError(f"Unknown note or frequency: {raw!r}. "
+                         f"Examples: 'A4', 'C#5', 'Eb3', '440', '261.63'")
 
 
 # ─── Envelope ────────────────────────────────────────────────────────────────
@@ -201,6 +278,8 @@ def apply_vibrato(samples: List[float], rate: float = 5.0, depth: float = 0.002,
     """Apply vibrato (frequency modulation via delay modulation)."""
     n = len(samples)
     max_delay = int(depth * sample_rate)
+    if max_delay < 1:
+        max_delay = 1
     # Pad with zeros at the beginning for delay
     padded = [0.0] * max_delay + samples
     result = []
@@ -215,6 +294,8 @@ def apply_vibrato(samples: List[float], rate: float = 5.0, depth: float = 0.002,
 def apply_lowpass(samples: List[float], cutoff: float = 1000.0,
                   sample_rate: int = SAMPLE_RATE) -> List[float]:
     """Apply a simple one-pole low-pass filter."""
+    if cutoff <= 0:
+        raise ValueError(f"Cutoff frequency must be positive, got {cutoff}")
     rc = 1.0 / (2.0 * math.pi * cutoff)
     dt = 1.0 / sample_rate
     alpha = dt / (rc + dt)
@@ -228,6 +309,8 @@ def apply_lowpass(samples: List[float], cutoff: float = 1000.0,
 def apply_highpass(samples: List[float], cutoff: float = 1000.0,
                    sample_rate: int = SAMPLE_RATE) -> List[float]:
     """Apply a simple one-pole high-pass filter."""
+    if cutoff <= 0:
+        raise ValueError(f"Cutoff frequency must be positive, got {cutoff}")
     rc = 1.0 / (2.0 * math.pi * cutoff)
     dt = 1.0 / sample_rate
     alpha = rc / (rc + dt)
@@ -239,15 +322,14 @@ def apply_highpass(samples: List[float], cutoff: float = 1000.0,
 
 
 def apply_distortion(samples: List[float], drive: float = 2.0) -> List[float]:
-    """Apply distortion (soft clipping)."""
+    """Apply distortion (soft clipping using tanh approximation)."""
+    if drive <= 0:
+        raise ValueError(f"Drive must be positive, got {drive}")
     result = []
     for s in samples:
         driven = s * drive
-        # Soft clip using tanh-like curve
-        if abs(driven) > 1.0:
-            clipped = math.copysign(1.0, driven)
-        else:
-            clipped = driven
+        # Better soft clip: tanh approximation
+        clipped = math.tanh(driven) / math.tanh(drive) if drive > 0 else s
         result.append(clipped)
     return result
 
@@ -255,6 +337,10 @@ def apply_distortion(samples: List[float], drive: float = 2.0) -> List[float]:
 def apply_delay(samples: List[float], delay_time: float = 0.3, feedback: float = 0.4,
                 mix: float = 0.5, sample_rate: int = SAMPLE_RATE) -> List[float]:
     """Apply a delay/echo effect."""
+    if delay_time <= 0:
+        raise ValueError(f"Delay time must be positive, got {delay_time}")
+    if not 0 <= feedback < 1.0:
+        raise ValueError(f"Feedback must be in [0, 1), got {feedback}")
     n = len(samples)
     delay_samples = int(delay_time * sample_rate)
     result = [0.0] * (n + delay_samples * 3)  # Extra room for echoes
@@ -266,13 +352,13 @@ def apply_delay(samples: List[float], delay_time: float = 0.3, feedback: float =
     # Add delayed signals
     echo = copy.deepcopy(samples)
     fb = feedback
+    current_delay = delay_samples
     while fb > 0.01:
         for i in range(len(echo)):
-            idx = i + delay_samples
+            idx = i + current_delay
             if idx < len(result):
                 result[idx] += echo[i] * fb * mix
-        delay_samples_actual = delay_samples
-        delay_samples += delay_samples_actual
+        current_delay += delay_samples
         fb *= feedback
 
     # Trim and normalize length
@@ -308,6 +394,82 @@ def normalize(samples: List[float], target_peak: float = 0.95) -> List[float]:
     return [s * scale for s in samples]
 
 
+def apply_reverse(samples: List[float]) -> List[float]:
+    """Reverse the waveform (backwards playback)."""
+    return list(reversed(samples))
+
+
+def apply_ring_mod(samples: List[float], freq: float = 100.0,
+                   sample_rate: int = SAMPLE_RATE) -> List[float]:
+    """Apply ring modulation with a carrier frequency."""
+    if freq <= 0:
+        raise ValueError(f"Carrier frequency must be positive, got {freq}")
+    return [s * math.sin(2 * math.pi * freq * i / sample_rate)
+            for i, s in enumerate(samples)]
+
+
+def apply_bitcrush(samples: List[float], bits: int = 8) -> List[float]:
+    """Reduce bit depth for a lo-fi crunchy sound. bits: target bit depth (1-16)."""
+    bits = max(1, min(16, int(bits)))
+    levels = 2 ** bits
+    return [round(s * levels / 2) / (levels / 2) for s in samples]
+
+
+def apply_reverb(samples: List[float], decay: float = 0.3,
+                 delays: Optional[List[float]] = None,
+                 sample_rate: int = SAMPLE_RATE) -> List[float]:
+    """Apply a simple multi-tap reverb effect.
+
+    decay: 0.0-1.0, how much reverb tail (0=dry, 1=infinite)
+    delays: list of delay times in seconds (default: simulated room reflections)
+    """
+    if delays is None:
+        # Simulated room reflections at different distances
+        delays = [0.023, 0.037, 0.041, 0.053, 0.067, 0.079]
+
+    result = list(samples)
+    for delay_s in delays:
+        delay_samples = int(delay_s * sample_rate)
+        for i in range(delay_samples, len(result)):
+            result[i] += result[i - delay_samples] * decay
+
+    # Normalize to prevent clipping
+    peak = max(abs(s) for s in result) if result else 0
+    if peak > 1.0:
+        result = [s / peak for s in result]
+    return result
+
+
+def apply_pitch_shift(samples: List[float], semitones: float = 0.0,
+                      sample_rate: int = SAMPLE_RATE) -> List[float]:
+    """Simple pitch shift by resampling (changes duration as a side effect).
+
+    Positive semitones shift up, negative shifts down.
+    Uses linear interpolation for resampling.
+    """
+    if semitones == 0:
+        return list(samples)
+
+    ratio = 2.0 ** (semitones / 12.0)
+    new_length = int(len(samples) / ratio)
+    if new_length == 0:
+        return [0.0]
+
+    result = []
+    for i in range(new_length):
+        src_pos = i * ratio
+        idx = int(src_pos)
+        frac = src_pos - idx
+        if idx + 1 < len(samples):
+            val = samples[idx] * (1.0 - frac) + samples[idx + 1] * frac
+        elif idx < len(samples):
+            val = samples[idx]
+        else:
+            val = 0.0
+        result.append(val)
+    return result
+
+
 EFFECTS = {
     'tremolo': apply_tremolo,
     'vibrato': apply_vibrato,
@@ -319,6 +481,11 @@ EFFECTS = {
     'fadeout': apply_fade_out,
     'normalize': normalize,
     'adsr': apply_adsr,
+    'reverse': apply_reverse,
+    'ringmod': apply_ring_mod,
+    'bitcrush': apply_bitcrush,
+    'reverb': apply_reverb,
+    'pitchshift': apply_pitch_shift,
 }
 
 
@@ -405,7 +572,7 @@ def visualize_ascii(samples: List[float], width: int = TERMINAL_WIDTH,
 
 def visualize_spectrum_ascii(samples: List[float], width: int = TERMINAL_WIDTH,
                             height: int = 10) -> str:
-    """Render a simple ASCII frequency spectrum approximation using zero-crossing analysis."""
+    """Render a simple ASCII frequency spectrum approximation using DFT."""
     if len(samples) < 2:
         return "(not enough samples for spectrum)"
 
@@ -486,7 +653,7 @@ def print_waveform_info(samples: List[float], name: str = "Waveform",
 # ─── WAV Export ──────────────────────────────────────────────────────────────
 
 def export_wav(samples: List[float], filename: str,
-               sample_rate: int = SAMPLE_RATE) -> None:
+              sample_rate: int = SAMPLE_RATE) -> None:
     """Export samples as a 16-bit mono WAV file."""
     # Normalize to prevent clipping
     peak = max(abs(s) for s in samples) if samples else 0
@@ -507,9 +674,58 @@ def export_wav(samples: List[float], filename: str,
         wf.writeframes(data)
 
     # Print file size
-    import os
     size = os.path.getsize(filename)
     print(f"  Exported: {filename} ({size:,} bytes, {len(samples)/sample_rate:.2f}s)")
+
+
+def import_wav(filename: str) -> Tuple[List[float], int]:
+    """Import samples from a 16-bit mono WAV file.
+
+    Returns (samples, sample_rate).
+    """
+    if not os.path.exists(filename):
+        raise FileNotFoundError(f"WAV file not found: {filename}")
+
+    with wave.open(filename, 'r') as wf:
+        n_channels = wf.getnchannels()
+        sampwidth = wf.getsampwidth()
+        sample_rate = wf.getframerate()
+        n_frames = wf.getnframes()
+        raw_data = wf.readframes(n_frames)
+
+    if sampwidth == 2:
+        # 16-bit
+        fmt = '<h' if n_channels == 1 else f'<{n_channels}h'
+        samples = []
+        for i in range(0, len(raw_data), sampwidth * n_channels):
+            if n_channels == 1:
+                val = struct.unpack('<h', raw_data[i:i+2])[0]
+                samples.append(val / MAX_AMPLITUDE)
+            else:
+                # Mix down to mono by averaging channels
+                frame_vals = []
+                for ch in range(n_channels):
+                    offset = i + ch * 2
+                    val = struct.unpack('<h', raw_data[offset:offset+2])[0]
+                    frame_vals.append(val)
+                samples.append(sum(frame_vals) / (len(frame_vals) * MAX_AMPLITUDE))
+    elif sampwidth == 1:
+        # 8-bit unsigned
+        samples = []
+        for i in range(0, len(raw_data), n_channels):
+            if n_channels == 1:
+                val = raw_data[i]
+                samples.append((val - 128) / 128.0)
+            else:
+                frame_vals = []
+                for ch in range(n_channels):
+                    val = raw_data[i + ch]
+                    frame_vals.append((val - 128) / 128.0)
+                samples.append(sum(frame_vals) / len(frame_vals))
+    else:
+        raise ValueError(f"Unsupported sample width: {sampwidth} bits. Only 8 and 16-bit WAV files are supported.")
+
+    return samples, sample_rate
 
 
 # ─── Chord / Arpeggio Generation ────────────────────────────────────────────
@@ -536,31 +752,31 @@ def note_to_freq(note_name: str) -> float:
     # Parse note letter and octave
     if len(note) < 2:
         return float(note)
-    
+
     letter = note[0].upper()
     accidental = ''
     octave_str = ''
-    
+
     i = 1
     while i < len(note) and note[i] in '#b':
         accidental += note[i]
         i += 1
     octave_str = note[i:]
-    
+
     if not octave_str:
         # Try as a frequency
         try:
             return float(note)
         except ValueError:
             octave_str = '4'
-    
+
     # Build the note key
     key = letter + accidental + octave_str
     key_upper = key.upper().replace('B', 'b')
-    
+
     if key_upper in NOTE_FREQS:
         return NOTE_FREQS[key_upper]
-    
+
     # Manual calculation
     try:
         semitone = NOTE_ORDER.index(letter + accidental.replace('b', '').replace('#', '#') if accidental else '')
@@ -611,6 +827,7 @@ def generate_arpeggio(root_freq: float, chord_type: str, duration: float,
 def generate_melody(notes: List[Tuple[str, float]], wave_type: str = 'sine',
                     amplitude: float = 0.8, sample_rate: int = SAMPLE_RATE) -> List[float]:
     """Generate a melody from a list of (note, duration) tuples.
+
     Notes can be note names like 'C4', 'A#3', rests use 'R' or 'rest'.
     Duration is in seconds.
     """
@@ -658,16 +875,19 @@ def interactive_mode():
     """Run an interactive wave synthesizer session."""
     print("╔══════════════════════════════════════════════════════════════╗")
     print("║              🎵  WAVE SYNTH — Interactive Mode  🎵          ║")
+    print(f"║                    version {__version__:<24}            ║")
     print("╚══════════════════════════════════════════════════════════════╝")
     print()
     print("Commands:")
     print("  gen <wave> <freq/note> <duration>  — Generate waveform")
+    print("  chirp <start_freq> <end_freq> <dur> — Generate chirp/sweep")
     print("  effect <name> [params]             — Apply effect to current wave")
     print("  adsr <a> <d> <s> <r>               — Apply ADSR envelope")
     print("  mix <idx1> <idx2> [w1] [w2]        — Mix two stored waves")
     print("  chord <root> <type> <duration>     — Generate chord")
     print("  arp <root> <type> <duration>        — Generate arpeggio")
     print("  melody <preset>                     — Generate preset melody")
+    print("  import <filename>                  — Import WAV file")
     print("  viz                                 — Visualize current waveform")
     print("  spectrum                            — Show frequency spectrum")
     print("  info                                — Show waveform info")
@@ -677,8 +897,9 @@ def interactive_mode():
     print("  help                                 — Show this help")
     print("  quit                                 — Exit")
     print()
-    print(f"  Wave types: sine, square, sawtooth, triangle, noise, harmonic")
-    print(f"  Effects: tremolo, vibrato, lowpass, highpass, distortion, delay, fadein, fadeout, normalize, adsr")
+    print(f"  Wave types: sine, square, sawtooth, triangle, noise, harmonic, chirp")
+    print(f"  Effects: tremolo, vibrato, lowpass, highpass, distortion, delay,")
+    print(f"           fadein, fadeout, normalize, reverse, ringmod, bitcrush, reverb, pitchshift")
     print(f"  Chord types: {', '.join(CHORD_INTERVALS.keys())}")
     print(f"  Melody presets: {', '.join(MELODY_PRESETS.keys())}")
     print()
@@ -714,8 +935,8 @@ def interactive_mode():
                 wave_type = parts[1].lower()
                 freq = resolve_freq(parts[2])
                 duration = float(parts[3])
-                if wave_type not in WAVE_GENERATORS:
-                    print(f"Unknown wave type: {wave_type}. Available: {', '.join(WAVE_GENERATORS.keys())}")
+                if wave_type not in WAVE_GENERATORS or WAVE_GENERATORS[wave_type] is None:
+                    print(f"Unknown wave type: {wave_type}. Available: {', '.join(k for k,v in WAVE_GENERATORS.items() if v is not None)}")
                     continue
                 gen = WAVE_GENERATORS[wave_type]
                 if wave_type == 'noise':
@@ -723,6 +944,20 @@ def interactive_mode():
                 else:
                     samples = gen(freq, duration, 1.0, SAMPLE_RATE)
                 name = f"{wave_type}_{parts[2]}_{duration}s"
+                current = samples
+                waves.append((name, samples))
+                print(f"  Generated {name} ({len(samples)} samples)")
+
+            elif action == 'chirp':
+                if len(parts) < 4:
+                    print("Usage: chirp <start_freq> <end_freq> <duration> [linear|exponential]")
+                    continue
+                start_freq = resolve_freq(parts[1])
+                end_freq = resolve_freq(parts[2])
+                duration = float(parts[3])
+                method = parts[4].lower() if len(parts) > 4 else 'linear'
+                samples = generate_chirp(start_freq, end_freq, duration, 1.0, SAMPLE_RATE, method)
+                name = f"chirp_{parts[1]}_{parts[2]}_{duration}s"
                 current = samples
                 waves.append((name, samples))
                 print(f"  Generated {name} ({len(samples)} samples)")
@@ -735,8 +970,8 @@ def interactive_mode():
                     print(f"Available effects: {', '.join(EFFECTS.keys())}")
                     continue
                 effect_name = parts[1].lower()
-                if effect_name not in EFFECTS and effect_name != 'adsr':
-                    print(f"Unknown effect: {effect_name}")
+                if effect_name not in EFFECTS:
+                    print(f"Unknown effect: {effect_name}. Available: {', '.join(EFFECTS.keys())}")
                     continue
 
                 if effect_name == 'tremolo':
@@ -784,6 +1019,25 @@ def interactive_mode():
                     r = float(parts[5]) if len(parts) > 5 else 0.1
                     current = apply_adsr(current, a, d, s, r)
                     print(f"  Applied ADSR (A={a}, D={d}, S={s}, R={r})")
+                elif effect_name == 'reverse':
+                    current = apply_reverse(current)
+                    print("  Reversed waveform")
+                elif effect_name == 'ringmod':
+                    freq = float(parts[2]) if len(parts) > 2 else 100.0
+                    current = apply_ring_mod(current, freq)
+                    print(f"  Applied ring modulation (carrier={freq}Hz)")
+                elif effect_name == 'bitcrush':
+                    bits = int(parts[2]) if len(parts) > 2 else 8
+                    current = apply_bitcrush(current, bits)
+                    print(f"  Applied bitcrush ({bits}-bit)")
+                elif effect_name == 'reverb':
+                    decay = float(parts[2]) if len(parts) > 2 else 0.3
+                    current = apply_reverb(current, decay)
+                    print(f"  Applied reverb (decay={decay})")
+                elif effect_name == 'pitchshift':
+                    semitones = float(parts[2]) if len(parts) > 2 else 0.0
+                    current = apply_pitch_shift(current, semitones)
+                    print(f"  Applied pitch shift ({semitones:+.1f} semitones)")
 
                 waves.append((f"effect_{effect_name}", current))
 
@@ -843,6 +1097,20 @@ def interactive_mode():
                 name = f"melody_{preset}"
                 waves.append((name, current))
                 print(f"  Generated {name} ({len(current)} samples)")
+
+            elif action == 'import':
+                if len(parts) < 2:
+                    print("Usage: import <filename.wav>")
+                    continue
+                filename = parts[1]
+                try:
+                    samples, sr = import_wav(filename)
+                    name = os.path.basename(filename).replace('.wav', '')
+                    current = samples
+                    waves.append((name, samples))
+                    print(f"  Imported {filename} ({len(samples)} samples, {sr}Hz)")
+                except Exception as e:
+                    print(f"  Import error: {e}")
 
             elif action == 'viz' or action == 'visualize':
                 if current is None:
@@ -907,12 +1175,23 @@ Examples:
   %(prog)s sine A4 2                          Generate 2s sine at A4 (440Hz)
   %(prog)s square 220 1 --effect tremolo       Square wave with tremolo
   %(prog)s triangle C4 3 --export output.wav   Export triangle wave to WAV
-  %(prog)s harmonic E4 2 --harmonics 1,1 2,0.5 3,0.25  Custom harmonics
+  %(prog)s harmonic E4 2 --harmonics "1,1 2,0.5 3,0.25"  Custom harmonics
   %(prog)s chord C4 maj 2 --wave sawtooth     C major chord (sawtooth)
   %(prog)s arp A3 min7 3                       A minor 7 arpeggio
   %(prog)s melody twinkle --wave triangle      Twinkle Twinkle melody
+  %(prog)s chirp 200 2000 3                    Frequency sweep 200-2000Hz
+  %(prog)s sine A4 2 --effect reverb:0.4       Sine with reverb
+  %(prog)s sine A4 2 --effect bitcrush:4       4-bit crushed sine
   %(prog)s --interactive                       Start interactive mode
   %(prog)s --spectrum sine A4 1               Show frequency spectrum
+
+Effects: tremolo, vibrato, lowpass, highpass, distortion, delay, fadein,
+         fadeout, normalize, reverse, ringmod, bitcrush, reverb, pitchshift
+
+Effect parameters:
+  tremolo:RATE:DEPTH  vibrato:RATE:DEPTH  lowpass:CUTOFF  highpass:CUTOFF
+  distortion:DRIVE    delay:TIME:FEEDBACK  fadein:DURATION  fadeout:DURATION
+  ringmod:FREQ        bitcrush:BITS        reverb:DECAY     pitchshift:SEMITONES
         """)
 
     parser.add_argument('wave_type', nargs='?', choices=list(WAVE_GENERATORS.keys()) + ['chord', 'arp', 'melody'],
@@ -921,15 +1200,19 @@ Examples:
 
     parser.add_argument('--interactive', '-i', action='store_true',
                         help='Start interactive mode')
+    parser.add_argument('--version', '-V', action='version',
+                        version=f'Wave Synth v{__version__}')
     parser.add_argument('--wave', '-w', default='sine',
-                        choices=list(WAVE_GENERATORS.keys()),
+                        choices=[k for k in WAVE_GENERATORS.keys() if WAVE_GENERATORS[k] is not None],
                         help='Wave type for chord/arp/melody (default: sine)')
     parser.add_argument('--amplitude', '-a', type=float, default=0.8,
                         help='Amplitude 0-1 (default: 0.8)')
     parser.add_argument('--export', '-e', metavar='FILE',
                         help='Export to WAV file')
+    parser.add_argument('--import-wav', metavar='FILE',
+                        help='Import WAV file and apply effects/visualize')
     parser.add_argument('--effect', '-f', action='append',
-                        help='Apply effect (e.g. tremolo, lowpass:1000, distortion:3)')
+                        help='Apply effect (e.g. tremolo, lowpass:1000, distortion:3, reverb:0.4)')
     parser.add_argument('--adsr', metavar='A,D,S,R',
                         help='Apply ADSR envelope (e.g. 0.01,0.1,0.7,0.2)')
     parser.add_argument('--chord-type', '-c', default='maj',
@@ -937,10 +1220,14 @@ Examples:
                         help='Chord type (for chord/arp commands)')
     parser.add_argument('--harmonics', metavar='N,A ...',
                         help='Custom harmonics for harmonic wave (e.g. "1,1 2,0.5 3,0.25")')
+    parser.add_argument('--sweep-method', choices=['linear', 'exponential'], default='linear',
+                        help='Chirp sweep method: linear or exponential (default: linear)')
     parser.add_argument('--spectrum', '-s', action='store_true',
                         help='Show frequency spectrum instead of waveform')
     parser.add_argument('--info', action='store_true',
                         help='Show waveform info')
+    parser.add_argument('--quiet', '-q', action='store_true',
+                        help='Suppress visualization output')
     parser.add_argument('--seed', type=int,
                         help='Random seed for noise generation')
     parser.add_argument('--width', type=int, default=TERMINAL_WIDTH,
@@ -954,7 +1241,7 @@ Examples:
         interactive_mode()
         return
 
-    if not args.wave_type:
+    if not args.wave_type and not args.import_wav:
         parser.print_help()
         return
 
@@ -983,7 +1270,16 @@ Examples:
     # Generate waveform
     samples = None
 
-    if args.wave_type in ('chord', 'arp'):
+    # Handle WAV import
+    if args.import_wav:
+        try:
+            samples, imported_sr = import_wav(args.import_wav)
+            print(f"  Imported: {args.import_wav} ({len(samples)} samples, {imported_sr}Hz)")
+        except Exception as e:
+            print(f"  Import error: {e}")
+            return
+
+    elif args.wave_type in ('chord', 'arp'):
         # chord C4 maj 2 | chord C4 2 (uses --chord-type)
         # arp A3 min7 3 | arp A3 3 (uses --chord-type)
         note = remaining[0] if len(remaining) >= 1 else None
@@ -1020,6 +1316,16 @@ Examples:
             print(f"Melody presets: {', '.join(MELODY_PRESETS.keys())}")
             return
 
+    elif args.wave_type == 'chirp':
+        # chirp <start_freq> <end_freq> <duration>
+        if len(remaining) < 3:
+            print("Chirp requires start_freq, end_freq, and duration. Usage: chirp <start_freq> <end_freq> <duration>")
+            return
+        start_freq = resolve_freq(remaining[0])
+        end_freq = resolve_freq(remaining[1])
+        duration = float(remaining[2])
+        samples = generate_chirp(start_freq, end_freq, duration, args.amplitude, SAMPLE_RATE, args.sweep_method)
+
     else:
         # Standard wave: sine A4 2 | noise 1 | harmonic C4 2
         if len(remaining) < 1:
@@ -1054,39 +1360,42 @@ Examples:
                 samples = gen(freq, duration, args.amplitude)
 
     # Apply ADSR
-    if adsr_params:
+    if adsr_params and samples:
         samples = apply_adsr(samples, *adsr_params)
 
     # Apply effects
-    for eff_name, params in effects_to_apply:
-        if eff_name in EFFECTS:
-            func = EFFECTS[eff_name]
-            try:
-                samples = func(samples, *params)
-            except TypeError:
-                samples = func(samples)
-            print(f"  Applied: {eff_name}")
-        else:
-            print(f"  Unknown effect: {eff_name}")
+    if samples:
+        for eff_name, params in effects_to_apply:
+            if eff_name in EFFECTS:
+                func = EFFECTS[eff_name]
+                try:
+                    samples = func(samples, *params)
+                except TypeError:
+                    samples = func(samples)
+                print(f"  Applied: {eff_name}")
+            else:
+                print(f"  Unknown effect: {eff_name}")
 
     # Normalize before export
-    if args.export:
+    if args.export and samples:
         samples = normalize(samples, 0.95)
 
     # Output
-    label = args.wave_type
+    label = args.wave_type or "imported"
     if remaining:
         label += '_' + '_'.join(str(r) for r in remaining)
-    if args.info:
+
+    if args.info and samples:
         print(print_waveform_info(samples, label))
         print()
 
-    if args.spectrum:
-        print(visualize_spectrum_ascii(samples, args.width, args.height))
-    else:
-        print(visualize_ascii(samples, args.width, args.height))
+    if not args.quiet and samples:
+        if args.spectrum:
+            print(visualize_spectrum_ascii(samples, args.width, args.height))
+        else:
+            print(visualize_ascii(samples, args.width, args.height))
 
-    if args.export:
+    if args.export and samples:
         export_wav(samples, args.export)
 
 
