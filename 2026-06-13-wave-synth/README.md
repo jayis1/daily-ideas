@@ -1,6 +1,6 @@
 # 🎵 Wave Synth — Terminal Audio Waveform Synthesizer
 
-**Version 1.2.1** — A command-line tool for generating, visualizing, mixing, and exporting audio waveforms entirely from your terminal.
+**Version 1.2.2** — A command-line tool for generating, visualizing, mixing, and exporting audio waveforms entirely from your terminal.
 
 Generate sine, square, sawtooth, triangle, pulse, noise, harmonic, and chirp waveforms. Apply effects like tremolo, distortion, reverb, compressor, flanger, and more. Visualize as ASCII art or export as WAV files.
 
@@ -24,6 +24,7 @@ Generate sine, square, sawtooth, triangle, pulse, noise, harmonic, and chirp wav
 - **`__all__` exports**: Clean public API for programmatic use
 - **Comprehensive docstrings**: All functions fully documented with Args/Returns/Raises
 - **Robust error handling**: Invalid CLI parameters produce helpful messages instead of crashes
+- **Minimum 1-sample guarantee**: All wave generators produce at least 1 sample for any positive duration
 
 ## Installation
 
@@ -211,68 +212,53 @@ Note: `export_wav()` prints its status message to **stderr** (not stdout), so it
 
 All public functions are exported via `__all__`.
 
-## What's New
+## Changelog
+
+### v1.2.2 — Bug Fix Release
+
+**Bugs fixed:**
+- **Wave generators now produce at least 1 sample for very short durations**: Previously, `generate_sine(440, 0.00001)` returned an empty list because `int(0.00001 * 44100) = 0`. All 8 wave generators (sine, square, sawtooth, triangle, pulse, noise, harmonic, chirp) now use `max(1, int(duration * sample_rate))` to guarantee at least 1 sample for any positive duration.
+- **Fade-in/out on single-sample input no longer silences the signal**: `apply_fade_in([0.8], 0.01)` and `apply_fade_out([0.8], 0.01)` previously returned `[0.0]` because the fade formula `i/n` yields 0 for i=0 when n=1. Now, when the fade covers 0 or 1 samples, the functions return a copy of the input unchanged.
+- **Visualization scale labels no longer overwrite waveform data**: The `+1.0`, `0.0`, and `-1.0` labels were inserted at column 2 inside the waveform frame, corrupting the displayed waveform. Now the labels appear as a left-side column *outside* the frame, preserving the waveform integrity.
+- **ADSR on empty input now returns empty list explicitly**: Added early return for empty samples in `apply_adsr()` for clarity, though the existing `[0.0] * n` pattern already handled this.
+- **Fixed duplicate `unittest.main()` call** in test file.
+
+**Tests:** 133 tests (up from 124), adding 9 new tests:
+- `test_fade_in_single_sample` — fade-in on 1 sample preserves the value
+- `test_fade_out_single_sample` — fade-out on 1 sample preserves the value
+- `test_fade_in_two_samples` — fade-in on 2 samples starts quiet
+- `test_fade_out_two_samples` — fade-out on 2 samples ends quiet
+- `test_generator_minimum_one_sample` — very short duration sine produces ≥1 sample
+- `test_generator_all_minimum_one_sample` — all generators produce ≥1 sample
+- `test_pulse_minimum_one_sample` — pulse wave produces ≥1 sample for short durations
+- `test_visualize_scale_labels_dont_corrupt_data` — labels appear as prefix, not inside frame
+- `test_adsr_empty_samples` — ADSR on empty input returns empty
 
 ### v1.2.1 — Bug Fix Release
 
-**Bug fixes:**
-- **Compressor math corrected**: The compressor was treating linear amplitude differences as dB values, producing nearly no effect. Now uses proper dB conversion (`20 * log10`) for gain computation, and `ratio=1.0` correctly passes signal through unchanged.
-- **`generate_noise()` no longer mutates global random state**: Previously, calling `generate_noise(seed=42)` would affect subsequent `random.random()` calls in the calling code. Now the global random state is saved before seeding and restored after generation.
-- **`apply_delay()` performance fix**: Replaced `copy.deepcopy(samples)` with `list(samples)`, giving ~35% speedup for delay processing. The `import copy` statement was removed.
-- **`export_wav()` prints to stderr**: The "Exported: ..." message now goes to `sys.stderr` instead of `stdout`, so it won't interfere with piped output in library/CLI usage.
-- **CLI crash on invalid effect parameters**: Passing non-numeric values like `--effect lowpass:abc` no longer crashes with an uncaught `ValueError`. Now prints a helpful error message and exits gracefully.
-- **CLI crash on invalid ADSR parameters**: Similarly, `--adsr abc,0.1,0.7,0.2` no longer crashes.
-- **Interactive mode hardcodes fixed**: `gen`, `pulse`, and `chirp` commands now accept an optional amplitude parameter (default 0.8) instead of being hardcoded to 1.0. Help text updated accordingly.
-- **Spectrum visualization performance**: `visualize_spectrum_ascii()` now downsamples long signals (>16384 samples) before computing the DFT, making it practical for 5+ second audio instead of taking minutes.
-
-**Tests:**
-- 124 tests (up from 113), adding 11 new tests for the bug fixes:
-  - `test_noise_seed_preserves_global_state` — verifies random state is not mutated
-  - `test_noise_deterministic_with_seed_after_state_fix` — verifies seed still works
-  - `test_compressor_ratio_one_is_noop` — verifies ratio=1 passes signal through
-  - `test_compressor_actually_reduces_peak` — verifies compressor reduces peaks with proper dB math
-  - `test_delay_no_deepcopy` — verifies delay performance with list copy
-  - `test_export_wav_prints_to_stderr` — verifies no stdout pollution
-  - `test_spectrum_fast_on_long_signal` — verifies spectrum is fast on long signals
-  - Plus existing tests updated for the new compressor behavior
+- **Compressor math corrected**: Proper dB conversion (`20 * log10`) for gain computation; `ratio=1.0` passes signal through unchanged.
+- **`generate_noise()` no longer mutates global random state**: Global state saved/restored around seeding.
+- **`apply_delay()` performance fix**: Replaced `copy.deepcopy(samples)` with `list(samples)`.
+- **`export_wav()` prints to stderr**: Won't interfere with piped output.
+- **CLI crash on invalid effect/ADSR parameters**: Non-numeric values produce helpful error messages.
+- **Interactive mode amplitude**: `gen`, `pulse`, `chirp` commands accept optional amplitude (default 0.8).
+- **Spectrum visualization performance**: Downsampling for signals >16384 samples.
 
 ### v1.2.0 — Feature Release
 
-**New features:**
-- **Pulse wave generator** (`generate_pulse`) — variable duty cycle rectangular wave
-- **Compressor effect** (`apply_compressor`) — dynamics processing with threshold, ratio, attack, and release
-- **Flanger effect** (`apply_flanger`) — classic sweeping modulated delay
-- **Melody transposition** (`transpose_melody`) — shift melodies up/down by semitones
-- **`--list-notes` and `--list-chords` CLI flags** — reference tables for all notes and chords
-- **`--duty` flag** for pulse wave duty cycle control
-- **3 new chord types**: `add9`, `6`, `9`
-- **2 new melody presets**: `fur_elise`, `amazing_grace`
-- **`_generate_wave_for_type()` helper** — unified wave generation for chords/arps/melodies
-- **`EFFECT_DESCRIPTIONS` dict** — human-readable descriptions for all effects
-- **`__all__` exports** — clean public API
-- **Enhanced `print_waveform_info()`** — now shows DC offset, crest factor, and sample rate
-- **Comprehensive docstrings** on all public functions with Args/Returns/Raises
-- **`export_wav()` validates empty input** — raises `ValueError` on empty samples
-- **Empty sample handling** added to tremolo, vibrato, delay, ring_mod, reverb, flanger, fade_in, fade_out, bitcrush, and compressor
+- Pulse wave, compressor, flanger, melody transposition, `--list-notes`, `--list-chords`, `--duty`, 3 chord types, 2 melody presets, `__all__` exports, enhanced `print_waveform_info`, comprehensive docstrings.
 
 ### v1.1.1 — Bug Fix Release
 
-- Fixed `note_to_freq` corrupted B notes
-- Fixed `resolve_freq` failed on lowercase flat notes
-- Fixed `generate_chord`/`generate_arpeggio`/`generate_melody` crashed with harmonic/chirp wave types
-- Fixed `lowpass`/`highpass` crashed on empty samples
-- Fixed `pitch_shift` returned `[0.0]` on empty input
-- Fixed `distortion` with `drive=0` raised `ValueError`
-- Fixed `mix_waves` with all-zero weights caused `ZeroDivisionError`
-- Fixed `visualize_ascii` scale labels shifting row indices
+- Fixed `note_to_freq` corrupted B notes, `resolve_freq` lowercase flats, chord/harmonic/chirp crashes, empty-sample crashes, distortion drive=0, mix zero-weight division, visualization scale label row shift.
 
 ### v1.1.0 — Feature Release
 
-- Added chirp/sweep waveform, 5 effects (reverse, ring mod, bitcrush, reverb, pitch shift), WAV import, `--version`/`-V`, `--quiet`/`-q`, interactive mode enhancements
+- Chirp/sweep, 5 effects (reverse, ring mod, bitcrush, reverb, pitch shift), WAV import, `--version`, `--quiet`, interactive mode enhancements.
 
 ### v1.0.0 — Initial Release
 
-- Basic waveform generation, effects, visualization, WAV export
+- Basic waveform generation, effects, visualization, WAV export.
 
 ## License
 

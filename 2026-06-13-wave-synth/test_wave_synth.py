@@ -563,8 +563,8 @@ class TestVersion(unittest.TestCase):
         self.assertRegex(__version__, r'\d+\.\d+\.\d+')
 
     def test_version_bumped(self):
-        """Version should be 1.2.1 after bugfix."""
-        self.assertEqual(__version__, '1.2.1')
+        """Version should be 1.2.2 after bugfix."""
+        self.assertEqual(__version__, '1.2.2')
 
 
 class TestBugFixes(unittest.TestCase):
@@ -857,6 +857,70 @@ class TestBugFixesRound2(unittest.TestCase):
         self.assertTrue(different, "Noise without seed should produce different results each call")
 
 
+class TestBugFixesRound3(unittest.TestCase):
+    """Tests for bugs fixed in v1.2.2."""
+
+    def test_fade_in_single_sample(self):
+        """Fade-in on a single sample should not zero it out."""
+        result = apply_fade_in([0.8], 0.01)
+        self.assertEqual(len(result), 1)
+        self.assertAlmostEqual(result[0], 0.8, places=2)
+
+    def test_fade_out_single_sample(self):
+        """Fade-out on a single sample should not zero it out."""
+        result = apply_fade_out([0.8], 0.01)
+        self.assertEqual(len(result), 1)
+        self.assertAlmostEqual(result[0], 0.8, places=2)
+
+    def test_fade_in_two_samples(self):
+        """Fade-in on 2 samples should start quiet and end loud."""
+        result = apply_fade_in([1.0, 1.0], 1.0)
+        self.assertEqual(len(result), 2)
+        self.assertLess(result[0], result[1])
+
+    def test_fade_out_two_samples(self):
+        """Fade-out on 2 samples should start loud and end quiet."""
+        result = apply_fade_out([1.0, 1.0], 1.0)
+        self.assertEqual(len(result), 2)
+        self.assertGreater(result[0], result[1])
+
+    def test_generator_minimum_one_sample(self):
+        """Very short durations should produce at least 1 sample, not 0."""
+        result = generate_sine(440, 0.00001)
+        self.assertGreaterEqual(len(result), 1)
+
+    def test_generator_all_minimum_one_sample(self):
+        """All wave generators should produce at least 1 sample for positive durations."""
+        dur = 0.00001
+        self.assertGreaterEqual(len(generate_square(440, dur)), 1)
+        self.assertGreaterEqual(len(generate_sawtooth(440, dur)), 1)
+        self.assertGreaterEqual(len(generate_triangle(440, dur)), 1)
+        self.assertGreaterEqual(len(generate_noise(dur)), 1)
+        self.assertGreaterEqual(len(generate_harmonic(440, dur)), 1)
+        self.assertGreaterEqual(len(generate_chirp(440, 880, dur)), 1)
+
+    def test_pulse_minimum_one_sample(self):
+        """Pulse wave should produce at least 1 sample for positive durations."""
+        result = generate_pulse(440, 0.00001, duty_cycle=0.5)
+        self.assertGreaterEqual(len(result), 1)
+
+    def test_visualize_scale_labels_dont_corrupt_data(self):
+        """Scale labels should appear outside the waveform frame, not overwrite data."""
+        samples = generate_sine(440, 0.1)
+        viz = visualize_ascii(samples, width=30, height=8)
+        lines = viz.split('\n')
+        # The +1.0, 0.0, -1.0 labels should be at the start of rows (prefix),
+        # not inside the waveform frame
+        # First data row (row index 1 in lines) should have the label as prefix
+        first_data_row = lines[1]
+        self.assertTrue(first_data_row.startswith('+1.0'),
+                        f"Expected '+1.0' prefix, got: {first_data_row[:20]}")
+
+    def test_adsr_empty_samples(self):
+        """ADSR on empty samples should return empty list."""
+        result = apply_adsr([], 0.01, 0.01, 0.7, 0.1)
+        self.assertEqual(result, [])
+
+
 if __name__ == '__main__':
-    unittest.main()
     unittest.main()

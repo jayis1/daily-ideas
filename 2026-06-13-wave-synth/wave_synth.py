@@ -7,7 +7,7 @@ Supports sine, square, sawtooth, triangle, noise, harmonic, chirp, and pulse wav
 with real-time ASCII visualization, envelope shaping, filters, effects, and WAV export.
 """
 
-__version__ = "1.2.1"
+__version__ = "1.2.2"
 
 __all__ = [
     # Waveform generators
@@ -115,7 +115,7 @@ def generate_sine(freq: float, duration: float, amplitude: float = 1.0,
         raise ValueError(f"Frequency must be positive, got {freq}")
     if duration <= 0:
         raise ValueError(f"Duration must be positive, got {duration}")
-    n_samples = int(duration * sample_rate)
+    n_samples = max(1, int(duration * sample_rate))
     return [amplitude * math.sin(2 * math.pi * freq * i / sample_rate)
             for i in range(n_samples)]
 
@@ -137,7 +137,7 @@ def generate_square(freq: float, duration: float, amplitude: float = 1.0,
         raise ValueError(f"Frequency must be positive, got {freq}")
     if duration <= 0:
         raise ValueError(f"Duration must be positive, got {duration}")
-    n_samples = int(duration * sample_rate)
+    n_samples = max(1, int(duration * sample_rate))
     return [amplitude * (1.0 if math.sin(2 * math.pi * freq * i / sample_rate) >= 0 else -1.0)
             for i in range(n_samples)]
 
@@ -159,7 +159,7 @@ def generate_sawtooth(freq: float, duration: float, amplitude: float = 1.0,
         raise ValueError(f"Frequency must be positive, got {freq}")
     if duration <= 0:
         raise ValueError(f"Duration must be positive, got {duration}")
-    n_samples = int(duration * sample_rate)
+    n_samples = max(1, int(duration * sample_rate))
     return [amplitude * (2.0 * ((freq * i / sample_rate) % 1.0) - 1.0)
             for i in range(n_samples)]
 
@@ -181,7 +181,7 @@ def generate_triangle(freq: float, duration: float, amplitude: float = 1.0,
         raise ValueError(f"Frequency must be positive, got {freq}")
     if duration <= 0:
         raise ValueError(f"Duration must be positive, got {duration}")
-    n_samples = int(duration * sample_rate)
+    n_samples = max(1, int(duration * sample_rate))
     result = []
     for i in range(n_samples):
         phase = (freq * i / sample_rate) % 1.0
@@ -220,7 +220,7 @@ def generate_pulse(freq: float, duration: float, amplitude: float = 1.0,
         raise ValueError(f"Duration must be positive, got {duration}")
     if not 0.0 < duty_cycle < 1.0:
         raise ValueError(f"Duty cycle must be between 0.0 and 1.0 (exclusive), got {duty_cycle}")
-    n_samples = int(duration * sample_rate)
+    n_samples = max(1, int(duration * sample_rate))
     result = []
     for i in range(n_samples):
         phase = (freq * i / sample_rate) % 1.0
@@ -253,7 +253,7 @@ def generate_noise(duration: float, amplitude: float = 1.0,
     if seed is not None:
         saved_state = random.getstate()
         random.seed(seed)
-    n_samples = int(duration * sample_rate)
+    n_samples = max(1, int(duration * sample_rate))
     result = [amplitude * (random.random() * 2.0 - 1.0) for _ in range(n_samples)]
     if saved_state is not None:
         random.setstate(saved_state)
@@ -287,7 +287,7 @@ def generate_harmonic(freq: float, duration: float, amplitude: float = 1.0,
         raise ValueError(f"Duration must be positive, got {duration}")
     if harmonics is None:
         harmonics = [(1, 1.0), (2, 0.5), (3, 0.25), (4, 0.125)]
-    n_samples = int(duration * sample_rate)
+    n_samples = max(1, int(duration * sample_rate))
     result = [0.0] * n_samples
     total_amp = sum(a for _, a in harmonics)
     if total_amp == 0:
@@ -324,7 +324,7 @@ def generate_chirp(start_freq: float, end_freq: float, duration: float,
         raise ValueError(f"Frequencies must be positive, got start={start_freq}, end={end_freq}")
     if duration <= 0:
         raise ValueError(f"Duration must be positive, got {duration}")
-    n_samples = int(duration * sample_rate)
+    n_samples = max(1, int(duration * sample_rate))
     result = []
     for i in range(n_samples):
         t = i / sample_rate
@@ -435,6 +435,8 @@ def apply_adsr(samples: List[float], attack: float = 0.01, decay: float = 0.01,
     Returns:
         Samples with the ADSR envelope applied.
     """
+    if not samples:
+        return []
     n = len(samples)
     result = [0.0] * n
 
@@ -655,6 +657,11 @@ def apply_fade_in(samples: List[float], duration: float = 0.05,
     if not samples:
         return []
     n = min(int(duration * sample_rate), len(samples))
+    if n <= 1:
+        # If fade covers 0 or 1 samples, no fade is needed — return copy.
+        # A 1-sample fade would zero the first sample (i/n = 0/1 = 0),
+        # which is worse than no fade at all.
+        return list(samples)
     result = list(samples)
     for i in range(n):
         result[i] *= i / n
@@ -676,6 +683,11 @@ def apply_fade_out(samples: List[float], duration: float = 0.05,
     if not samples:
         return []
     n = min(int(duration * sample_rate), len(samples))
+    if n <= 1:
+        # If fade covers 0 or 1 samples, no fade is needed — return copy.
+        # A 1-sample fade would zero the last sample (0/n = 0),
+        # which is worse than no fade at all.
+        return list(samples)
     result = list(samples)
     for i in range(n):
         result[len(result) - 1 - i] *= i / n
@@ -1076,28 +1088,30 @@ def visualize_ascii(samples: List[float], width: int = TERMINAL_WIDTH,
         if canvas[center_row][col] == ' ':
             canvas[center_row][col] = '─'
 
-    # Build frame
-    top_line = '┌' + '─' * len(points) + '┐'
-    bottom_line = '└' + '─' * len(points) + '┘'
-    lines = [top_line]
-    for row in canvas:
-        lines.append('│' + ''.join(row) + '│')
-    lines.append(bottom_line)
-
-    # Add scale labels — annotate specific rows in the canvas
-    label_col = 2
+    # Build frame with scale labels as a left-side column (outside the waveform)
+    label_width = 5  # width for labels like "+1.0"
+    top_label = '+1.0'
+    mid_label = ' 0.0'
+    bot_label = '-1.0'
     center_row = height // 2
 
-    row_str = lines[1]
-    lines[1] = row_str[:label_col] + '+1.0' + row_str[label_col + 4:]
+    top_line = '┌' + '─' * len(points) + '┐'
+    bottom_line = '└' + '─' * len(points) + '┘'
 
-    center_line_idx = center_row + 1
-    row_str = lines[center_line_idx]
-    lines[center_line_idx] = row_str[:label_col] + ' 0.0' + row_str[label_col + 4:]
-
-    bottom_line_idx = height
-    row_str = lines[bottom_line_idx]
-    lines[bottom_line_idx] = row_str[:label_col] + '-1.0' + row_str[label_col + 4:]
+    lines = [top_line]
+    for r, row in enumerate(canvas):
+        row_str = '│' + ''.join(row) + '│'
+        # Add scale label on the appropriate rows
+        if r == 0:
+            row_str = top_label + row_str
+        elif r == center_row:
+            row_str = mid_label + row_str
+        elif r == height - 1:
+            row_str = bot_label + row_str
+        else:
+            row_str = ' ' * label_width + row_str
+        lines.append(row_str)
+    lines.append(' ' * label_width + bottom_line)
 
     return '\n'.join(lines)
 
