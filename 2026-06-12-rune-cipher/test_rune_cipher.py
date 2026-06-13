@@ -313,6 +313,76 @@ def test_caesar_large_key():
     assert caesar_decrypt(caesar_encrypt("hello", 29), 29) == "hello"
 
 
+# ── Unicode/Non-ASCII safety tests ──────────────────────────────────────────
+
+def test_caesar_runic_passthrough():
+    """Caesar cipher should pass runic characters through unchanged."""
+    runic = text_to_runes("hello")
+    result = caesar_encrypt(runic, 3)
+    assert result == runic, f"Caesar should pass runes through, got {result!r}"
+
+def test_caesar_accented_passthrough():
+    """Caesar cipher should pass non-ASCII letters (é, ü, etc.) through unchanged."""
+    result = caesar_encrypt("café", 3)
+    # c->f, a->d, f->i, é passes through
+    assert result == "fdié", f"Expected 'fdié', got {result!r}"
+
+def test_vigenere_runic_passthrough():
+    """Vigenère should pass runic characters through unchanged."""
+    runic = text_to_runes("hello")
+    result = vigenere_encrypt(runic, "key")
+    assert result == runic, f"Vigenère should pass runes through, got {result!r}"
+
+def test_atbash_runic_passthrough():
+    """Atbash should pass runic characters through unchanged (no crash)."""
+    runic = text_to_runes("hello")
+    result = atbash_encrypt(runic)
+    assert result == runic, f"Atbash should pass runes through, got {result!r}"
+
+def test_atbash_accented_passthrough():
+    """Atbash should pass non-ASCII letters through unchanged (no crash)."""
+    result = atbash_encrypt("café")
+    # c->x, a->z, f->u, é passes through
+    assert result == "xzué", f"Expected 'xzué', got {result!r}"
+
+def test_substitution_runic_passthrough():
+    """Substitution should pass runic characters through unchanged (no crash)."""
+    runic = text_to_runes("hello")
+    result = substitution_encrypt(runic, "abcdefghijklmnopqrstuvwxyz")
+    assert result == runic, f"Substitution should pass runes through, got {result!r}"
+
+def test_affine_runic_passthrough():
+    """Affine should pass runic characters through unchanged."""
+    runic = text_to_runes("hello")
+    result = affine_encrypt(runic, 5, 8)
+    assert result == runic, f"Affine should pass runes through, got {result!r}"
+
+def test_affine_accented_passthrough():
+    """Affine should pass non-ASCII letters through unchanged."""
+    result = affine_encrypt("café", 5, 8)
+    # c->i, a->i, f->h, é passes through
+    # Actually: c(2) -> (5*2+8)%26 = 18 = 's', a(0) -> (5*0+8)%26 = 8 = 'i', 
+    # f(5) -> (5*5+8)%26 = 33%26 = 7 = 'h', é passes through
+    expected = "sihé"
+    assert result == expected, f"Expected {expected!r}, got {result!r}"
+
+def test_crack_affine_non_alpha():
+    """crack_affine with no alphabetic chars should return empty list."""
+    assert crack_affine("123!@#") == []
+
+def test_analyze_frequency_runic():
+    """analyze_frequency on runic text should return error (no a-z letters)."""
+    runic = text_to_runes("hello")
+    result = analyze_frequency(runic)
+    assert "error" in result, f"Expected error for runic input, got {result}"
+
+def test_frequency_score_runic():
+    """frequency_score on runic text should return inf (no a-z letters)."""
+    runic = text_to_runes("hello")
+    result = frequency_score(runic)
+    assert result == float('inf'), f"Expected inf for runic input, got {result}"
+
+
 # ── Run all tests ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

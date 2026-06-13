@@ -30,7 +30,7 @@ import textwrap
 from collections import Counter
 from pathlib import Path
 
-__version__ = "2.0.0"
+__version__ = "2.0.3"
 
 # ── Runic Unicode mapping ──────────────────────────────────────────────────────
 # Elder Futhark runic alphabet (24 runes) + extensions for full Latin coverage
@@ -162,7 +162,7 @@ def caesar_encrypt(text: str, key: int) -> str:
         return ""
     result = []
     for ch in text.lower():
-        if ch.isalpha():
+        if 'a' <= ch <= 'z':
             shifted = chr((ord(ch) - ord('a') + key) % 26 + ord('a'))
             result.append(shifted)
         else:
@@ -202,7 +202,7 @@ def vigenere_encrypt(text: str, key: str) -> str:
     result = []
     ki = 0
     for ch in text.lower():
-        if ch.isalpha():
+        if 'a' <= ch <= 'z':
             shift = ord(key[ki % len(key)]) - ord('a')
             result.append(chr((ord(ch) - ord('a') + shift) % 26 + ord('a')))
             ki += 1
@@ -227,7 +227,7 @@ def vigenere_decrypt(text: str, key: str) -> str:
     result = []
     ki = 0
     for ch in text.lower():
-        if ch.isalpha():
+        if 'a' <= ch <= 'z':
             shift = ord(key[ki % len(key)]) - ord('a')
             result.append(chr((ord(ch) - ord('a') - shift) % 26 + ord('a')))
             ki += 1
@@ -247,7 +247,7 @@ def atbash_encrypt(text: str) -> str:
     """
     result = []
     for ch in text.lower():
-        if ch.isalpha():
+        if 'a' <= ch <= 'z':
             result.append(chr(ord('z') - (ord(ch) - ord('a'))))
         else:
             result.append(ch)
@@ -289,7 +289,7 @@ def substitution_encrypt(text: str, key: str) -> str:
         raise ValueError("Substitution key must be 26 unique letters.")
     result = []
     for ch in text.lower():
-        if ch.isalpha():
+        if 'a' <= ch <= 'z':
             result.append(key[ord(ch) - ord('a')])
         else:
             result.append(ch)
@@ -341,7 +341,7 @@ def affine_encrypt(text: str, a: int, b: int) -> str:
         raise ValueError(f"Affine key 'b' must be 0-25, got {b}.")
     result = []
     for ch in text.lower():
-        if ch.isalpha():
+        if 'a' <= ch <= 'z':
             x = ord(ch) - ord('a')
             enc = (a * x + b) % 26
             result.append(chr(enc + ord('a')))
@@ -369,7 +369,7 @@ def affine_decrypt(text: str, a: int, b: int) -> str:
     a_inv = pow(a, -1, 26)
     result = []
     for ch in text.lower():
-        if ch.isalpha():
+        if 'a' <= ch <= 'z':
             x = ord(ch) - ord('a')
             dec = (a_inv * (x - b)) % 26
             result.append(chr(dec + ord('a')))
@@ -484,7 +484,7 @@ def frequency_score(text: str) -> float:
         Chi-squared frequency distance score.
     """
     text = text.lower()
-    letters = [ch for ch in text if ch.isalpha()]
+    letters = [ch for ch in text if 'a' <= ch <= 'z']
     if not letters:
         return float('inf')
     total = len(letters)
@@ -508,7 +508,7 @@ def bigram_score(text: str) -> float:
         Count of common English bigrams found.
     """
     text = text.lower()
-    letters = [ch for ch in text if ch.isalpha()]
+    letters = [ch for ch in text if 'a' <= ch <= 'z']
     if len(letters) < 2:
         return 0
     bigrams = [''.join(letters[i:i+2]) for i in range(len(letters) - 1)]
@@ -529,7 +529,7 @@ def combined_score(text: str) -> float:
         Combined score (lower = more English-like).
     """
     text_lower = text.lower()
-    letters = [ch for ch in text_lower if ch.isalpha()]
+    letters = [ch for ch in text_lower if 'a' <= ch <= 'z']
     if not letters:
         return float('inf')
     
@@ -599,7 +599,7 @@ def crack_vigenere(ciphertext: str, max_key_len: int = 10) -> list:
     Returns:
         List of (key, decrypted_text) candidates, best match first.
     """
-    ciphertext_clean = ''.join(ch for ch in ciphertext.lower() if ch.isalpha())
+    ciphertext_clean = ''.join(ch for ch in ciphertext.lower() if 'a' <= ch <= 'z')
     if len(ciphertext_clean) < 12:
         # Fix: return an informative marker instead of the original ciphertext,
         # so users don't confuse it with a successful decryption
@@ -667,7 +667,7 @@ def crack_substitution(ciphertext: str, iterations: int = 500) -> list:
     Returns:
         Top 3 (key, plaintext) candidates.
     """
-    ciphertext_clean = ''.join(ch for ch in ciphertext.lower() if ch.isalpha())
+    ciphertext_clean = ''.join(ch for ch in ciphertext.lower() if 'a' <= ch <= 'z')
     if len(ciphertext_clean) < 10:
         return [("<too short>", ciphertext)]
     
@@ -716,6 +716,9 @@ def crack_affine(ciphertext: str) -> list:
     """
     if not ciphertext.strip():
         return []
+    # Skip if text has no ASCII letters (nothing meaningful to crack)
+    if not any('a' <= ch <= 'z' for ch in ciphertext.lower()):
+        return []
     candidates = []
     for a in AFFINE_VALID_A:
         for b in range(26):
@@ -741,7 +744,7 @@ def analyze_frequency(text: str) -> dict:
         Dictionary with letter frequencies, bigram counts, IoC, etc.
     """
     text = text.lower()
-    letters = [ch for ch in text if ch.isalpha()]
+    letters = [ch for ch in text if 'a' <= ch <= 'z']
     if not letters:
         return {"error": "No alphabetic characters found."}
     

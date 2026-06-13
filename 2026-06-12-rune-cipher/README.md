@@ -191,6 +191,17 @@ python3 rune_cipher.py encrypt --cipher substitution --key rune --text "hello"
 # Internally generates: runeabcdfghijklmopqstvwxyz (keyword-based alphabet)
 ```
 
+## Unicode Handling
+
+All ciphers operate exclusively on ASCII letters (a–z). Non-ASCII characters — including runic characters, accented letters (é, ü), and emoji — are **passed through unchanged** and not transformed. This means:
+
+- Encrypting runic text preserves the runes: `caesar_encrypt("ᚨᛒᚲ", 3)` → `"ᚨᛒᚲ"` (unchanged)
+- Accented letters pass through: `caesar_encrypt("café", 3)` → `"fdié"` (é unchanged)
+- Runic conversion (`text_to_runes`) is independent and only works on a–z letters
+- Frequency analysis and cracking functions only count ASCII a–z letters
+
+This design prevents crashes and garbled output when processing text that contains Unicode characters.
+
 ## Runic Alphabet
 
 The tool maps A–Z to Elder Futhark runes:
@@ -207,7 +218,7 @@ Spaces render as `᛬`
 python3 test_rune_cipher.py
 ```
 
-Runs 38 tests covering:
+Runs 49 tests covering:
 - Round-trip encryption/decryption for all 7 ciphers
 - Runic text conversion (text → runes → text)
 - Known-value tests for Caesar, Vigenère, Atbash, Affine
@@ -217,8 +228,22 @@ Runs 38 tests covering:
 - Keyword key generation and deduplication
 - XOR round-trip with special characters
 - Caesar with large keys (> 25)
+- **Unicode safety**: Runic characters, accented letters, and emoji pass through all ciphers without crashes or garbled output
+- **Non-ASCII passthrough**: All cipher functions correctly ignore Unicode letters and only transform ASCII a–z
+- **Frequency analysis with non-ASCII**: Runic/accented text returns an error (no a–z letters found) rather than producing misleading results
+- **crack_affine with non-alpha text**: Returns empty list instead of spurious candidates
 
 ## Changelog
+
+### v2.0.3 — Unicode Safety Bug Fixes (2026-06-13)
+- **Fixed crash in `atbash_encrypt`**: Input containing Unicode letters (runic chars, accented letters like é) caused `ValueError: chr() arg not in range(0x110000)` because the formula `ord('z') - (ord(ch) - ord('a'))` produced invalid code points for non-ASCII letters.
+- **Fixed crash in `substitution_encrypt`**: Input containing Unicode letters caused `IndexError: string index out of range` because `ord(ch) - ord('a')` produced indices outside 0–25 for non-ASCII characters.
+- **Fixed silent corruption in all cipher functions**: `caesar_encrypt`, `vigenere_encrypt`, `vigenere_decrypt`, `affine_encrypt`, `affine_decrypt`, and `rot13_encrypt` (which calls `caesar_encrypt`) all used `ch.isalpha()` which returns True for Unicode letters like runic characters and accented letters. This caused these characters to be incorrectly transformed through the cipher math, producing garbage output. Changed all cipher functions to use `'a' <= ch <= 'z'` to only transform ASCII lowercase letters.
+- **Fixed `analyze_frequency` Unicode handling**: `isalpha()` counted Unicode letters (runes, accented chars) in `total_letters` and `most_common_letters`, producing misleading analysis. Now only ASCII a–z letters are counted.
+- **Fixed `frequency_score`, `bigram_score`, `combined_score`**: Same `isalpha()` issue caused incorrect scoring when text contained Unicode letters. Now only scores ASCII a–z letters.
+- **Fixed `crack_vigenere` and `crack_substitution`**: Same `isalpha()` issue in ciphertext cleaning. Now only extracts ASCII a–z letters.
+- **Fixed `crack_affine` with non-alpha input**: Previously returned 312 spurious candidates when given text with no alphabetic characters (e.g., `"123!@#"`). Now returns an empty list.
+- **Added 11 new tests**: Runic passthrough for all cipher functions, accented letter passthrough, Unicode crash prevention, non-alpha crack_affine, and frequency analysis Unicode handling.
 
 ### v2.0.2 — Bug Hunt Fixes (2026-06-12)
 - **Fixed `crack_vigenere` short-text marker**: Changed `<short>` to `<too-short>` to avoid confusion with a real decryption key.
