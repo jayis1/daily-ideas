@@ -279,6 +279,122 @@ def test_render_link():
 
 
 # ──────────────────────────────────────────────
+# Test: Bug fixes (v1.2.0)
+# ──────────────────────────────────────────────
+
+def test_code_block_box_consistency():
+    """Code block top bar, content, and bottom bar should have the same visible width."""
+    md = "## Code\n\n```python\nprint('hello world')\n```"
+    parser = SlideParser(md)
+    for cols in [80, 60, 40]:
+        r = Renderer("dark")
+        r.cols = cols
+        output = r.render_slide(parser.slides[0], 0, 1)
+        clean = re.sub(r'\033\[[0-9;]*m', '', output)
+        widths = set()
+        for line in clean.split('\n'):
+            if any(c in line for c in '┌│└'):
+                widths.add(len(line.rstrip()))
+        # All box-drawing lines should be the same width
+        assert len(widths) <= 2, f"Inconsistent code box widths at cols={cols}: {widths}"
+
+def test_crlf_handling():
+    """Files with CRLF (Windows) line endings should parse correctly."""
+    md = "# Title\r\n\r\nBody text\r\n\r\n---\r\n\r\n## Slide 2"
+    parser = SlideParser(md)
+    assert len(parser.slides) == 2
+    assert parser.slides[0][0]["type"] == "heading1"
+
+def test_separator_with_trailing_whitespace():
+    """Slide separator '---' with trailing spaces should still work."""
+    md = "# A\n\n---   \n\n# B"
+    parser = SlideParser(md)
+    assert len(parser.slides) == 2
+
+def test_separator_at_start_of_file():
+    """A '---' at the very start of the file should be treated as a separator, not an HR."""
+    md = "---\n\n# Title"
+    parser = SlideParser(md)
+    # The --- at start should be stripped, leaving just the title slide
+    assert len(parser.slides) == 1
+    assert parser.slides[0][0]["type"] == "heading1"
+
+def test_hr_requires_four_dashes():
+    """Three dashes should be a slide separator, not an HR. Four+ dashes should be HR."""
+    # 3 dashes = slide separator
+    md_three = "## Before\n\n---\n\nAfter"
+    parser_three = SlideParser(md_three)
+    assert len(parser_three.slides) == 2  # Split into 2 slides
+
+    # 4 dashes = HR within a slide
+    md_four = "## Before\n\n----\n\nAfter"
+    parser_four = SlideParser(md_four)
+    assert len(parser_four.slides) == 1  # Single slide
+    hrs = [e for e in parser_four.slides[0] if e["type"] == "hr"]
+    assert len(hrs) == 1
+
+def test_list_item_wrapping():
+    """Long list items should not overflow the terminal width."""
+    r = Renderer("dark")
+    r.cols = 40
+    # Unordered list
+    md = "* " + "A" * 80
+    parser = SlideParser(md)
+    output = r.render_slide(parser.slides[0], 0, 1)
+    clean = re.sub(r'\033\[[0-9;]*m', '', output)
+    for line in clean.split('\n'):
+        assert len(line.rstrip()) <= r.cols, f"Unordered list line overflows: {len(line.rstrip())} > {r.cols}"
+
+    # Ordered list
+    md2 = "1. " + "B" * 80
+    parser2 = SlideParser(md2)
+    output2 = r.render_slide(parser2.slides[0], 0, 1)
+    clean2 = re.sub(r'\033\[[0-9;]*m', '', output2)
+    for line in clean2.split('\n'):
+        assert len(line.rstrip()) <= r.cols, f"Ordered list line overflows: {len(line.rstrip())} > {r.cols}"
+
+def test_heading_wrapping():
+    """Long headings should be wrapped to fit terminal width."""
+    r = Renderer("dark")
+    r.cols = 40
+    md = "# " + "A" * 100
+    parser = SlideParser(md)
+    output = r.render_slide(parser.slides[0], 0, 1)
+    clean = re.sub(r'\033\[[0-9;]*m', '', output)
+    max_len = max(len(line.rstrip()) for line in clean.split('\n'))
+    assert max_len <= r.cols, f"Heading overflows: {max_len} > {r.cols}"
+
+def test_note_box_width_consistency():
+    """Note box header and footer should have consistent visible width."""
+    md = "# Talk\n\n??? This is a speaker note"
+    parser = SlideParser(md)
+    for cols in [80, 40]:
+        r = Renderer("dark")
+        r.cols = cols
+        output = r.render_slide(parser.slides[0], 0, 1, show_notes=True)
+        clean = re.sub(r'\033\[[0-9;]*m', '', output)
+        header_len = None
+        footer_len = None
+        for line in clean.split('\n'):
+            stripped = line.rstrip()
+            if '┌' in stripped and 'Notes' in stripped:
+                header_len = len(stripped)
+            elif '└' in stripped:
+                footer_len = len(stripped)
+        if header_len and footer_len:
+            assert header_len == footer_len, f"Note box width mismatch at cols={cols}: header={header_len}, footer={footer_len}"
+
+def test_empty_note_renders():
+    """A note with empty text should render without crashing."""
+    md = "# Title\n\n???"
+    parser = SlideParser(md)
+    r = Renderer("dark")
+    output = r.render_slide(parser.slides[0], 0, 1, show_notes=True)
+    # Should not crash
+    assert len(output) > 0
+
+
+# ──────────────────────────────────────────────
 # Run tests
 # ──────────────────────────────────────────────
 

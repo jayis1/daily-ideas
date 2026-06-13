@@ -6,9 +6,9 @@ A presentation tool that runs entirely in your terminal. Write your slides in Ma
 
 - **Markdown-based slides** — Separate slides with `---`, use standard Markdown syntax
 - **Rich inline formatting** — Bold, italic, inline code, and Markdown links `[text](url)`
-- **Code blocks** — Language-labeled with box-drawing borders
+- **Code blocks** — Language-labeled with box-drawing borders, properly sized to terminal width
 - **Blockquotes** — Styled with a sidebar indicator
-- **Ordered & unordered lists** — Numbered and bulleted
+- **Ordered & unordered lists** — Numbered and bulleted, with long-item wrapping
 - **Horizontal rules** — Use `----` (4+ dashes) for decorative separators within a slide
 - **Speaker notes** — Lines starting with `???` are hidden by default; press `n` to toggle
 - **3 built-in themes** — Dark, Light, and Monochrome
@@ -20,7 +20,8 @@ A presentation tool that runs entirely in your terminal. Write your slides in Ma
 - **Slide listing** — Use `--list` to print all slide titles
 - **Alternate screen buffer** — Your terminal history is preserved after exiting
 - **Export to text** — Dump slides to plain text (strips ANSI codes)
-- **TTTY detection** — Helpful error message if not run in an interactive terminal
+- **TTY detection** — Helpful error message if not run in an interactive terminal
+- **CRLF support** — Handles Windows-style line endings gracefully
 - **Zero dependencies** — Pure Python 3.6+, no external packages needed
 - **SSH-friendly** — Present remotely over any terminal connection
 
@@ -141,7 +142,7 @@ Add hidden speaker notes with `???`:
 
 Revenue grew 40% YoY
 
-??? Remember to mention the Q3 spike was due to the holiday campaign
+??? remember to mention the Q3 spike was due to the holiday campaign
 ??? The Q4 forecast is conservative
 ```
 
@@ -203,7 +204,7 @@ Another point
 
 2. **Theming**: Three built-in color themes map each element type (title, body, code, quote, note, etc.) to ANSI color + style combinations
 
-3. **Rendering**: The `Renderer` converts each slide's element list into ANSI-decorated strings, centering title slides, drawing box-drawing characters around code blocks, and showing timestamps in the progress bar
+3. **Rendering**: The `Renderer` converts each slide's element list into ANSI-decorated strings, centering title slides, drawing box-drawing characters around code blocks, and wrapping long text to fit the terminal
 
 4. **Presentation**: The `Presenter` uses the alternate screen buffer and raw terminal input to create an interactive slide-show experience without any curses dependency
 
@@ -217,7 +218,34 @@ Run the built-in test suite:
 python3 test_slides.py
 ```
 
-The tests cover parsing, inline formatting, rendering, export, speaker notes, horizontal rules, and edge cases — all without requiring an interactive terminal.
+The tests cover parsing, inline formatting, rendering, export, speaker notes, horizontal rules, CRLF handling, code block sizing, list wrapping, heading wrapping, note box consistency, and edge cases — all without requiring an interactive terminal.
+
+## Changelog
+
+### v1.2.0 — Bug Fix Release
+
+- **Fixed**: Code block box borders and content lines now have consistent widths (were off by 1)
+- **Fixed**: Note box header and footer now have matching widths
+- **Fixed**: Long unordered and ordered list items now wrap to fit the terminal width
+- **Fixed**: Long headings (h1, h2, h3) now wrap to fit the terminal width
+- **Fixed**: CRLF (Windows) line endings are now handled gracefully — `\r` characters no longer appear in parsed text
+- **Fixed**: Slide separators now accept trailing whitespace (e.g., `--- ` instead of requiring exact `---`)
+- **Fixed**: `---` at the very start of a file is now treated as a separator, not parsed as an HR element
+- **Fixed**: Horizontal rules now require 4+ dashes (`----`) instead of 3+ — this eliminates the conflict with the `---` slide separator
+- **Fixed**: `_wrap_text()` now properly measures visible text width by stripping both ANSI codes and inline format markers
+- **Fixed**: Quote wrapping now strips inline format markers for accurate width measurement
+- **Fixed**: Note content wrapping now strips inline format markers for accurate width measurement
+- **Fixed**: Empty notes (just `???` with no text) no longer crash — they render an empty note box
+- **Added**: 9 new tests covering all fixed bugs
+
+### v1.1.0 — Feature Release
+
+- Added speaker notes, markdown links, slide goto, --list, --version, timestamp, horizontal rules, refresh key, TTY detection, Page Up/Down support
+- Added 33 unit tests
+
+### v1.0.0 — Initial Release
+
+- Basic terminal-based Markdown presentation tool
 
 ## File Structure
 
@@ -225,7 +253,7 @@ The tests cover parsing, inline formatting, rendering, export, speaker notes, ho
 terminal-slides/
 ├── slides.py       # The complete presentation tool (single file)
 ├── sample.md       # Example presentation with notes and links
-├── test_slides.py  # Test suite (33 tests)
+├── test_slides.py  # Test suite (42 tests)
 └── README.md       # This file
 ```
 

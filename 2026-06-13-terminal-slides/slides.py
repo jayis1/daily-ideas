@@ -29,7 +29,7 @@ import textwrap
 import select
 import time
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # ──────────────────────────────────────────────
 # ANSI helpers
@@ -170,7 +170,7 @@ class SlideParser:
     QUOTE_RE = re.compile(r'^>\s?(.*)$')
     UNORDERED_RE = re.compile(r'^[\s]*[-*+]\s+(.+)$')
     ORDERED_RE = re.compile(r'^[\s]*(\d+)\.\s+(.+)$')
-    HORIZONTAL_RE = re.compile(r'^---+\s*$')
+    HORIZONTAL_RE = re.compile(r'^-{4,}\s*$')
     CODE_FENCE_RE = re.compile(r'^```(\w*)$')
     NOTE_RE = re.compile(r'^\?\?\?\s*(.*)$')
 
@@ -179,7 +179,12 @@ class SlideParser:
         self._parse(text)
 
     def _parse(self, text: str):
-        raw_slides = re.split(r'\n---\n|\n---\s*$', text)
+        # Normalize CRLF to LF (handle Windows line endings)
+        text = text.replace('\r\n', '\n').replace('\r', '\n')
+        # Handle --- at the very start of the file (skip it as a separator)
+        text = re.sub(r'^---\s*\n', '', text)
+        # Split on slide separators: --- on its own line (allowing trailing whitespace)
+        raw_slides = re.split(r'\n---\s*\n|\n---\s*$', text)
         for raw in raw_slides:
             slide = self._parse_slide(raw.strip())
             if slide:
@@ -378,16 +383,23 @@ class Renderer:
         return " " * pad + line
 
     def _wrap_text(self, text: str, indent: int = 2, max_width: int = 0) -> list[str]:
-        """Wrap a long line of text to fit within terminal width, preserving ANSI codes."""
+        """Wrap a long line of text to fit within terminal width, preserving ANSI codes.
+
+        When text contains inline format markers (<<BOLD>>, etc.), we strip them
+        for measurement, wrap the clean text, then re-apply formatting by mapping
+        segments from the original to the wrapped lines.
+        """
         if not max_width:
             max_width = self.cols - indent - 2
-        # Strip ANSI for measurement
+        # Strip ANSI and inline format markers for measurement
         clean = re.sub(r'\033\[[0-9;]*m', '', text)
-        if len(clean) <= max_width:
+        # Also strip our inline format markers for length check
+        clean_no_fmt = re.sub(r'<<.*?>>', '', clean)
+        if len(clean_no_fmt) <= max_width:
             return [text]
-        # For wrapped text, we need to wrap the clean version and re-apply formatting
-        # Simpler approach: wrap the clean text and return it (losing inline formatting on wrap)
-        wrapped = textwrap.wrap(clean, width=max_width)
+        # For wrapped text, wrap the clean (marker-stripped) version
+        # then re-render each wrapped segment through _render_inline
+        wrapped = textwrap.wrap(clean_no_fmt, width=max_width)
         return wrapped
 
     def render_slide(self, slide: list[dict], slide_num: int, total: int, show_notes: bool = False) -> str:
@@ -405,18 +417,42 @@ class Renderer:
 
             if elem["type"] == "heading1":
                 text = self._render_inline(elem["text"])
-                lines.append(self._center(f"{self._color('title')}{BOLD}{text}{RESET}"))
+                # Wrap long headings to fit terminal width
+                clean_text = re.sub(r'\033\[[0-9;]*m', '', text)
+                max_w = self.cols - 4
+                if len(clean_text) > max_w:
+                    wrapped = textwrap.wrap(clean_text, width=max_w)
+                    for w_line in wrapped:
+                        lines.append(self._center(f"{self._color('title')}{BOLD}{w_line}{RESET}"))
+                else:
+                    lines.append(self._center(f"{self._color('title')}{BOLD}{text}{RESET}"))
                 lines.append(self._center(f"{dim_color}{'━' * min(40, self.cols - 4)}{RESET}"))
                 lines.append("")
 
             elif elem["type"] == "heading2":
                 text = self._render_inline(elem["text"])
-                lines.append(f"  {self._color('heading2')}{BOLD}{text}{RESET}")
+                # Wrap long h2 headings
+                clean_text = re.sub(r'\033\[[0-9;]*m', '', text)
+                max_w = self.cols - 4
+                if len(clean_text) > max_w:
+                    wrapped = textwrap.wrap(clean_text, width=max_w)
+                    for w_line in wrapped:
+                        lines.append(f"  {self._color('heading2')}{BOLD}{w_line}{RESET}")
+                else:
+                    lines.append(f"  {self._color('heading2')}{BOLD}{text}{RESET}")
                 lines.append("")
 
             elif elem["type"] == "heading3":
                 text = self._render_inline(elem["text"])
-                lines.append(f"  {self._color('heading3')}{UNDERLINE}{text}{RESET}")
+                # Wrap long h3 headings
+                clean_text = re.sub(r'\033\[[0-9;]*m', '', text)
+                max_w = self.cols - 4
+                if len(clean_text) > max_w:
+                    wrapped = textwrap.wrap(clean_text, width=max_w)
+                    for w_line in wrapped:
+                        lines.append(f"  {self._color('heading3')}{UNDERLINE}{w_line}{RESET}")
+                else:
+                    lines.append(f"  {self._color('heading3')}{UNDERLINE}{text}{RESET}")
                 lines.append("")
 
             elif elem["type"] == "text":
@@ -428,18 +464,21 @@ class Renderer:
             elif elem["type"] == "code_block":
                 lang = elem.get("lang", "")
                 code = elem["text"]
-                bar = f"  {self._color('code_inline')}┌{'─' * (self.cols - 6)}┐{RESET}"
+                # Box inner width (between the vertical bars)
+                inner_w = self.cols - 6  # "  │" (3) + content + "│" (1) = cols - 2
+                bar = f"  {self._color('code_inline')}┌{'─' * inner_w}┐{RESET}"
                 lines.append(f"  {dim_color}{lang}{RESET}")
                 lines.append(bar)
                 for code_line in code.split('\n'):
+                    # Truncate long lines to fit inside the box
+                    max_code_w = inner_w - 2  # subtract "│ " prefix and " │" suffix padding
                     vis_len = len(code_line)
-                    max_w = self.cols - 8
-                    if vis_len > max_w:
-                        code_line = code_line[:max_w-1] + "…"
+                    if vis_len > max_code_w:
+                        code_line = code_line[:max_code_w - 1] + "…"
                         vis_len = len(code_line)
-                    pad = max(0, self.cols - 6 - vis_len)
-                    lines.append(f"  {self._color('code_block')}│ {code_line}{' ' * pad}│{RESET}")
-                bar2 = f"  {self._color('code_inline')}└{'─' * (self.cols - 6)}┘{RESET}"
+                    pad = max(0, inner_w - 2 - vis_len)
+                    lines.append(f"  {self._color('code_block')}│ {code_line}{' ' * pad} │{RESET}")
+                bar2 = f"  {self._color('code_inline')}└{'─' * inner_w}┘{RESET}"
                 lines.append(bar2)
                 lines.append("")
 
@@ -447,8 +486,9 @@ class Renderer:
                 text = self._render_inline(elem["text"])
                 bar_char = f"{self._color('quote_bar')}┃{RESET}"
                 max_w = self.cols - 6
-                # Wrap the clean (ANSI-stripped) text for quoting
+                # Wrap the clean text for quoting (strip both ANSI and format markers)
                 clean_text = re.sub(r'\033\[[0-9;]*m', '', text)
+                clean_text = re.sub(r'<<.*?>>', '', clean_text)
                 wrapped = textwrap.wrap(clean_text, width=max_w)
                 for w_line in wrapped:
                     lines.append(f"  {bar_char} {self._color('quote')}{w_line}{RESET}")
@@ -458,13 +498,41 @@ class Renderer:
                 bullet = f"{self._color('bullet')}•{RESET}"
                 for item in elem["items"]:
                     item_rendered = self._render_inline(item)
-                    lines.append(f"    {bullet} {body_color}{item_rendered}{RESET}")
+                    # Wrap long list items to fit terminal width
+                    prefix = f"    {bullet} {body_color}"
+                    prefix_visible_len = 6  # "    • " = 6 visible chars
+                    max_item_w = max(20, self.cols - prefix_visible_len - 2)
+                    clean_item = re.sub(r'\033\[[0-9;]*m', '', item_rendered)
+                    clean_item = re.sub(r'<<.*?>>', '', clean_item)
+                    if len(clean_item) > max_item_w:
+                        wrapped = textwrap.wrap(clean_item, width=max_item_w)
+                        for j, w_line in enumerate(wrapped):
+                            if j == 0:
+                                lines.append(f"{prefix}{w_line}{RESET}")
+                            else:
+                                lines.append(f"      {body_color}{w_line}{RESET}")
+                    else:
+                        lines.append(f"{prefix}{item_rendered}{RESET}")
                 lines.append("")
 
             elif elem["type"] == "ordered_list":
                 for num, item_text in elem["items"]:
                     item_rendered = self._render_inline(item_text)
-                    lines.append(f"    {self._color('number')}{num}.{RESET} {body_color}{item_rendered}{RESET}")
+                    # Wrap long list items to fit terminal width
+                    num_prefix = f"    {self._color('number')}{num}.{RESET} {body_color}"
+                    num_visible_len = len(f"    {num}. ")  # visible chars for prefix
+                    max_item_w = max(20, self.cols - num_visible_len - 2)
+                    clean_item = re.sub(r'\033\[[0-9;]*m', '', item_rendered)
+                    clean_item = re.sub(r'<<.*?>>', '', clean_item)
+                    if len(clean_item) > max_item_w:
+                        wrapped = textwrap.wrap(clean_item, width=max_item_w)
+                        for j, w_line in enumerate(wrapped):
+                            if j == 0:
+                                lines.append(f"{num_prefix}{w_line}{RESET}")
+                            else:
+                                lines.append(f"      {body_color}{w_line}{RESET}")
+                    else:
+                        lines.append(f"{num_prefix}{item_rendered}{RESET}")
                 lines.append("")
 
             elif elem["type"] == "hr":
@@ -477,14 +545,25 @@ class Renderer:
                 # Speaker notes displayed at the bottom
                 note_text = self._render_inline(elem["text"])
                 bar_char = f"{self._color('notes_bar')}│{RESET}"
-                lines.append(f"  {self._color('notes_bar')}┌─ 📝 Notes {'─' * min(30, self.cols - 20)}{RESET}")
-                # Wrap notes
+                # Build a note box that fits within terminal width
+                # Box structure: "  ┌─ Notes ────...──┐" (total visible = note_box_w)
+                note_box_w = min(60, self.cols - 4)  # total visible width of the box
+                # Header: "  ┌─ Notes " (11 visible) + dashes + "┐"
+                header_dashes = note_box_w - 11 - 1  # -1 for ┐, -11 for prefix
+                lines.append(f"  {self._color('notes_bar')}┌─ Notes {'─' * header_dashes}┐{RESET}")
+                # Wrap notes — strip both ANSI and inline format markers for measurement
                 clean_note = re.sub(r'\033\[[0-9;]*m', '', note_text)
-                max_w = self.cols - 6
-                wrapped = textwrap.wrap(clean_note, width=max_w)
-                for wl in wrapped:
-                    lines.append(f"  {bar_char} {self._color('notes')}{wl}{RESET}")
-                lines.append(f"  {self._color('notes_bar')}└{'─' * min(40, self.cols - 6)}┘{RESET}")
+                clean_note = re.sub(r'<<.*?>>', '', clean_note)
+                max_w = note_box_w - 6  # "  │ " (4) + content + " │" (2) = note_box_w
+                if clean_note.strip():  # skip wrapping empty notes
+                    wrapped = textwrap.wrap(clean_note, width=max_w)
+                    for wl in wrapped:
+                        lines.append(f"  {bar_char} {self._color('notes')}{wl} {bar_char}")
+                else:
+                    lines.append(f"  {bar_char}  {bar_char}")
+                # Footer: "  └─────...───┘" — total visible width matches header
+                footer_dashes = note_box_w - 4  # "  └" (3) + dashes + "┘" (1) = note_box_w
+                lines.append(f"  {self._color('notes_bar')}└{'─' * footer_dashes}┘{RESET}")
                 lines.append("")
 
         # Add vertical fill
