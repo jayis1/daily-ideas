@@ -416,5 +416,116 @@ class TestVersion(unittest.TestCase):
         self.assertEqual(len(parts), 3)
 
 
+class TestBugFixes(unittest.TestCase):
+    """Tests for bugs found and fixed in v1.1.1."""
+
+    def test_compute_weave_value_out_of_bounds(self):
+        """compute_weave_value should not crash when x/y exceed width/height."""
+        loom = Loom(width=10, height=5, seed=42)
+        # These used to cause IndexError
+        val = loom.compute_weave_value(15, 3, 1.0)
+        self.assertIsInstance(val, float)
+        val = loom.compute_weave_value(100, 100, 1.0)
+        self.assertIsInstance(val, float)
+        val = loom.compute_weave_value(999, 999, 0.0)
+        self.assertIsInstance(val, float)
+
+    def test_compute_weave_value_at_boundary(self):
+        """compute_weave_value should work at exact boundary indices."""
+        loom = Loom(width=10, height=5, seed=42)
+        val = loom.compute_weave_value(9, 4, 1.0)
+        self.assertIsInstance(val, float)
+        val = loom.compute_weave_value(0, 0, 1.0)
+        self.assertIsInstance(val, float)
+
+    def test_invalid_palette_name_corrected(self):
+        """Invalid palette name should be corrected to 'sunset' with a warning."""
+        import io
+        old_stderr = sys.stderr
+        sys.stderr = io.StringIO()
+        try:
+            loom = Loom(width=20, height=5, palette="nonexistent")
+            self.assertEqual(loom.palette_name, "sunset")
+            self.assertEqual(loom.palette, PALETTES["sunset"])
+        finally:
+            sys.stderr = old_stderr
+
+    def test_invalid_pattern_name_corrected(self):
+        """Invalid pattern name should be corrected to 'twill' with a warning."""
+        import io
+        old_stderr = sys.stderr
+        sys.stderr = io.StringIO()
+        try:
+            loom = Loom(width=20, height=5, pattern="nonexistent")
+            self.assertEqual(loom.pattern_name, "twill")
+        finally:
+            sys.stderr = old_stderr
+
+    def test_fps_zero_corrected(self):
+        """FPS=0 should be corrected to 15 with a warning."""
+        import io
+        old_stderr = sys.stderr
+        sys.stderr = io.StringIO()
+        try:
+            loom = Loom(width=20, height=5, fps=0)
+            self.assertEqual(loom.fps, 15)
+            self.assertAlmostEqual(loom.frame_time, 1.0 / 15)
+        finally:
+            sys.stderr = old_stderr
+
+    def test_fps_negative_corrected(self):
+        """Negative FPS should be corrected to 15 with a warning."""
+        import io
+        old_stderr = sys.stderr
+        sys.stderr = io.StringIO()
+        sys.stderr = io.StringIO()
+        try:
+            loom = Loom(width=20, height=5, fps=-5)
+            self.assertEqual(loom.fps, 15)
+        finally:
+            sys.stderr = old_stderr
+
+    def test_speed_zero_corrected(self):
+        """Speed=0 should be corrected to 1.0 with a warning."""
+        import io
+        old_stderr = sys.stderr
+        sys.stderr = io.StringIO()
+        try:
+            loom = Loom(width=20, height=5, speed=0)
+            self.assertEqual(loom.speed, 1.0)
+        finally:
+            sys.stderr = old_stderr
+
+    def test_speed_negative_corrected(self):
+        """Negative speed should be corrected to 1.0 with a warning."""
+        import io
+        old_stderr = sys.stderr
+        sys.stderr = io.StringIO()
+        try:
+            loom = Loom(width=20, height=5, speed=-1)
+            self.assertEqual(loom.speed, 1.0)
+        finally:
+            sys.stderr = old_stderr
+
+    def test_valid_palette_name_unchanged(self):
+        """Valid palette names should not be changed."""
+        loom = Loom(width=20, height=5, palette="neon")
+        self.assertEqual(loom.palette_name, "neon")
+
+    def test_valid_pattern_name_unchanged(self):
+        """Valid pattern names should not be changed."""
+        loom = Loom(width=20, height=5, pattern="diamond")
+        self.assertEqual(loom.pattern_name, "diamond")
+
+    def test_render_with_out_of_bounds_coords(self):
+        """Rendering should work even if internal coords go beyond thread arrays."""
+        loom = Loom(width=40, height=10, seed=42)
+        # This should not raise any exceptions
+        lines = loom.render_frame(1.0)
+        self.assertEqual(len(lines), 10)
+        lines = loom.render_ascii_frame(1.0)
+        self.assertEqual(len(lines), 10)
+
+
 if __name__ == "__main__":
     unittest.main()

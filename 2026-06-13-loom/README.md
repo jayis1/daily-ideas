@@ -1,6 +1,6 @@
 # LOOM — Terminal Generative Art Weaver
 
-**Version 1.1.0**
+**Version 1.1.1**
 
 LOOM is a terminal-based generative art tool that creates animated geometric tapestry patterns using Unicode block characters. It simulates a textile loom, layering trigonometric wave functions to produce evolving, woven-look patterns directly in your terminal with full 24-bit color support.
 
@@ -13,7 +13,7 @@ LOOM is a terminal-based generative art tool that creates animated geometric tap
 - **herringbone** — V-shaped zigzag pattern like classic suiting
 - **basket** — Alternating blocks of over/under threads
 - **diamond** — Diamond-shaped motifs with time-based subtle rotation
-- **hexagonal** *(new)* — Honeycomb-like structure using axial coordinate mapping
+- **hexagonal** — Honeycomb-like structure using axial coordinate mapping
 
 ### Color Palettes (9)
 - **sunset** — Warm oranges, yellows, and deep reds (default)
@@ -23,27 +23,28 @@ LOOM is a terminal-based generative art tool that creates animated geometric tap
 - **ember** — Fiery reds and oranges with deep shadows
 - **aurora** — Northern lights pastel greens, purples, and teals
 - **monochrome** — Grayscale shades from white to near-black
-- **thermal** *(new)* — Deep blue to yellow to white heat-map gradient
-- **nightshade** *(new)* — Rich purples, magentas, and lavender
+- **thermal** — Deep blue to yellow to white heat-map gradient
+- **nightshade** — Rich purples, magentas, and lavender
 
 ### Animation & Output
 - **Live animation** — Continuously evolving patterns that flow like a loom in motion
 - **Snapshot mode** — Output a single frame for piping to files
-- **Save-to-file mode** — Export multiple frames as a text file (ASCII or colored)
-- **Info overlay** *(new)* — Live stats bar showing palette, pattern, seed, dimensions, FPS, and time
-- **Configurable speed** *(new)* — `--speed` multiplier for faster or slower animation
+- **Save-to-file mode** — Export multiple frames as a text file (colored by default, or ASCII with `--ascii`)
+- **Info overlay** — Live stats bar showing palette, pattern, seed, dimensions, FPS, and time
+- **Configurable speed** — `--speed` multiplier for faster or slower animation
 - **Duration limit** — Run for a fixed number of seconds
 
 ### Engineering & Quality
 - **Reproducible seeds** — Use `--seed` to recreate the exact same pattern
 - **ASCII fallback** — `--ascii` for terminals without color support
-- **`--version` flag** *(new)* — Print version and exit
+- **`--version` flag** — Print version and exit
 - **`--help` flag** — Full usage examples in the help message
-- **`--list-palettes` / `--list-patterns`** *(new)* — Enumerate all options
-- **Graceful signal handling** *(new)* — Ctrl+C and SIGTERM restore terminal state cleanly
-- **Robust terminal size detection** *(improved)* — Falls back gracefully in non-TTY environments
-- **Input validation** *(new)* — Tiny width/height values are clamped with a warning
-- **BrokenPipeError handling** *(new)* — Piped output doesn't crash on early close
+- **`--list-palettes` / `--list-patterns`** — Enumerate all options
+- **Graceful signal handling** — Ctrl+C and SIGTERM restore terminal state cleanly
+- **Robust terminal size detection** — Falls back gracefully in non-TTY environments
+- **Input validation** — Invalid width, height, fps, speed, palette, and pattern values are caught and corrected with warnings
+- **BrokenPipeError handling** — Piped output doesn't crash on early close
+- **Bounds-safe weave computation** — Out-of-range coordinates no longer cause IndexError
 
 ## How It Works
 
@@ -115,13 +116,16 @@ python3 loom.py --snapshot
 ### Save Frames to File
 
 ```bash
-# Save 10 ASCII frames to a text file
+# Save 10 colored frames to a text file (default is now colored)
 python3 loom.py --save output.txt --save-frames 10
 
-# Save 30 frames with ANSI color codes
+# Save 10 ASCII-only frames
+python3 loom.py --save output.txt --save-frames 10 --ascii
+
+# Save 30 frames with ANSI color codes (explicit)
 python3 loom.py --save animation.txt --save-frames 30 --save-colored
 
-# Save ASCII frames with custom interval (5 frames)
+# Save ASCII frames with custom interval
 python3 loom.py --save frames.txt --save-frames 5 --ascii
 ```
 
@@ -147,8 +151,9 @@ python3 loom.py --list-patterns
 | `python3 loom.py --pattern satin -p neon` | Neon satin weave pattern |
 | `python3 loom.py --pattern hexagonal -p thermal --info` | Thermal hexagonal with stats |
 | `python3 loom.py --speed 5 --fps 30` | Fast 30fps animation |
-| `python3 loom.py --save art.txt --save-frames 20` | Save 20 frames to file |
-| `python3 loom.py --version` | Print version (1.1.0) |
+| `python3 loom.py --save art.txt --save-frames 20` | Save 20 colored frames to file |
+| `python3 loom.py --save art.txt --save-frames 20 --ascii` | Save 20 ASCII frames to file |
+| `python3 loom.py --version` | Print version (1.1.1) |
 
 ## What It Does
 
@@ -157,6 +162,13 @@ LOOM transforms your terminal into a generative art canvas that mimics real text
 The result is a mesmerizing, continuously evolving tapestry that looks like fabric being woven in real time — but is entirely mathematical, created from the interference of sine waves and the structure of weave algorithms.
 
 ## Changelog
+
+### v1.1.1
+- **Fixed IndexError** in `compute_weave_value` when x/y exceeded width/height bounds — now uses safe modulo indexing
+- **Fixed invalid palette/pattern name mismatch** — unknown names now default to 'sunset'/'twill' with a warning, keeping `palette_name` and actual palette in sync
+- **Fixed `--save` default output** — now defaults to colored (ANSI) output instead of ASCII, matching the animation default; `--ascii` flag is properly respected
+- **Added validation for `--speed` and `--fps`** — zero and negative values are now rejected with a warning and corrected (speed defaults to 1.0, fps to 15)
+- **Added 11 new tests** covering all bug fixes (out-of-bounds coords, invalid names, fps/speed validation, save mode behavior)
 
 ### v1.1.0
 - **New pattern: hexagonal** — honeycomb-like weave structure

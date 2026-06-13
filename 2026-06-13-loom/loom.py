@@ -5,7 +5,7 @@ Creates animated geometric tapestry patterns using Unicode block characters.
 Patterns are generated from layered trigonometric functions and rendered
 as a continuously evolving woven textile in your terminal.
 
-Version: 1.1.0
+Version: 1.1.1
 """
 
 import os
@@ -18,7 +18,7 @@ import signal
 from collections import namedtuple
 
 # ─── Version ────────────────────────────────────────────────────────────
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 # ─── Unicode block characters for weaving ───────────────────────────────
 BLOCKS = {
@@ -178,10 +178,23 @@ class Loom:
         self.width = width or default_w
         self.height = height or default_h
         self.palette_name = palette
-        self.palette = PALETTES.get(palette, PALETTES["sunset"])
-        self.pattern_name = pattern
+        if palette not in PALETTES:
+            print(f"Warning: Unknown palette '{palette}', using 'sunset'.", file=sys.stderr)
+            self.palette_name = "sunset"
+        self.palette = PALETTES[self.palette_name]
+        if pattern not in WEAVE_PATTERNS:
+            print(f"Warning: Unknown pattern '{pattern}', using 'twill'.", file=sys.stderr)
+            self.pattern_name = "twill"
+        else:
+            self.pattern_name = pattern
+        if fps <= 0:
+            print(f"Warning: FPS must be positive, got {fps}, using 15.", file=sys.stderr)
+            fps = 15
         self.fps = fps
-        self.frame_time = 1.0 / fps if fps > 0 else 1.0 / 15
+        self.frame_time = 1.0 / fps
+        if speed <= 0:
+            print(f"Warning: Speed must be positive, got {speed}, using 1.0.", file=sys.stderr)
+            speed = 1.0
         self.speed = speed
         self.info = info
 
@@ -242,8 +255,11 @@ class Loom:
             value /= total_amplitude
 
         # Apply warp/weft thread modulation (like real fabric)
-        warp_mod = math.sin(self.warp_threads[x] * x + t * 0.2)
-        weft_mod = math.sin(self.weft_threads[y] * y + t * 0.15)
+        # Use modulo to safely handle x/y values beyond array bounds
+        wx = x % len(self.warp_threads) if self.warp_threads else 0
+        wy = y % len(self.weft_threads) if self.weft_threads else 0
+        warp_mod = math.sin(self.warp_threads[wx] * x + t * 0.2)
+        weft_mod = math.sin(self.weft_threads[wy] * y + t * 0.15)
         value = value * 0.8 + (warp_mod + weft_mod) * 0.1
 
         # Global drift creates slow evolution
@@ -663,6 +679,8 @@ Examples:
   loom.py --palette aurora --layers 5   # More complex weaving
   loom.py --info                    # Show live stats overlay
   loom.py --speed 4 --fps 30       # Fast animation at 30fps
+  loom.py --save output.txt         # Save 10 colored frames to file
+  loom.py --save output.txt --ascii    # Save 10 ASCII frames to file
 
 Available palettes: sunset, ocean, forest, neon, ember, aurora, monochrome, thermal, nightshade
 Available patterns: plain, twill, satin, herringbone, basket, diamond, hexagonal
@@ -685,7 +703,7 @@ Available patterns: plain, twill, satin, herringbone, basket, diamond, hexagonal
     parser.add_argument("--duration", type=float, default=None, help="Animation duration in seconds")
     parser.add_argument("--save", type=str, default=None, help="Save frames to file instead of animating")
     parser.add_argument("--save-frames", type=int, default=10, help="Number of frames to save (default: 10)")
-    parser.add_argument("--save-colored", action="store_true", help="Save with ANSI color codes (use with --save)")
+    parser.add_argument("--save-colored", action="store_true", help="Save with ANSI color codes (default for --save; this flag is kept for backward compatibility)")
     parser.add_argument("--info", action="store_true", help="Show info overlay bar during animation")
     parser.add_argument("--list-palettes", action="store_true", help="List available palettes and exit")
     parser.add_argument("--list-patterns", action="store_true", help="List available weave patterns and exit")
@@ -718,11 +736,15 @@ Available patterns: plain, twill, satin, herringbone, basket, diamond, hexagonal
     if args.snapshot:
         print(loom.snapshot(t=2.0, ascii_mode=args.ascii))
     elif args.save:
+        # --ascii forces plain ASCII output; otherwise use colored by default
+        # --save-colored is kept for backward compatibility but is now the default
+        use_ascii = args.ascii
+        use_colored = not args.ascii
         filename = loom.save_frames(
             args.save,
             frames=args.save_frames,
-            ascii_mode=not args.save_colored,
-            colored=args.save_colored,
+            ascii_mode=use_ascii,
+            colored=use_colored,
         )
         print(f"Saved {args.save_frames} frames to {filename}", file=sys.stderr)
     else:
