@@ -1,28 +1,29 @@
 # 🎵 Wave Synth — Terminal Audio Waveform Synthesizer
 
-**Version 1.2.0** — A command-line tool for generating, visualizing, mixing, and exporting audio waveforms entirely from your terminal.
+**Version 1.2.1** — A command-line tool for generating, visualizing, mixing, and exporting audio waveforms entirely from your terminal.
 
 Generate sine, square, sawtooth, triangle, pulse, noise, harmonic, and chirp waveforms. Apply effects like tremolo, distortion, reverb, compressor, flanger, and more. Visualize as ASCII art or export as WAV files.
 
 ## Features
 
 - **8 waveform types**: sine, square, sawtooth, triangle, pulse, noise, harmonic, chirp
-- **17 audio effects**: tremolo, vibrato, lowpass, highpass, distortion, delay, fade-in/out, normalize, ADSR envelope, reverse, ring modulation, bitcrush, reverb, pitch shift, **compressor**, **flanger**
-- **Pulse wave**: Variable duty cycle square wave (new in v1.2)
-- **Dynamic compressor**: Threshold/ratio-based dynamics processing (new in v1.2)
-- **Flanger**: Sweeping modulated delay with feedback (new in v1.2)
-- **Melody transposition**: Shift melodies up/down by semitones (new in v1.2)
+- **17 audio effects**: tremolo, vibrato, lowpass, highpass, distortion, delay, fade-in/out, normalize, ADSR envelope, reverse, ring modulation, bitcrush, reverb, pitch shift, compressor, flanger
+- **Pulse wave**: Variable duty cycle square wave
+- **Dynamic compressor**: Threshold/ratio-based dynamics processing (proper dB math)
+- **Flanger**: Sweeping modulated delay with feedback
+- **Melody transposition**: Shift melodies up/down by semitones
 - **Musical note support**: Use note names like `A4`, `C#5`, `Eb3` — sharps and flats, case-insensitive
-- **13 chord types**: maj, min, dim, aug, 7, maj7, min7, sus2, sus4, 5, **add9, 6, 9** (new in v1.2)
-- **7 melody presets**: scale, happy_birthday, ode_to_joy, twinkle, pentatonic, **fur_elise**, **amazing_grace** (2 new in v1.2)
+- **13 chord types**: maj, min, dim, aug, 7, maj7, min7, sus2, sus4, 5, add9, 6, 9
+- **7 melody presets**: scale, happy_birthday, ode_to_joy, twinkle, pentatonic, fur_elise, amazing_grace
 - **WAV import/export**: Load 8-bit or 16-bit WAV files, apply effects, re-export
 - **ASCII visualization**: Waveform and frequency spectrum display in your terminal
 - **Waveform info**: Duration, peak, RMS, DC offset, crest factor, estimated frequency
-- **Interactive mode**: REPL for real-time waveform experimentation
+- **Interactive mode**: REPL for real-time waveform experimentation with amplitude control
 - **Custom harmonics**: Define your own harmonic series for rich tones
 - **Note & chord reference**: `--list-notes` and `--list-chords` flags for discoverability
 - **`__all__` exports**: Clean public API for programmatic use
 - **Comprehensive docstrings**: All functions fully documented with Args/Returns/Raises
+- **Robust error handling**: Invalid CLI parameters produce helpful messages instead of crashes
 
 ## Installation
 
@@ -174,18 +175,19 @@ The `pulse` wave type generates a rectangular wave with configurable duty cycle:
 Run `python3 wave_synth.py --interactive` for a REPL:
 
 ```
-wave> gen sine A4 2
+wave> gen sine A4 2 0.8       # Generate with amplitude 0.8
 wave> effect tremolo:5:0.5
 wave> effect reverb:0.3
 wave> effect compressor:0.5:4
-wave> effect flanger:0.5:0.002:0.3
 wave> viz
 wave> export output.wav
 wave> quit
 ```
 
 Interactive mode also supports:
-- `pulse <freq> <duration> [duty]` — Generate pulse waves
+- `gen <wave> <freq> <dur> [amp]` — Generate waveform with optional amplitude (default 0.8)
+- `pulse <freq> <dur> [duty] [amp]` — Generate pulse wave with optional amplitude
+- `chirp <start> <end> <dur> [amp] [method]` — Generate chirp with optional amplitude
 - `transpose <semitones>` — Transpose the last melody by semitones
 - `info` — Show detailed waveform statistics
 
@@ -201,13 +203,38 @@ samples = generate_sine(440.0, 2.0, amplitude=0.8)
 samples = apply_compressor(samples, threshold=0.5, ratio=4.0)
 samples = apply_reverb(samples, decay=0.3)
 
-# Export to WAV
+# Export to WAV (status message printed to stderr)
 export_wav(samples, 'output.wav')
 ```
+
+Note: `export_wav()` prints its status message to **stderr** (not stdout), so it won't interfere with piped output.
 
 All public functions are exported via `__all__`.
 
 ## What's New
+
+### v1.2.1 — Bug Fix Release
+
+**Bug fixes:**
+- **Compressor math corrected**: The compressor was treating linear amplitude differences as dB values, producing nearly no effect. Now uses proper dB conversion (`20 * log10`) for gain computation, and `ratio=1.0` correctly passes signal through unchanged.
+- **`generate_noise()` no longer mutates global random state**: Previously, calling `generate_noise(seed=42)` would affect subsequent `random.random()` calls in the calling code. Now the global random state is saved before seeding and restored after generation.
+- **`apply_delay()` performance fix**: Replaced `copy.deepcopy(samples)` with `list(samples)`, giving ~35% speedup for delay processing. The `import copy` statement was removed.
+- **`export_wav()` prints to stderr**: The "Exported: ..." message now goes to `sys.stderr` instead of `stdout`, so it won't interfere with piped output in library/CLI usage.
+- **CLI crash on invalid effect parameters**: Passing non-numeric values like `--effect lowpass:abc` no longer crashes with an uncaught `ValueError`. Now prints a helpful error message and exits gracefully.
+- **CLI crash on invalid ADSR parameters**: Similarly, `--adsr abc,0.1,0.7,0.2` no longer crashes.
+- **Interactive mode hardcodes fixed**: `gen`, `pulse`, and `chirp` commands now accept an optional amplitude parameter (default 0.8) instead of being hardcoded to 1.0. Help text updated accordingly.
+- **Spectrum visualization performance**: `visualize_spectrum_ascii()` now downsamples long signals (>16384 samples) before computing the DFT, making it practical for 5+ second audio instead of taking minutes.
+
+**Tests:**
+- 124 tests (up from 113), adding 11 new tests for the bug fixes:
+  - `test_noise_seed_preserves_global_state` — verifies random state is not mutated
+  - `test_noise_deterministic_with_seed_after_state_fix` — verifies seed still works
+  - `test_compressor_ratio_one_is_noop` — verifies ratio=1 passes signal through
+  - `test_compressor_actually_reduces_peak` — verifies compressor reduces peaks with proper dB math
+  - `test_delay_no_deepcopy` — verifies delay performance with list copy
+  - `test_export_wav_prints_to_stderr` — verifies no stdout pollution
+  - `test_spectrum_fast_on_long_signal` — verifies spectrum is fast on long signals
+  - Plus existing tests updated for the new compressor behavior
 
 ### v1.2.0 — Feature Release
 
@@ -227,9 +254,6 @@ All public functions are exported via `__all__`.
 - **Comprehensive docstrings** on all public functions with Args/Returns/Raises
 - **`export_wav()` validates empty input** — raises `ValueError` on empty samples
 - **Empty sample handling** added to tremolo, vibrato, delay, ring_mod, reverb, flanger, fade_in, fade_out, bitcrush, and compressor
-
-**Tests:**
-- 113 tests (up from 80), including new test classes for pulse wave, compressor, flanger, transpose, edge cases, and effect registry completeness
 
 ### v1.1.1 — Bug Fix Release
 

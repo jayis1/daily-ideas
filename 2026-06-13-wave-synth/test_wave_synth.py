@@ -563,8 +563,8 @@ class TestVersion(unittest.TestCase):
         self.assertRegex(__version__, r'\d+\.\d+\.\d+')
 
     def test_version_bumped(self):
-        """Version should be 1.2.0 after enhancement."""
-        self.assertEqual(__version__, '1.2.0')
+        """Version should be 1.2.1 after bugfix."""
+        self.assertEqual(__version__, '1.2.1')
 
 
 class TestBugFixes(unittest.TestCase):
@@ -747,5 +747,116 @@ class TestEdgeCases(unittest.TestCase):
         self.assertTrue(any(abs(s - 0.8) < 0.01 for s in samples))
 
 
+class TestBugFixesRound2(unittest.TestCase):
+    """Tests for bugs found and fixed in the second bug-hunting pass."""
+
+    def test_noise_seed_preserves_global_state(self):
+        """generate_noise with seed should not affect global random state."""
+        import random
+        random.seed(42)
+        before = random.random()
+        random.seed(42)
+        _ = generate_noise(0.01, seed=123)  # Should not affect global state
+        after = random.random()
+        self.assertAlmostEqual(before, after, places=10,
+                               msg="generate_noise seed should not affect global random state")
+
+    def test_noise_deterministic_with_seed_after_state_fix(self):
+        """Noise with same seed should still produce identical output after state fix."""
+        s1 = generate_noise(0.01, seed=42)
+        s2 = generate_noise(0.01, seed=42)
+        self.assertEqual(s1, s2)
+
+    def test_compressor_ratio_one_is_noop(self):
+        """Compressor with ratio=1.0 should pass signal through unchanged."""
+        samples = generate_sine(440.0, 0.1, amplitude=0.8)
+        result = apply_compressor(samples, threshold=0.5, ratio=1.0)
+        self.assertEqual(len(result), len(samples))
+        for orig, comp in zip(samples, result):
+            self.assertAlmostEqual(orig, comp, places=5,
+                                   msg="Compressor ratio=1 should be transparent")
+
+    def test_compressor_actually_reduces_peak(self):
+        """Compressor should reduce the peak of a loud signal (proper dB math)."""
+        samples = generate_sine(440.0, 0.5, amplitude=1.0)
+        result = apply_compressor(samples, threshold=0.3, ratio=10.0)
+        orig_peak = max(abs(s) for s in samples)
+        comp_peak = max(abs(s) for s in result)
+        # With threshold=0.3 and ratio=10:1, peaks should be noticeably reduced
+        self.assertLess(comp_peak, orig_peak,
+                       "Compressor should reduce peak of loud signal")
+
+    def test_delay_no_deepcopy(self):
+        """Delay should use list copy, not deepcopy (performance fix)."""
+        import time
+        samples = generate_sine(440.0, 2.0)  # 2 seconds
+        start = time.time()
+        for _ in range(50):
+            apply_delay(samples, delay_time=0.1, feedback=0.3)
+        elapsed = time.time() - start
+        # Should be fast (< 2 seconds for 50 calls on 2s of audio)
+        self.assertLess(elapsed, 2.0,
+                        f"Delay should be fast, took {elapsed:.2f}s for 50 calls")
+
+    def test_export_wav_prints_to_stderr(self):
+        """export_wav should print to stderr, not stdout."""
+        import io
+        samples = generate_sine(440.0, 0.1)
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+            filename = f.name
+        try:
+            # Capture stdout
+            old_stdout = sys.stdout
+            sys.stdout = io.StringIO()
+            export_wav(samples, filename)
+            stdout_output = sys.stdout.getvalue()
+            sys.stdout = old_stdout
+            # stdout should be empty (output goes to stderr)
+            self.assertEqual(stdout_output, "",
+                            "export_wav should not print to stdout")
+        finally:
+            os.unlink(filename)
+
+    def test_spectrum_fast_on_long_signal(self):
+        """Spectrum visualization should be fast on long signals (downsampling)."""
+        import time
+        samples = generate_sine(440.0, 5.0)  # 5 seconds = 220500 samples
+        start = time.time()
+        result = visualize_spectrum_ascii(samples, width=40, height=5)
+        elapsed = time.time() - start
+        self.assertLess(elapsed, 5.0,
+                        f"Spectrum should be fast, took {elapsed:.2f}s")
+        # Check for box-drawing or any output character
+        self.assertTrue(len(result) > 0 and ('│' in result or '|' in result or '─' in result),
+                        "Spectrum should contain drawing characters")
+
+    def test_compressor_empty(self):
+        """Compressor on empty samples should return empty list."""
+        result = apply_compressor([], threshold=0.5, ratio=4.0)
+        self.assertEqual(result, [])
+
+    def test_compressor_preserves_length(self):
+        """Compressor should preserve sample length."""
+        samples = generate_sine(440.0, 0.5)
+        result = apply_compressor(samples, threshold=0.5, ratio=4.0)
+        self.assertEqual(len(result), len(samples))
+
+    def test_delay_empty_list_copy(self):
+        """Delay on empty samples should return empty list (list() not deepcopy)."""
+        result = apply_delay([], delay_time=0.3)
+        self.assertEqual(result, [])
+
+    def test_noise_without_seed_unchanged(self):
+        """generate_noise without seed should work normally after state-preservation fix."""
+        samples = generate_noise(0.01)
+        self.assertEqual(len(samples), int(0.01 * SAMPLE_RATE))
+        # Should produce different results each call (no seed)
+        s2 = generate_noise(0.01)
+        # Very unlikely to be identical
+        different = any(abs(a - b) > 0.01 for a, b in zip(samples, s2))
+        self.assertTrue(different, "Noise without seed should produce different results each call")
+
+
 if __name__ == '__main__':
+    unittest.main()
     unittest.main()

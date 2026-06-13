@@ -7,7 +7,7 @@ Supports sine, square, sawtooth, triangle, noise, harmonic, chirp, and pulse wav
 with real-time ASCII visualization, envelope shaping, filters, effects, and WAV export.
 """
 
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 __all__ = [
     # Waveform generators
@@ -47,7 +47,6 @@ import struct
 import wave
 import random
 import sys
-import copy
 import os
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
@@ -242,16 +241,23 @@ def generate_noise(duration: float, amplitude: float = 1.0,
         amplitude: Peak amplitude.
         sample_rate: Samples per second.
         seed: Random seed for reproducible noise. If None, uses system randomness.
+            The global random state is preserved after generation.
 
     Returns:
         List of random samples uniformly distributed in [-amplitude, amplitude].
     """
     if duration <= 0:
         raise ValueError(f"Duration must be positive, got {duration}")
+    # Save global random state only when using a seed, to avoid side effects
+    saved_state = None
     if seed is not None:
+        saved_state = random.getstate()
         random.seed(seed)
     n_samples = int(duration * sample_rate)
-    return [amplitude * (random.random() * 2.0 - 1.0) for _ in range(n_samples)]
+    result = [amplitude * (random.random() * 2.0 - 1.0) for _ in range(n_samples)]
+    if saved_state is not None:
+        random.setstate(saved_state)
+    return result
 
 
 def generate_harmonic(freq: float, duration: float, amplitude: float = 1.0,
@@ -619,7 +625,8 @@ def apply_delay(samples: List[float], delay_time: float = 0.3, feedback: float =
     for i in range(n):
         result[i] += samples[i] * (1.0 - mix)
 
-    echo = copy.deepcopy(samples)
+    # Copy samples for echo buffer (shallow copy suffices for float list)
+    echo = list(samples)
     fb = feedback
     current_delay = delay_samples
     while fb > 0.01:
@@ -827,11 +834,15 @@ def apply_compressor(samples: List[float], threshold: float = 0.5,
     overall sound louder and more even. Common in music production to
     even out volume differences.
 
+    Uses proper dB conversion for gain computation: signals above the
+    threshold are reduced so that their dB level is compressed by the
+    given ratio.
+
     Args:
         samples: Input audio samples.
         threshold: Level above which compression starts (0.0 to 1.0).
         ratio: Compression ratio (e.g. 4.0 means 4:1 compression).
-            Higher values = more aggressive compression.
+            Higher values = more aggressive compression. ratio=1.0 is a no-op.
         attack: Attack time in seconds (how quickly compression kicks in).
         release: Release time in seconds (how quickly compression fades out).
         sample_rate: Samples per second.
@@ -849,11 +860,15 @@ def apply_compressor(samples: List[float], threshold: float = 0.5,
     if ratio < 1.0:
         raise ValueError(f"Ratio must be >= 1.0, got {ratio}")
 
+    # Fast path: ratio=1 means no compression
+    if ratio == 1.0:
+        return list(samples)
+
     attack_samples = max(1, int(attack * sample_rate))
     release_samples = max(1, int(release * sample_rate))
 
-    # Compute gain reduction for each sample
-    gain_reduction = [0.0] * len(samples)
+    # Compute gain for each sample using envelope follower
+    gain = [1.0] * len(samples)
     env_level = 0.0
 
     for i in range(len(samples)):
@@ -861,29 +876,26 @@ def apply_compressor(samples: List[float], threshold: float = 0.5,
 
         # Smooth envelope follower
         if input_level > env_level:
-            # Attack
             coeff = 1.0 / attack_samples
             env_level += coeff * (input_level - env_level)
         else:
-            # Release
             coeff = 1.0 / release_samples
             env_level += coeff * (input_level - env_level)
 
-        # Compute gain reduction
+        # Compute gain reduction in dB
         if env_level > threshold:
-            over_db = env_level - threshold
-            compressed_db = over_db / ratio
-            gain_reduction[i] = -(over_db - compressed_db)
-        else:
-            gain_reduction[i] = 0.0
+            # Convert to dB, compress, convert back
+            level_db = 20.0 * math.log10(env_level) if env_level > 0 else -120.0
+            threshold_db = 20.0 * math.log10(threshold) if threshold > 0 else -120.0
+            over_db = level_db - threshold_db
+            compressed_db = threshold_db + over_db / ratio
+            # Gain in dB = compressed_db - level_db
+            gain_db = compressed_db - level_db
+            gain[i] = 10.0 ** (gain_db / 20.0)
+        # else gain[i] stays 1.0 (no compression)
 
-    # Apply gain reduction (convert from linear dB-like reduction)
-    result = []
-    for i, s in enumerate(samples):
-        # Convert dB-like reduction to linear gain
-        gain = 10.0 ** (gain_reduction[i] / 20.0) if gain_reduction[i] != 0 else 1.0
-        result.append(s * gain)
-
+    # Apply gain
+    result = [s * g for s, g in zip(samples, gain)]
     return result
 
 
@@ -1106,6 +1118,15 @@ def visualize_spectrum_ascii(samples: List[float], width: int = TERMINAL_WIDTH,
         return "(not enough samples for spectrum)"
 
     n = len(samples)
+
+    # Downsample long signals to keep computation reasonable
+    # Use at most 16384 samples for the DFT (about 0.37s at 44100Hz)
+    MAX_DFT_SAMPLES = 16384
+    if n > MAX_DFT_SAMPLES:
+        step = n / MAX_DFT_SAMPLES
+        samples = [samples[int(i * step)] for i in range(MAX_DFT_SAMPLES)]
+        n = MAX_DFT_SAMPLES
+
     # Pick logarithmically spaced frequency bins
     bins = []
     min_freq = 20
@@ -1233,9 +1254,9 @@ def export_wav(samples: List[float], filename: str,
 
         wf.writeframes(data)
 
-    # Print file size
+    # Report file size (using stderr to avoid polluting stdout in library usage)
     size = os.path.getsize(filename)
-    print(f"  Exported: {filename} ({size:,} bytes, {len(samples)/sample_rate:.2f}s)")
+    print(f"  Exported: {filename} ({size:,} bytes, {len(samples)/sample_rate:.2f}s)", file=sys.stderr)
 
 
 def import_wav(filename: str) -> Tuple[List[float], int]:
@@ -1570,9 +1591,9 @@ def interactive_mode():
     print("╚══════════════════════════════════════════════════════════════╝")
     print()
     print("Commands:")
-    print("  gen <wave> <freq/note> <duration>  — Generate waveform")
-    print("  chirp <start_freq> <end_freq> <dur> — Generate chirp/sweep")
-    print("  pulse <freq> <duration> [duty]       — Generate pulse wave (duty 0.0-1.0)")
+    print("  gen <wave> <freq/note> <dur> [amp] — Generate waveform")
+    print("  chirp <start> <end> <dur> [amp] [method] — Generate chirp/sweep")
+    print("  pulse <freq> <duration> [duty] [amp] — Generate pulse wave (duty 0.0-1.0)")
     print("  effect <name> [params]             — Apply effect to current wave")
     print("  adsr <a> <d> <s> <r>               — Apply ADSR envelope")
     print("  mix <idx1> <idx2> [w1] [w2]        — Mix two stored waves")
@@ -1623,48 +1644,59 @@ def interactive_mode():
 
             elif action == 'gen':
                 if len(parts) < 4:
-                    print("Usage: gen <wave_type> <freq_or_note> <duration>")
+                    print("Usage: gen <wave_type> <freq_or_note> <duration> [amplitude]")
                     continue
                 wave_type = parts[1].lower()
                 freq = resolve_freq(parts[2])
                 duration = float(parts[3])
+                amplitude = float(parts[4]) if len(parts) > 4 else 0.8
                 if wave_type not in WAVE_GENERATORS or WAVE_GENERATORS[wave_type] is None:
                     print(f"Unknown wave type: {wave_type}. Available: {', '.join(k for k,v in WAVE_GENERATORS.items() if v is not None)}")
                     continue
                 gen = WAVE_GENERATORS[wave_type]
                 if wave_type == 'noise':
-                    samples = generate_noise(duration, 1.0, SAMPLE_RATE)
+                    samples = generate_noise(duration, amplitude, SAMPLE_RATE)
                 else:
-                    samples = gen(freq, duration, 1.0, SAMPLE_RATE)
+                    samples = gen(freq, duration, amplitude, SAMPLE_RATE)
                 name = f"{wave_type}_{parts[2]}_{duration}s"
                 current = samples
                 waves.append((name, samples))
                 current_melody_notes = None
-                print(f"  Generated {name} ({len(samples)} samples)")
+                print(f"  Generated {name} ({len(samples)} samples, amp={amplitude})")
 
             elif action == 'pulse':
                 if len(parts) < 4:
-                    print("Usage: pulse <freq_or_note> <duration> [duty_cycle]")
+                    print("Usage: pulse <freq_or_note> <duration> [duty_cycle] [amplitude]")
                     continue
                 freq = resolve_freq(parts[1])
                 duration = float(parts[2])
                 duty = float(parts[3]) if len(parts) > 3 else 0.5
-                samples = generate_pulse(freq, duration, 1.0, duty, SAMPLE_RATE)
+                amplitude = float(parts[4]) if len(parts) > 4 else 0.8
+                samples = generate_pulse(freq, duration, amplitude, duty, SAMPLE_RATE)
                 name = f"pulse_{parts[1]}_{duration}s_d{duty}"
                 current = samples
                 waves.append((name, samples))
                 current_melody_notes = None
-                print(f"  Generated {name} ({len(samples)} samples)")
+                print(f"  Generated {name} ({len(samples)} samples, amp={amplitude})")
 
             elif action == 'chirp':
                 if len(parts) < 4:
-                    print("Usage: chirp <start_freq> <end_freq> <duration> [linear|exponential]")
+                    print("Usage: chirp <start_freq> <end_freq> <duration> [amplitude] [linear|exponential]")
                     continue
                 start_freq = resolve_freq(parts[1])
                 end_freq = resolve_freq(parts[2])
                 duration = float(parts[3])
-                method = parts[4].lower() if len(parts) > 4 else 'linear'
-                samples = generate_chirp(start_freq, end_freq, duration, 1.0, SAMPLE_RATE, method)
+                amplitude = 0.8
+                method = 'linear'
+                for p in parts[4:]:
+                    if p.lower() in ('linear', 'exponential'):
+                        method = p.lower()
+                    else:
+                        try:
+                            amplitude = float(p)
+                        except ValueError:
+                            pass
+                samples = generate_chirp(start_freq, end_freq, duration, amplitude, SAMPLE_RATE, method)
                 name = f"chirp_{parts[1]}_{parts[2]}_{duration}s"
                 current = samples
                 waves.append((name, samples))
@@ -2035,7 +2067,11 @@ Effect parameters:
         for eff_str in args.effect:
             parts = eff_str.split(':')
             name = parts[0].lower()
-            params = [float(p) for p in parts[1:]] if len(parts) > 1 else []
+            try:
+                params = [float(p) for p in parts[1:]] if len(parts) > 1 else []
+            except ValueError:
+                print(f"  Invalid effect parameter for '{name}': expected numbers, got '{':'.join(parts[1:])}'")
+                return
             effects_to_apply.append((name, params))
 
     # Parse ADSR
@@ -2043,7 +2079,11 @@ Effect parameters:
     if args.adsr:
         parts = args.adsr.split(',')
         if len(parts) == 4:
-            adsr_params = tuple(float(p) for p in parts)
+            try:
+                adsr_params = tuple(float(p) for p in parts)
+            except ValueError:
+                print("ADSR parameters must be numbers. Format: A,D,S,R (e.g. 0.01,0.1,0.7,0.2)")
+                return
         else:
             print("ADSR format: A,D,S,R (e.g. 0.01,0.1,0.7,0.2)")
             return
