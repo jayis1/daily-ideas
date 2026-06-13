@@ -27,10 +27,67 @@ import time
 import math
 import os
 import json
+import unicodedata
 from datetime import datetime
 
+
+def _display_width(text):
+    """Return the visual display width of *text* in terminal columns.
+
+    East-Asian wide characters (including most emoji) count as 2 columns;
+    combining marks and zero-width characters count as 0; everything else
+    counts as 1.  This is a lightweight alternative to pulling in the
+    ``wcwidth`` package.
+    """
+    width = 0
+    for ch in text:
+        cat = unicodedata.category(ch)
+        # Combining marks, surrogates, control chars, zero-width joiners, etc.
+        if cat.startswith(("M", "C")) or ch in ("\u200d", "\u200c", "\u200b", "\ufeff"):
+            continue
+        ea = unicodedata.east_asian_width(ch)
+        width += 2 if ea in ("W", "F") else 1
+    return width
+
+
+def _pad_to_width(text, target_width, align="center"):
+    """Pad *text* so its *display* width equals *target_width*.
+
+    Because emoji/wide chars make ``len()`` unreliable, this calculates
+    padding based on display width.  *align* can be ``"center"``,
+    ``"left"``, or ``"right"``.
+    """
+    dw = _display_width(text)
+    gap = target_width - dw
+    if gap <= 0:
+        return text[:len(text)]  # already fits (or overflow — caller truncates)
+    if align == "center":
+        left = gap // 2
+        right = gap - left
+        return " " * left + text + " " * right
+    elif align == "left":
+        return text + " " * gap
+    elif align == "right":
+        return " " * gap + text
+    return text
+
+
+def _truncate_to_display_width(text, max_width):
+    """Truncate *text* so its display width does not exceed *max_width*.
+
+    Returns the truncated string with ellipsis if truncation occurred.
+    """
+    if _display_width(text) <= max_width:
+        return text
+    result = ""
+    for ch in text:
+        if _display_width(result + ch) > max_width - 1:
+            break
+        result += ch
+    return result + "…"
+
 # Version follows semantic versioning — bump on releases
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # ═══════════════════════════════════════════════════════════
 # TAROT DATA
@@ -851,8 +908,11 @@ class TarotDeck:
         """Look up a card by partial name match (case-insensitive).
 
         Returns (card_key, card_info) for the first match, or None.
+        Empty or whitespace-only strings return None.
         """
         needle = name_fragment.strip().lower()
+        if not needle:
+            return None
         # Check Major Arcana first
         for k, info in MAJOR_ARCANA.items():
             if needle in info["name"].lower():
@@ -865,7 +925,11 @@ class TarotDeck:
 
 
 def render_card(card_info, reversed_card=False, position_name="", width=44):
-    """Render a single tarot card as ASCII art with border."""
+    """Render a single tarot card as ASCII art with border.
+
+    Uses display-width-aware alignment so emoji and wide characters
+    don't break the frame borders.
+    """
     lines = []
     art = card_info["art"]
 
@@ -876,62 +940,90 @@ def render_card(card_info, reversed_card=False, position_name="", width=44):
 
     lines.append(frame_top)
 
-    # Position name
+    # Position name (truncated if too long, display-width-aware centering)
     if position_name:
-        pos_line = f"│ {position_name:^{width-4}} │"
-        lines.append(pos_line)
+        inner_w = width - 4  # space between │ borders
+        pos_text = _truncate_to_display_width(position_name, inner_w)
+        pos_text = _pad_to_width(pos_text, inner_w, align="center")
+        lines.append(f"│ {pos_text} │")
         lines.append(divider)
 
-    # Card name
+    # Card name — display-width-aware centering to keep frame intact
     name = card_info["name"]
     if reversed_card:
         name += " (Reversed)"
     emoji = card_info["emoji"]
-    name_line = f"│ {emoji} {name:^{width-6}} {emoji} │"
-    lines.append(name_line)
+    inner_name = f"{emoji} {_pad_to_width(name, width - 6 - _display_width(emoji) * 2, align='center')} {emoji}"
+    # Final safety: truncate if still too wide
+    if _display_width(inner_name) > width - 4:
+        inner_name = _truncate_to_display_width(inner_name, width - 4)
+    inner_name = _pad_to_width(inner_name, width - 4, align="center")
+    lines.append(f"│ {inner_name} │")
     lines.append(divider)
 
-    # ASCII Art
+    # ASCII Art — display-width-aware centering
     for art_line in art:
         if reversed_card:
             # Reverse the art visually (flip characters approximately)
             art_line = art_line[::-1]
-        padded = art_line.center(width - 4)
+        inner_w = width - 4
+        padded = _pad_to_width(art_line, inner_w, align="center")
+        # Truncate anything that still overflows (safety net)
+        if _display_width(padded) > inner_w:
+            padded = _truncate_to_display_width(padded, inner_w)
+        padded = _pad_to_width(padded, inner_w, align="center")
         lines.append(f"│ {padded} │")
 
     lines.append(divider)
 
-    # Meaning
+    # Meaning label (left-aligned, display-width-aware)
     meaning = card_info["reversed"] if reversed_card else card_info["upright"]
     meaning_label = "Reversed:" if reversed_card else "Upright:"
-    lines.append(f"│ {meaning_label:<{width-4}} │")
+    label_inner = _pad_to_width(meaning_label, width - 4, align="left")
+    lines.append(f"│ {label_inner} │")
 
-    # Word-wrap the meaning
+    # Word-wrap the meaning — display-width-aware
     words = meaning.split()
     current_line = "│  "
     for word in words:
-        if len(current_line) + len(word) + 1 > width - 2:
-            lines.append(current_line + " " * (width - len(current_line) - 1) + "│")
+        test_line = current_line + (" " if current_line != "│  " else "") + word
+        if _display_width(test_line) > width - 2:
+            # Current line is full — pad and emit it
+            # Total line = current_line + padding + "│", display width = width
+            padding = width - _display_width(current_line) - 1  # -1 for the closing │
+            if padding < 0:
+                padding = 0
+            lines.append(current_line + " " * padding + "│")
             current_line = "│  " + word
         else:
-            current_line += (" " if current_line != "│  " else "") + word
+            current_line = test_line
     if current_line.strip():
-        lines.append(current_line + " " * (width - len(current_line) - 1) + "│")
+        padding = width - _display_width(current_line) - 1
+        if padding < 0:
+            padding = 0
+        lines.append(current_line + " " * padding + "│")
 
     lines.append(divider)
 
-    # Story
+    # Story — display-width-aware word-wrap
     story = card_info["story_rev"] if reversed_card else card_info["story_up"]
     story_words = story.split()
     current_line = "│  "
     for word in story_words:
-        if len(current_line) + len(word) + 1 > width - 2:
-            lines.append(current_line + " " * (width - len(current_line) - 1) + "│")
+        test_line = current_line + (" " if current_line != "│  " else "") + word
+        if _display_width(test_line) > width - 2:
+            padding = width - _display_width(current_line) - 1
+            if padding < 0:
+                padding = 0
+            lines.append(current_line + " " * padding + "│")
             current_line = "│  " + word
         else:
-            current_line += (" " if current_line != "│  " else "") + word
+            current_line = test_line
     if current_line.strip():
-        lines.append(current_line + " " * (width - len(current_line) - 1) + "│")
+        padding = width - _display_width(current_line) - 1
+        if padding < 0:
+            padding = 0
+        lines.append(current_line + " " * padding + "│")
 
     lines.append(frame_bot)
     return lines
@@ -963,10 +1055,10 @@ def display_splash():
     print()
     print_centered("╔══════════════════════════════════════════════════════════╗", width)
     print_centered("║                                                          ║", width)
-    print_centered("║         ✨  C L I  T A R O T  R E A D E R  ✨           ║", width)
+    print_centered("║         ✨  C L I  T A R O T  R E A D E R  ✨              ║", width)
     print_centered("║                                                          ║", width)
     print_centered("║        The cards hold no power over you.                 ║", width)
-    print_centered("║        You hold all the power over the cards.             ║", width)
+    print_centered("║        You hold all the power over the cards.            ║", width)
     print_centered("║                                                          ║", width)
     print_centered("╚══════════════════════════════════════════════════════════╝", width)
     print()
@@ -1098,6 +1190,16 @@ def generate_synthesis(readings, spread_key=None):
     astrological associations, and (for relationship spreads) zodiac compatibility.
     """
     lines = []
+
+    # Handle empty readings gracefully
+    if not readings:
+        lines.append("No cards were drawn — the reading is empty.")
+        lines.append("Shuffle the deck and try again when you're ready.")
+        lines.append("")
+        lines.append("Remember: the tarot is a mirror, not a map. It reflects")
+        lines.append("what you already know on some level. Trust yourself first,")
+        lines.append("and let the cards illuminate what was hidden in shadow.")
+        return lines
 
     # Count orientations
     num_reversed = sum(1 for r in readings if r["reversed"])
@@ -1447,8 +1549,11 @@ def quick_reading(spread_type="three_card", seed=None, as_json=False, save_path=
         json_str = json.dumps(output, indent=2, ensure_ascii=False)
         print(json_str)
         if save_path:
-            with open(save_path, "w", encoding="utf-8") as f:
-                f.write(json_str)
+            try:
+                with open(save_path, "w", encoding="utf-8") as f:
+                    f.write(json_str)
+            except OSError as e:
+                print(f"Error: Could not save to '{save_path}': {e}", file=sys.stderr)
         return
 
     # Human-readable output
@@ -1471,8 +1576,11 @@ def quick_reading(spread_type="three_card", seed=None, as_json=False, save_path=
     print(full_text)
 
     if save_path:
-        with open(save_path, "w", encoding="utf-8") as f:
-            f.write(full_text)
+        try:
+            with open(save_path, "w", encoding="utf-8") as f:
+                f.write(full_text)
+        except OSError as e:
+            print(f"Error: Could not save to '{save_path}': {e}", file=sys.stderr)
 
 
 def lookup_card(name_fragment, as_json=False):
@@ -1646,8 +1754,11 @@ def main():
             json_str = json.dumps(entry, indent=2, ensure_ascii=False)
             print(json_str)
             if args.save:
-                with open(args.save, "w", encoding="utf-8") as f:
-                    f.write(json_str)
+                try:
+                    with open(args.save, "w", encoding="utf-8") as f:
+                        f.write(json_str)
+                except OSError as e:
+                    print(f"Error: Could not save to '{args.save}': {e}", file=sys.stderr)
         else:
             text = f"✨ Card of the Day ✨\n"
             text += f"{card_info['emoji']} {card_info['name']} ({orient})\n"
@@ -1655,8 +1766,11 @@ def main():
             text += f"  {story}\n"
             print(text)
             if args.save:
-                with open(args.save, "w", encoding="utf-8") as f:
-                    f.write(text)
+                try:
+                    with open(args.save, "w", encoding="utf-8") as f:
+                        f.write(text)
+                except OSError as e:
+                    print(f"Error: Could not save to '{args.save}': {e}", file=sys.stderr)
     elif args.quick:
         quick_reading(args.spread, seed=args.seed, as_json=args.as_json, save_path=args.save)
     else:

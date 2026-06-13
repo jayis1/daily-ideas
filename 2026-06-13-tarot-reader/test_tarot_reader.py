@@ -124,6 +124,13 @@ def test_find_card_not_found():
     assert result is None
 
 
+def test_find_card_empty_string():
+    """find_card should return None for empty or whitespace-only strings."""
+    deck = tr.TarotDeck(seed=42)
+    assert deck.find_card("") is None, "Empty string should return None"
+    assert deck.find_card("   ") is None, "Whitespace-only should return None"
+
+
 def test_render_card():
     """render_card should return a list of ASCII art lines."""
     info = tr.MAJOR_ARCANA[0]
@@ -269,6 +276,67 @@ def test_version_defined():
     assert isinstance(tr.__version__, str)
     parts = tr.__version__.split(".")
     assert len(parts) >= 2, "Version should follow semver"
+
+
+def test_display_width():
+    """_display_width should correctly measure terminal column width."""
+    # ASCII chars are 1 column each
+    assert tr._display_width("hello") == 5
+    # Empty string
+    assert tr._display_width("") == 0
+    # Emoji are typically 2 columns wide
+    assert tr._display_width("🃏") == 2
+    # Mixed: "🃏hello" = 2 + 5 = 7
+    assert tr._display_width("🃏hello") == 7
+
+
+def test_render_card_frame_alignment():
+    """All rendered card lines should have consistent display width matching the frame."""
+    width = 44
+    for key, card in list(tr.MAJOR_ARCANA.items())[:5]:
+        for is_rev in [False, True]:
+            lines = tr.render_card(card, reversed_card=is_rev, width=width)
+            for i, line in enumerate(lines):
+                dw = tr._display_width(line)
+                assert dw == width, (
+                    f"Frame misaligned: {card['name']} rev={is_rev} line {i}: "
+                    f"display_width={dw} expected {width}"
+                )
+
+
+def test_render_card_long_position_name():
+    """Long position names should be truncated, not overflow the frame."""
+    info = tr.MAJOR_ARCANA[0]
+    lines = tr.render_card(info, False, position_name="X" * 50, width=44)
+    for line in lines:
+        dw = tr._display_width(line)
+        assert dw == 44, f"Position overflow: display_width={dw}"
+
+
+def test_generate_synthesis_empty():
+    """generate_synthesis with empty readings should not crash or be misleading."""
+    syn = tr.generate_synthesis([], "single")
+    assert isinstance(syn, list)
+    assert len(syn) > 0
+    # Should mention that the reading is empty, not claim "balance"
+    text = " ".join(syn).lower()
+    assert "empty" in text or "no cards" in text, (
+        f"Empty synthesis should mention emptiness, got: {syn[:3]}"
+    )
+
+
+def test_save_path_error_handling():
+    """Saving to an invalid path should show an error, not crash."""
+    import io
+    from unittest.mock import patch
+    buf = io.StringIO()
+    err = io.StringIO()
+    with patch("sys.stdout", buf), patch("sys.stderr", err):
+        tr.quick_reading("single", seed=42, save_path="/nonexistent/dir/file.txt")
+    stderr_out = err.getvalue()
+    assert "Error" in stderr_out or "Could not save" in stderr_out, (
+        f"Should report save error gracefully, stderr: {stderr_out[:100]}"
+    )
 
 
 if __name__ == "__main__":
