@@ -5,7 +5,7 @@ Generates fictional planets with detailed properties, atmosphere, life forms,
 ASCII art globe renderings, habitability scores, hazard assessments, and resource
 richness ratings. Each planet is seeded for reproducibility.
 
-Version: 1.1.0
+Version: 1.2.0
 """
 
 import hashlib
@@ -18,7 +18,7 @@ import argparse
 from dataclasses import dataclass, field, asdict
 from typing import List, Optional, Dict
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 
 # ─── Data tables ──────────────────────────────────────────────────────────────
@@ -283,6 +283,15 @@ def compute_habitability(planet_type: str, mean_temp_c: float, atmosphere: str,
         score += 5
     elif life_level not in ("None",):
         score += 2
+
+    # Distance from star scoring (ideal habitable zone: 0.7–1.5 AU for G-class;
+    # roughly proportional to sqrt(star_mass))
+    # This is a simplified bonus — planets too close or too far lose points
+    if planet_type != "Rogue Planet":
+        if 0.5 <= distance_au <= 2.0:
+            score += 5
+        elif 0.2 <= distance_au < 0.5 or 2.0 < distance_au <= 5.0:
+            score += 2
 
     # Type penalty/bonus
     type_bonuses = {
@@ -580,27 +589,92 @@ def generate_planet(seed: Optional[str] = None) -> Planet:
     return planet
 
 
+def _format_atmosphere(atmo: str) -> str:
+    """Format atmosphere for use in descriptions, handling 'None' gracefully."""
+    if atmo.startswith("None"):
+        if atmo == "None":
+            return "no atmosphere"
+        # e.g., "None - Escaped to Space" -> "no atmosphere (escaped to space)"
+        detail = atmo[len("None"):].strip(" -")
+        return f"no atmosphere ({detail.lower()})"
+    return atmo.lower()
+
+
+def _format_life(life: str) -> str:
+    """Format life level for use in descriptions, handling 'None' gracefully."""
+    if life == "None":
+        return "no known life"
+    return life.lower()
+
+
+def _format_features(features: list) -> str:
+    """Format a features list for use in descriptions with proper singular/plural."""
+    if len(features) == 1:
+        return features[0].lower()
+    return ", ".join(f.lower() for f in features)
+
+
+def _article(word: str) -> str:
+    """Return 'an' if the word starts with a vowel sound, else 'a'."""
+    if word and word[0].lower() in "aeiou":
+        return "an"
+    return "a"
+
+
 def _generate_description(name, ptype, star_color, atmo, life, features, rng):
     """Generate a short lore paragraph."""
-    templates = [
-        f"{name} orbits a {star_color.lower()} star, veiled in {atmo.lower()}. "
-        f"Known for its {', '.join(features).lower()}, this {ptype.lower()} hosts {life.lower()}.",
+    atmo_desc = _format_atmosphere(atmo)
+    life_desc = _format_life(life)
+    features_str = _format_features(features)
+    star_article = _article(star_color.lower())
+    ptype_article = _article(ptype.lower())
+    is_rogue = (ptype == "Rogue Planet")
 
-        f"Deep in the cosmos, {name} spins silently — a {ptype.lower()} wrapped in {atmo.lower()}. "
-        f"Explorers report {', '.join(features).lower()}, and life here is classified as {life.lower()}.",
+    if is_rogue:
+        # Rogue planets don't orbit a star — use star-less descriptions
+        templates = [
+            f"Drifting through the void, {name} is {ptype_article} {ptype.lower()} veiled in {atmo_desc}. "
+            f"Known for its {features_str}, this world hosts {life_desc}.",
 
-        f"The {ptype.lower()} {name} endures under the glow of a {star_color.lower()} sun. "
-        f"Under skies of {atmo.lower()}, {', '.join(features).lower()} define its character. "
-        f"Life assessment: {life.lower()}.",
+            f"Deep in the cosmos, {name} drifts — {ptype_article} {ptype.lower()} wrapped in {atmo_desc}. "
+            f"Explorers report {features_str}, and life here is {life_desc}.",
 
-        f"Catalogued as a {ptype.lower()}, {name} breathes {atmo.lower()}. "
-        f"Its most notable features include {', '.join(features).lower()}. "
-        f"The biosphere reads: {life.lower()}.",
+            f"The {ptype.lower()} {name} wanders the dark, shrouded in {atmo_desc}. "
+            f"Its notable features include {features_str}. Life assessment: {life_desc}.",
 
-        f"A {star_color.lower()} star illuminates the {ptype.lower()} {name}, where {atmo.lower()} "
-        f"fills the atmosphere. Beneath, {', '.join(features).lower()} await discovery. "
-        f"Life status: {life.lower()}.",
-    ]
+            f"Catalogued as {ptype_article} {ptype.lower()}, {name} breathes {atmo_desc}. "
+            f"Its most notable feature{'s' if len(features) != 1 else ''} include{'s' if len(features) == 1 else ''} {features_str}. "
+            f"The biosphere reads: {life_desc}.",
+
+            f"Starless and alone, the {ptype.lower()} {name} is wrapped in {atmo_desc}. "
+            f"Within, {features_str} await discovery. Life status: {life_desc}.",
+        ]
+    else:
+        # For the "fills the atmosphere" template, handle "no atmosphere" specially
+        if atmo_desc == "no atmosphere" or atmo_desc.startswith("no atmosphere"):
+            atmo_fills = "the atmosphere is absent"
+        else:
+            atmo_fills = f"{atmo_desc} fills the atmosphere"
+
+        templates = [
+            f"{name} orbits {star_article} {star_color.lower()} star, veiled in {atmo_desc}. "
+            f"Known for its {features_str}, this {ptype.lower()} hosts {life_desc}.",
+
+            f"Deep in the cosmos, {name} spins silently — {ptype_article} {ptype.lower()} wrapped in {atmo_desc}. "
+            f"Explorers report {features_str}, and life here is classified as {life_desc}.",
+
+            f"The {ptype.lower()} {name} endures under the glow of {star_article} {star_color.lower()} sun. "
+            f"Under skies of {atmo_desc}, its notable features include {features_str}. "
+            f"Life assessment: {life_desc}.",
+
+            f"Catalogued as {ptype_article} {ptype.lower()}, {name} breathes {atmo_desc}. "
+            f"Its most notable feature{'s' if len(features) != 1 else ''} include{'s' if len(features) == 1 else ''} {features_str}. "
+            f"The biosphere reads: {life_desc}.",
+
+            f"{star_article.capitalize()} {star_color.lower()} star illuminates the {ptype.lower()} {name}, where {atmo_fills}. "
+            f"Within, {features_str} await discovery. "
+            f"Life status: {life_desc}.",
+        ]
     return rng.choice(templates)
 
 

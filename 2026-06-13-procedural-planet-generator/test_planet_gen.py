@@ -17,6 +17,7 @@ from planet_gen import (
     STAR_TYPES, PLANET_TYPES, ATMOSPHERES, LIFE_LEVELS, FEATURES,
     HAZARDS, RESOURCES, GLOBE_CHARS, NAME_PREFIXES, NAME_SUFFIXES,
     DESCRIPTORS, __version__,
+    _format_atmosphere, _format_life, _format_features, _article,
 )
 
 
@@ -509,6 +510,166 @@ class TestDataIntegrity:
             assert data["mass_range"][0] < data["mass_range"][1]
 
 
+class TestFormatHelpers:
+    """Tests for description formatting helper functions."""
+
+    def test_format_atmosphere_normal(self):
+        """Normal atmospheres should be lowercased."""
+        assert _format_atmosphere("Nitrogen/Oxygen") == "nitrogen/oxygen"
+        assert _format_atmosphere("Sulfur Dioxide") == "sulfur dioxide"
+
+    def test_format_atmosphere_none(self):
+        """Atmosphere 'None' should become 'no atmosphere'."""
+        assert _format_atmosphere("None") == "no atmosphere"
+
+    def test_format_atmosphere_none_with_detail(self):
+        """Atmosphere like 'None - Escaped to Space' should be descriptive."""
+        result = _format_atmosphere("None - Escaped to Space")
+        assert "no atmosphere" in result
+        assert "escaped to space" in result
+
+    def test_format_life_normal(self):
+        """Normal life levels should be lowercased."""
+        assert _format_life("Complex Ecosystem") == "complex ecosystem"
+
+    def test_format_life_none(self):
+        """Life level 'None' should become 'no known life'."""
+        assert _format_life("None") == "no known life"
+
+    def test_format_features_single(self):
+        """Single feature should be returned lowercase."""
+        assert _format_features(["Cryovolcanoes"]) == "cryovolcanoes"
+
+    def test_format_features_multiple(self):
+        """Multiple features should be comma-separated and lowercased."""
+        result = _format_features(["Cryovolcanoes", "Diamond Rain"])
+        assert result == "cryovolcanoes, diamond rain"
+
+    def test_article_vowel(self):
+        """Words starting with vowels should use 'an'."""
+        assert _article("orange") == "an"
+        assert _article("Orange") == "an"
+
+    def test_article_consonant(self):
+        """Words starting with consonants should use 'a'."""
+        assert _article("red") == "a"
+        assert _article("Blue") == "a"
+
+
+class TestDescriptionGrammar:
+    """Tests for description grammar correctness."""
+
+    def test_no_life_none_in_description(self):
+        """Descriptions should not contain raw 'None' for life level."""
+        for i in range(200):
+            p = generate_planet(f"desc_none_life_{i}")
+            if p.life_level == "None":
+                assert "hosts none" not in p.description.lower(), \
+                    f"Raw 'None' life in description: {p.description}"
+                assert "classified as none" not in p.description.lower(), \
+                    f"Raw 'None' life in description: {p.description}"
+                assert "reads: none" not in p.description.lower(), \
+                    f"Raw 'None' life in description: {p.description}"
+                assert "status: none" not in p.description.lower(), \
+                    f"Raw 'None' life in description: {p.description}"
+                break
+
+    def test_no_atmosphere_none_in_description(self):
+        """Descriptions should not contain raw 'None' for atmosphere."""
+        for i in range(500):
+            p = generate_planet(f"desc_none_atmo_{i}")
+            if p.atmosphere.startswith("None"):
+                assert "veiled in none" not in p.description.lower(), \
+                    f"Raw 'None' atmosphere in description: {p.description}"
+                assert "breathes none" not in p.description.lower(), \
+                    f"Raw 'None' atmosphere in description: {p.description}"
+                assert "where none fills" not in p.description.lower(), \
+                    f"Raw 'None' atmosphere in description: {p.description}"
+                assert "skies of none" not in p.description.lower(), \
+                    f"Raw 'None' atmosphere in description: {p.description}"
+                break
+
+    def test_rogue_planet_no_star_reference(self):
+        """Rogue Planet descriptions should not reference stars."""
+        for i in range(500):
+            p = generate_planet(f"desc_rogue_{i}")
+            if p.planet_type == "Rogue Planet":
+                desc_lower = p.description.lower()
+                assert "star" not in desc_lower or "starless" in desc_lower, \
+                    f"Rogue Planet mentions star: {p.description}"
+                assert "sun" not in desc_lower, \
+                    f"Rogue Planet mentions sun: {p.description}"
+                assert "orbits" not in desc_lower, \
+                    f"Rogue Planet mentions orbiting: {p.description}"
+                break
+
+    def test_article_a_an_orange(self):
+        """Descriptions should use 'an orange' not 'a orange'."""
+        found = False
+        for i in range(500):
+            p = generate_planet(f"desc_article_{i}")
+            if p.planet_type != "Rogue Planet" and p.star_color == "Orange":
+                # Only check if the description mentions the star color
+                if "orange" in p.description.lower():
+                    assert "a orange" not in p.description, \
+                        f"Wrong article 'a orange': {p.description}"
+                    assert "an orange" in p.description, \
+                        f"Expected 'an orange': {p.description}"
+                    found = True
+                    break
+        # If we never found an Orange-star planet whose description mentions the star,
+        # that's OK — just skip. But if we did find one, it must use correct grammar.
+        if not found:
+            # Couldn't find a matching planet in 500 tries; still verify helper works
+            assert _article("orange") == "an"
+
+    def test_article_a_an_for_vowel_planet_types(self):
+        """Descriptions should use 'an ice world', 'an ocean world', etc., not 'a ice world'."""
+        vowel_types = {"Ice World", "Ice Giant", "Ocean World"}
+        import re
+        for i in range(1000):
+            p = generate_planet(f"desc_ptype_article_{i}")
+            if p.planet_type in vowel_types:
+                # Should never have "a ice" or "a ocean" in description
+                assert not re.search(r'\ba (ice|ocean) ', p.description), \
+                    f"Wrong article for vowel-starting planet type: {p.description}"
+
+    def test_single_feature_grammar(self):
+        """Descriptions should handle single/multiple features gracefully."""
+        for i in range(500):
+            p = generate_planet(f"desc_single_feat_{i}")
+            if len(p.features) == 1:
+                # Single features should use "feature includes" not "features includes"
+                if "features includes" in p.description:
+                    assert False, \
+                        f"Single feature with 'features includes': {p.description}"
+                # "feature includes" is correct for single feature
+                break
+
+    def test_habitability_uses_distance(self):
+        """Habitability should factor in distance from star."""
+        # Use a planet type where the difference matters (not capped at 100)
+        # A marginal Ocean World where distance makes or breaks it
+        score_close, _ = compute_habitability(
+            "Ocean World", 15, "Nitrogen/Oxygen", 1.0,
+            "Microbial", 85.0, "Moderate", 1.0
+        )
+        score_far, _ = compute_habitability(
+            "Ocean World", 15, "Nitrogen/Oxygen", 1.0,
+            "Microbial", 85.0, "Moderate", 50.0
+        )
+        assert score_close > score_far, \
+            f"Close planet ({score_close}) should score higher than far planet ({score_far})"
+
+        # Rogue planet should NOT get distance bonus even if close
+        score_rogue, _ = compute_habitability(
+            "Rogue Planet", -200, "Thin Nitrogen/Methane", 0.8,
+            "None", 0.0, "Weak", 0.5
+        )
+        # Just verify it doesn't crash and scores are in range
+        assert 0 <= score_rogue <= 100
+
+
 if __name__ == "__main__":
     # Run all tests
     test_classes = [
@@ -516,6 +677,7 @@ if __name__ == "__main__":
         TestComputeHabitability, TestComputeHazards, TestComputeResources,
         TestRenderGlobe, TestDisplayPlanet, TestExportFunctions,
         TestComparePlanets, TestVersion, TestDataIntegrity,
+        TestFormatHelpers, TestDescriptionGrammar,
     ]
 
     total_tests = 0
