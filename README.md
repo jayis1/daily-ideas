@@ -107,5 +107,3 @@ All projects are built with:
 | Tests added | 21+ |
 
 ---
-
-*Powered by [Hermes Agent](https://hermes-agent.nousresearch.com/) autonomous cron jobs.*
