@@ -7,7 +7,7 @@ Supports sine, square, sawtooth, triangle, noise, harmonic, and chirp waveforms 
 real-time ASCII visualization, envelope shaping, filters, effects, and WAV export.
 """
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 import argparse
 import math
@@ -206,20 +206,44 @@ def resolve_freq(note_or_freq: str) -> float:
     """Resolve a note name (e.g. 'A4', 'Eb3') or frequency string to a float.
 
     Supports sharps (#) and flats (b) in note names, e.g. 'C#4', 'Eb3'.
+    Case-insensitive: 'eb3' works, 'bb4' works.
     """
     raw = note_or_freq.strip()
     # Try direct lookup first (preserves case-sensitive keys like 'Eb3')
     if raw in NOTE_FREQS:
         return NOTE_FREQS[raw]
-    # Try uppercase version (handles 'c4' -> 'C4', 'a#4' -> 'A#4')
-    upper = raw.upper()
-    if upper in NOTE_FREQS:
-        return NOTE_FREQS[upper]
+
+    # Normalize for case-insensitive lookup:
+    # Uppercase the letter, preserve 'b' as flat indicator, '#' as sharp.
+    # e.g. 'eb3' -> 'Eb3', 'bb4' -> 'Bb4', 'a#4' -> 'A#4'
+    normalized = _normalize_note_name(raw)
+    if normalized in NOTE_FREQS:
+        return NOTE_FREQS[normalized]
+
     try:
         return float(raw)
     except ValueError:
         raise ValueError(f"Unknown note or frequency: {raw!r}. "
                          f"Examples: 'A4', 'C#5', 'Eb3', '440', '261.63'")
+
+
+def _normalize_note_name(name: str) -> str:
+    """Normalize a note name to the format used in NOTE_FREQS.
+
+    Converts 'eb3' -> 'Eb3', 'bb4' -> 'Bb4', 'c#5' -> 'C#5', 'a4' -> 'A4'.
+    """
+    if not name:
+        return name
+    # Extract letter, accidental(s), and octave
+    letter = name[0].upper()
+    rest = name[1:]
+    accidental = ''
+    i = 0
+    while i < len(rest) and rest[i] in '#b':
+        accidental += rest[i]
+        i += 1
+    octave = rest[i:]
+    return letter + accidental + octave
 
 
 # ─── Envelope ────────────────────────────────────────────────────────────────
@@ -294,6 +318,8 @@ def apply_vibrato(samples: List[float], rate: float = 5.0, depth: float = 0.002,
 def apply_lowpass(samples: List[float], cutoff: float = 1000.0,
                   sample_rate: int = SAMPLE_RATE) -> List[float]:
     """Apply a simple one-pole low-pass filter."""
+    if not samples:
+        return []
     if cutoff <= 0:
         raise ValueError(f"Cutoff frequency must be positive, got {cutoff}")
     rc = 1.0 / (2.0 * math.pi * cutoff)
@@ -309,6 +335,8 @@ def apply_lowpass(samples: List[float], cutoff: float = 1000.0,
 def apply_highpass(samples: List[float], cutoff: float = 1000.0,
                    sample_rate: int = SAMPLE_RATE) -> List[float]:
     """Apply a simple one-pole high-pass filter."""
+    if not samples:
+        return []
     if cutoff <= 0:
         raise ValueError(f"Cutoff frequency must be positive, got {cutoff}")
     rc = 1.0 / (2.0 * math.pi * cutoff)
@@ -323,13 +351,15 @@ def apply_highpass(samples: List[float], cutoff: float = 1000.0,
 
 def apply_distortion(samples: List[float], drive: float = 2.0) -> List[float]:
     """Apply distortion (soft clipping using tanh approximation)."""
-    if drive <= 0:
-        raise ValueError(f"Drive must be positive, got {drive}")
+    if drive < 0:
+        raise ValueError(f"Drive must be non-negative, got {drive}")
+    if drive == 0:
+        return list(samples)
     result = []
     for s in samples:
         driven = s * drive
         # Better soft clip: tanh approximation
-        clipped = math.tanh(driven) / math.tanh(drive) if drive > 0 else s
+        clipped = math.tanh(driven) / math.tanh(drive)
         result.append(clipped)
     return result
 
@@ -447,6 +477,8 @@ def apply_pitch_shift(samples: List[float], semitones: float = 0.0,
     Positive semitones shift up, negative shifts down.
     Uses linear interpolation for resampling.
     """
+    if not samples:
+        return []
     if semitones == 0:
         return list(samples)
 
@@ -499,6 +531,8 @@ def mix_waves(waves: List[List[float]], weights: Optional[List[float]] = None) -
     if weights is None:
         weights = [1.0 / len(waves)] * len(waves)
     total_weight = sum(weights)
+    if total_weight == 0:
+        return [0.0] * max_len
     weights = [w / total_weight for w in weights]
 
     result = [0.0] * max_len
@@ -562,10 +596,24 @@ def visualize_ascii(samples: List[float], width: int = TERMINAL_WIDTH,
         lines.append('│' + ''.join(row) + '│')
     lines.append(bottom_line)
 
-    # Add scale labels
-    lines.insert(1, f'│ +1.0 {" " * (len(points) - 6)}│')
-    lines.insert(height // 2 + 2, f'│  0.0 {" " * (len(points) - 6)}│')
-    lines.insert(-1, f'│ -1.0 {" " * (len(points) - 6)}│')
+    # Add scale labels — annotate specific rows in the canvas
+    # Row 0 = +1.0, center row = 0.0, bottom row = -1.0
+    label_col = 2  # Position within the data area for label text
+    center_row = height // 2
+
+    # +1.0 label at top data row (line index 1)
+    row_str = lines[1]
+    lines[1] = row_str[:label_col] + '+1.0' + row_str[label_col + 4:]
+
+    # 0.0 label at center data row
+    center_line_idx = center_row + 1
+    row_str = lines[center_line_idx]
+    lines[center_line_idx] = row_str[:label_col] + ' 0.0' + row_str[label_col + 4:]
+
+    # -1.0 label at bottom data row
+    bottom_line_idx = height
+    row_str = lines[bottom_line_idx]
+    lines[bottom_line_idx] = row_str[:label_col] + '-1.0' + row_str[label_col + 4:]
 
     return '\n'.join(lines)
 
@@ -747,44 +795,23 @@ NOTE_ORDER = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
 
 def note_to_freq(note_name: str) -> float:
-    """Convert a note name like 'C4' to frequency."""
+    """Convert a note name like 'C4' to frequency.
+
+    Supports sharps (#) and flats (b), e.g. 'C#4', 'Eb3', 'Bb4'.
+    Delegates to resolve_freq for accurate lookups.
+    """
     note = note_name.strip()
-    # Parse note letter and octave
-    if len(note) < 2:
-        return float(note)
-
-    letter = note[0].upper()
-    accidental = ''
-    octave_str = ''
-
-    i = 1
-    while i < len(note) and note[i] in '#b':
-        accidental += note[i]
-        i += 1
-    octave_str = note[i:]
-
-    if not octave_str:
-        # Try as a frequency
+    if not note:
+        raise ValueError(f"Empty note name")
+    # Delegate to resolve_freq which handles all note formats correctly
+    try:
+        return resolve_freq(note)
+    except ValueError:
+        # Try as a numeric frequency
         try:
             return float(note)
         except ValueError:
-            octave_str = '4'
-
-    # Build the note key
-    key = letter + accidental + octave_str
-    key_upper = key.upper().replace('B', 'b')
-
-    if key_upper in NOTE_FREQS:
-        return NOTE_FREQS[key_upper]
-
-    # Manual calculation
-    try:
-        semitone = NOTE_ORDER.index(letter + accidental.replace('b', '').replace('#', '#') if accidental else '')
-        octave = int(octave_str)
-        midi = (octave + 1) * 12 + semitone
-        return 440.0 * (2.0 ** ((midi - 69) / 12.0))
-    except (ValueError, IndexError):
-        return float(note)
+            raise ValueError(f"Unknown note or frequency: {note!r}")
 
 
 def generate_chord(root_freq: float, chord_type: str, duration: float,
@@ -795,11 +822,20 @@ def generate_chord(root_freq: float, chord_type: str, duration: float,
     waves = []
     for interval in intervals:
         freq = root_freq * (2.0 ** (interval / 12.0))
-        gen = WAVE_GENERATORS.get(wave_type, generate_sine)
         if wave_type == 'noise':
             w = generate_noise(duration, amplitude / len(intervals), sample_rate)
+        elif wave_type == 'harmonic':
+            w = generate_harmonic(freq, duration, amplitude / len(intervals),
+                                   sample_rate=sample_rate)
+        elif wave_type == 'chirp':
+            # For chords, chirp does a sweep from root_freq to this note's freq
+            w = generate_chirp(freq, freq, duration, amplitude / len(intervals),
+                                sample_rate)
+        elif wave_type in WAVE_GENERATORS and WAVE_GENERATORS[wave_type] is not None:
+            w = WAVE_GENERATORS[wave_type](freq, duration, amplitude / len(intervals),
+                                             sample_rate)
         else:
-            w = gen(freq, duration, amplitude / len(intervals), sample_rate)
+            w = generate_sine(freq, duration, amplitude / len(intervals), sample_rate)
         waves.append(w)
     return mix_waves(waves)
 
@@ -813,11 +849,19 @@ def generate_arpeggio(root_freq: float, chord_type: str, duration: float,
     result = []
     for interval in intervals:
         freq = root_freq * (2.0 ** (interval / 12.0))
-        gen = WAVE_GENERATORS.get(wave_type, generate_sine)
         if wave_type == 'noise':
             w = generate_noise(note_duration, amplitude, sample_rate)
+        elif wave_type == 'harmonic':
+            w = generate_harmonic(freq, note_duration, amplitude,
+                                   sample_rate=sample_rate)
+        elif wave_type == 'chirp':
+            w = generate_chirp(freq, freq, note_duration, amplitude,
+                                sample_rate)
+        elif wave_type in WAVE_GENERATORS and WAVE_GENERATORS[wave_type] is not None:
+            w = WAVE_GENERATORS[wave_type](freq, note_duration, amplitude,
+                                             sample_rate)
         else:
-            w = gen(freq, note_duration, amplitude, sample_rate)
+            w = generate_sine(freq, note_duration, amplitude, sample_rate)
         result.extend(w)
     return result
 
@@ -832,7 +876,6 @@ def generate_melody(notes: List[Tuple[str, float]], wave_type: str = 'sine',
     Duration is in seconds.
     """
     result = []
-    gen = WAVE_GENERATORS.get(wave_type, generate_sine)
     for note, dur in notes:
         if note.upper() in ('R', 'REST', ''):
             result.extend([0.0] * int(dur * sample_rate))
@@ -840,8 +883,17 @@ def generate_melody(notes: List[Tuple[str, float]], wave_type: str = 'sine',
             freq = resolve_freq(note)
             if wave_type == 'noise':
                 w = generate_noise(dur, amplitude, sample_rate)
+            elif wave_type == 'harmonic':
+                w = generate_harmonic(freq, dur, amplitude,
+                                       sample_rate=sample_rate)
+            elif wave_type == 'chirp':
+                w = generate_chirp(freq, freq, dur, amplitude,
+                                    sample_rate)
+            elif wave_type in WAVE_GENERATORS and WAVE_GENERATORS[wave_type] is not None:
+                w = WAVE_GENERATORS[wave_type](freq, dur, amplitude,
+                                                sample_rate)
             else:
-                w = gen(freq, dur, amplitude, sample_rate)
+                w = generate_sine(freq, dur, amplitude, sample_rate)
             result.extend(w)
     return result
 

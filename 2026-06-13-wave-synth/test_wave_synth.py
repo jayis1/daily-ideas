@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from wave_synth import (
     generate_sine, generate_square, generate_sawtooth, generate_triangle,
     generate_noise, generate_harmonic, generate_chirp,
-    resolve_freq, NOTE_FREQS, SAMPLE_RATE,
+    resolve_freq, note_to_freq, NOTE_FREQS, SAMPLE_RATE,
     apply_adsr, apply_tremolo, apply_vibrato, apply_lowpass, apply_highpass,
     apply_distortion, apply_delay, apply_fade_in, apply_fade_out,
     apply_reverse, apply_ring_mod, apply_bitcrush, apply_reverb,
@@ -380,5 +380,101 @@ class TestVersion(unittest.TestCase):
         self.assertRegex(__version__, r'\d+\.\d+\.\d+')
 
 
+class TestBugFixes(unittest.TestCase):
+    """Tests for bugs found and fixed during bug hunting."""
+
+    def test_resolve_freq_lowercase_flats(self):
+        """Lowercase flat notes should resolve correctly (eb3 -> Eb3)."""
+        self.assertAlmostEqual(resolve_freq('eb3'), 155.56, places=1)
+        self.assertAlmostEqual(resolve_freq('bb4'), 466.16, places=1)
+        self.assertAlmostEqual(resolve_freq('ab4'), 415.30, places=1)
+        self.assertAlmostEqual(resolve_freq('gb5'), 739.99, places=1)
+
+    def test_note_to_freq_B_notes(self):
+        """B notes should not be corrupted by case normalization."""
+        self.assertAlmostEqual(note_to_freq('B4'), 493.88, places=1)
+        self.assertAlmostEqual(note_to_freq('B3'), 246.94, places=1)
+        self.assertAlmostEqual(note_to_freq('Bb4'), 466.16, places=1)
+
+    def test_note_to_freq_lowercase_flats(self):
+        """note_to_freq should handle lowercase flats correctly."""
+        self.assertAlmostEqual(note_to_freq('eb3'), 155.56, places=1)
+        self.assertAlmostEqual(note_to_freq('bb4'), 466.16, places=1)
+
+    def test_generate_chord_harmonic(self):
+        """Generating a chord with harmonic wave type should not crash."""
+        samples = generate_chord(440.0, 'maj', 0.5, wave_type='harmonic')
+        self.assertGreater(len(samples), 0)
+
+    def test_generate_chord_chirp(self):
+        """Generating a chord with chirp wave type should not crash (uses sine fallback)."""
+        samples = generate_chord(440.0, 'maj', 0.5, wave_type='chirp')
+        self.assertGreater(len(samples), 0)
+
+    def test_generate_arpeggio_harmonic(self):
+        """Generating an arpeggio with harmonic wave type should not crash."""
+        samples = generate_arpeggio(440.0, 'maj', 0.5, wave_type='harmonic')
+        self.assertGreater(len(samples), 0)
+
+    def test_generate_melody_harmonic(self):
+        """Generating a melody with harmonic wave type should not crash."""
+        notes = [('C4', 0.2), ('E4', 0.2)]
+        samples = generate_melody(notes, wave_type='harmonic')
+        self.assertGreater(len(samples), 0)
+
+    def test_lowpass_empty_samples(self):
+        """Lowpass filter on empty samples should return empty list."""
+        result = apply_lowpass([], cutoff=1000.0)
+        self.assertEqual(result, [])
+
+    def test_highpass_empty_samples(self):
+        """Highpass filter on empty samples should return empty list."""
+        result = apply_highpass([], cutoff=1000.0)
+        self.assertEqual(result, [])
+
+    def test_pitch_shift_empty_samples(self):
+        """Pitch shift on empty samples should return empty list."""
+        result = apply_pitch_shift([], semitones=5)
+        self.assertEqual(result, [])
+
+    def test_distortion_zero_drive(self):
+        """Distortion with drive=0 should return a copy of the samples (no-op)."""
+        samples = generate_sine(440.0, 0.1)
+        result = apply_distortion(samples, drive=0)
+        self.assertEqual(len(result), len(samples))
+        for orig, res in zip(samples, result):
+            self.assertAlmostEqual(orig, res, places=5)
+
+    def test_distortion_negative_drive_raises(self):
+        """Distortion with negative drive should raise ValueError."""
+        with self.assertRaises(ValueError):
+            apply_distortion([0.5], drive=-1.0)
+
+    def test_mix_waves_zero_weights(self):
+        """Mixing with all-zero weights should produce silence."""
+        s1 = generate_sine(440.0, 0.1)
+        s2 = generate_sine(880.0, 0.1)
+        result = mix_waves([s1, s2], [0.0, 0.0])
+        self.assertEqual(len(result), len(s1))
+        for s in result:
+            self.assertAlmostEqual(s, 0.0, places=5)
+
+    def test_visualize_ascii_scale_labels(self):
+        """Visualization should have correct number of data rows (not extra from labels)."""
+        samples = generate_sine(440.0, 0.5)
+        viz = visualize_ascii(samples, width=40, height=10)
+        lines = viz.split('\n')
+        # Should have top border + height data rows + bottom border = height+2 lines
+        # (labels are now overlaid on existing rows, not inserted as new rows)
+        self.assertEqual(len(lines), 10 + 2)  # height + top + bottom
+
+    def test_chirp_same_freq(self):
+        """Chirp with same start/end frequency should produce valid sine wave."""
+        samples = generate_chirp(440, 440, 0.5)
+        self.assertEqual(len(samples), int(0.5 * SAMPLE_RATE))
+        self.assertTrue(any(abs(s) > 0.01 for s in samples))
+
+
 if __name__ == '__main__':
+    unittest.main()
     unittest.main()

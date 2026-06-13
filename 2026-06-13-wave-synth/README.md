@@ -1,284 +1,179 @@
 # 🎵 Wave Synth — Terminal Audio Waveform Synthesizer
 
-Generate, visualize, mix, and export audio waveforms entirely from the command line. No GUI, no dependencies beyond Python's standard library — just pure terminal audio synthesis.
+**Version 1.1.1** — A command-line tool for generating, visualizing, mixing, and exporting audio waveforms entirely from your terminal.
 
-![Waveform visualization](https://img.shields.io/badge/platform-terminal-black?style=flat-square) ![Python 3.7+](https://img.shields.io/badge/python-3.7%2B-blue?style=flat-square) ![Zero dependencies](https://img.shields.io/badge/dependencies-zero-green?style=flat-square)
+Generate sine, square, sawtooth, triangle, noise, harmonic, and chirp waveforms. Apply effects like tremolo, distortion, reverb, and more. Visualize as ASCII art or export as WAV files.
 
 ## Features
 
-### Waveform Generation
-- **7 waveform types**: sine, square, sawtooth, triangle, noise, harmonic (custom overtones), and chirp (frequency sweep)
-- **Musical note support**: Use notes like `A4`, `C#5`, `Eb3` instead of raw Hz frequencies
-- **Full chromatic scale**: All notes C0–C8 including sharps (`C#`) and flats (`Eb`)
-
-### Effects (15 total)
-- **Tremolo** — amplitude modulation (rate + depth)
-- **Vibrato** — frequency modulation via delay modulation
-- **Lowpass filter** — one-pole IIR low-pass (cutoff in Hz)
-- **Highpass filter** — one-pole IIR high-pass (cutoff in Hz)
-- **Distortion** — soft-clipping using tanh approximation (drive)
-- **Delay/Echo** — with feedback control
-- **Fade-in / Fade-out** — smooth volume ramps
-- **Normalize** — peak normalization to target level
-- **ADSR envelope** — Attack-Decay-Sustain-Release shaping
-- **Reverse** — backwards playback
-- **Ring modulation** — multiply with a carrier frequency
-- **Bitcrush** — reduce bit depth for lo-fi crunch (1–16 bits)
-- **Reverb** — multi-tap room simulation (decay control)
-- **Pitch shift** — resample-based semitone shifting
-- **Effect chaining** — stack multiple effects on a single waveform
-
-### Visualization
-- **ASCII art waveform display** with Unicode box-drawing characters and scale labels
-- **Frequency spectrum** — approximate DFT bar chart with logarithmic frequency bins
-- **Waveform info** — duration, sample count, peak amplitude, RMS, estimated frequency
-
-### Music Theory
-- **10 chord types**: maj, min, dim, aug, 7, maj7, min7, sus2, sus4, 5
-- **Arpeggio generation** — play chord notes sequentially through any waveform
-- **5 preset melodies**: C major scale, Happy Birthday, Ode to Joy, Twinkle Twinkle Little Star, pentatonic
-
-### Audio I/O
-- **WAV export** — 16-bit PCM mono WAV files
-- **WAV import** — load 8-bit or 16-bit WAV files, apply effects, and re-export
-- **Interactive mode** — full REPL-style synthesizer with command history
+- **7 waveform types**: sine, square, sawtooth, triangle, noise, harmonic, chirp
+- **15 audio effects**: tremolo, vibrato, lowpass, highpass, distortion, delay, fade-in/out, normalize, ADSR envelope, reverse, ring modulation, bitcrush, reverb, pitch shift
+- **Musical note support**: Use note names like `A4`, `C#5`, `Eb3` — sharps and flats, case-insensitive
+- **Chord & arpeggio generation**: 10 chord types (maj, min, dim, aug, 7, maj7, min7, sus2, sus4, 5)
+- **Melody presets**: scale, happy_birthday, ode_to_joy, twinkle, pentatonic
+- **WAV import/export**: Load 8-bit or 16-bit WAV files, apply effects, re-export
+- **ASCII visualization**: Waveform and spectrum display in your terminal
+- **Interactive mode**: REPL for real-time waveform experimentation
+- **Custom harmonics**: Define your own harmonic series for rich tones
 
 ## Installation
 
-No installation required — just download and run:
+No external dependencies required — uses only Python standard library modules.
 
 ```bash
-# Clone or download
-git clone https://github.com/youruser/daily-ideas.git
-cd daily-ideas/2026-06-13-wave-synth
-
-# Make executable (optional)
-chmod +x wave_synth.py
+# Clone or download, then run directly:
+python3 wave_synth.py sine A4 2
 ```
 
-Requires Python 3.7+ (no external packages needed).
-
-## Usage
-
-### Basic Waveform Generation
+## Quick Start
 
 ```bash
-# Generate a 2-second sine wave at A4 (440 Hz)
+# Generate 2 seconds of A4 (440 Hz) sine wave
 python3 wave_synth.py sine A4 2
 
-# Use frequency in Hz directly
-python3 wave_synth.py sine 440 2
+# Square wave at 220 Hz with tremolo effect
+python3 wave_synth.py square 220 1 --effect tremolo
 
-# Square wave at 220 Hz
-python3 wave_synth.py square 220 1
+# C major chord with sawtooth wave
+python3 wave_synth.py chord C4 maj 2 --wave sawtooth
 
-# Sawtooth wave at middle C
-python3 wave_synth.py sawtooth C4 3
+# A minor 7 arpeggio
+python3 wave_synth.py arp A3 min7 3
 
-# Triangle wave
-python3 wave_synth.py triangle E4 1.5
-
-# White noise (1 second, first arg is duration)
-python3 wave_synth.py noise 1
-
-# Harmonic wave with custom overtones
-python3 wave_synth.py harmonic C4 2 --harmonics "1,1 2,0.5 3,0.25 4,0.125"
+# Twinkle Twinkle melody with triangle wave
+python3 wave_synth.py melody twinkle --wave triangle
 
 # Frequency sweep (chirp) from 200 Hz to 2000 Hz
 python3 wave_synth.py chirp 200 2000 3
 
-# Exponential frequency sweep
-python3 wave_synth.py chirp 100 5000 4 --sweep-method exponential
-```
+# Sine wave with reverb, exported to WAV
+python3 wave_synth.py sine A4 2 --effect reverb:0.4 --export output.wav
 
-### Applying Effects
-
-```bash
-# Tremolo effect (rate=6Hz, depth=0.7)
-python3 wave_synth.py sine A4 2 --effect tremolo:6:0.7
-
-# Low-pass filter at 1000 Hz
-python3 wave_synth.py sawtooth C4 2 --effect lowpass:1000
-
-# High-pass filter at 200 Hz
-python3 wave_synth.py square 100 3 --effect highpass:200
-
-# Distortion (drive=3)
-python3 wave_synth.py sine A4 1 --effect distortion:3
-
-# Delay/echo (0.3s delay, 0.4 feedback)
-python3 wave_synth.py sine A4 2 --effect delay:0.3:0.4
-
-# Reverse playback
-python3 wave_synth.py sine A4 2 --effect reverse
-
-# Ring modulation (100 Hz carrier)
-python3 wave_synth.py sine A4 2 --effect ringmod:100
-
-# Bitcrush to 4-bit lo-fi
+# 4-bit crushed sine
 python3 wave_synth.py sine A4 2 --effect bitcrush:4
 
-# Reverb (decay=0.4)
-python3 wave_synth.py sine A4 2 --effect reverb:0.4
+# Import a WAV, apply effects, re-export
+python3 wave_synth.py --import-wav input.wav --effect lowpass:800 --export processed.wav
 
-# Pitch shift up 5 semitones
-python3 wave_synth.py sine A4 2 --effect pitchshift:5
+# Show frequency spectrum
+python3 wave_synth.py sine A4 1 --spectrum
 
-# Chain multiple effects
-python3 wave_synth.py sawtooth 220 2 --effect lowpass:2000 --effect distortion:2 --effect reverb:0.3
-
-# Suppress visualization (useful for scripting)
-python3 wave_synth.py sine A4 2 --effect normalize --quiet
-```
-
-### ADSR Envelope
-
-```bash
-# Apply envelope: Attack=0.05s, Decay=0.1s, Sustain=0.7, Release=0.3s
-python3 wave_synth.py sine C4 2 --adsr 0.05,0.1,0.7,0.3
-```
-
-### Chords and Arpeggios
-
-```bash
-# C major chord (2 seconds)
-python3 wave_synth.py chord C4 maj 2
-
-# A minor 7th arpeggio (3 seconds, triangle wave)
-python3 wave_synth.py arp A3 min7 3 --wave triangle
-
-# D diminished chord
-python3 wave_synth.py chord D4 dim 2 --wave sawtooth
-
-# G7 chord with ADSR
-python3 wave_synth.py chord G4 7 2 --wave sine --adsr 0.01,0.1,0.6,0.3
-```
-
-Available chord types: `maj`, `min`, `dim`, `aug`, `7`, `maj7`, `min7`, `sus2`, `sus4`, `5`
-
-### Preset Melodies
-
-```bash
-# Twinkle Twinkle Little Star
-python3 wave_synth.py melody twinkle
-
-# C major scale
-python3 wave_synth.py melody scale
-
-# Happy Birthday
-python3 wave_synth.py melody happy_birthday
-
-# Ode to Joy (triangle wave)
-python3 wave_synth.py melody ode_to_joy --wave triangle
-
-# Pentatonic scale (sawtooth)
-python3 wave_synth.py melody pentatonic --wave sawtooth
-```
-
-### Frequency Spectrum
-
-```bash
-# Show spectrum instead of waveform
-python3 wave_synth.py --spectrum sine A4 1
-
-# Spectrum of a complex waveform
-python3 wave_synth.py --spectrum harmonic C4 2 --harmonics "1,1 2,0.5 3,0.3 5,0.2"
-```
-
-### Exporting and Importing WAV
-
-```bash
-# Export a waveform to a WAV file
-python3 wave_synth.py sine A4 2 --export output.wav
-
-# Chain effects and export
-python3 wave_synth.py sawtooth 220 2 --effect lowpass:1000 --effect reverb:0.4 --export synth_sound.wav
-
-# Export an arpeggio
-python3 wave_synth.py arp C4 maj 3 --export arpeggio.wav
-
-# Import a WAV file, apply effects, and re-export
-python3 wave_synth.py --import-wav input.wav --effect reverb:0.3 --export processed.wav
-```
-
-### Waveform Info
-
-```bash
-# Show technical info about the waveform
-python3 wave_synth.py sine A4 2 --info
-```
-
-Output:
-```
-  Name:       sine_A4_2
-  Duration:   2.000s
-  Samples:   88200
-  Peak:       0.8000
-  RMS:        0.5657
-  Est. Freq:  439.8 Hz
-```
-
-### Version and Help
-
-```bash
-# Show version
-python3 wave_synth.py --version
-
-# Show full help with examples
-python3 wave_synth.py --help
-```
-
-### Interactive Mode
-
-```bash
+# Interactive mode
 python3 wave_synth.py --interactive
 ```
 
-In interactive mode, you can:
-- Generate waveforms: `gen sine A4 2`
-- Generate chirps: `chirp 200 2000 3`
-- Apply effects: `effect reverb:0.3`, `effect bitcrush:4`, `effect reverse`
-- Apply ADSR: `adsr 0.01 0.1 0.7 0.2`
-- Mix waveforms: `mix 0 1` (combines stored waves 0 and 1)
-- Generate chords: `chord C4 maj 2`
-- Generate arpeggios: `arp A3 min7 3`
-- Play preset melodies: `melody twinkle`
-- Import WAV: `import recording.wav`
-- Visualize: `viz` or `spectrum`
-- Show info: `info`
-- Export: `export output.wav`
-- List stored waves: `list`
-- Quit: `quit`
+## Usage
 
-## Supported Note Names
-
-All notes from C0 through C8 are supported, including sharps and flats:
-- `C4` = 261.63 Hz (middle C)
-- `A4` = 440.00 Hz (concert A)
-- `F#5` = 739.99 Hz (F sharp 5)
-- `Eb3` = 155.56 Hz (E flat 3)
-- `Bb4` = 466.16 Hz (B flat 4)
-
-Or use raw frequencies: `440`, `261.63`, etc.
-
-## How It Works
-
-- **Wave generation**: Mathematical functions produce sample arrays at 44100 Hz sample rate
-- **Chirp/sweep**: Linear and exponential frequency sweeps with proper phase integration
-- **ASCII visualization**: Downsamples the waveform and maps amplitude values to Unicode box-drawing characters
-- **Spectrum analysis**: Approximates a DFT across logarithmically-spaced frequency bins
-- **WAV export**: Converts float samples to 16-bit PCM with proper WAV header structure
-- **WAV import**: Reads 8-bit and 16-bit WAV files (mono and stereo, auto-mixdown)
-- **Effects**: Tremolo (AM), vibrato (FM via delay modulation), one-pole IIR filters, tanh distortion, delay with feedback, bitcrushing, ring modulation, reverb, and resampling pitch shift
-- **ADSR**: Classic synthesizer envelope with linear ramp segments
-
-## Running Tests
-
-```bash
-python3 -m unittest test_wave_synth -v
+```
+python3 wave_synth.py <wave_type> <note/freq> <duration> [options]
 ```
 
-The test suite covers waveform generation, note resolution, all effects, mixing, chord/arpeggio generation, melody presets, WAV I/O roundtrips, and visualization.
+### Positional Arguments
+
+| Argument     | Description                                         |
+|--------------|-----------------------------------------------------|
+| `wave_type`  | sine, square, sawtooth, triangle, noise, harmonic, chirp, chord, arp, melody |
+| `remaining`  | Note/frequency, chord type, duration (varies)      |
+
+### Options
+
+| Flag                     | Description                                        |
+|--------------------------|----------------------------------------------------|
+| `--interactive`, `-i`    | Start interactive mode                              |
+| `--version`, `-V`        | Show version                                       |
+| `--wave`, `-w`           | Wave type for chord/arp/melody (default: sine)     |
+| `--amplitude`, `-a`      | Amplitude 0–1 (default: 0.8)                        |
+| `--export`, `-e`         | Export to WAV file                                  |
+| `--import-wav`           | Import WAV file and apply effects                   |
+| `--effect`, `-f`         | Apply effect (can be used multiple times)           |
+| `--adsr`                 | Apply ADSR envelope (e.g. `0.01,0.1,0.7,0.2`)       |
+| `--chord-type`, `-c`     | Chord type for chord/arp (default: maj)             |
+| `--harmonics`            | Custom harmonics (e.g. `"1,1 2,0.5 3,0.25"`)        |
+| `--sweep-method`         | Chirp method: linear or exponential (default: linear) |
+| `--spectrum`, `-s`       | Show frequency spectrum instead of waveform         |
+| `--info`                 | Show waveform info (duration, peak, RMS, etc.)       |
+| `--quiet`, `-q`          | Suppress visualization output                        |
+| `--seed`                 | Random seed for noise generation                    |
+| `--width`                | Visualization width (default: 72)                   |
+| `--height`               | Visualization height (default: 16)                  |
+
+### Effect Parameters
+
+Effects can be specified with parameters using colons:
+
+```
+--effect tremolo:5:0.5       Tremolo (rate, depth)
+--effect vibrato:5:0.002    Vibrato (rate, depth)
+--effect lowpass:1000       Low-pass filter (cutoff Hz)
+--effect highpass:1000      High-pass filter (cutoff Hz)
+--effect distortion:3       Distortion (drive, 0+)
+--effect delay:0.3:0.4       Delay (time, feedback)
+--effect fadein:0.05         Fade in (duration)
+--effect fadeout:0.05        Fade out (duration)
+--effect normalize           Normalize to peak 0.95
+--effect reverse              Reverse waveform
+--effect ringmod:100          Ring modulation (carrier Hz)
+--effect bitcrush:4           Bit crush (1–16 bits)
+--effect reverb:0.3           Reverb (decay 0–1)
+--effect pitchshift:5         Pitch shift (semitones)
+```
+
+### Note Names
+
+Supports standard scientific pitch notation:
+- Sharps: `C#4`, `A#3`, `F#5`
+- Flats: `Eb3`, `Bb4`, `Ab5`
+- Case-insensitive: `eb3`, `bb4`, `c#5` all work
+- Numeric frequencies: `440`, `261.63`
+
+### Chord Types
+
+`maj`, `min`, `dim`, `aug`, `7`, `maj7`, `min7`, `sus2`, `sus4`, `5`
+
+### Melody Presets
+
+`scale`, `happy_birthday`, `ode_to_joy`, `twinkle`, `pentatonic`
+
+## Interactive Mode
+
+Run `python3 wave_synth.py --interactive` for a REPL:
+
+```
+wave> gen sine A4 2
+wave> effect tremolo:5:0.5
+wave> effect reverb:0.3
+wave> viz
+wave> export output.wav
+wave> quit
+```
+
+## Changelog
+
+### v1.1.1 — Bug Fix Release
+
+**Fixed:**
+- **`note_to_freq` corrupted B notes** — `.upper().replace('B','b')` turned `B4` into `b4` (not in dictionary) and `Bb4` into `bb4` (wrong frequency). Rewrote to delegate to `resolve_freq` for correct lookup.
+- **`resolve_freq` failed on lowercase flat notes** — `eb3`, `bb4`, `ab4` etc. crashed because `.upper()` produced `EB3` (not in dict). Added proper `_normalize_note_name()` function that preserves flat indicators.
+- **`generate_chord`/`generate_arpeggio`/`generate_melody` crashed with harmonic wave type** — `sample_rate` (int) was being passed as the `harmonics` parameter. Fixed to use `sample_rate` as a keyword argument.
+- **`generate_chord`/`generate_arpeggio`/`generate_melody` crashed with chirp wave type** — `WAVE_GENERATORS['chirp']` is `None`, causing `TypeError`. Fixed with explicit handling that uses `generate_chirp()` directly.
+- **`lowpass`/`highpass` crashed on empty samples** — `IndexError` from accessing `samples[0]` on empty list. Added early return for empty input.
+- **`pitch_shift` returned `[0.0]` on empty input** instead of `[]`. Fixed to return empty list.
+- **`distortion` with `drive=0` raised `ValueError`** — changed to be a no-op (returns copy of samples). Negative drive still raises error.
+- **`mix_waves` with all-zero weights** caused `ZeroDivisionError`. Added guard to return silence.
+- **`visualize_ascii` scale labels inserted as extra rows** — scale labels (`+1.0`, `0.0`, `-1.0`) were `insert()`ed into the lines list, shifting row indices and producing a malformed display (wrong number of rows). Changed to overlay labels on existing rows instead.
+
+**Added:**
+- 15 new regression tests covering all fixed bugs
+- Version bumped to 1.1.1
+
+### v1.1.0 — Feature Release
+
+- Added chirp/sweep waveform, 5 new effects (reverse, ring mod, bitcrush, reverb, pitch shift), WAV import, `--version`/`-V` flag, `--quiet`/`-q` flag, interactive mode enhancements
+- Fixed flat note resolution, improved distortion, better error handling
+
+### v1.0.0 — Initial Release
+
+- Basic waveform generation, effects, visualization, WAV export
 
 ## License
 
