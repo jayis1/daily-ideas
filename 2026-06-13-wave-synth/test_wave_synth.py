@@ -11,16 +11,18 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from wave_synth import (
     generate_sine, generate_square, generate_sawtooth, generate_triangle,
-    generate_noise, generate_harmonic, generate_chirp,
+    generate_noise, generate_harmonic, generate_chirp, generate_pulse,
     resolve_freq, note_to_freq, NOTE_FREQS, SAMPLE_RATE,
     apply_adsr, apply_tremolo, apply_vibrato, apply_lowpass, apply_highpass,
     apply_distortion, apply_delay, apply_fade_in, apply_fade_out,
     apply_reverse, apply_ring_mod, apply_bitcrush, apply_reverb,
-    apply_pitch_shift, normalize,
-    mix_waves, generate_chord, generate_arpeggio, generate_melody,
+    apply_pitch_shift, apply_compressor, apply_flanger,
+    normalize, mix_waves, generate_chord, generate_arpeggio, generate_melody,
+    transpose_melody, _freq_to_note,
     export_wav, import_wav, MELODY_PRESETS, CHORD_INTERVALS,
     visualize_ascii, visualize_spectrum_ascii, print_waveform_info,
-    WAVE_GENERATORS, EFFECTS, __version__,
+    WAVE_GENERATORS, EFFECTS, EFFECT_DESCRIPTIONS, __version__,
+    _generate_wave_for_type,
 )
 
 
@@ -81,14 +83,12 @@ class TestWaveGeneration(unittest.TestCase):
         """Harmonic wave with default overtones should produce samples."""
         samples = generate_harmonic(440.0, 1.0)
         self.assertEqual(len(samples), SAMPLE_RATE)
-        # Should not be all zeros
         self.assertTrue(any(abs(s) > 0.01 for s in samples))
 
     def test_chirp_wave(self):
         """Chirp wave should produce samples and change frequency over time."""
         samples = generate_chirp(200.0, 2000.0, 1.0)
         self.assertEqual(len(samples), SAMPLE_RATE)
-        # Should not be all zeros
         self.assertTrue(any(abs(s) > 0.01 for s in samples))
 
     def test_chirp_exponential(self):
@@ -109,6 +109,55 @@ class TestWaveGeneration(unittest.TestCase):
             generate_sine(440.0, -1.0)
         with self.assertRaises(ValueError):
             generate_sine(440.0, 0.0)
+
+
+class TestPulseWave(unittest.TestCase):
+    """Test pulse wave generator."""
+
+    def test_pulse_wave_length(self):
+        """Pulse wave should produce correct number of samples."""
+        samples = generate_pulse(440.0, 1.0)
+        self.assertEqual(len(samples), SAMPLE_RATE)
+
+    def test_pulse_wave_50_percent(self):
+        """Pulse wave with 50% duty should match square wave values."""
+        samples = generate_pulse(440.0, 0.01, duty_cycle=0.5)
+        for s in samples:
+            self.assertIn(round(s), [-1, 1])
+
+    def test_pulse_wave_narrow(self):
+        """Pulse wave with narrow duty cycle should have mostly -1 values."""
+        samples = generate_pulse(440.0, 0.01, duty_cycle=0.1)
+        neg_count = sum(1 for s in samples if s < 0)
+        pos_count = sum(1 for s in samples if s > 0)
+        self.assertGreater(neg_count, pos_count)
+
+    def test_pulse_wave_wide(self):
+        """Pulse wave with wide duty cycle should have mostly +1 values."""
+        samples = generate_pulse(440.0, 0.01, duty_cycle=0.9)
+        neg_count = sum(1 for s in samples if s < 0)
+        pos_count = sum(1 for s in samples if s > 0)
+        self.assertGreater(pos_count, neg_count)
+
+    def test_pulse_wave_invalid_freq(self):
+        """Pulse wave with invalid frequency should raise ValueError."""
+        with self.assertRaises(ValueError):
+            generate_pulse(-1.0, 1.0)
+
+    def test_pulse_wave_invalid_duty_cycle_zero(self):
+        """Pulse wave with duty cycle 0 should raise ValueError."""
+        with self.assertRaises(ValueError):
+            generate_pulse(440.0, 1.0, duty_cycle=0.0)
+
+    def test_pulse_wave_invalid_duty_cycle_one(self):
+        """Pulse wave with duty cycle 1.0 should raise ValueError."""
+        with self.assertRaises(ValueError):
+            generate_pulse(440.0, 1.0, duty_cycle=1.0)
+
+    def test_pulse_wave_in_wave_generators(self):
+        """Pulse should be registered in WAVE_GENERATORS."""
+        self.assertIn('pulse', WAVE_GENERATORS)
+        self.assertIsNotNone(WAVE_GENERATORS['pulse'])
 
 
 class TestNoteResolution(unittest.TestCase):
@@ -172,7 +221,6 @@ class TestEffects(unittest.TestCase):
         """Distortion should limit peak values."""
         result = apply_distortion(self.samples, drive=5.0)
         peak = max(abs(s) for s in result)
-        # tanh-based distortion should keep values < 1
         self.assertLess(peak, 1.01)
 
     def test_delay_length(self):
@@ -238,6 +286,66 @@ class TestEffects(unittest.TestCase):
         self.assertAlmostEqual(result[0], 0.0, places=2)
 
 
+class TestCompressor(unittest.TestCase):
+    """Test compressor effect."""
+
+    def test_compressor_reduces_peak(self):
+        """Compressor should reduce the peak of a loud signal."""
+        samples = generate_sine(440.0, 0.5, amplitude=1.0)
+        result = apply_compressor(samples, threshold=0.5, ratio=4.0)
+        # The compressor should reduce the peak
+        orig_peak = max(abs(s) for s in samples)
+        comp_peak = max(abs(s) for s in result)
+        self.assertLess(comp_peak, orig_peak)
+
+    def test_compressor_preserves_length(self):
+        """Compressor should not change sample length."""
+        samples = generate_sine(440.0, 0.5)
+        result = apply_compressor(samples, threshold=0.5, ratio=4.0)
+        self.assertEqual(len(result), len(samples))
+
+    def test_compressor_empty_samples(self):
+        """Compressor on empty samples should return empty list."""
+        result = apply_compressor([], threshold=0.5, ratio=4.0)
+        self.assertEqual(result, [])
+
+    def test_compressor_invalid_threshold(self):
+        """Compressor with invalid threshold should raise ValueError."""
+        with self.assertRaises(ValueError):
+            apply_compressor(generate_sine(440, 0.1), threshold=0.0, ratio=4.0)
+
+    def test_compressor_invalid_ratio(self):
+        """Compressor with ratio < 1 should raise ValueError."""
+        with self.assertRaises(ValueError):
+            apply_compressor(generate_sine(440, 0.1), threshold=0.5, ratio=0.5)
+
+
+class TestFlanger(unittest.TestCase):
+    """Test flanger effect."""
+
+    def test_flanger_preserves_length(self):
+        """Flanger should not change sample length."""
+        samples = generate_sine(440.0, 0.5)
+        result = apply_flanger(samples, rate=0.5, depth=0.002, feedback=0.3)
+        self.assertEqual(len(result), len(samples))
+
+    def test_flanger_empty_samples(self):
+        """Flanger on empty samples should return empty list."""
+        result = apply_flanger([], rate=0.5, depth=0.002, feedback=0.3)
+        self.assertEqual(result, [])
+
+    def test_flanger_invalid_feedback(self):
+        """Flanger with invalid feedback should raise ValueError."""
+        with self.assertRaises(ValueError):
+            apply_flanger(generate_sine(440, 0.1), rate=0.5, depth=0.002, feedback=1.5)
+
+    def test_flanger_produces_non_silent_output(self):
+        """Flanger should produce non-silent output from non-silent input."""
+        samples = generate_sine(440.0, 0.5, amplitude=0.8)
+        result = apply_flanger(samples, rate=0.5, depth=0.002, feedback=0.3)
+        self.assertTrue(any(abs(s) > 0.01 for s in result))
+
+
 class TestMixing(unittest.TestCase):
     """Test waveform mixing."""
 
@@ -252,7 +360,6 @@ class TestMixing(unittest.TestCase):
         """Mixing with unequal weights should weight properly."""
         s1 = generate_sine(440.0, 0.1)
         s2 = [0.0] * len(s1)  # Silent
-        # With weights [1.0, 0.0], normalized to [1.0, 0.0], result = s1*1.0 + 0*0.0
         result = mix_waves([s1, s2], [1.0, 0.0])
         for i in range(len(result)):
             self.assertAlmostEqual(result[i], s1[i], places=5)
@@ -277,6 +384,12 @@ class TestChordsAndArpeggios(unittest.TestCase):
             samples = generate_chord(440.0, chord_type, 1.0)
             self.assertGreater(len(samples), 0)
 
+    def test_new_chord_types(self):
+        """New chord types (add9, 6, 9) should generate correctly."""
+        for chord_type in ['add9', '6', '9']:
+            samples = generate_chord(440.0, chord_type, 0.5)
+            self.assertGreater(len(samples), 0)
+
 
 class TestMelody(unittest.TestCase):
     """Test melody generation."""
@@ -285,13 +398,71 @@ class TestMelody(unittest.TestCase):
         """All melody presets should generate without errors."""
         for name, notes in MELODY_PRESETS.items():
             samples = generate_melody(notes)
-            self.assertGreater(len(samples), 0)
+            self.assertGreater(len(samples), 0, f"Melody preset '{name}' failed")
 
     def test_melody_with_rests(self):
         """Melodies with rests should produce silence for rest notes."""
         notes = [('C4', 0.1), ('R', 0.1)]
         samples = generate_melody(notes)
         self.assertGreater(len(samples), 0)
+
+    def test_fur_elise_preset(self):
+        """Fur Elise preset should be available and generate samples."""
+        self.assertIn('fur_elise', MELODY_PRESETS)
+        samples = generate_melody(MELODY_PRESETS['fur_elise'])
+        self.assertGreater(len(samples), 0)
+
+    def test_amazing_grace_preset(self):
+        """Amazing Grace preset should be available and generate samples."""
+        self.assertIn('amazing_grace', MELODY_PRESETS)
+        samples = generate_melody(MELODY_PRESETS['amazing_grace'])
+        self.assertGreater(len(samples), 0)
+
+
+class TestTransposeMelody(unittest.TestCase):
+    """Test melody transposition."""
+
+    def test_transpose_up(self):
+        """Transposing up by semitones should shift note frequencies."""
+        notes = [('C4', 0.5), ('E4', 0.5)]
+        transposed = transpose_melody(notes, 2)
+        self.assertEqual(len(transposed), 2)
+        # C4+2 semitones = D4
+        self.assertAlmostEqual(resolve_freq(transposed[0][0]), resolve_freq('D4'), places=1)
+        # Durations should be preserved
+        self.assertEqual(transposed[0][1], 0.5)
+        self.assertEqual(transposed[1][1], 0.5)
+
+    def test_transpose_down(self):
+        """Transposing down by semitones should shift note frequencies."""
+        notes = [('E4', 0.5)]
+        transposed = transpose_melody(notes, -2)
+        # E4-2 = D4
+        self.assertAlmostEqual(resolve_freq(transposed[0][0]), resolve_freq('D4'), places=1)
+
+    def test_transpose_preserves_rests(self):
+        """Transposing should preserve rest notes unchanged."""
+        notes = [('C4', 0.5), ('R', 0.5), ('E4', 0.5)]
+        transposed = transpose_melody(notes, 2)
+        self.assertEqual(transposed[1][0], 'R')
+        self.assertEqual(transposed[1][1], 0.5)
+
+    def test_transpose_zero(self):
+        """Transposing by 0 semitones should return same notes."""
+        notes = [('A4', 0.5)]
+        transposed = transpose_melody(notes, 0)
+        self.assertAlmostEqual(resolve_freq(transposed[0][0]), resolve_freq('A4'), places=1)
+
+    def test_freq_to_note(self):
+        """_freq_to_note should find the nearest note name."""
+        # Exact A4 frequency should return 'A4'
+        note = _freq_to_note(440.0)
+        self.assertEqual(note, 'A4')
+
+    def test_freq_to_note_low(self):
+        """_freq_to_note should handle very low frequencies."""
+        note = _freq_to_note(16.35)
+        self.assertEqual(note, 'C0')
 
 
 class TestWavIO(unittest.TestCase):
@@ -306,7 +477,6 @@ class TestWavIO(unittest.TestCase):
             export_wav(original, filename)
             imported, sr = import_wav(filename)
             self.assertEqual(sr, SAMPLE_RATE)
-            # Allow some quantization error (16-bit)
             self.assertEqual(len(imported), len(original))
             for orig, imp in zip(original, imported):
                 self.assertAlmostEqual(orig, imp, places=3)
@@ -323,6 +493,17 @@ class TestWavIO(unittest.TestCase):
             self.assertGreater(os.path.getsize(filename), 0)
         finally:
             os.unlink(filename)
+
+    def test_export_empty_raises(self):
+        """Exporting empty samples should raise ValueError."""
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+            filename = f.name
+        try:
+            with self.assertRaises(ValueError):
+                export_wav([], filename)
+        finally:
+            if os.path.exists(filename):
+                os.unlink(filename)
 
     def test_import_nonexistent_raises(self):
         """Importing a nonexistent file should raise FileNotFoundError."""
@@ -364,6 +545,8 @@ class TestVisualization(unittest.TestCase):
         self.assertIn('Duration:', info)
         self.assertIn('Peak:', info)
         self.assertIn('RMS:', info)
+        self.assertIn('DC Offset:', info)
+        self.assertIn('Crest Factor:', info)
 
     def test_waveform_info_empty(self):
         """Waveform info for empty samples should indicate empty."""
@@ -378,6 +561,10 @@ class TestVersion(unittest.TestCase):
         """Module should have a version string."""
         self.assertIsNotNone(__version__)
         self.assertRegex(__version__, r'\d+\.\d+\.\d+')
+
+    def test_version_bumped(self):
+        """Version should be 1.2.0 after enhancement."""
+        self.assertEqual(__version__, '1.2.0')
 
 
 class TestBugFixes(unittest.TestCase):
@@ -409,6 +596,11 @@ class TestBugFixes(unittest.TestCase):
     def test_generate_chord_chirp(self):
         """Generating a chord with chirp wave type should not crash (uses sine fallback)."""
         samples = generate_chord(440.0, 'maj', 0.5, wave_type='chirp')
+        self.assertGreater(len(samples), 0)
+
+    def test_generate_chord_pulse(self):
+        """Generating a chord with pulse wave type should work."""
+        samples = generate_chord(440.0, 'maj', 0.5, wave_type='pulse')
         self.assertGreater(len(samples), 0)
 
     def test_generate_arpeggio_harmonic(self):
@@ -460,12 +652,10 @@ class TestBugFixes(unittest.TestCase):
             self.assertAlmostEqual(s, 0.0, places=5)
 
     def test_visualize_ascii_scale_labels(self):
-        """Visualization should have correct number of data rows (not extra from labels)."""
+        """Visualization should have correct number of data rows."""
         samples = generate_sine(440.0, 0.5)
         viz = visualize_ascii(samples, width=40, height=10)
         lines = viz.split('\n')
-        # Should have top border + height data rows + bottom border = height+2 lines
-        # (labels are now overlaid on existing rows, not inserted as new rows)
         self.assertEqual(len(lines), 10 + 2)  # height + top + bottom
 
     def test_chirp_same_freq(self):
@@ -475,6 +665,87 @@ class TestBugFixes(unittest.TestCase):
         self.assertTrue(any(abs(s) > 0.01 for s in samples))
 
 
+class TestEdgeCases(unittest.TestCase):
+    """Tests for edge cases and error handling."""
+
+    def test_fade_in_empty_samples(self):
+        """Fade-in on empty samples should return empty list."""
+        result = apply_fade_in([], duration=0.1)
+        self.assertEqual(result, [])
+
+    def test_fade_out_empty_samples(self):
+        """Fade-out on empty samples should return empty list."""
+        result = apply_fade_out([], duration=0.1)
+        self.assertEqual(result, [])
+
+    def test_reverse_empty(self):
+        """Reversing empty samples should return empty list."""
+        self.assertEqual(apply_reverse([]), [])
+
+    def test_normalize_empty(self):
+        """Normalizing empty samples should return empty list."""
+        self.assertEqual(normalize([]), [])
+
+    def test_bitcrush_empty(self):
+        """Bitcrushing empty samples should return empty list."""
+        self.assertEqual(apply_bitcrush([], bits=4), [])
+
+    def test_ring_mod_empty(self):
+        """Ring modulation on empty samples should return empty list."""
+        self.assertEqual(apply_ring_mod([], freq=100.0), [])
+
+    def test_delay_empty(self):
+        """Delay on empty samples should return empty list."""
+        self.assertEqual(apply_delay([], delay_time=0.3), [])
+
+    def test_tremolo_empty(self):
+        """Tremolo on empty samples should return empty list."""
+        self.assertEqual(apply_tremolo([], rate=5.0), [])
+
+    def test_vibrato_empty(self):
+        """Vibrato on empty samples should return empty list."""
+        self.assertEqual(apply_vibrato([], rate=5.0), [])
+
+    def test_reverb_empty(self):
+        """Reverb on empty samples should return empty list."""
+        self.assertEqual(apply_reverb([], decay=0.3), [])
+
+    def test_flanger_empty(self):
+        """Flanger on empty samples should return empty list."""
+        self.assertEqual(apply_flanger([]), [])
+
+    def test_compressor_empty(self):
+        """Compressor on empty samples should return empty list."""
+        self.assertEqual(apply_compressor([]), [])
+
+    def test_effects_dict_complete(self):
+        """All effects should be in EFFECTS dict."""
+        expected = {'tremolo', 'vibrato', 'lowpass', 'highpass', 'distortion',
+                    'delay', 'fadein', 'fadeout', 'normalize', 'adsr',
+                    'reverse', 'ringmod', 'bitcrush', 'reverb', 'pitchshift',
+                    'compressor', 'flanger'}
+        self.assertEqual(set(EFFECTS.keys()), expected)
+
+    def test_effect_descriptions_complete(self):
+        """All effects should have descriptions."""
+        for effect_name in EFFECTS:
+            self.assertIn(effect_name, EFFECT_DESCRIPTIONS,
+                          f"Missing description for effect: {effect_name}")
+
+    def test_generate_wave_for_type_all_types(self):
+        """_generate_wave_for_type should work for all wave types."""
+        for wave_type in ['sine', 'square', 'sawtooth', 'triangle', 'pulse',
+                          'noise', 'harmonic', 'chirp']:
+            samples = _generate_wave_for_type(wave_type, 440.0, 0.1, 0.8, SAMPLE_RATE)
+            self.assertGreater(len(samples), 0, f"Wave type {wave_type} produced no samples")
+
+    def test_pulse_wave_via_generate_wave_for_type(self):
+        """_generate_wave_for_type with 'pulse' should produce pulse wave samples."""
+        samples = _generate_wave_for_type('pulse', 440.0, 0.1, 0.8, SAMPLE_RATE)
+        self.assertGreater(len(samples), 0)
+        # Pulse wave should have values near +0.8 and -0.8
+        self.assertTrue(any(abs(s - 0.8) < 0.01 for s in samples))
+
+
 if __name__ == '__main__':
-    unittest.main()
     unittest.main()
