@@ -8,11 +8,16 @@ Supports:
   - Headers, bold, italic, inline code, code blocks
   - Ordered & unordered lists
   - Blockquotes
+  - Markdown links [text](url)
+  - Speaker notes (lines starting with ???)
+  - Horizontal rules (rendered as decorative lines)
   - Theming (dark/light/monochrome)
-  - Progress bar and slide counter
-  - Keyboard navigation (arrows, space, q to quit)
+  - Progress bar with timestamp
+  - Keyboard navigation (arrows, space, q to quit, n for notes, number+Enter for goto)
   - Auto-play mode with configurable interval
-  - Export slides to PNG (optional)
+  - --list to show slide titles
+  - Export slides to plain text
+  - --version flag
 """
 
 import sys
@@ -21,6 +26,10 @@ import re
 import shutil
 import argparse
 import textwrap
+import select
+import time
+
+__version__ = "1.1.0"
 
 # ──────────────────────────────────────────────
 # ANSI helpers
@@ -89,6 +98,9 @@ THEMES = {
         "progress":    ("cyan",         "normal"),
         "progress_bg": ("bright_black", "normal"),
         "slide_num":   ("bright_black", "dim"),
+        "hr":          ("bright_black", "dim"),
+        "notes":       ("bright_yellow", "dim"),
+        "notes_bar":   ("yellow",       "dim"),
     },
     "light": {
         "title":       ("blue",         "bold"),
@@ -109,6 +121,9 @@ THEMES = {
         "progress":    ("blue",         "normal"),
         "progress_bg": ("bright_black", "normal"),
         "slide_num":   ("bright_black", "dim"),
+        "hr":          ("bright_black", "dim"),
+        "notes":       ("bright_black", "dim"),
+        "notes_bar":   ("bright_black", "dim"),
     },
     "monochrome": {
         "title":       ("white",        "bold"),
@@ -129,6 +144,9 @@ THEMES = {
         "progress":    ("white",        "normal"),
         "progress_bg": ("bright_black", "normal"),
         "slide_num":   ("bright_black", "dim"),
+        "hr":          ("bright_black", "dim"),
+        "notes":       ("bright_black", "dim"),
+        "notes_bar":   ("bright_black", "dim"),
     },
 }
 
@@ -137,17 +155,24 @@ THEMES = {
 # ──────────────────────────────────────────────
 
 class SlideParser:
-    """Parse a Markdown string into a list of slides."""
+    """Parse a Markdown string into a list of slides.
+
+    Each slide is a list of element dicts. Supported element types:
+      heading1, heading2, heading3, text, code_block, quote,
+      unordered_list, ordered_list, hr, note
+    """
 
     HEADING_RE = re.compile(r'^(#{1,6})\s+(.+)$')
     BOLD_RE = re.compile(r'\*\*(.+?)\*\*')
     ITALIC_RE = re.compile(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)')
     CODE_INLINE_RE = re.compile(r'`(.+?)`')
+    LINK_RE = re.compile(r'\[([^\]]+)\]\(([^)]+)\)')
     QUOTE_RE = re.compile(r'^>\s?(.*)$')
     UNORDERED_RE = re.compile(r'^[\s]*[-*+]\s+(.+)$')
     ORDERED_RE = re.compile(r'^[\s]*(\d+)\.\s+(.+)$')
     HORIZONTAL_RE = re.compile(r'^---+\s*$')
     CODE_FENCE_RE = re.compile(r'^```(\w*)$')
+    NOTE_RE = re.compile(r'^\?\?\?\s*(.*)$')
 
     def __init__(self, text: str):
         self.slides: list[list[dict]] = []
@@ -176,8 +201,24 @@ class SlideParser:
                 while i < len(lines) and not self.CODE_FENCE_RE.match(lines[i]):
                     code_lines.append(lines[i])
                     i += 1
-                i += 1  # skip closing ```
+                if i < len(lines):
+                    i += 1  # skip closing ```
                 elements.append({"type": "code_block", "lang": lang, "text": "\n".join(code_lines)})
+                continue
+
+            # Speaker note (lines starting with ???)
+            m = self.NOTE_RE.match(line)
+            if m:
+                note_lines = [m.group(1)]
+                i += 1
+                while i < len(lines):
+                    m2 = self.NOTE_RE.match(lines[i])
+                    if m2:
+                        note_lines.append(m2.group(1))
+                        i += 1
+                    else:
+                        break
+                elements.append({"type": "note", "text": self._inline_format(" ".join(note_lines))})
                 continue
 
             # Heading
@@ -234,8 +275,9 @@ class SlideParser:
                 elements.append({"type": "ordered_list", "items": [(n, self._inline_format(t)) for n, t in items]})
                 continue
 
-            # Horizontal rule (skip)
+            # Horizontal rule (render as decorative separator)
             if self.HORIZONTAL_RE.match(line):
+                elements.append({"type": "hr"})
                 i += 1
                 continue
 
@@ -252,17 +294,36 @@ class SlideParser:
 
     def _inline_format(self, text: str) -> str:
         """Store inline format markers; we'll render them later with theme colors."""
-        # We use sentinel markers that won't appear in normal text
         BOLD_OPEN = "<<BOLD>>"
         BOLD_CLOSE = "<</BOLD>>"
         ITALIC_OPEN = "<<ITALIC>>"
         ITALIC_CLOSE = "<</ITALIC>>"
         CODE_OPEN = "<<CODE>>"
         CODE_CLOSE = "<</CODE>>"
+        LINK_OPEN = "<<LINK:"
+        LINK_MID = ">>"
+        LINK_CLOSE = "<</LINK>>"
+        # Process links first so bold/italic inside link text still works
+        text = self.LINK_RE.sub(lambda m: f'{LINK_OPEN}{m.group(2)}{LINK_MID}{m.group(1)}{LINK_CLOSE}', text)
         text = self.BOLD_RE.sub(BOLD_OPEN + r'\1' + BOLD_CLOSE, text)
         text = self.ITALIC_RE.sub(ITALIC_OPEN + r'\1' + ITALIC_CLOSE, text)
         text = self.CODE_INLINE_RE.sub(CODE_OPEN + r'\1' + CODE_CLOSE, text)
         return text
+
+    def get_slide_titles(self) -> list[str]:
+        """Return a list of slide titles (first heading or first text line per slide)."""
+        titles = []
+        for slide in self.slides:
+            title = None
+            for elem in slide:
+                if elem["type"] in ("heading1", "heading2", "heading3"):
+                    # Strip inline format markers for a clean title
+                    title = re.sub(r'<<.*?>>', '', elem["text"])
+                    break
+                if elem["type"] == "text" and title is None:
+                    title = re.sub(r'<<.*?>>', '', elem["text"])
+            titles.append(title or "(untitled)")
+        return titles
 
 
 # ──────────────────────────────────────────────
@@ -270,6 +331,8 @@ class SlideParser:
 # ──────────────────────────────────────────────
 
 class Renderer:
+    """Renders parsed slide elements into ANSI-decorated strings."""
+
     def __init__(self, theme_name: str = "dark"):
         self.theme_name = theme_name
         self.theme = THEMES.get(theme_name, THEMES["dark"])
@@ -298,18 +361,36 @@ class Renderer:
         text = text.replace('<</ITALIC>>', self._color("body"))
         text = text.replace('<<CODE>>', self._color("code_inline"))
         text = text.replace('<</CODE>>', self._color("body"))
+        # Links: <<LINK:url>>text<</LINK>> → url-rendered text
+        def _link_replace(m):
+            url = m.group(1)
+            link_text = m.group(2)
+            return f"{self._color('link')}{link_text} {DIM}({url}){RESET}{self._color('body')}"
+        text = re.sub(r'<<LINK:(.*?)>>(.*?)<</LINK>>', _link_replace, text)
         return text
 
     def _center(self, line: str, width: int = 0) -> str:
         """Center a line in the terminal, accounting for ANSI codes."""
-        # Strip ANSI to measure visible width
         visible = re.sub(r'\033\[[0-9;]*m', '', line)
         vis_len = len(visible)
         target_w = width or self.cols
         pad = max(0, (target_w - vis_len) // 2)
         return " " * pad + line
 
-    def render_slide(self, slide: list[dict], slide_num: int, total: int) -> str:
+    def _wrap_text(self, text: str, indent: int = 2, max_width: int = 0) -> list[str]:
+        """Wrap a long line of text to fit within terminal width, preserving ANSI codes."""
+        if not max_width:
+            max_width = self.cols - indent - 2
+        # Strip ANSI for measurement
+        clean = re.sub(r'\033\[[0-9;]*m', '', text)
+        if len(clean) <= max_width:
+            return [text]
+        # For wrapped text, we need to wrap the clean version and re-apply formatting
+        # Simpler approach: wrap the clean text and return it (losing inline formatting on wrap)
+        wrapped = textwrap.wrap(clean, width=max_width)
+        return wrapped
+
+    def render_slide(self, slide: list[dict], slide_num: int, total: int, show_notes: bool = False) -> str:
         lines = []
         body_color = self._color("body")
         dim_color = self._color("dim")
@@ -318,6 +399,10 @@ class Renderer:
         lines.append("")
 
         for elem in slide:
+            # Skip notes unless show_notes is True
+            if elem["type"] == "note" and not show_notes:
+                continue
+
             if elem["type"] == "heading1":
                 text = self._render_inline(elem["text"])
                 lines.append(self._center(f"{self._color('title')}{BOLD}{text}{RESET}"))
@@ -336,7 +421,9 @@ class Renderer:
 
             elif elem["type"] == "text":
                 text = self._render_inline(elem["text"])
-                lines.append(f"  {body_color}{text}{RESET}")
+                wrapped = self._wrap_text(text)
+                for wl in wrapped:
+                    lines.append(f"  {body_color}{wl}{RESET}")
 
             elif elem["type"] == "code_block":
                 lang = elem.get("lang", "")
@@ -359,9 +446,10 @@ class Renderer:
             elif elem["type"] == "quote":
                 text = self._render_inline(elem["text"])
                 bar_char = f"{self._color('quote_bar')}┃{RESET}"
-                # Wrap long quotes
                 max_w = self.cols - 6
-                wrapped = textwrap.wrap(re.sub(r'\033\[[0-9;]*m', '', text), width=max_w)
+                # Wrap the clean (ANSI-stripped) text for quoting
+                clean_text = re.sub(r'\033\[[0-9;]*m', '', text)
+                wrapped = textwrap.wrap(clean_text, width=max_w)
                 for w_line in wrapped:
                     lines.append(f"  {bar_char} {self._color('quote')}{w_line}{RESET}")
                 lines.append("")
@@ -379,18 +467,40 @@ class Renderer:
                     lines.append(f"    {self._color('number')}{num}.{RESET} {body_color}{item_rendered}{RESET}")
                 lines.append("")
 
+            elif elem["type"] == "hr":
+                hr_char = "─"
+                line_len = min(60, self.cols - 4)
+                lines.append(f"  {self._color('hr')}{hr_char * line_len}{RESET}")
+                lines.append("")
+
+            elif elem["type"] == "note":
+                # Speaker notes displayed at the bottom
+                note_text = self._render_inline(elem["text"])
+                bar_char = f"{self._color('notes_bar')}│{RESET}"
+                lines.append(f"  {self._color('notes_bar')}┌─ 📝 Notes {'─' * min(30, self.cols - 20)}{RESET}")
+                # Wrap notes
+                clean_note = re.sub(r'\033\[[0-9;]*m', '', note_text)
+                max_w = self.cols - 6
+                wrapped = textwrap.wrap(clean_note, width=max_w)
+                for wl in wrapped:
+                    lines.append(f"  {bar_char} {self._color('notes')}{wl}{RESET}")
+                lines.append(f"  {self._color('notes_bar')}└{'─' * min(40, self.cols - 6)}┘{RESET}")
+                lines.append("")
+
         # Add vertical fill
         while len(lines) < self.rows - 3:
             lines.append("")
 
-        # Progress bar
+        # Progress bar with timestamp
         pct = (slide_num + 1) / total if total > 0 else 0
-        bar_w = self.cols - 20
+        bar_w = self.cols - 28
         filled = int(pct * bar_w)
         empty = bar_w - filled
+        now = time.strftime("%H:%M")
         progress = (
             f"  {self._color('progress')}{'█' * filled}{self._color('progress_bg')}{'░' * empty}{RESET}"
             f"  {self._color('slide_num')}{slide_num + 1}/{total}{RESET}"
+            f"  {dim_color}{now}{RESET}"
         )
         lines.append(progress)
 
@@ -402,7 +512,11 @@ class Renderer:
 # ──────────────────────────────────────────────
 
 def _get_key() -> str:
-    """Read a single keypress from stdin without echo."""
+    """Read a single keypress from stdin without echo.
+
+    Returns action strings like 'NEXT', 'PREV', 'QUIT', etc.
+    Also supports number entry for goto-slide (returns 'GOTO:N').
+    """
     import tty, termios
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
@@ -419,6 +533,14 @@ def _get_key() -> str:
                 return 'RIGHT'
             elif seq == '[D':
                 return 'LEFT'
+            elif seq == '[5':
+                # Page Up: read trailing ~
+                sys.stdin.read(1)
+                return 'PREV'
+            elif seq == '[6':
+                # Page Down: read trailing ~
+                sys.stdin.read(1)
+                return 'NEXT'
             return 'ESC'
         elif ch == 'q' or ch == '\x03':  # q or Ctrl-C
             return 'QUIT'
@@ -436,9 +558,48 @@ def _get_key() -> str:
             return 'FIRST'
         elif ch == 'G':
             return 'LAST'
+        elif ch == 'n':
+            return 'NOTES'
+        elif ch == 'l':
+            return 'LIST'
+        elif ch == 'r':
+            return 'REFRESH'
+        elif ch in '0123456789':
+            # Number entry mode: accumulate digits until Enter
+            digits = ch
+            # Set a brief timeout for subsequent digits
+            new_old = termios.tcgetattr(fd)
+            new_old[3] = new_old[3] & ~termios.ICANON
+            # Wait for more digits or Enter
+            while True:
+                # Check if there's input available (brief timeout)
+                import select as _sel
+                ready, _, _ = _sel.select([sys.stdin], [], [], 0.5)
+                if ready:
+                    next_ch = sys.stdin.read(1)
+                    if next_ch == '\n' or next_ch == '\r':
+                        break
+                    elif next_ch.isdigit():
+                        digits += next_ch
+                    elif next_ch == '\x1b':
+                        # Escape cancels
+                        return 'ESC'
+                    else:
+                        break
+                else:
+                    # Timeout - treat as goto
+                    break
+            if digits:
+                return f'GOTO:{digits}'
+            return 'ESC'
         return ch
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+
+def _is_interactive_terminal() -> bool:
+    """Check if stdin is connected to an interactive terminal (TTY)."""
+    return sys.stdin.isatty()
 
 
 # ──────────────────────────────────────────────
@@ -446,13 +607,21 @@ def _get_key() -> str:
 # ──────────────────────────────────────────────
 
 class Presenter:
+    """Interactive terminal presentation with keyboard navigation."""
+
     def __init__(self, slides: list[list[dict]], theme: str = "dark", auto: float = 0):
         self.slides = slides
         self.theme = theme
         self.auto = auto
         self.current = 0
+        self.show_notes = False
 
     def run(self):
+        if not _is_interactive_terminal():
+            print("Error: Terminal Slides requires an interactive terminal (TTY).", file=sys.stderr)
+            print("  Tip: Use --export to write slides to a file instead.", file=sys.stderr)
+            sys.exit(1)
+
         renderer = Renderer(self.theme)
 
         # Save cursor & switch to alternate screen
@@ -465,6 +634,8 @@ class Presenter:
                 self._auto_play(renderer)
             else:
                 self._interactive(renderer)
+        except KeyboardInterrupt:
+            pass
         finally:
             sys.stdout.write("\033[?25h")   # show cursor
             sys.stdout.write("\033[?1049l") # back to main screen
@@ -472,7 +643,7 @@ class Presenter:
 
     def _draw(self, renderer: Renderer):
         sys.stdout.write("\033[H\033[J")  # clear screen
-        content = renderer.render_slide(self.slides[self.current], self.current, len(self.slides))
+        content = renderer.render_slide(self.slides[self.current], self.current, len(self.slides), show_notes=self.show_notes)
         sys.stdout.write(content)
         sys.stdout.flush()
 
@@ -498,6 +669,22 @@ class Presenter:
             elif key == 'LAST':
                 self.current = len(self.slides) - 1
                 self._draw(renderer)
+            elif key == 'NOTES':
+                self.show_notes = not self.show_notes
+                self._draw(renderer)
+            elif key == 'REFRESH':
+                # Re-render with current terminal size
+                renderer.cols, renderer.rows = shutil.get_terminal_size((80, 24))
+                renderer.cols = max(renderer.cols, 40)
+                renderer.rows = max(renderer.rows, 12)
+                self._draw(renderer)
+            elif key.startswith('GOTO:'):
+                target = int(key[5:]) - 1  # 1-indexed for user
+                if 0 <= target < len(self.slides):
+                    self.current = target
+                    self._draw(renderer)
+            elif key == 'ESC':
+                pass  # ignore stray escape sequences
 
     def _auto_play(self, renderer: Renderer):
         import time
@@ -528,6 +715,10 @@ A presentation tool that runs entirely in your terminal
 * Markdown-based — use your favorite editor
 * Lightweight and fast
 
+???
+
+Remember to mention SSH use-case for remote teams!
+
 ---
 
 ## Features
@@ -537,6 +728,8 @@ A presentation tool that runs entirely in your terminal
 3. Code blocks with language labels
 4. Beautiful blockquotes
 5. Ordered and unordered lists
+6. Speaker notes — press `n` to toggle
+7. Links rendered inline
 
 ---
 
@@ -555,12 +748,23 @@ print(greet("Terminal Slides"))
 
 ---
 
+## Links & More
+
+Learn more at [GitHub](https://github.com) or visit [Python.org](https://python.org)
+
+---
+
+---
+
 ## Keyboard Navigation
 
 * `→` or `Space` — next slide
 * `←` or `h` — previous slide
 * `g` — first slide
 * `G` — last slide
+* `n` — toggle speaker notes
+* `1`-`9` then `Enter` — jump to slide
+* `r` — refresh (re-read terminal size)
 * `q` — quit
 
 ---
@@ -577,11 +781,11 @@ Try: `python slides.py demo --theme light`
 # ──────────────────────────────────────────────
 
 def export_text(slides: list[list[dict]], output: str, theme: str = "dark"):
-    """Export slides to a plain-text file."""
+    """Export slides to a plain-text file (ANSI codes stripped)."""
     renderer = Renderer(theme)
     lines = []
     for i, slide in enumerate(slides):
-        rendered = renderer.render_slide(slide, i, len(slides))
+        rendered = renderer.render_slide(slide, i, len(slides), show_notes=True)
         # Strip ANSI codes for plain text
         clean = re.sub(r'\033\[[0-9;]*m', '', rendered)
         lines.append(clean)
@@ -591,19 +795,30 @@ def export_text(slides: list[list[dict]], output: str, theme: str = "dark"):
     print(f"Exported {len(slides)} slides to {output}")
 
 
+def list_slides(slides: list[list[dict]], parser: SlideParser):
+    """Print slide titles to stdout."""
+    titles = parser.get_slide_titles()
+    for i, title in enumerate(titles):
+        print(f"  {i+1:3d}. {title}")
+    print(f"\n  Total: {len(titles)} slides")
+
+
 # ──────────────────────────────────────────────
 # Main
 # ──────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Terminal Slides — Present Markdown slides in your terminal"
+        description="Terminal Slides — Present Markdown slides in your terminal",
+        prog="slides"
     )
     parser.add_argument("file", nargs="?", help="Markdown file with slides (separated by ---)")
-    parser.add_argument("--theme", choices=list(THEMES.keys()), default="dark", help="Color theme")
-    parser.add_argument("--auto", type=float, default=0, help="Auto-advance interval in seconds (0 = manual)")
+    parser.add_argument("--theme", choices=list(THEMES.keys()), default="dark", help="Color theme (default: dark)")
+    parser.add_argument("--auto", type=float, default=0, metavar="SECONDS", help="Auto-advance interval in seconds (0 = manual)")
     parser.add_argument("--export", metavar="FILE", help="Export slides to plain text file instead of presenting")
+    parser.add_argument("--list", action="store_true", help="List slide titles and exit")
     parser.add_argument("--demo", action="store_true", help="Run the built-in demo presentation")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
     args = parser.parse_args()
 
@@ -616,6 +831,9 @@ def main():
         except FileNotFoundError:
             print(f"Error: File not found: {args.file}", file=sys.stderr)
             sys.exit(1)
+        except PermissionError:
+            print(f"Error: Permission denied: {args.file}", file=sys.stderr)
+            sys.exit(1)
     else:
         parser.print_help()
         sys.exit(1)
@@ -626,6 +844,10 @@ def main():
     if not slides:
         print("No slides found. Separate slides with --- in your Markdown.", file=sys.stderr)
         sys.exit(1)
+
+    if args.list:
+        list_slides(slides, parser_obj)
+        return
 
     if args.export:
         export_text(slides, args.export, args.theme)

@@ -11,6 +11,10 @@ A whirlwind tour of Python's best features
 * **Community** — millions of packages on PyPI
 * **Versatile** — web, data, AI, automation
 
+???
+
+Mention the Python community survey results and growth stats
+
 ---
 
 ## Hello World
@@ -20,6 +24,10 @@ print("Hello, World!")
 ```
 
 > Every great journey begins with a single `print`
+
+???
+
+This is the simplest Python program — great for first-timers
 
 ---
 
@@ -40,6 +48,10 @@ evens = [x for x in squares if x % 2 == 0]
 ```
 
 Elegant and **fast**
+
+----
+
+Learn more at [Python.org](https://python.org) or [Real Python](https://realpython.com)
 
 ---
 
