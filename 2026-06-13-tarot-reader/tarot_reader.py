@@ -2,7 +2,23 @@
 """
 ✨ CLI Tarot Reader ✨
 A beautifully rendered terminal tarot card reader with ASCII art cards,
-multiple spreads, and full interpretations.
+multiple spreads, full interpretations, and dramatic reveal animations.
+
+Features:
+  - Full 78-card Rider-Waite–style deck (22 Major + 56 Minor Arcana)
+  - 5 spread types (Single, Three Card, Celtic Cross, Relationship, Decision)
+  - ASCII art card rendering with reversed card flipping
+  - Elemental synthesis and astrological associations
+  - Interactive browsing, card lookup, JSON output, and save-to-file
+  - Seeded RNG for reproducible readings
+  - Non-interactive / pipe-friendly mode
+
+Usage:
+  python3 tarot_reader.py                  # Interactive mode
+  python3 tarot_reader.py --quick          # Quick three-card reading
+  python3 tarot_reader.py --daily          # Card of the day
+  python3 tarot_reader.py --card "Death"   # Look up a specific card
+  python3 tarot_reader.py --quick --json   # Machine-readable output
 """
 
 import random
@@ -10,7 +26,11 @@ import sys
 import time
 import math
 import os
+import json
 from datetime import datetime
+
+# Version follows semantic versioning — bump on releases
+__version__ = "1.1.0"
 
 # ═══════════════════════════════════════════════════════════
 # TAROT DATA
@@ -481,6 +501,47 @@ MAJOR_ARCANA = {
     },
 }
 
+# Astrological & numerological associations for Major Arcana
+# Based on traditional Golden Dawn / Rider-Waite correspondences
+MAJOR_ARCANA_ASSOC = {
+    0:  {"zodiac": "—",        "planet": "Uranus",    "element": "Air",   "number": "0 (The Fool's leap)"},
+    1:  {"zodiac": "—",        "planet": "Mercury",   "element": "Air",   "number": "1 (Unity, will)"},
+    2:  {"zodiac": "—",        "planet": "Moon",      "element": "Water",  "number": "2 (Duality, intuition)"},
+    3:  {"zodiac": "—",        "planet": "Venus",     "element": "Earth",  "number": "3 (Creation, growth)"},
+    4:  {"zodiac": "Aries",    "planet": "—",         "element": "Fire",  "number": "4 (Stability, authority)"},
+    5:  {"zodiac": "Taurus",   "planet": "—",         "element": "Earth",  "number": "5 (Conflict, teaching)"},
+    6:  {"zodiac": "Gemini",   "planet": "—",         "element": "Air",   "number": "6 (Harmony, choice)"},
+    7:  {"zodiac": "Cancer",   "planet": "—",         "element": "Water",  "number": "7 (Will, movement)"},
+    8:  {"zodiac": "Leo",      "planet": "—",         "element": "Fire",  "number": "8 (Power, mastery)"},
+    9:  {"zodiac": "Virgo",    "planet": "—",         "element": "Earth",  "number": "9 (Wisdom, solitude)"},
+    10: {"zodiac": "—",        "planet": "Jupiter",   "element": "Fire",  "number": "10 (Cycles, fate)"},
+    11: {"zodiac": "Libra",    "planet": "—",         "element": "Air",   "number": "11 (Justice, balance)"},
+    12: {"zodiac": "—",        "planet": "Neptune",   "element": "Water", "number": "12 (Surrender, perspective)"},
+    13: {"zodiac": "Scorpio",  "planet": "—",         "element": "Water",  "number": "13 (Transformation, rebirth)"},
+    14: {"zodiac": "Sagittarius", "planet": "—",     "element": "Fire",  "number": "14 (Temperance, alchemy)"},
+    15: {"zodiac": "Capricorn","planet": "—",         "element": "Earth",  "number": "15 (Shadow, material bond)"},
+    16: {"zodiac": "—",        "planet": "Mars",      "element": "Fire",  "number": "16 (Upheaval, awakening)"},
+    17: {"zodiac": "Aquarius", "planet": "—",         "element": "Air",   "number": "17 (Hope, inspiration)"},
+    18: {"zodiac": "Pisces",   "planet": "—",         "element": "Water",  "number": "18 (Illusion, intuition)"},
+    19: {"zodiac": "—",        "planet": "Sun",       "element": "Fire",  "number": "19 (Joy, vitality)"},
+    20: {"zodiac": "—",        "planet": "Pluto",     "element": "Fire",  "number": "20 (Reckoning, rebirth)"},
+    21: {"zodiac": "—",        "planet": "Saturn",    "element": "Earth",  "number": "21 (Completion, wholeness)"},
+}
+
+# Zodiac compatibility for relationship spread analysis
+ZODIAC_COMPAT = {
+    ("Fire", "Fire"): "Both burn bright — passion and friction in equal measure.",
+    ("Fire", "Air"):  "Air fans Fire's flame — intellectual spark fuels passion.",
+    ("Fire", "Water"): "Steam and sizzle — creative tension, but may exhaust each other.",
+    ("Fire", "Earth"): "Fire warms Earth, Earth grounds Fire — productive if patient.",
+    ("Air", "Air"):   "Minds in flight — great communication, may lack emotional depth.",
+    ("Air", "Water"): "Rain on the wind — imagination flows, but logic and feeling clash.",
+    ("Air", "Earth"): "Wind over stone — ideas meet practicality, slow but solid.",
+    ("Water", "Water"): "Deep ocean meeting deep ocean — emotional depth, risk of drowning.",
+    ("Water", "Earth"): "Rain on fertile soil — nurturing, growth, slow and steady.",
+    ("Earth", "Earth"): "Mountain meets mountain — rock-solid stability, risk of stagnation.",
+}
+
 SUIT_DATA = {
     "Wands": {
         "emoji": "🔥",
@@ -718,25 +779,56 @@ SPREADS = {
 # ═══════════════════════════════════════════════════════════
 
 class TarotDeck:
-    def __init__(self, seed=None):
+    """A complete 78-card tarot deck with shuffling, drawing, and reversal logic.
+
+    Args:
+        seed: Optional RNG seed for reproducible readings. If None, uses
+              time-based seed so each run is unique.
+        reversal_rate: Probability (0.0–1.0) that a drawn card is reversed.
+              Defaults to 0.3 (30%).
+    """
+
+    def __init__(self, seed=None, reversal_rate=0.3):
         if seed is None:
             seed = int(time.time() * 1000) % (2**32)
+        self.seed = seed
         self.rng = random.Random(seed)
+        self.reversal_rate = max(0.0, min(1.0, reversal_rate))
         self.cards = list(MAJOR_ARCANA.keys())
         self.minor_cards = list(MINOR_ARCANA.keys())
         self.all_cards = self.cards + self.minor_cards
         self.drawn = []
 
+    def shuffle(self):
+        """Reset the deck, clearing all drawn cards so they can be drawn again."""
+        self.drawn = []
+
     def draw(self, count=1, major_only=False):
-        """Draw cards from the deck."""
+        """Draw *count* unique cards from the deck.
+
+        If fewer cards remain than requested, the deck is reshuffled
+        automatically so all draws are possible.
+
+        Args:
+            count: Number of cards to draw.
+            major_only: If True, draw only from the 22 Major Arcana.
+
+        Returns:
+            List of card keys (int for Major, str for Minor).
+        """
         pool = self.cards if major_only else self.all_cards
         available = [c for c in pool if c not in self.drawn]
+
         if len(available) < count:
+            # Not enough unique cards left — reshuffle
             self.drawn = []
             available = pool[:]
 
         drawn = []
         for _ in range(count):
+            if not available:
+                # Edge case: pool smaller than count even after reshuffle
+                break
             card = self.rng.choice(available)
             available.remove(card)
             self.drawn.append(card)
@@ -745,15 +837,31 @@ class TarotDeck:
         return drawn
 
     def get_card_info(self, card_key):
-        """Get card info by key."""
+        """Get card info dict by key (int for Major Arcana, str for Minor)."""
         if isinstance(card_key, int) or (isinstance(card_key, str) and card_key.isdigit()):
             return MAJOR_ARCANA[int(card_key)]
         else:
             return MINOR_ARCANA[card_key]
 
     def is_reversed(self):
-        """Randomly determine if card is reversed (~30% chance)."""
-        return self.rng.random() < 0.3
+        """Randomly determine if a card is reversed based on reversal_rate."""
+        return self.rng.random() < self.reversal_rate
+
+    def find_card(self, name_fragment):
+        """Look up a card by partial name match (case-insensitive).
+
+        Returns (card_key, card_info) for the first match, or None.
+        """
+        needle = name_fragment.strip().lower()
+        # Check Major Arcana first
+        for k, info in MAJOR_ARCANA.items():
+            if needle in info["name"].lower():
+                return k, info
+        # Then Minor Arcana
+        for k, info in MINOR_ARCANA.items():
+            if needle in info["name"].lower():
+                return k, info
+        return None
 
 
 def render_card(card_info, reversed_card=False, position_name="", width=44):
@@ -971,7 +1079,7 @@ def perform_reading(spread_key, deck):
     print()
     print_slow("  The cards whisper their synthesis...", 0.03)
     print()
-    synthesis = generate_synthesis(readings)
+    synthesis = generate_synthesis(readings, spread_key)
     for line in synthesis:
         print_slow(f"  {line}", 0.02)
     print()
@@ -983,8 +1091,12 @@ def perform_reading(spread_key, deck):
     return readings
 
 
-def generate_synthesis(readings):
-    """Generate a synthesis interpretation of the reading."""
+def generate_synthesis(readings, spread_key=None):
+    """Generate a synthesis interpretation of the reading.
+
+    Includes orientation analysis, Major Arcana presence, elemental balance,
+    astrological associations, and (for relationship spreads) zodiac compatibility.
+    """
     lines = []
 
     # Count orientations
@@ -1006,10 +1118,8 @@ def generate_synthesis(readings):
     lines.append("")
 
     # Check for major arcana presence
-    major_count = 0
-    for r in readings:
-        if r["card"]["name"] in [MAJOR_ARCANA[k]["name"] for k in MAJOR_ARCANA]:
-            major_count += 1
+    major_names = {MAJOR_ARCANA[k]["name"] for k in MAJOR_ARCANA}
+    major_count = sum(1 for r in readings if r["card"]["name"] in major_names)
 
     if major_count >= len(readings) // 2:
         lines.append("The presence of Major Arcana cards signals that this reading")
@@ -1018,22 +1128,21 @@ def generate_synthesis(readings):
 
     lines.append("")
 
-    # Elemental balance
+    # Elemental balance — using MAJOR_ARCANA_ASSOC for Major Arcana cards
     elements: dict[str, float] = {"Fire": 0.0, "Water": 0.0, "Air": 0.0, "Earth": 0.0}
     for r in readings:
         name = r["card"]["name"]
+        # Minor Arcana: derive element from suit
         for suit, info in SUIT_DATA.items():
             if suit in name:
                 elements[info["element"]] += 1.0
-        # Major arcana associations
-        if "Fool" in name or "Chariot" in name or "Tower" in name:
-            elements["Fire"] += 0.5
-        if "High Priestess" in name or "Cups" in name or "Moon" in name:
-            elements["Water"] += 0.5
-        if "Justice" in name or "Swords" in name or "Magician" in name:
-            elements["Air"] += 0.5
-        if "Empress" in name or "Emperor" in name or "Pentacles" in name or "World" in name:
-            elements["Earth"] += 0.5
+        # Major Arcana: use astrological associations
+        for k, info in MAJOR_ARCANA.items():
+            if info["name"] == name and k in MAJOR_ARCANA_ASSOC:
+                assoc = MAJOR_ARCANA_ASSOC[k]
+                if assoc["element"] in elements:
+                    elements[assoc["element"]] += 1.0
+                break
 
     dominant = max(elements, key=lambda k: elements[k])
     element_vibes = {
@@ -1046,12 +1155,60 @@ def generate_synthesis(readings):
         lines.append(f"The dominant element is {dominant}, suggesting that")
         lines.append(f"{element_vibes[dominant]} is the current theme")
 
+    # Astrological note for Major Arcana cards drawn
+    astro_notes = []
+    for r in readings:
+        name = r["card"]["name"]
+        for k, info in MAJOR_ARCANA.items():
+            if info["name"] == name and k in MAJOR_ARCANA_ASSOC:
+                assoc = MAJOR_ARCANA_ASSOC[k]
+                parts = []
+                if assoc["zodiac"] != "—":
+                    parts.append(f"Zodiac: {assoc['zodiac']}")
+                if assoc["planet"] != "—":
+                    parts.append(f"Planet: {assoc['planet']}")
+                if parts:
+                    astro_notes.append(f"{name} — {'; '.join(parts)}")
+                break
+
+    if astro_notes:
+        lines.append("")
+        lines.append("Astrological influences at play:")
+        for note in astro_notes:
+            lines.append(f"  ✦ {note}")
+
+    # Relationship spread compatibility analysis
+    if spread_key == "relationship" and len(readings) >= 2:
+        you_elem = _card_element(readings[0])
+        other_elem = _card_element(readings[1])
+        if you_elem and other_elem:
+            key = (you_elem, other_elem)
+            compat = ZODIAC_COMPAT.get(key) or ZODIAC_COMPAT.get((other_elem, you_elem))
+            if compat:
+                lines.append("")
+                lines.append("Elemental compatibility:")
+                lines.append(f"  {you_elem} meets {other_elem} — {compat}")
+
     lines.append("")
     lines.append("Remember: the tarot is a mirror, not a map. It reflects")
     lines.append("what you already know on some level. Trust yourself first,")
     lines.append("and let the cards illuminate what was hidden in shadow.")
 
     return lines
+
+
+def _card_element(reading_entry):
+    """Determine the element associated with a card in a reading dict."""
+    name = reading_entry["card"]["name"]
+    # Minor Arcana via suit
+    for suit, info in SUIT_DATA.items():
+        if suit in name:
+            return info["element"]
+    # Major Arcana via association table
+    for k, info in MAJOR_ARCANA.items():
+        if info["name"] == name and k in MAJOR_ARCANA_ASSOC:
+            return MAJOR_ARCANA_ASSOC[k]["element"]
+    return None
 
 
 def daily_card(deck):
@@ -1247,25 +1404,134 @@ def interactive_mode():
             time.sleep(1)
 
 
-def quick_reading(spread_type="three_card"):
-    """Non-interactive quick reading for scripts/pipes."""
-    deck = TarotDeck()
+def quick_reading(spread_type="three_card", seed=None, as_json=False, save_path=None):
+    """Non-interactive quick reading for scripts/pipes.
+
+    Args:
+        spread_type: Key from SPREADS dict.
+        seed: Optional RNG seed for reproducibility.
+        as_json: If True, output the reading as JSON.
+        save_path: If set, write the reading text to this file.
+    """
+    deck = TarotDeck(seed=seed)
     spread = SPREADS.get(spread_type, SPREADS["three_card"])
     positions = spread["positions"]
     drawn_keys = deck.draw(count=len(positions))
     reversals = [deck.is_reversed() for _ in range(len(positions))]
 
-    print(f"✨ {spread['name']} ✨")
-    print(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n")
+    if as_json:
+        cards_data = []
+        for card_key, is_reversed, position in zip(drawn_keys, reversals, positions):
+            card_info = deck.get_card_info(card_key)
+            orient = "Reversed" if is_reversed else "Upright"
+            entry = {
+                "position": position,
+                "name": card_info["name"],
+                "emoji": card_info["emoji"],
+                "orientation": orient,
+                "meaning": card_info["reversed"] if is_reversed else card_info["upright"],
+                "story": card_info["story_rev"] if is_reversed else card_info["story_up"],
+            }
+            # Add astrological data for Major Arcana
+            for k, info in MAJOR_ARCANA.items():
+                if info["name"] == card_info["name"] and k in MAJOR_ARCANA_ASSOC:
+                    entry["astrology"] = MAJOR_ARCANA_ASSOC[k]
+                    break
+            cards_data.append(entry)
+        output = {
+            "spread": spread["name"],
+            "date": datetime.now().isoformat(),
+            "seed": deck.seed,
+            "cards": cards_data,
+        }
+        json_str = json.dumps(output, indent=2, ensure_ascii=False)
+        print(json_str)
+        if save_path:
+            with open(save_path, "w", encoding="utf-8") as f:
+                f.write(json_str)
+        return
+
+    # Human-readable output
+    text_lines = []
+    text_lines.append(f"✨ {spread['name']} ✨")
+    text_lines.append(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    text_lines.append("")
 
     for card_key, is_reversed, position in zip(drawn_keys, reversals, positions):
         card_info = deck.get_card_info(card_key)
         orient = "Reversed" if is_reversed else "Upright"
         meaning = card_info["reversed"] if is_reversed else card_info["upright"]
-        print(f"{position}: {card_info['emoji']} {card_info['name']} ({orient})")
-        print(f"  → {meaning}")
+        text_lines.append(f"{position}: {card_info['emoji']} {card_info['name']} ({orient})")
+        text_lines.append(f"  → {meaning}")
         story = card_info["story_rev"] if is_reversed else card_info["story_up"]
-        print(f"  {story}\n")
+        text_lines.append(f"  {story}")
+        text_lines.append("")
+
+    full_text = "\n".join(text_lines)
+    print(full_text)
+
+    if save_path:
+        with open(save_path, "w", encoding="utf-8") as f:
+            f.write(full_text)
+
+
+def lookup_card(name_fragment, as_json=False):
+    """Look up and display a card by partial name match.
+
+    Args:
+        name_fragment: Partial or full card name to search for.
+        as_json: If True, output as JSON instead of formatted text.
+    """
+    deck = TarotDeck()
+    result = deck.find_card(name_fragment)
+    if result is None:
+        print(f"Card not found matching '{name_fragment}'.", file=sys.stderr)
+        print("Try partial names like 'fool', 'death', '3 of cups', 'queen of wands'.", file=sys.stderr)
+        sys.exit(1)
+
+    card_key, card_info = result
+
+    if as_json:
+        entry = {
+            "name": card_info["name"],
+            "emoji": card_info["emoji"],
+            "upright": card_info["upright"],
+            "reversed": card_info["reversed"],
+            "story_up": card_info["story_up"],
+            "story_rev": card_info["story_rev"],
+        }
+        # Add astrological data for Major Arcana
+        for k, info in MAJOR_ARCANA.items():
+            if info["name"] == card_info["name"] and k in MAJOR_ARCANA_ASSOC:
+                entry["astrology"] = MAJOR_ARCANA_ASSOC[k]
+                break
+        print(json.dumps(entry, indent=2, ensure_ascii=False))
+        return
+
+    print(f"\n✨ {card_info['emoji']} {card_info['name']} ✨\n")
+    for line in render_card(card_info, False, "Upright"):
+        print(f"  {line}")
+    print()
+    print(f"  Upright: {card_info['upright']}")
+    print(f"  Reversed: {card_info['reversed']}")
+    print()
+    print(f"  Story (Upright): {card_info['story_up']}")
+    print(f"  Story (Reversed): {card_info['story_rev']}")
+
+    # Show astrological associations for Major Arcana
+    for k, info in MAJOR_ARCANA.items():
+        if info["name"] == card_info["name"] and k in MAJOR_ARCANA_ASSOC:
+            assoc = MAJOR_ARCANA_ASSOC[k]
+            print()
+            print(f"  ✦ Astrology:")
+            if assoc["zodiac"] != "—":
+                print(f"    Zodiac: {assoc['zodiac']}")
+            if assoc["planet"] != "—":
+                print(f"    Planet: {assoc['planet']}")
+            print(f"    Element: {assoc['element']}")
+            print(f"    Numerology: {assoc['number']}")
+            break
+    print()
 
 
 # ═══════════════════════════════════════════════════════════
@@ -1299,23 +1565,100 @@ def main():
         action="store_true",
         help="Only draw from the Major Arcana",
     )
+    parser.add_argument(
+        "--version", "-V",
+        action="version",
+        version=f"%(prog)s {__version__}",
+        help="Show version and exit",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="RNG seed for reproducible readings (e.g. 42)",
+    )
+    parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        dest="as_json",
+        help="Output reading as JSON (works with --quick and --daily)",
+    )
+    parser.add_argument(
+        "--card", "-c",
+        type=str,
+        default=None,
+        metavar="NAME",
+        help="Look up a specific card by name (e.g. 'Death', '3 of Cups')",
+    )
+    parser.add_argument(
+        "--save",
+        type=str,
+        default=None,
+        metavar="FILE",
+        help="Save the reading text to a file",
+    )
+    parser.add_argument(
+        "--reversal-rate",
+        type=float,
+        default=0.3,
+        metavar="RATE",
+        help="Probability of reversed cards, 0.0–1.0 (default: 0.3)",
+    )
 
     args = parser.parse_args()
 
+    # Card lookup mode
+    if args.card:
+        lookup_card(args.card, as_json=args.as_json)
+        return
+
     if args.daily:
-        deck = TarotDeck()
+        deck = TarotDeck(seed=args.seed, reversal_rate=args.reversal_rate)
         drawn = deck.draw(count=1, major_only=args.major_only)
+        if not drawn:
+            print("Error: Could not draw a card.", file=sys.stderr)
+            sys.exit(1)
         is_reversed = deck.is_reversed()
         card_info = deck.get_card_info(drawn[0])
         orient = "Reversed" if is_reversed else "Upright"
         meaning = card_info["reversed"] if is_reversed else card_info["upright"]
         story = card_info["story_rev"] if is_reversed else card_info["story_up"]
-        print(f"✨ Card of the Day ✨")
-        print(f"{card_info['emoji']} {card_info['name']} ({orient})")
-        print(f"  Keywords: {meaning}")
-        print(f"  {story}")
+
+        if args.as_json:
+            entry = {
+                "spread": "Card of the Day",
+                "date": datetime.now().isoformat(),
+                "seed": deck.seed,
+                "cards": [{
+                    "position": "Card of the Day",
+                    "name": card_info["name"],
+                    "emoji": card_info["emoji"],
+                    "orientation": orient,
+                    "meaning": meaning,
+                    "story": story,
+                }],
+            }
+            # Add astrology for Major Arcana
+            for k, info in MAJOR_ARCANA.items():
+                if info["name"] == card_info["name"] and k in MAJOR_ARCANA_ASSOC:
+                    entry["cards"][0]["astrology"] = MAJOR_ARCANA_ASSOC[k]
+                    break
+            json_str = json.dumps(entry, indent=2, ensure_ascii=False)
+            print(json_str)
+            if args.save:
+                with open(args.save, "w", encoding="utf-8") as f:
+                    f.write(json_str)
+        else:
+            text = f"✨ Card of the Day ✨\n"
+            text += f"{card_info['emoji']} {card_info['name']} ({orient})\n"
+            text += f"  Keywords: {meaning}\n"
+            text += f"  {story}\n"
+            print(text)
+            if args.save:
+                with open(args.save, "w", encoding="utf-8") as f:
+                    f.write(text)
     elif args.quick:
-        quick_reading(args.spread)
+        quick_reading(args.spread, seed=args.seed, as_json=args.as_json, save_path=args.save)
     else:
         interactive_mode()
 
