@@ -2,16 +2,23 @@
 """
 Procedural Planet Generator
 Generates fictional planets with detailed properties, atmosphere, life forms,
-and ASCII art globe renderings. Each planet is seeded for reproducibility.
+ASCII art globe renderings, habitability scores, hazard assessments, and resource
+richness ratings. Each planet is seeded for reproducibility.
+
+Version: 1.1.0
 """
 
 import hashlib
+import json
 import math
+import os
 import random
 import sys
 import argparse
-from dataclasses import dataclass, field
-from typing import List, Optional
+from dataclasses import dataclass, field, asdict
+from typing import List, Optional, Dict
+
+__version__ = "1.1.0"
 
 
 # ─── Data tables ──────────────────────────────────────────────────────────────
@@ -86,6 +93,46 @@ FEATURES = {
     "Rogue Planet": ["Geothermal Vents", "Ice Shell Protection", "Drifting Moons", "Dark Matter Accumulation", "Starless Orbit"],
 }
 
+HAZARDS = {
+    "Lava World": ["Extreme Heat", "Volcanic Eruptions", "Toxic Gases", "Magma Rivers", "Seismic Activity"],
+    "Desert World": ["Dust Storms", "Extreme UV", "Flash Floods", "Sand Vortexes", "Dehydration Risk"],
+    "Ice World": ["Extreme Cold", "Frost Quakes", "Cryovolcanic Eruptions", "Blizzard Conditions", "Ice Shelf Collapse"],
+    "Ocean World": ["Megatsunamis", "Deep Pressure", "Storm Surges", "Biological Hazards", "Corrosive Spray"],
+    "Terran World": ["Earthquakes", "Severe Weather", "Volcanic Activity", "Pandemic Risk", "Solar Flares"],
+    "Gas Giant": ["Crushing Pressure", "Extreme Winds", "Radiation Belts", "Gravitational Shear", "Lightning Storms"],
+    "Ice Giant": ["Extreme Cold", "Supersonic Winds", "Toxic Methane Clouds", "Diamond Hail", "Magnetic Storms"],
+    "Toxic World": ["Corrosive Atmosphere", "Acid Rain", "Poison Dust", "Biochemical Hazards", "Chemical Explosions"],
+    "Crystalline World": ["Crystal Shrapnel", "Resonance Cascades", "Silicate Storms", "Geometric Traps", "Piezoelectric Discharges"],
+    "Storm World": ["Perpetual Storms", "Lightning Barrage", "Pressure Variance", "Electromagnetic Pulses", "Tornado Vortexes"],
+    "Megastructure": ["Automated Defenses", "Structural Collapse", "Radiation Leaks", "Gravity Anomalies", "Nanite Swarms"],
+    "Rogue Planet": ["Absolute Cold", "Darkness", "Ice Implosions", "Drifting Debris", "Geothermal Instability"],
+}
+
+RESOURCES = {
+    "Lava World": ["Rare Metals", "Volcanic Diamonds", "Sulfur Deposits", "Geothermal Energy", "Magma Minerals"],
+    "Desert World": ["Silicon Deposits", "Underground Water", "Solar Energy", "Rare Earth Oxides", "Ancient Fossils"],
+    "Ice World": ["Water Ice", "Methane Clathrates", "Cryogenic Minerals", "Diamond Deposits", "Deuterium"],
+    "Ocean World": ["Biological Compounds", "Dissolved Minerals", "Wave Energy", "Deep-sea Vents", "Protein Harvests"],
+    "Terran World": ["Biomass", "Mineral Ores", "Fossil Fuels", "Fresh Water", "Agricultural Land"],
+    "Gas Giant": ["Helium-3", "Metallic Hydrogen", "Atmospheric Gases", "Lightning Energy", "Storm-sourced Compounds"],
+    "Ice Giant": ["Diamonds", "Ammonia", "Methane", "Noble Gases", "Cryogenic Fluids"],
+    "Toxic World": ["Exotic Compounds", "Acid Solutions", "Catalyst Minerals", "Rare Isotopes", "Chemical Precursors"],
+    "Crystalline World": ["Piezoelectric Crystals", "Prismatic Minerals", "Resonance Crystals", "Silicon Lattices", "Optical Materials"],
+    "Storm World": ["Static Electricity", "Plasma Residues", "Storm-forged Alloys", "Compressed Gases", "Electromagnetic Coils"],
+    "Megastructure": ["Salvaged Technology", "Data Archives", "Refined Materials", "Energy Grids", "Builder Artifacts"],
+    "Rogue Planet": ["Geothermal Energy", "Subsurface Ice", "Trapped Gases", "Mineral Veins", "Dark Matter Samples"],
+}
+
+MOON_NAMES_PRE = [
+    "Al", "Be", "Ca", "De", "El", "Fa", "Ga", "Ha", "Il", "Jo",
+    "Ka", "Lu", "Ma", "Ni", "Or", "Pa", "Ra", "Si", "To", "Ul",
+    "Va", "Wi", "Xe", "Yo", "Zu",
+]
+MOON_NAMES_SUF = [
+    "on", "is", "ax", "ul", "ith", "ar", "en", "os", "ix", "um",
+    "ia", "us", "al", "or", "ix", "an", "ei", "oth", "eon", "el",
+]
+
 NAME_PREFIXES = [
     "Zor", "Kla", "Xen", "Phi", "Vel", "Neb", "Ori", "Thal", "Myr", "Cryn",
     "Aeth", "Vex", "Lum", "Sol", "Nov", "Arc", "Eld", "Zyn", "Pho", "Rix",
@@ -114,6 +161,17 @@ def make_rng(seed_string: str) -> random.Random:
     return random.Random(int(h, 16))
 
 
+# ─── Moon dataclass ───────────────────────────────────────────────────────────
+
+@dataclass
+class Moon:
+    """A moon orbiting a planet."""
+    name: str
+    radius_km: float
+    orbit_days: float
+    description: str
+
+
 # ─── Planet dataclass ─────────────────────────────────────────────────────────
 
 @dataclass
@@ -136,15 +194,23 @@ class Planet:
     life_level: str
     features: List[str]
     moons: int
-    ring_system: bool
-    magnetic_field: str
-    surface_water_pct: float
-    description: str
+    moon_details: List[Moon] = field(default_factory=list)
+    ring_system: bool = False
+    magnetic_field: str = "Moderate"
+    surface_water_pct: float = 0.0
+    description: str = ""
+    habitability_score: float = 0.0
+    habitability_grade: str = ""
+    hazard_level: str = ""
+    hazard_list: List[str] = field(default_factory=list)
+    resource_potential: str = ""
+    resource_list: List[str] = field(default_factory=list)
 
 
 # ─── Generator ────────────────────────────────────────────────────────────────
 
 def weighted_choice(rng: random.Random, choices: list) -> str:
+    """Select a weighted random choice from a list of (item, weight) tuples."""
     items, weights = zip(*choices)
     total = sum(weights)
     r = rng.random() * total
@@ -156,7 +222,181 @@ def weighted_choice(rng: random.Random, choices: list) -> str:
     return items[-1]
 
 
+def compute_habitability(planet_type: str, mean_temp_c: float, atmosphere: str,
+                         gravity_g: float, life_level: str, surface_water_pct: float,
+                         magnetic_field: str, distance_au: float) -> tuple:
+    """
+    Compute a habitability score (0-100) and grade based on planet properties.
+    Inspired by the Earth Similarity Index but simplified for fiction.
+    """
+    score = 0.0
+
+    # Temperature scoring (ideal: 0-50°C, tolerant: -30 to 60°C)
+    if -10 <= mean_temp_c <= 40:
+        score += 25
+    elif -30 <= mean_temp_c <= 60:
+        score += 15
+    elif -60 <= mean_temp_c <= 100:
+        score += 5
+    # Extreme temps get 0
+
+    # Atmosphere scoring
+    breathable = ["Nitrogen/Oxygen", "Nitrogen/Oxygen/Argon", "Dense Nitrogen/Oxygen",
+                  "Thin Nitrogen/Oxygen", "Artificial Nitrogen/Oxygen", "Engineered Mix",
+                  "Pressurized Dome Atmosphere", "Recycled Air"]
+    if atmosphere in breathable:
+        score += 25
+    elif "Oxygen" in atmosphere or "Nitrogen" in atmosphere:
+        score += 10
+    elif atmosphere.startswith("Thin") or atmosphere.startswith("Trace"):
+        score += 3
+    # Toxic atmospheres get 0
+
+    # Gravity scoring (ideal: 0.8-1.2g)
+    if 0.8 <= gravity_g <= 1.2:
+        score += 15
+    elif 0.5 <= gravity_g <= 2.0:
+        score += 8
+    elif 0.3 <= gravity_g <= 3.0:
+        score += 3
+
+    # Surface water scoring
+    if 20 <= surface_water_pct <= 80:
+        score += 15
+    elif 5 <= surface_water_pct <= 95:
+        score += 8
+    elif surface_water_pct > 0:
+        score += 3
+
+    # Magnetic field scoring
+    if magnetic_field in ("Moderate", "Strong"):
+        score += 10
+    elif magnetic_field == "Extreme":
+        score += 5
+    elif magnetic_field == "Weak":
+        score += 3
+
+    # Life bonus (existing life suggests habitability)
+    if life_level in ("Intelligent Civilization", "Post-Singularity", "Complex Ecosystem"):
+        score += 10
+    elif life_level in ("Aquatic Multicellular", "Simple Multicellular"):
+        score += 5
+    elif life_level not in ("None",):
+        score += 2
+
+    # Type penalty/bonus
+    type_bonuses = {
+        "Terran World": 0, "Ocean World": -5, "Desert World": -10,
+        "Ice World": -15, "Lava World": -25, "Gas Giant": -30,
+        "Ice Giant": -30, "Toxic World": -25, "Crystalline World": -20,
+        "Storm World": -20, "Megastructure": -5, "Rogue Planet": -25,
+    }
+    score += type_bonuses.get(planet_type, 0)
+
+    # Clamp
+    score = max(0, min(100, score))
+
+    # Grade
+    if score >= 80:
+        grade = "A — Paradise"
+    elif score >= 65:
+        grade = "B — Habitable"
+    elif score >= 45:
+        grade = "C — Marginal"
+    elif score >= 25:
+        grade = "D — Hostile"
+    elif score >= 10:
+        grade = "E — Extreme"
+    else:
+        grade = "F — Lethal"
+
+    return round(score, 1), grade
+
+
+def compute_hazards(planet_type: str, mean_temp_c: float, gravity_g: float,
+                    atmosphere: str, magnetic_field: str, ring_system: bool,
+                    moons: int, rng: random.Random) -> tuple:
+    """Compute hazard level and specific hazards for a planet."""
+    hazard_pool = HAZARDS.get(planet_type, ["Unknown Hazards"])
+    num_hazards = rng.randint(2, min(4, len(hazard_pool)))
+    hazard_list = rng.sample(hazard_pool, num_hazards)
+
+    # Overall hazard level
+    if planet_type in ("Lava World", "Gas Giant", "Ice Giant", "Toxic World", "Storm World"):
+        base = "Critical"
+    elif planet_type in ("Ice World", "Crystalline World", "Rogue Planet"):
+        base = "High"
+    elif planet_type in ("Desert World",):
+        base = "Moderate"
+    elif planet_type in ("Ocean World", "Megastructure"):
+        base = "Moderate"
+    else:
+        base = "Low"
+
+    # Adjust based on conditions
+    if abs(mean_temp_c) > 200 or gravity_g > 3.0 or gravity_g < 0.2:
+        if base != "Critical":
+            base = "High"
+    if magnetic_field == "None" and planet_type not in ("Gas Giant", "Ice Giant", "Rogue Planet"):
+        if base == "Low":
+            base = "Moderate"
+
+    return base, hazard_list
+
+
+def compute_resources(planet_type: str, life_level: str, rng: random.Random) -> tuple:
+    """Compute resource potential and specific resources for a planet."""
+    resource_pool = RESOURCES.get(planet_type, ["Unknown Resources"])
+    num_resources = rng.randint(2, min(4, len(resource_pool)))
+    resource_list = rng.sample(resource_pool, num_resources)
+
+    # Resource potential
+    if planet_type == "Megastructure":
+        potential = rng.choice(["Exceptional", "High", "Very High"])
+    elif planet_type in ("Terran World", "Ocean World"):
+        potential = rng.choice(["Moderate", "High", "Very High"])
+    elif planet_type in ("Lava World", "Toxic World", "Crystalline World"):
+        potential = rng.choice(["Low", "Moderate", "High"])
+    elif planet_type in ("Gas Giant", "Ice Giant"):
+        potential = rng.choice(["Moderate", "High"])
+    else:
+        potential = rng.choice(["Low", "Moderate"])
+
+    if life_level in ("Intelligent Civilization", "Post-Singularity", "Uploaded Consciousness"):
+        potential = "Exceptional"
+
+    return potential, resource_list
+
+
+def generate_moons(planet: Planet, rng: random.Random) -> List[Moon]:
+    """Generate named moons with orbital details for a planet."""
+    moons = []
+    moon_descriptors = {
+        "Gas Giant": ["icy", "volcanic", "subsurface ocean", "cratered", "tidally locked"],
+        "Ice Giant": ["frigid", "geyser-active", "smooth", "ringed", "captured"],
+        "default": ["rocky", "cratered", "smooth", "tidally locked", "fractured"],
+    }
+    descriptors = moon_descriptors.get(planet.planet_type, moon_descriptors["default"])
+    for i in range(planet.moons):
+        name = rng.choice(MOON_NAMES_PRE) + rng.choice(MOON_NAMES_SUF) + "-" + str(rng.randint(1, 99))
+        radius_km = round(rng.uniform(50, 5000), 1)
+        orbit_days = round(rng.uniform(0.3, 100), 1)
+        desc = rng.choice(descriptors)
+        moons.append(Moon(name=name, radius_km=radius_km, orbit_days=orbit_days, description=desc))
+    return moons
+
+
 def generate_planet(seed: Optional[str] = None) -> Planet:
+    """
+    Generate a complete procedural planet from a seed.
+
+    Args:
+        seed: Optional seed string for reproducible generation.
+              If None, a random seed is generated.
+
+    Returns:
+        A Planet dataclass with all generated properties.
+    """
     if seed is None:
         seed = str(random.Random().randint(0, 0xFFFFFFFFFFFF))
     seed_str = str(seed)
@@ -294,9 +534,9 @@ def generate_planet(seed: Optional[str] = None) -> Planet:
         surface_water_pct = round(rng.uniform(0, 10), 1)
 
     # Description
-    descriptions = _generate_description(full_name, planet_type, star_color, atmosphere, life_level, features, rng)
+    description = _generate_description(full_name, planet_type, star_color, atmosphere, life_level, features, rng)
 
-    return Planet(
+    planet = Planet(
         name=full_name,
         seed=seed_str,
         planet_type=planet_type,
@@ -318,8 +558,26 @@ def generate_planet(seed: Optional[str] = None) -> Planet:
         ring_system=ring_system,
         magnetic_field=magnetic_field,
         surface_water_pct=surface_water_pct,
-        description=descriptions,
+        description=description,
     )
+
+    # Derived properties
+    planet.habitability_score, planet.habitability_grade = compute_habitability(
+        planet_type, mean_temp_c, atmosphere, gravity_g, life_level,
+        surface_water_pct, magnetic_field, distance_au
+    )
+    planet.hazard_level, planet.hazard_list = compute_hazards(
+        planet_type, mean_temp_c, gravity_g, atmosphere, magnetic_field,
+        ring_system, moons, rng
+    )
+    planet.resource_potential, planet.resource_list = compute_resources(
+        planet_type, life_level, rng
+    )
+
+    # Moon details
+    planet.moon_details = generate_moons(planet, rng)
+
+    return planet
 
 
 def _generate_description(name, ptype, star_color, atmo, life, features, rng):
@@ -468,7 +726,9 @@ def render_globe(planet: Planet, width: int = 40, height: int = 20, use_color: b
 
 # ─── Display ───────────────────────────────────────────────────────────────────
 
-def display_planet(planet: Planet, show_globe: bool = True, use_color: bool = True, globe_size: int = 40):
+def display_planet(planet: Planet, show_globe: bool = True, use_color: bool = True,
+                   globe_size: int = 40, show_moons: bool = True, show_hazards: bool = True,
+                   show_resources: bool = True):
     """Pretty-print a planet's info card."""
     R = RESET
     B = BOLD if use_color else ""
@@ -490,6 +750,21 @@ def display_planet(planet: Planet, show_globe: bool = True, use_color: bool = Tr
         "Rogue Planet": "\033[90m",
     }
     tc = type_colors.get(planet.planet_type, "\033[37m") if use_color else ""
+
+    # Habitability color
+    if planet.habitability_score >= 65:
+        hab_color = "\033[32m" if use_color else ""  # Green
+    elif planet.habitability_score >= 35:
+        hab_color = "\033[33m" if use_color else ""  # Yellow
+    else:
+        hab_color = "\033[31m" if use_color else ""  # Red
+
+    # Hazard color
+    hazard_colors = {
+        "Low": "\033[32m", "Moderate": "\033[33m",
+        "High": "\033[38;5;208m", "Critical": "\033[31m",
+    }
+    hc = hazard_colors.get(planet.hazard_level, "\033[37m") if use_color else ""
 
     w = globe_size + 2  # Card width based on globe size
 
@@ -516,6 +791,23 @@ def display_planet(planet: Planet, show_globe: bool = True, use_color: bool = Tr
     output.append(f"  {B}Life Level:{R}      {planet.life_level}")
     output.append(f"  {B}Features:{R}        {', '.join(planet.features)}")
     output.append(f"{tc}{'─' * w}{R}")
+
+    # Habitability score
+    bar_len = 20
+    filled = int(planet.habitability_score / 100 * bar_len)
+    bar = "█" * filled + "░" * (bar_len - filled)
+    output.append(f"  {B}Habitability:{R}    {hab_color}{bar}{R} {hab_color}{planet.habitability_score}{R}  {hab_color}{planet.habitability_grade}{R}")
+
+    # Hazard level
+    if show_hazards:
+        output.append(f"  {B}Hazard Level:{R}     {hc}{planet.hazard_level}{R}")
+        output.append(f"  {B}Hazards:{R}          {', '.join(planet.hazard_list)}")
+
+    # Resource potential
+    if show_resources:
+        output.append(f"  {B}Resources:{R}        {planet.resource_potential} — {', '.join(planet.resource_list)}")
+
+    output.append(f"{tc}{'─' * w}{R}")
     output.append(f"  {D}{planet.description}{R}")
 
     if show_globe:
@@ -527,6 +819,17 @@ def display_planet(planet: Planet, show_globe: bool = True, use_color: bool = Tr
         for line in globe.split("\n"):
             output.append(f"  {line}")
         output.append("")
+
+    # Moon details
+    if show_moons and planet.moon_details:
+        output.append(f"{tc}{'─' * w}{R}")
+        output.append(f"{B}  Major Moons:{R}")
+        # Show up to 5 moons in the card, summarize the rest
+        shown = planet.moon_details[:5]
+        for moon in shown:
+            output.append(f"    {B}▪{R} {moon.name}: {moon.radius_km:,.0f} km, orbit {moon.orbit_days}d — {moon.description}")
+        if len(planet.moon_details) > 5:
+            output.append(f"    {D}... and {len(planet.moon_details) - 5} more moons{R}")
 
     output.append(f"{tc}{'━' * w}{R}")
 
@@ -556,8 +859,87 @@ def export_text(planet: Planet) -> str:
         f"Ring System: {'Yes' if planet.ring_system else 'No'}",
         f"Life Level: {planet.life_level}",
         f"Features: {', '.join(planet.features)}",
-        f"Description: {planet.description}",
+        f"Habitability Score: {planet.habitability_score} ({planet.habitability_grade})",
+        f"Hazard Level: {planet.hazard_level}",
+        f"Hazards: {', '.join(planet.hazard_list)}",
+        f"Resource Potential: {planet.resource_potential}",
+        f"Resources: {', '.join(planet.resource_list)}",
     ]
+    # Moon details
+    if planet.moon_details:
+        lines.append("Moons:")
+        for moon in planet.moon_details:
+            lines.append(f"  {moon.name}: {moon.radius_km:,.0f} km, orbit {moon.orbit_days}d — {moon.description}")
+    lines.append(f"Description: {planet.description}")
+    return "\n".join(lines)
+
+
+def export_json(planet: Planet) -> str:
+    """Export planet as JSON string."""
+    data = asdict(planet)
+    return json.dumps(data, indent=2)
+
+
+def compare_planets(planets: List[Planet], use_color: bool = True) -> str:
+    """
+    Generate a side-by-side comparison table for multiple planets.
+
+    Shows key properties in a compact tabular format for easy comparison.
+    """
+    R = RESET
+    B = BOLD if use_color else ""
+    D = DIM if use_color else ""
+
+    if not planets:
+        return "No planets to compare."
+
+    # Properties to compare
+    props = [
+        ("Type", lambda p: p.planet_type),
+        ("Star", lambda p: f"{p.star_type}-class ({p.star_color})"),
+        ("Distance", lambda p: f"{p.distance_au} AU"),
+        ("Radius", lambda p: f"{p.radius_km:,.0f} km"),
+        ("Gravity", lambda p: f"{p.gravity_g}g"),
+        ("Day Length", lambda p: f"{p.day_length_hours}h"),
+        ("Year Length", lambda p: f"{p.year_length_days:,.0f}d"),
+        ("Axial Tilt", lambda p: f"{p.axial_tilt_deg}°"),
+        ("Mean Temp", lambda p: f"{p.mean_temp_c}°C"),
+        ("Atmosphere", lambda p: p.atmosphere),
+        ("Water", lambda p: f"{p.surface_water_pct}%"),
+        ("Mag Field", lambda p: p.magnetic_field),
+        ("Moons", lambda p: str(p.moons)),
+        ("Rings", lambda p: "Yes" if p.ring_system else "No"),
+        ("Life", lambda p: p.life_level),
+        ("Hab Score", lambda p: str(p.habitability_score)),
+        ("Hab Grade", lambda p: p.habitability_grade),
+        ("Hazards", lambda p: p.hazard_level),
+        ("Resources", lambda p: p.resource_potential),
+    ]
+
+    # Calculate column widths
+    name_col = max(len(p.name) for p in planets) + 2
+    prop_col = max(len(label) for label, _ in props) + 2
+    val_cols = [max(len(getter(p)) for p in planets) + 2 for _, getter in props]
+
+    total_w = name_col + sum(val_cols)
+    lines = []
+
+    # Header
+    header = f"{'Property':<{prop_col}}"
+    for p in planets:
+        header += f" {p.name:>{name_col}}"
+    lines.append(B + header + R)
+    lines.append("─" * (prop_col + (name_col + 1) * len(planets)))
+
+    # Rows
+    for label, getter in props:
+        row = f"{label:>{prop_col}}"
+        for p in planets:
+            row += f" {getter(p):>{name_col}}"
+        lines.append(row)
+
+    lines.append("─" * (prop_col + (name_col + 1) * len(planets)))
+
     return "\n".join(lines)
 
 
@@ -565,27 +947,56 @@ def export_text(planet: Planet) -> str:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="🌌 Procedural Planet Generator — create fictional worlds!",
+        description="🌌 Procedural Planet Generator — create infinite fictional worlds!",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python planet_gen.py                    # Random planet
-  python planet_gen.py --seed 42          # Reproducible planet
-  python planet_gen.py --count 5           # Generate 5 planets
-  python planet_gen.py --no-globe          # Skip the ASCII globe
-  python planet_gen.py --no-color          # No ANSI colors
-  python planet_gen.py --save catalog.txt  # Save to file
-  python planet_gen.py --size 50           # Larger globe
+  python planet_gen.py                        # Random planet
+  python planet_gen.py --seed 42              # Reproducible planet
+  python planet_gen.py --count 5               # Generate 5 planets
+  python planet_gen.py --no-globe              # Skip the ASCII globe
+  python planet_gen.py --no-color              # No ANSI colors
+  python planet_gen.py --save catalog.txt      # Save to file
+  python planet_gen.py --size 50               # Larger globe
+  python planet_gen.py --json                  # Output as JSON
+  python planet_gen.py --seed sol --count 3 --compare  # Compare 3 planets
+  python planet_gen.py --no-moons              # Hide moon details
+  python planet_gen.py --no-hazards            # Hide hazard info
+  python planet_gen.py --no-resources           # Hide resource info
         """
     )
-    parser.add_argument("--seed", type=str, default=None, help="Seed for reproducible generation")
-    parser.add_argument("--count", "-n", type=int, default=1, help="Number of planets to generate")
-    parser.add_argument("--no-globe", action="store_true", help="Don't render the ASCII globe")
-    parser.add_argument("--no-color", action="store_true", help="Disable ANSI colors")
-    parser.add_argument("--save", type=str, default=None, help="Save output to file")
-    parser.add_argument("--size", type=int, default=40, help="Globe width (default: 40)")
+    parser.add_argument("--seed", type=str, default=None,
+                        help="Seed for reproducible generation")
+    parser.add_argument("--count", "-n", type=int, default=1,
+                        help="Number of planets to generate (default: 1)")
+    parser.add_argument("--no-globe", action="store_true",
+                        help="Don't render the ASCII globe")
+    parser.add_argument("--no-color", action="store_true",
+                        help="Disable ANSI colors")
+    parser.add_argument("--save", type=str, default=None,
+                        help="Save output to file")
+    parser.add_argument("--size", type=int, default=40,
+                        help="Globe width (default: 40)")
+    parser.add_argument("--json", action="store_true",
+                        help="Output planet data as JSON")
+    parser.add_argument("--compare", action="store_true",
+                        help="Show comparison table when generating multiple planets")
+    parser.add_argument("--no-moons", action="store_true",
+                        help="Hide moon details in output")
+    parser.add_argument("--no-hazards", action="store_true",
+                        help="Hide hazard information in output")
+    parser.add_argument("--no-resources", action="store_true",
+                        help="Hide resource information in output")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}",
+                        help="Show version and exit")
 
     args = parser.parse_args()
+
+    # Validate arguments
+    if args.count < 1:
+        parser.error("--count must be at least 1")
+    if args.size < 10:
+        parser.error("--size must be at least 10")
 
     use_color = not args.no_color
     planets = []
@@ -603,22 +1014,66 @@ Examples:
         planet = generate_planet(seed)
         planets.append(planet)
 
-        output = display_planet(planet, show_globe=not args.no_globe, use_color=use_color, globe_size=args.size)
+    # JSON output mode
+    if args.json:
+        json_output = [json.loads(export_json(p)) for p in planets]
+        if len(json_output) == 1:
+            print(json.dumps(json_output[0], indent=2))
+        else:
+            print(json.dumps(json_output, indent=2))
+
+        if args.save:
+            try:
+                with open(args.save, "w") as f:
+                    if len(json_output) == 1:
+                        json.dump(json_output[0], f, indent=2)
+                    else:
+                        json.dump(json_output, f, indent=2)
+                print(f"\n💾 Saved {len(planets)} planet(s) to {args.save}", file=sys.stderr)
+            except OSError as e:
+                print(f"\n❌ Error saving to {args.save}: {e}", file=sys.stderr)
+                sys.exit(1)
+        return
+
+    # Normal display mode
+    for i, planet in enumerate(planets):
         if args.count > 1:
             print(f"\n{'═' * 50}")
             print(f"  PLANET {i + 1} OF {args.count}")
             print(f"{'═' * 50}")
+
+        output = display_planet(
+            planet,
+            show_globe=not args.no_globe,
+            use_color=use_color,
+            globe_size=args.size,
+            show_moons=not args.no_moons,
+            show_hazards=not args.no_hazards,
+            show_resources=not args.no_resources,
+        )
         print(output)
 
+    # Comparison table
+    if args.compare and len(planets) > 1:
+        print("\n" + "═" * 60)
+        print("  PLANET COMPARISON")
+        print("═" * 60)
+        print(compare_planets(planets, use_color=use_color))
+
+    # Save to file
     if args.save:
-        with open(args.save, "w") as f:
-            for planet in planets:
-                f.write(export_text(planet) + "\n")
-                if not args.no_globe:
-                    globe = render_globe(planet, width=args.size, height=max(12, args.size // 2), use_color=False)
-                    f.write("\n" + globe + "\n")
-                f.write("\n" + "=" * 50 + "\n\n")
-        print(f"\n💾 Saved {len(planets)} planet(s) to {args.save}")
+        try:
+            with open(args.save, "w") as f:
+                for planet in planets:
+                    f.write(export_text(planet) + "\n")
+                    if not args.no_globe:
+                        globe = render_globe(planet, width=args.size, height=max(12, args.size // 2), use_color=False)
+                        f.write("\n" + globe + "\n")
+                    f.write("\n" + "=" * 50 + "\n\n")
+            print(f"\n💾 Saved {len(planets)} planet(s) to {args.save}")
+        except OSError as e:
+            print(f"\n❌ Error saving to {args.save}: {e}")
+            sys.exit(1)
 
 
 if __name__ == "__main__":
