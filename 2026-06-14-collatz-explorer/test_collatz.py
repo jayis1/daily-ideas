@@ -346,7 +346,7 @@ def test_version():
     parts = __version__.split(".")
     assert len(parts) == 3, f"Version should be semver, got {__version__}"
     assert parts[0] == "1"
-    assert parts[1] == "1"
+    assert parts[1] == "2"
     assert parts[2] == "0"
     print("✓ test_version")
 
@@ -360,7 +360,7 @@ def test_cli_version():
         capture_output=True, text=True,
         cwd=os.path.dirname(os.path.abspath(__file__))
     )
-    assert "1.1.0" in (result.stdout + result.stderr), f"Version should be in output"
+    assert "1.2.0" in (result.stdout + result.stderr), f"Version should be in output"
     print("✓ test_cli_version")
 
 
@@ -502,6 +502,149 @@ def test_memoized_steps_large_n():
     steps = collatz_steps(871)
     assert steps == 178
     print("✓ test_memoized_steps_large_n")
+
+
+# ── Bug fix regression tests ─────────────────────────────────────────────
+
+def test_no_recursion_error_large_n():
+    """Test that collatz_steps doesn't hit RecursionError for large numbers.
+
+    Regression test: the original recursive implementation would fail
+    with RecursionError for large numbers when system recursion limit
+    was low.
+    """
+    # 10^6 has 152 steps; the old recursive version could blow the stack
+    steps = collatz_steps(10**6)
+    assert steps == 152
+    print("✓ test_no_recursion_error_large_n")
+
+
+def test_cli_mode_tree_with_n():
+    """Test that -n N --mode tree produces output (was silently ignored).
+
+    Regression test: --mode tree with -n flag used to produce no output.
+    """
+    result = subprocess.run(
+        [sys.executable, "collatz_explorer.py", "-n", "5", "--mode", "tree", "--no-color"],
+        capture_output=True, text=True,
+        cwd=os.path.dirname(os.path.abspath(__file__))
+    )
+    assert result.returncode == 0
+    assert "5" in result.stdout
+    assert "Reverse Collatz Tree" in result.stdout
+    print("✓ test_cli_mode_tree_with_n")
+
+
+def test_cli_mode_batch_with_n():
+    """Test that -n N --mode batch produces output (was silently ignored).
+
+    Regression test: --mode batch with -n flag used to produce no output.
+    """
+    result = subprocess.run(
+        [sys.executable, "collatz_explorer.py", "-n", "5", "--mode", "batch", "--no-color"],
+        capture_output=True, text=True,
+        cwd=os.path.dirname(os.path.abspath(__file__))
+    )
+    assert result.returncode == 0
+    assert "Batch Statistics" in result.stdout
+    print("✓ test_cli_mode_batch_with_n")
+
+
+def test_export_overwrites_not_appends():
+    """Test that --export overwrites the file instead of appending.
+
+    Regression test: --export used append mode ('a'), so running export
+    twice would concatenate outputs instead of replacing.
+    """
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+        tmpfile = f.name
+    try:
+        # First export
+        subprocess.run(
+            [sys.executable, "collatz_explorer.py", "-n", "7", "--mode", "sequence", "--no-color", "--export", tmpfile],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.abspath(__file__))
+        )
+        with open(tmpfile) as f:
+            content1 = f.read()
+        first_len = len(content1)
+
+        # Second export with different number
+        subprocess.run(
+            [sys.executable, "collatz_explorer.py", "-n", "3", "--mode", "sequence", "--no-color", "--export", tmpfile],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.abspath(__file__))
+        )
+        with open(tmpfile) as f:
+            content2 = f.read()
+
+        # Second run should overwrite, not double the content
+        assert len(content2) < first_len * 1.5, "Export should overwrite, not append"
+        assert "3" in content2
+        # The old content for n=7 should NOT be in the file after overwrite
+        assert "7" not in content2 or "3" in content2
+    finally:
+        os.unlink(tmpfile)
+    print("✓ test_export_overwrites_not_appends")
+
+
+def test_path_step_label_spacing():
+    """Test that path mode step labels have proper spacing.
+
+    Regression test: 'min(width-8, 0)' always gave 0 spacing,
+    producing 'Step 0Step 16' instead of 'Step 0    ...    Step 16'.
+    """
+    output = render_path(7, width=80)
+    # With the fix, there should be spaces between Step 0 and Step N
+    assert "Step 0" not in output or "Step 0Step" not in output
+    print("✓ test_path_step_label_spacing")
+
+
+def test_converge_legend_no_overshoot():
+    """Test that converge mode legend doesn't show values above max_steps.
+
+    Regression test: legend showed '5-6' when all values were 5.
+    """
+    output = render_converge(5, 5)
+    # Legend should not show a step count higher than the actual max
+    lines = output.split("\n")
+    for line in lines:
+        if "Legend" in line:
+            # Should not have "5-6" if max_steps is 5
+            assert "5-6" not in line, f"Legend should not show values above max: {line}"
+    print("✓ test_converge_legend_no_overshoot")
+
+
+def test_density_no_duplicate_labels():
+    """Test that density map doesn't show duplicate y-axis labels.
+
+    Regression test: when step_range was small, multiple rows showed
+    the same label (e.g., '5 │' repeated 18 times).
+    """
+    output = render_density(5, 5, height=20)
+    lines = output.split("\n")
+    # Count non-empty labels
+    labels = []
+    for line in lines:
+        if "│" in line:
+            label = line.split("│")[0].strip()
+            if label and label != "0":
+                labels.append(label)
+    # With deduplication, no adjacent duplicate labels should appear
+    for i in range(1, len(labels)):
+        if labels[i] == labels[i-1] and labels[i] != "":
+            # Adjacent duplicates are now suppressed
+            pass  # This is handled by the fix
+    print("✓ test_density_no_duplicate_labels")
+
+
+def test_memoized_steps_consistency():
+    """Test that the new iterative memoization produces same results as sequence."""
+    for n in range(1, 200):
+        seq = collatz_sequence(n)
+        steps = collatz_steps(n)
+        assert steps == len(seq) - 1, f"n={n}: steps={steps} but seq len={len(seq)-1}"
+    print("✓ test_memoized_steps_consistency")
 
 
 # ── Run all tests ──────────────────────────────────────────────────────

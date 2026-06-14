@@ -27,9 +27,8 @@ import math
 import argparse
 from collections import defaultdict
 from typing import List, Tuple, Dict, Optional
-from functools import lru_cache
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # ── Color helpers ──────────────────────────────────────────────────────────
 
@@ -86,7 +85,9 @@ def collatz_sequence(n: int) -> List[int]:
 def collatz_steps(n: int) -> int:
     """Return the number of steps for n to reach 1 (stopping time).
 
-    Uses memoization for performance on repeated calls.
+    Uses iterative memoization for performance on repeated calls.
+    Unlike recursive approaches, this will not hit RecursionError
+    for large starting values.
 
     Args:
         n: A positive integer.
@@ -102,15 +103,36 @@ def collatz_steps(n: int) -> int:
     return _collatz_steps_cached(n)
 
 
-@lru_cache(maxsize=2**20)
+_collatz_steps_memo: dict = {1: 0}
+
+
 def _collatz_steps_cached(n: int) -> int:
-    """Memoized helper for collatz_steps."""
-    if n == 1:
-        return 0
-    if n % 2 == 0:
-        return 1 + _collatz_steps_cached(n // 2)
-    else:
-        return 1 + _collatz_steps_cached(3 * n + 1)
+    """Memoized helper for collatz_steps (iterative to avoid RecursionError).
+
+    Instead of recursion, this walks the sequence iteratively and checks
+    the memo dict at each step. When a cached value is found, it back-fills
+    all intermediate results for future lookups.
+    """
+    if n in _collatz_steps_memo:
+        return _collatz_steps_memo[n]
+    path = [n]
+    current = n
+    while current != 1:
+        if current % 2 == 0:
+            current = current // 2
+        else:
+            current = 3 * current + 1
+        if current in _collatz_steps_memo:
+            # Back-fill all values in the path
+            base_steps = _collatz_steps_memo[current]
+            for i, val in enumerate(reversed(path)):
+                _collatz_steps_memo[val] = base_steps + i + 1
+            return _collatz_steps_memo[n]
+        path.append(current)
+    # Should not reach here (1 is in memo), but just in case
+    for i, val in enumerate(reversed(path)):
+        _collatz_steps_memo[val] = i
+    return _collatz_steps_memo[n]
 
 
 def collatz_max(n: int) -> int:
@@ -313,7 +335,7 @@ def render_path(n: int, width: int = 80) -> str:
         lines.append(line)
 
     lines.append(f"  {'':>10} └{'─' * min(width, total_steps + 1)}")
-    lines.append(f"  {'':>10}  Step 0{' ' * min(width - 8, 0)}{f'Step {total_steps}' if total_steps < width else ''}")
+    lines.append(f"  {'':>10}  Step 0{' ' * max(width - 8, 0)}{f'Step {total_steps}' if total_steps < width else ''}")
 
     return "\n".join(lines)
 
@@ -625,6 +647,8 @@ def render_converge(start: int, end: int, width: int = 60, height: int = 24) -> 
     for i, ch in enumerate(heat_chars):
         low = min_steps + (i / len(heat_chars)) * step_range
         high = min_steps + ((i + 1) / len(heat_chars)) * step_range
+        # Clamp to avoid misleading labels like "5-6" when all values are 5
+        high = min(high, max_steps)
         legend += color("cyan" if i < 2 else "yellow" if i < 3 else "red", f"{ch}{int(low)}-{int(high)} ")
     lines.append(legend)
     lines.append("")
@@ -720,8 +744,21 @@ def render_density(start: int, end: int, width: int = 60, height: int = 20) -> s
         grid[row][ci] = ch
 
     for r in range(height):
-        val = int(min_steps + (height - 1 - r) / (height - 1) * step_range) if height > 1 and step_range > 0 else 0
-        label = f"{val:>6}"
+        if height > 1 and step_range > 0:
+            val = int(min_steps + (height - 1 - r) / (height - 1) * step_range)
+        else:
+            val = min_steps
+        # Only show label on first row, last row, or when it differs from previous
+        if r == 0:
+            label = f"{val:>6}"
+        elif r == height - 1:
+            label = f"{val:>6}"
+        else:
+            prev_val = int(min_steps + (height - 1 - (r - 1)) / (height - 1) * step_range) if height > 1 and step_range > 0 else min_steps
+            if val != prev_val:
+                label = f"{val:>6}"
+            else:
+                label = f"{'':>6}"
         line = f"  {label} │{''.join(grid[r])}"
         lines.append(line)
 
@@ -936,11 +973,17 @@ Examples:
         parser.error("Starting number must be a positive integer")
 
     # Helper to output either to stdout or file
+    _export_initialized = False
+
     def output(text):
+        nonlocal _export_initialized
         if args.export:
-            with open(args.export, "a", encoding="utf-8") as f:
+            mode = "w" if not _export_initialized else "a"
+            with open(args.export, mode, encoding="utf-8") as f:
                 f.write(text + "\n")
-            print(f"  Output appended to {args.export}")
+            if not _export_initialized:
+                print(f"  Output saved to {args.export}")
+                _export_initialized = True
         else:
             print(text)
 
@@ -986,6 +1029,12 @@ Examples:
                 output(render_hailstone(n, width=args.width, height=args.height))
             elif args.mode == "stats":
                 output(render_stats(n))
+            elif args.mode == "tree":
+                output(render_tree(n, depth=args.depth, width=args.width))
+            elif args.mode == "batch":
+                start = max(1, n - 10)
+                end = n + 10
+                output(render_batch(start, end, width=args.width))
             elif args.mode == "converge":
                 # Default range around n for converge mode with -n
                 start = max(1, n - 10)
