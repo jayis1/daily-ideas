@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
 Markov Chain Haiku Generator
-Reads text, builds Markov chains, and generates 5-7-5 syllable haikus.
+Reads text, builds Markov chains, and generates 5-7-5 syllable haikus
+(or 5-7-5-7-7 tanka poems). Supports multiple display styles, season
+detection, interactive mode, stats, and file export.
 """
 
 import random
@@ -9,6 +11,69 @@ import re
 import sys
 import os
 from collections import defaultdict
+
+__version__ = "1.1.0"
+
+
+# ─── ANSI Colors ─────────────────────────────────────────────────────────────
+
+class Colors:
+    """Minimal ANSI color helpers — auto-disabled on dumb terminals or Windows."""
+    RESET   = "\033[0m"
+    BOLD    = "\033[1m"
+    DIM     = "\033[2m"
+    ITALIC  = "\033[3m"
+    GREEN   = "\033[32m"
+    CYAN    = "\033[36m"
+    YELLOW  = "\033[33m"
+    MAGENTA = "\033[35m"
+    WHITE   = "\033[37m"
+
+    SEASON_COLORS = {
+        "spring": "\033[38;5;213m",   # pink
+        "summer": "\033[38;5;226m",   # yellow
+        "autumn": "\033[38;5;208m",   # orange
+        "winter": "\033[38;5;117m",    # light blue
+    }
+
+    @classmethod
+    def enabled(cls):
+        """Check whether colors should be emitted."""
+        # Respect NO_COLOR env var (https://no-color.org/)
+        if os.environ.get("NO_COLOR"):
+            return False
+        # Don't color if not a tty (piped output) unless FORCE_COLOR is set
+        if os.environ.get("FORCE_COLOR"):
+            return True
+        return hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
+
+    @classmethod
+    def _wrap(cls, code, text):
+        if not cls.enabled():
+            return text
+        return f"{code}{text}{cls.RESET}"
+
+    @classmethod
+    def bold(cls, text):    return cls._wrap(cls.BOLD, text)
+    @classmethod
+    def dim(cls, text):     return cls._wrap(cls.DIM, text)
+    @classmethod
+    def italic(cls, text):  return cls._wrap(cls.ITALIC, text)
+    @classmethod
+    def green(cls, text):   return cls._wrap(cls.GREEN, text)
+    @classmethod
+    def cyan(cls, text):    return cls._wrap(cls.CYAN, text)
+    @classmethod
+    def yellow(cls, text):  return cls._wrap(cls.YELLOW, text)
+    @classmethod
+    def magenta(cls, text): return cls._wrap(cls.MAGENTA, text)
+
+    @classmethod
+    def season_color(cls, season, text):
+        code = cls.SEASON_COLORS.get(season, cls.WHITE)
+        if not cls.enabled():
+            return text
+        return f"{code}{text}{cls.RESET}"
 
 
 # ─── Syllable counting ───────────────────────────────────────────────────────
@@ -37,7 +102,7 @@ SYLLABLE_EXCEPTIONS = {
     "waking": 2, "sleeping": 2, "weeping": 2, "laughing": 2,
     "breathing": 2, "wander": 2, "linger": 2, "flutter": 2,
     "shimmer": 2, "glimmer": 2, "glowing": 2, "fading": 2,
-    "rising": 2, "falling": 2, "melting": 2, "freezing": 2,
+    "rising": 2, "melting": 2, "freezing": 2,
     "gentle": 2, "solitary": 4, "tranquil": 2, "serene": 2,
     "peaceful": 2, "endless": 2, "eternal": 3, "infinite": 3,
     "moment": 2, "breathe": 1, "rhythm": 2, "harmony": 3,
@@ -47,13 +112,32 @@ SYLLABLE_EXCEPTIONS = {
     "beyond": 2, "before": 2, "behind": 2,
     "fireflies": 3, "dragonfly": 3, "hummingbird": 3,
     "raindrop": 2, "snowfall": 2, "rainfall": 2, "windfall": 2,
-    "nightfall": 2, "daybreak": 2, "daybreak": 2,
+    "nightfall": 2, "daybreak": 2,
     "haiku": 2, "haikus": 2,
+    # Additional common words
+    "our": 1, "hour": 1, "sour": 1, "flower": 2,
+    "robin": 2, "sparrow": 2, "meadow": 2, "willow": 2,
+    "sunset": 2, "sunrise": 2, "moonrise": 2,
+    "over": 2, "under": 2, "above": 2, "below": 2,
+    "remember": 3, "together": 3, "forever": 3,
+    "someone": 2, "anyone": 3, "everyone": 3,
+    "nothing": 2, "something": 2, "everything": 4,
+    "alone": 2, "awake": 2, "asleep": 2, "afraid": 2,
+    "return": 2, "reveal": 2, "remain": 2,
 }
 
 
 def count_syllables(word):
-    """Count syllables in a word using heuristic rules + exception table."""
+    """Count syllables in a word using heuristic rules + exception table.
+
+    The algorithm:
+    1. Check the exception table for known words.
+    2. Strip non-alpha characters.
+    3. Count contiguous vowel groups.
+    4. Apply adjustment rules for silent-e, -le, -ed.
+
+    Returns at least 1 for any non-empty word.
+    """
     word = word.lower().strip()
     word = re.sub(r"[^a-z]", "", word)
 
@@ -63,39 +147,25 @@ def count_syllables(word):
     if word in SYLLABLE_EXCEPTIONS:
         return SYLLABLE_EXCEPTIONS[word]
 
-    # Handle -le at end (e.g., "little" = 2, "sparkle" = 2)
-    # But "able" = 2 not 3
-
-    # Count vowel groups
     vowels = "aeiouy"
     count = 0
     prev_was_vowel = False
 
-    for i, ch in enumerate(word):
+    for ch in word:
         is_vowel = ch in vowels
         if is_vowel and not prev_was_vowel:
             count += 1
         prev_was_vowel = is_vowel
 
-    # Adjustments
     # Silent 'e' at end (but not -le patterns like "little")
     if word.endswith("e") and not word.endswith("le") and len(word) > 2:
         if word[-2] not in vowels:
             count = max(1, count - 1)
 
-    # -y at end adds a syllable usually (already counted by vowel group)
-
     # Words ending in -ed: if preceded by t or d, it's a syllable
     if word.endswith("ed") and len(word) > 3:
-        if word[-3] in ("t", "d"):
-            pass  # keep the count
-        else:
+        if word[-3] not in ("t", "d"):
             count = max(1, count - 1)
-
-    # -es at end: if preceded by s, z, ch, sh, x, ge — adds syllable
-    # Already handled by vowel group counting
-
-    # ia, io, ea etc. — usually 2 syllables, already handled
 
     return max(1, count)
 
@@ -106,24 +176,58 @@ def syllable_count_phrase(phrase):
     return sum(count_syllables(w) for w in words)
 
 
+def syllable_breakdown(phrase):
+    """Return a list of (word, syllable_count) tuples for a phrase.
+
+    Useful for --stats mode to show per-word syllable counts.
+    """
+    words = phrase.split()
+    return [(w, count_syllables(w)) for w in words]
+
+
 # ─── Markov Chain ────────────────────────────────────────────────────────────
 
 class MarkovChain:
-    """Builds a Markov chain from text and generates sequences."""
+    """Builds a Markov chain from text and generates sequences.
+
+    Parameters
+    ----------
+    order : int
+        Number of preceding words used as state. Higher order produces
+        more coherent but less varied output. Default is 2.
+    """
 
     def __init__(self, order=2):
+        if order < 1:
+            raise ValueError(f"Markov chain order must be >= 1, got {order}")
         self.order = order
-        self.chain = defaultdict(list)  # (prefix) -> [next_words]
-        self.starters = []  # sentence/line starters
+        self.chain = defaultdict(list)       # (prefix) -> [next_words]
+        self._single_chain = defaultdict(list)  # word -> [next_words] (fallback)
+        self.starters = []                    # sentence/line starters
         self.all_words = set()
 
     def train(self, text):
-        """Train the chain on input text."""
-        # Split into sentences/lines
+        """Train the chain on input text.
+
+        Text is split on sentence boundaries (periods, exclamation marks,
+        question marks, and newlines). Each sentence contributes transition
+        probabilities to both the N-gram and single-word (fallback) chains.
+        """
+        if not text or not text.strip():
+            return
+
         sentences = re.split(r'[.!?\n]+', text)
         for sentence in sentences:
             words = self._tokenize(sentence)
             if len(words) < self.order + 1:
+                # Still add to single-word chain for short sentences
+                if len(words) >= 2:
+                    for i in range(len(words) - 1):
+                        self._single_chain[words[i]].append(words[i + 1])
+                        self.all_words.add(words[i])
+                        self.all_words.add(words[i + 1])
+                elif len(words) == 1:
+                    self.all_words.add(words[0])
                 continue
 
             self.starters.append(tuple(words[:self.order]))
@@ -136,9 +240,7 @@ class MarkovChain:
                 for w in prefix:
                     self.all_words.add(w)
 
-        # Also build single-word chain for fallback
-        if not hasattr(self, '_single_chain'):
-            self._single_chain = defaultdict(list)
+        # Build single-word chain for fallback
         for sentence in sentences:
             words = self._tokenize(sentence)
             if len(words) < 2:
@@ -149,41 +251,72 @@ class MarkovChain:
                 self.all_words.add(words[i + 1])
 
     def _tokenize(self, text):
-        """Tokenize text into words, preserving contractions."""
+        """Tokenize text into lowercase words, preserving contractions."""
         words = re.findall(r"[a-zA-Z']+", text.lower())
         return [w for w in words if w and not all(c == "'" for c in w)]
 
     def generate(self, max_words=20, start=None):
-        """Generate a sequence of words."""
+        """Generate a sequence of words using the Markov chain.
+
+        Parameters
+        ----------
+        max_words : int
+            Maximum number of words to generate.
+        start : tuple or None
+            Starting prefix. Randomly chosen if None.
+
+        Returns
+        -------
+        list of str
+            Generated word sequence.
+        """
+        if not self.all_words:
+            return []
+
         if start is None:
             if self.starters:
                 start = random.choice(self.starters)
             else:
-                # fallback
                 word_list = list(self.all_words)
-                if not word_list:
-                    return []
                 start = tuple(random.sample(word_list, min(self.order, len(word_list))))
 
         result = list(start)
         prefix = tuple(start)
+        # Track recent words to avoid awkward repetition
+        seen_counter = defaultdict(int)
+        for w in result:
+            seen_counter[w] += 1
 
         for _ in range(max_words - len(start)):
-            if prefix in self.chain and self.chain[prefix]:
-                next_word = random.choice(self.chain[prefix])
-            else:
+            candidates = list(self.chain.get(prefix, []))
+            if not candidates:
                 # Try single-word fallback
-                if prefix[-1] in self._single_chain and self._single_chain[prefix[-1]]:
-                    next_word = random.choice(self._single_chain[prefix[-1]])
-                else:
-                    break
+                last_word = prefix[-1] if prefix else None
+                candidates = list(self._single_chain.get(last_word, [])) if last_word else []
+
+            if not candidates:
+                break
+
+            # Prefer words that haven't been used much to reduce repetition
+            # Weight: words seen fewer times get higher weight
+            weighted = []
+            for w in candidates:
+                weight = max(1, 4 - seen_counter[w])  # 4 if unseen, 1 if seen 3+ times
+                weighted.extend([w] * weight)
+
+            next_word = random.choice(weighted) if weighted else random.choice(candidates)
             result.append(next_word)
+            seen_counter[next_word] += 1
             prefix = tuple(result[-self.order:])
 
         return result
 
-    def generate_with_syllable_target(self, target_syllables, max_attempts=200):
-        """Generate a phrase that matches the target syllable count."""
+    def generate_with_syllable_target(self, target_syllables, max_attempts=300):
+        """Generate a phrase that matches the target syllable count.
+
+        Tries random Markov walks and evaluates all prefixes for a syllable
+        match. Falls back to word-by-word construction if random walks fail.
+        """
         for _ in range(max_attempts):
             words = self.generate(max_words=target_syllables + 5)
             # Try all prefixes
@@ -200,16 +333,19 @@ class MarkovChain:
         return self._construct_by_syllables(target_syllables)
 
     def _construct_by_syllables(self, target):
-        """Build a phrase word-by-word to hit exact syllable count."""
+        """Build a phrase word-by-word to hit exact syllable count.
+
+        Uses the single-word transition table for coherence, falling
+        back to random vocabulary words when needed.
+        """
         words_so_far = []
         syllables_so_far = 0
 
-        # Pick a starting word
         word_list = sorted(self.all_words)
         if not word_list:
             return None
 
-        # Try random words until we find a starting point
+        # Try random starting words
         attempts = 0
         while attempts < 50:
             start_word = random.choice(word_list)
@@ -229,24 +365,21 @@ class MarkovChain:
             if remaining == 0:
                 break
             if remaining < 0:
-                # backtrack
+                # Backtrack
                 removed = words_so_far.pop()
                 syllables_so_far -= count_syllables(removed)
                 continue
 
-            # Find candidate next words
             last = words_so_far[-1]
             candidates = self._single_chain.get(last, [])
             if not candidates:
                 candidates = word_list
 
-            # Filter by syllable fit
+            # Filter by syllable fit, preferring transition words
             valid = [w for w in candidates if count_syllables(w) <= remaining]
             if not valid:
-                # Try any word that fits
                 valid = [w for w in word_list if count_syllables(w) <= remaining]
             if not valid:
-                # Backtrack
                 removed = words_so_far.pop()
                 syllables_so_far -= count_syllables(removed)
                 continue
@@ -371,7 +504,18 @@ The mountain stream sings its ancient song
 
 
 class HaikuGenerator:
-    """Generate haikus using Markov chains and syllable counting."""
+    """Generate haikus (or tanka) using Markov chains and syllable counting.
+
+    Parameters
+    ----------
+    order : int
+        Markov chain order. Default is 2.
+
+    Attributes
+    ----------
+    chain : MarkovChain
+        The underlying Markov chain model.
+    """
 
     SEASONS = {
         "spring": ["🌸", "🌱", "🌷"],
@@ -400,6 +544,8 @@ class HaikuGenerator:
 
     def train(self, text):
         """Train on provided text."""
+        if not text or not text.strip():
+            return
         self.chain.train(text)
 
     def train_default(self):
@@ -407,7 +553,20 @@ class HaikuGenerator:
         self.chain.train(DEFAULT_CORPUS)
 
     def detect_season(self, haiku_text):
-        """Detect the season of a haiku based on keywords."""
+        """Detect the season of a haiku based on keyword matching.
+
+        If no keywords match, defaults to the current astronomical season.
+
+        Parameters
+        ----------
+        haiku_text : str
+            The full text of the haiku/tanka.
+
+        Returns
+        -------
+        str
+            One of "spring", "summer", "autumn", "winter".
+        """
         text_lower = haiku_text.lower()
         scores = {s: 0 for s in self.SEASONS}
         for season, keywords in self.SEASON_KEYWORDS.items():
@@ -428,8 +587,23 @@ class HaikuGenerator:
                 best = "winter"
         return best
 
-    def generate_haiku(self, max_attempts=500):
-        """Generate a single 5-7-5 haiku."""
+    def generate_haiku(self, max_attempts=500, season_bias=None):
+        """Generate a single 5-7-5 haiku.
+
+        Parameters
+        ----------
+        max_attempts : int
+            Maximum number of attempts before giving up.
+        season_bias : str or None
+            If set, one of "spring"/"summer"/"autumn"/"winter".
+            Lines will be regenerated until the detected season matches
+            (up to 3 extra retries per haiku).
+
+        Returns
+        -------
+        list of str or None
+            Three lines [5-syllable, 7-syllable, 5-syllable], or None on failure.
+        """
         for _ in range(max_attempts):
             line1 = self.chain.generate_with_syllable_target(5)
             line2 = self.chain.generate_with_syllable_target(7)
@@ -440,14 +614,79 @@ class HaikuGenerator:
                 line1 = line1[0].upper() + line1[1:]
                 line2 = line2[0].upper() + line2[1:]
                 line3 = line3[0].upper() + line3[1:]
-                return [line1, line2, line3]
+
+                haiku_lines = [line1, line2, line3]
+
+                # If season_bias is requested, check it
+                if season_bias:
+                    full_text = " ".join(haiku_lines).lower()
+                    detected = self.detect_season(full_text)
+                    if detected == season_bias:
+                        return haiku_lines
+                    # Season doesn't match — try again
+                    continue
+
+                return haiku_lines
 
         return None
 
-    def format_haiku(self, lines, style="pretty"):
-        """Format a haiku for display."""
+    def generate_tanka(self, max_attempts=500, season_bias=None):
+        """Generate a 5-7-5-7-7 tanka poem.
+
+        A tanka is the classic Japanese five-line form, a sister to haiku.
+
+        Parameters
+        ----------
+        max_attempts : int
+            Maximum generation attempts.
+        season_bias : str or None
+            Optional season filter.
+
+        Returns
+        -------
+        list of str or None
+            Five lines [5, 7, 5, 7, 7 syllables], or None on failure.
+        """
+        for _ in range(max_attempts):
+            line1 = self.chain.generate_with_syllable_target(5)
+            line2 = self.chain.generate_with_syllable_target(7)
+            line3 = self.chain.generate_with_syllable_target(5)
+            line4 = self.chain.generate_with_syllable_target(7)
+            line5 = self.chain.generate_with_syllable_target(7)
+
+            if all([line1, line2, line3, line4, line5]):
+                lines = [line1, line2, line3, line4, line5]
+                lines = [l[0].upper() + l[1:] for l in lines]
+
+                if season_bias:
+                    full_text = " ".join(lines).lower()
+                    detected = self.detect_season(full_text)
+                    if detected != season_bias:
+                        continue
+
+                return lines
+
+        return None
+
+    def format_haiku(self, lines, style="pretty", poem_type="haiku"):
+        """Format a haiku or tanka for display.
+
+        Parameters
+        ----------
+        lines : list of str
+            The poem lines.
+        style : str
+            One of "pretty", "cjk", "minimal".
+        poem_type : str
+            "haiku" or "tanka" — used for labeling.
+
+        Returns
+        -------
+        str
+            Formatted poem string.
+        """
         if not lines:
-            return "  (could not generate haiku)"
+            return "  (could not generate poem)"
 
         text = " ".join(lines)
         season = self.detect_season(text)
@@ -458,17 +697,21 @@ class HaikuGenerator:
 
         if style == "pretty":
             border = "─" * 40
+            label = poem_type.upper() if poem_type == "tanka" else ""
             result = []
             result.append(f"  {emoji}  ┌{border}┐")
             for line in lines:
                 padded = line.center(36)
                 result.append(f"     │ {padded} │")
             result.append(f"  {emoji}  └{border}┘")
-            result.append(f"      ── {season.capitalize()} ──")
+            season_label = season.capitalize()
+            if label:
+                result.append(f"      ── {Colors.season_color(season, season_label)} · {label} ──")
+            else:
+                result.append(f"      ── {Colors.season_color(season, season_label)} ──")
             return "\n".join(result)
 
         if style == "cjk":
-            # Japanese-inspired vertical-ish layout
             result = []
             result.append("  ╔══════════════════════════╗")
             for line in lines:
@@ -476,17 +719,62 @@ class HaikuGenerator:
                 padded = padded.ljust(24)
                 result.append(f"  ║{padded}║")
             result.append("  ╚══════════════════════════╝")
-            result.append(f"     {emoji} {season.capitalize()}")
+            label = f" ({poem_type})" if poem_type == "tanka" else ""
+            result.append(f"     {emoji} {Colors.season_color(season, season.capitalize())}{label}")
             return "\n".join(result)
 
         return "\n".join(lines)
 
-    def generate_and_format(self, count=1, style="pretty"):
-        """Generate multiple haikus and format them."""
+    def format_stats(self, lines, poem_type="haiku"):
+        """Format per-line syllable breakdown for --stats mode.
+
+        Shows each word with its syllable count, e.g.:
+            Line 1 (5): Cherry(2) blossoms(2) fall(1)
+        """
+        if not lines:
+            return "  (no poem to analyze)"
+
+        targets = [5, 7, 5, 7, 7] if poem_type == "tanka" else [5, 7, 5]
+        output_lines = []
+        for i, (line, target) in enumerate(zip(lines, targets)):
+            breakdown = syllable_breakdown(line)
+            word_parts = []
+            for word, sc in breakdown:
+                word_parts.append(f"{word}({sc})")
+            total = syllable_count_phrase(line)
+            marker = "✓" if total == target else f"✗ (got {total})"
+            output_lines.append(
+                f"  Line {i+1} ({target}): {' '.join(word_parts)} {marker}"
+            )
+        return "\n".join(output_lines)
+
+    def generate_and_format(self, count=1, style="pretty", poem_type="haiku",
+                            season_bias=None):
+        """Generate multiple poems and format them.
+
+        Parameters
+        ----------
+        count : int
+            Number of poems to generate.
+        style : str
+            Display style.
+        poem_type : str
+            "haiku" or "tanka".
+        season_bias : str or None
+            Optional season filter.
+
+        Returns
+        -------
+        list of str
+            Formatted poem strings.
+        """
         results = []
         for _ in range(count):
-            lines = self.generate_haiku()
-            formatted = self.format_haiku(lines, style=style)
+            if poem_type == "tanka":
+                lines = self.generate_tanka(season_bias=season_bias)
+            else:
+                lines = self.generate_haiku(season_bias=season_bias)
+            formatted = self.format_haiku(lines, style=style, poem_type=poem_type)
             results.append(formatted)
         return results
 
@@ -494,25 +782,30 @@ class HaikuGenerator:
 # ─── Interactive mode ─────────────────────────────────────────────────────────
 
 def interactive_mode(generator):
-    """Run an interactive haiku generation session."""
-    print("\n  🎋 Markov Chain Haiku Generator 🎋")
+    """Run an interactive haiku/tanka generation session."""
+    print(f"\n  🎋 {Colors.bold('Markov Chain Haiku Generator')} v{__version__} 🎋")
     print("  ─────────────────────────────────")
     print("  Commands:")
     print("    [Enter]  Generate a new haiku")
+    print("    t        Switch to tanka mode (5-7-5-7-7)")
+    print("    h        Switch to haiku mode (5-7-5)")
     print("    s        Cycle display style")
     print("    c        Enter custom text to train on")
     print("    d        Reset to default corpus")
+    print("    v        Show vocabulary stats")
     print("    q        Quit")
     print()
 
     styles = ["pretty", "cjk", "minimal"]
     style_idx = 0
+    poem_type = "haiku"  # "haiku" or "tanka"
 
     while True:
         try:
-            cmd = input("  > ").strip().lower()
+            mode_label = Colors.cyan(f"[{poem_type}]")
+            cmd = input(f"  {mode_label} > ").strip().lower()
         except (EOFError, KeyboardInterrupt):
-            print("\n  Farewell! 🌸")
+            print(f"\n  Farewell! 🌸")
             break
 
         if cmd == "q" or cmd == "quit":
@@ -521,6 +814,20 @@ def interactive_mode(generator):
         elif cmd == "s":
             style_idx = (style_idx + 1) % len(styles)
             print(f"  Style: {styles[style_idx]}")
+            continue
+        elif cmd == "t":
+            poem_type = "tanka"
+            print(f"  Switched to {Colors.magenta('tanka')} mode (5-7-5-7-7)")
+            continue
+        elif cmd == "h":
+            poem_type = "haiku"
+            print(f"  Switched to {Colors.green('haiku')} mode (5-7-5)")
+            continue
+        elif cmd == "v":
+            vocab_size = len(generator.chain.all_words)
+            starters = len(generator.chain.starters)
+            print(f"  Vocabulary: {Colors.bold(str(vocab_size))} words, "
+                  f"{Colors.bold(str(starters))} starters")
             continue
         elif cmd == "c":
             print("  Enter your text (end with an empty line):")
@@ -535,21 +842,29 @@ def interactive_mode(generator):
                 lines.append(line)
             if lines:
                 text = " ".join(lines)
-                generator.chain = MarkovChain(order=2)
+                generator.chain = MarkovChain(order=generator.chain.order)
                 generator.train(text)
                 generator.train_default()
                 print(f"  Trained on {len(lines)} lines of text (+ default corpus)")
             continue
         elif cmd == "d":
-            generator.chain = MarkovChain(order=2)
+            generator.chain = MarkovChain(order=generator.chain.order)
             generator.train_default()
             print("  Reset to default corpus")
             continue
         else:
-            # Generate haiku
-            lines = generator.generate_haiku()
+            # Generate poem
+            if poem_type == "tanka":
+                lines = generator.generate_tanka()
+            else:
+                lines = generator.generate_haiku()
             print()
-            print(generator.format_haiku(lines, style=styles[style_idx]))
+            print(generator.format_haiku(lines, style=styles[style_idx],
+                                         poem_type=poem_type))
+            # Show stats line
+            if lines:
+                stats = generator.format_stats(lines, poem_type=poem_type)
+                print(Colors.dim(stats))
             print()
 
 
@@ -567,7 +882,7 @@ def main():
     )
     parser.add_argument(
         "-n", "--count", type=int, default=1,
-        help="Number of haikus to generate (default: 1)"
+        help="Number of poems to generate (default: 1)"
     )
     parser.add_argument(
         "-s", "--style", choices=["pretty", "cjk", "minimal"], default="pretty",
@@ -585,6 +900,25 @@ def main():
         "--seed", type=int, default=None,
         help="Random seed for reproducibility"
     )
+    parser.add_argument(
+        "--season", choices=["spring", "summer", "autumn", "winter"], default=None,
+        help="Filter poems to match a season (default: any)"
+    )
+    parser.add_argument(
+        "--tanka", action="store_true",
+        help="Generate tanka (5-7-5-7-7) instead of haiku (5-7-5)"
+    )
+    parser.add_argument(
+        "--stats", action="store_true",
+        help="Show per-word syllable breakdown for each poem"
+    )
+    parser.add_argument(
+        "--export", metavar="FILE",
+        help="Save generated poems to a file"
+    )
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {__version__}"
+    )
 
     args = parser.parse_args()
 
@@ -596,23 +930,60 @@ def main():
     # Train
     if args.input_file:
         try:
-            with open(args.input_file, "r") as f:
+            with open(args.input_file, "r", encoding="utf-8") as f:
                 text = f.read()
-            gen.train(text)
-            print(f"  Trained on {args.input_file}", file=sys.stderr)
+            if not text.strip():
+                print(f"  Warning: file '{args.input_file}' is empty, using default corpus",
+                      file=sys.stderr)
+                gen.train_default()
+            else:
+                gen.train(text)
+                print(f"  Trained on {args.input_file}", file=sys.stderr)
         except FileNotFoundError:
             print(f"  Error: file '{args.input_file}' not found", file=sys.stderr)
+            sys.exit(1)
+        except PermissionError:
+            print(f"  Error: permission denied for '{args.input_file}'", file=sys.stderr)
             sys.exit(1)
     else:
         gen.train_default()
 
+    poem_type = "tanka" if args.tanka else "haiku"
+
     if args.interactive:
         interactive_mode(gen)
     else:
-        haikus = gen.generate_and_format(count=args.count, style=args.style)
-        for h in haikus:
-            print(h)
+        output_parts = []
+        all_raw_lines = []
+
+        for _ in range(args.count):
+            if poem_type == "tanka":
+                lines = gen.generate_tanka(season_bias=args.season)
+            else:
+                lines = gen.generate_haiku(season_bias=args.season)
+            formatted = gen.format_haiku(lines, style=args.style,
+                                          poem_type=poem_type)
+            print(formatted)
+            output_parts.append(formatted)
             print()
+            if lines:
+                all_raw_lines.append((lines, poem_type))
+
+        # Show stats if requested — uses same raw lines just generated
+        if args.stats:
+            for lines, ptype in all_raw_lines:
+                stats = gen.format_stats(lines, poem_type=ptype)
+                print(Colors.dim(stats))
+                output_parts.append(stats)
+
+        # Export to file if requested
+        if args.export:
+            try:
+                with open(args.export, "w", encoding="utf-8") as f:
+                    f.write("\n\n".join(output_parts) + "\n")
+                print(f"\n  Exported to {args.export}", file=sys.stderr)
+            except (IOError, PermissionError) as e:
+                print(f"  Error writing to {args.export}: {e}", file=sys.stderr)
 
 
 if __name__ == "__main__":

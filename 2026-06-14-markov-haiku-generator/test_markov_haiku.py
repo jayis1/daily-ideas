@@ -11,9 +11,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from markov_haiku import (
     count_syllables,
     syllable_count_phrase,
+    syllable_breakdown,
     MarkovChain,
     HaikuGenerator,
     DEFAULT_CORPUS,
+    Colors,
+    __version__,
 )
 
 
@@ -87,7 +90,25 @@ def test_syllable_empty():
     assert syllable_count_phrase("") == 0
 
 
-# ─── Markov Chain tests ────────────────────────────────────────────────────────
+def test_syllable_breakdown():
+    """Test the syllable_breakdown helper."""
+    bd = syllable_breakdown("cherry blossom petals")
+    assert bd == [("cherry", 2), ("blossom", 2), ("petals", 2)]
+    total = sum(sc for _, sc in bd)
+    assert total == 6
+
+
+def test_syllable_new_exceptions():
+    """New exception words added in v1.1."""
+    assert count_syllables("willow") == 2
+    assert count_syllables("sunset") == 2
+    assert count_syllables("meadow") == 2
+    assert count_syllables("alone") == 2
+    assert count_syllables("remember") == 3
+    assert count_syllables("return") == 2
+
+
+# ─── Markov Chain tests ────────────────────────────────────────────────────
 
 def test_markov_train_basic():
     """Basic training and generation."""
@@ -127,6 +148,30 @@ def test_markov_construct_by_syllables():
     if result:
         assert syllable_count_phrase(result) == 5, \
             f"Expected 5 syllables, got {syllable_count_phrase(result)}: '{result}'"
+
+
+def test_markov_order_validation():
+    """Order must be >= 1."""
+    try:
+        MarkovChain(order=0)
+        assert False, "Should have raised ValueError"
+    except ValueError:
+        pass
+
+
+def test_markov_train_empty():
+    """Training on empty text should not crash."""
+    chain = MarkovChain(order=2)
+    chain.train("")
+    chain.train("   ")
+    assert len(chain.all_words) == 0
+
+
+def test_markov_train_short():
+    """Training on short text (fewer words than order) should still work."""
+    chain = MarkovChain(order=2)
+    chain.train("hello world")
+    assert "hello" in chain.all_words or "world" in chain.all_words
 
 
 # ─── Haiku Generator tests ────────────────────────────────────────────────────
@@ -247,6 +292,151 @@ def test_haiku_reproducible_with_seed():
     h2 = gen2.generate_haiku()
 
     assert h1 == h2, "Same seed should produce same haiku"
+
+
+# ─── Tanka tests ────────────────────────────────────────────────────────────
+
+def test_tanka_generate():
+    """Generate a tanka (5-7-5-7-7)."""
+    random.seed(42)
+    gen = HaikuGenerator()
+    gen.train_default()
+    tanka = gen.generate_tanka()
+    assert tanka is not None, "Tanka generation returned None"
+    assert len(tanka) == 5, f"Expected 5 lines, got {len(tanka)}"
+    targets = [5, 7, 5, 7, 7]
+    for i, (line, target) in enumerate(zip(tanka, targets)):
+        actual = syllable_count_phrase(line)
+        assert actual == target, \
+            f"Line {i+1}: expected {target} syllables, got {actual}: '{line}'"
+
+
+def test_tanka_format():
+    """Format a tanka with type label."""
+    gen = HaikuGenerator()
+    gen.train_default()
+    random.seed(42)
+    tanka = gen.generate_tanka()
+    formatted = gen.format_haiku(tanka, style="pretty", poem_type="tanka")
+    assert tanka is not None
+    # Should contain border characters
+    assert "│" in formatted or "┌" in formatted
+
+
+def test_tanka_format_cjk():
+    """CJK format of a tanka includes 'tanka' label."""
+    gen = HaikuGenerator()
+    gen.train_default()
+    random.seed(42)
+    tanka = gen.generate_tanka()
+    if tanka:
+        formatted = gen.format_haiku(tanka, style="cjk", poem_type="tanka")
+        assert "tanka" in formatted.lower() or "║" in formatted
+
+
+def test_tanka_format_minimal():
+    """Minimal format of tanka has 5 lines."""
+    gen = HaikuGenerator()
+    gen.train_default()
+    random.seed(42)
+    tanka = gen.generate_tanka()
+    if tanka:
+        formatted = gen.format_haiku(tanka, style="minimal", poem_type="tanka")
+        assert len(formatted.strip().split("\n")) == 5
+
+
+# ─── Season bias tests ────────────────────────────────────────────────────────
+
+def test_haiku_season_bias():
+    """Generate haiku with season bias."""
+    random.seed(100)
+    gen = HaikuGenerator()
+    gen.train_default()
+    # Try winter bias — generate several and at least one should match
+    for _ in range(10):
+        haiku = gen.generate_haiku(season_bias="winter")
+        if haiku:
+            season = gen.detect_season(" ".join(haiku))
+            assert season == "winter", f"Season bias winter failed, got {season}"
+            break  # At least one success is enough
+
+
+# ─── Stats and formatting tests ─────────────────────────────────────────────
+
+def test_format_stats():
+    """Stats display shows syllable breakdown."""
+    gen = HaikuGenerator()
+    gen.train_default()
+    random.seed(42)
+    haiku = gen.generate_haiku()
+    assert haiku is not None
+    stats = gen.format_stats(haiku)
+    assert "Line 1 (5):" in stats
+    assert "Line 2 (7):" in stats
+    assert "Line 3 (5):" in stats
+
+
+def test_format_stats_tanka():
+    """Stats display for tanka shows 5 lines."""
+    gen = HaikuGenerator()
+    gen.train_default()
+    random.seed(42)
+    tanka = gen.generate_tanka()
+    if tanka:
+        stats = gen.format_stats(tanka, poem_type="tanka")
+        assert "Line 5 (7):" in stats
+
+
+def test_format_empty():
+    """Formatting None/empty returns fallback string."""
+    gen = HaikuGenerator()
+    result = gen.format_haiku(None)
+    assert "could not generate" in result.lower() or "no poem" in result.lower()
+
+
+# ─── Colors tests ────────────────────────────────────────────────────────────
+
+def test_colors_disabled():
+    """Colors.enabled() returns False when NO_COLOR is set."""
+    old = os.environ.get("NO_COLOR")
+    os.environ["NO_COLOR"] = "1"
+    assert Colors.enabled() is False
+    if old is None:
+        del os.environ["NO_COLOR"]
+    else:
+        os.environ["NO_COLOR"] = old
+
+
+def test_colors_bold():
+    """Colors.bold returns text unchanged when disabled."""
+    old = os.environ.get("NO_COLOR")
+    os.environ["NO_COLOR"] = "1"
+    assert Colors.bold("hello") == "hello"
+    if old is None:
+        del os.environ["NO_COLOR"]
+    else:
+        os.environ["NO_COLOR"] = old
+
+
+def test_season_color():
+    """Season color returns text when disabled."""
+    old = os.environ.get("NO_COLOR")
+    os.environ["NO_COLOR"] = "1"
+    assert Colors.season_color("spring", "Spring") == "Spring"
+    if old is None:
+        del os.environ["NO_COLOR"]
+    else:
+        os.environ["NO_COLOR"] = old
+
+
+# ─── Version test ────────────────────────────────────────────────────────────
+
+def test_version():
+    """Version string is valid."""
+    assert __version__ is not None
+    parts = __version__.split(".")
+    assert len(parts) == 3
+    assert all(p.isdigit() for p in parts)
 
 
 # ─── Run all tests ─────────────────────────────────────────────────────────────
