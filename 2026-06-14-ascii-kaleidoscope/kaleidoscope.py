@@ -24,9 +24,9 @@ import time
 import signal
 import random
 import argparse
-from collections import namedtuple
 
-__version__ = "1.1.0"
+
+__version__ = "1.2.0"
 
 # ── ANSI helpers ──────────────────────────────────────────────────────────
 
@@ -81,9 +81,9 @@ def generate_palette(hue_offset=0.0):
     for i in range(256):
         t = (i / 256.0) * 2 * math.pi + hue_offset
         # Map to ANSI 256-color cube (indices 16-231 are the 6x6x6 cube)
-        r = int((math.sin(t) * 0.5 + 0.5) * 5)
-        g = int((math.sin(t + 2.094) * 0.5 + 0.5) * 5)
-        b = int((math.sin(t + 4.189) * 0.5 + 0.5) * 5)
+        r = min(5, max(0, int((math.sin(t) * 0.5 + 0.5) * 5.999)))
+        g = min(5, max(0, int((math.sin(t + 2.094) * 0.5 + 0.5) * 5.999)))
+        b = min(5, max(0, int((math.sin(t + 4.189) * 0.5 + 0.5) * 5.999)))
         ansi = 16 + 36 * r + 6 * g + b
         colors.append(ansi)
     return colors
@@ -148,9 +148,9 @@ class Kaleidoscope:
             seed: Optional random seed for reproducible parameters.
         """
         # Ensure segments is even and >= 4
-        self.segments = max(4, segments)
-        if self.segments % 2 != 0:
-            self.segments += 1
+        self._segments = max(4, segments)
+        if self._segments % 2 != 0:
+            self._segments += 1
 
         self.speed = max(0.2, min(5.0, speed))
         self.pattern = pattern if pattern in self.PATTERNS else "spiral"
@@ -169,6 +169,19 @@ class Kaleidoscope:
         self.phase2 = self.rng.uniform(0, 2 * math.pi)
         self.phase3 = self.rng.uniform(0, 2 * math.pi)
         self.morph_speed = self.rng.uniform(0.3, 1.2)
+
+    @property
+    def segments(self):
+        """Number of symmetry segments (always even, minimum 4)."""
+        return self._segments
+
+    @segments.setter
+    def segments(self, value):
+        """Set segments, normalizing to even and minimum 4."""
+        value = max(4, int(value))
+        if value % 2 != 0:
+            value += 1
+        self._segments = value
 
     def compute_pixel(self, r, theta, t):
         """
@@ -329,7 +342,7 @@ class Kaleidoscope:
                 # Handle outside-circle pixels
                 if upper_val < 0 and lower_val < 0:
                     # Both sub-pixels outside circle: show as dark background
-                    row_data.append((" ", bg_dark, 0))  # space with dark bg
+                    row_data.append((" ", bg_dark, bg_dark))  # space with dark bg
                     continue
 
                 # If one sub-pixel is outside, clamp it to near-zero
@@ -369,16 +382,52 @@ def get_key_nonblock(timeout=0.02):
     """
     Read a single keypress from stdin without blocking.
 
+    Handles common escape sequences (arrow keys, function keys) by
+    consuming the full sequence so that partial escapes don't trigger
+    unintended actions (e.g., '[' from arrow-key sequences).
+
     Args:
         timeout: Seconds to wait for input (default 0.02).
 
     Returns:
         Character string if a key was pressed, or None if no input available.
+        Returns special strings for arrow keys: 'up', 'down', 'left', 'right'.
     """
     import select
-    if select.select([sys.stdin], [], [], timeout)[0]:
-        return sys.stdin.read(1)
-    return None
+    if not select.select([sys.stdin], [], [], timeout)[0]:
+        return None
+    ch = sys.stdin.read(1)
+    if ch == '\x1b':
+        # Start of an escape sequence — try to read the rest
+        # Common sequences: \x1b[A (up), \x1b[B (down), \x1b[C (right), \x1b[D (left)
+        # Also: \x1b[1;5D etc. for modified keys, and \x1bOH / \x1b[F for Home/End
+        if select.select([sys.stdin], [], [], 0.01)[0]:
+            next_ch = sys.stdin.read(1)
+            if next_ch == '[':
+                # CSI sequence
+                seq = next_ch
+                # Read until we get a letter (the command byte)
+                while select.select([sys.stdin], [], [], 0.01)[0]:
+                    c = sys.stdin.read(1)
+                    seq += c
+                    if c.isalpha():
+                        break
+                # Map known sequences
+                arrow_map = {'A': 'up', 'B': 'down', 'C': 'right', 'D': 'left'}
+                if seq.endswith('A') or seq.endswith('B') or seq.endswith('C') or seq.endswith('D'):
+                    return arrow_map.get(seq[-1], None)
+                return None  # Unknown CSI sequence — swallow it
+            elif next_ch == 'O':
+                # SS3 sequence (e.g., \x1bOH = Home, \x1bOF = End)
+                if select.select([sys.stdin], [], [], 0.01)[0]:
+                    sys.stdin.read(1)
+                return None
+            else:
+                # Alt+key or bare Escape — treat as Escape
+                return None
+        # Bare escape key with no follow-up
+        return None
+    return ch
 
 
 def set_terminal_raw():
@@ -484,11 +533,13 @@ def main():
             if not paused:
                 frame = ks.render_frame(cols, rows)
 
-                # Build output buffer
-                output_parts = [move_cursor(1, 1)]
+                # Build output buffer — use move_cursor per row to avoid
+                # a spurious newline after the initial cursor positioning
+                # (joining with \n would shift the display down by one row)
+                output_parts = []
 
                 for row_idx, row in enumerate(frame):
-                    line_parts = []
+                    line_parts = [move_cursor(row_idx + 1, 1)]
                     prev_fg = -1
                     prev_bg = -1
                     for char, fg, bg in row:
@@ -517,8 +568,9 @@ def main():
                 sys.stdout.write("\n".join(output_parts) + "\n")
                 sys.stdout.flush()
 
-            # FPS calculation
-            fps_frame_count += 1
+            # FPS calculation (only count rendered frames, not spin-loop iterations)
+            if not paused:
+                fps_frame_count += 1
             now = time.time()
             elapsed = now - last_fps_time
             if elapsed >= 1.0:
@@ -554,7 +606,7 @@ def main():
                 restore_terminal(old_term_settings)
             except Exception:
                 pass
-        sys.stdout.write(show_cursor() + move_cursor(rows + info_rows + 1, 1) + RESET + "\n")
+        sys.stdout.write(show_cursor() + move_cursor(rows + info_rows, 1) + RESET + "\n")
         sys.stdout.flush()
 
 

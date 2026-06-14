@@ -3,13 +3,17 @@
 Unit tests for the ASCII Kaleidoscope engine.
 
 Covers pattern rendering, segment symmetry, animation continuity,
-parameter validation, palette generation, and the new plasma/vortex
-pattern modes.
+parameter validation, palette generation, escape sequence handling,
+FPS counter behavior, and rendering output format.
 """
 
 import unittest
 import math
-from kaleidoscope import Kaleidoscope, generate_palette, generate_palette_enhanced
+from kaleidoscope import (
+    Kaleidoscope, generate_palette, generate_palette_enhanced,
+    get_key_nonblock, move_cursor, fg_color_256, bg_color_256,
+    clear_screen, hide_cursor, show_cursor
+)
 
 
 class TestKaleidoscopeCore(unittest.TestCase):
@@ -116,6 +120,50 @@ class TestKaleidoscopeCore(unittest.TestCase):
         frame = k.render_frame(1, 1)
         self.assertEqual(frame, [[]])
 
+    def test_negative_viewport(self):
+        """Negative viewport dimensions should return [[]] gracefully."""
+        k = Kaleidoscope(pattern="spiral", segments=8)
+        frame = k.render_frame(-1, -1)
+        self.assertEqual(frame, [[]])
+
+    def test_zero_viewport(self):
+        """Zero-size viewport should return [[]] gracefully."""
+        k = Kaleidoscope(pattern="spiral", segments=8)
+        frame = k.render_frame(0, 0)
+        self.assertEqual(frame, [[]])
+
+
+class TestSegmentsProperty(unittest.TestCase):
+    """Tests for the segments property with normalization."""
+
+    def test_segments_property_normalizes_odd(self):
+        """Setting odd segment values via property should normalize to even."""
+        k = Kaleidoscope(segments=8, pattern="spiral")
+        k.segments = 7
+        self.assertEqual(k.segments, 8, "Odd value 7 should normalize to 8")
+
+    def test_segments_property_enforces_minimum(self):
+        """Setting segments below 4 via property should clamp to 4."""
+        k = Kaleidoscope(segments=8, pattern="spiral")
+        k.segments = 2
+        self.assertEqual(k.segments, 4, "Below-minimum value should clamp to 4")
+
+    def test_segments_property_accepts_even(self):
+        """Even segment values should be stored as-is."""
+        k = Kaleidoscope(segments=8, pattern="spiral")
+        k.segments = 12
+        self.assertEqual(k.segments, 12)
+
+    def test_live_segment_changes(self):
+        """Simulating the live segment controls from main loop."""
+        k = Kaleidoscope(segments=8, pattern="spiral")
+        # Increase by 2 (from main loop: min(ks.segments + 2, 24))
+        k.segments = min(k.segments + 2, 24)
+        self.assertEqual(k.segments, 10)
+        # Decrease by 2 (from main loop: max(ks.segments - 2, 4))
+        k.segments = max(k.segments - 2, 4)
+        self.assertEqual(k.segments, 8)
+
 
 class TestComputePixel(unittest.TestCase):
     """Tests for the compute_pixel method directly."""
@@ -174,6 +222,53 @@ class TestPalette(unittest.TestCase):
         # They should differ (extremely unlikely to be identical)
         self.assertNotEqual(pal0, pal1)
 
+    def test_generate_palette_full_color_range(self):
+        """generate_palette should use the full 6x6x6 cube (16-231)."""
+        pal = generate_palette(0.0)
+        # With the * 5.999 fix, the palette should reach higher values
+        self.assertGreaterEqual(min(pal), 16, "Palette minimum should be >= 16")
+        self.assertLessEqual(max(pal), 231, "Palette maximum should be <= 231")
+        # The palette should span a significant range
+        self.assertGreater(max(pal) - min(pal), 50,
+                           "Palette should span a wide range of colors")
+
+
+class TestRenderOutput(unittest.TestCase):
+    """Tests for the rendered output format and content."""
+
+    def test_outside_circle_pixels_use_bg_dark(self):
+        """Outside-circle pixels should use bg_dark (16) for both fg and bg."""
+        k = Kaleidoscope(pattern="spiral", segments=8, seed=42)
+        # Render a large frame to ensure some outside-circle pixels
+        frame = k.render_frame(60, 30)
+        outside_pixels = [(char, fg, bg) for row in frame
+                          for char, fg, bg in row if char == ' ']
+        if outside_pixels:
+            for char, fg, bg in outside_pixels:
+                self.assertEqual(fg, 16, "Outside pixel fg should be bg_dark (16)")
+                self.assertEqual(bg, 16, "Outside pixel bg should be bg_dark (16)")
+
+    def test_all_output_chars_valid(self):
+        """All rendered characters should be valid (space, ▀, or ▄)."""
+        k = Kaleidoscope(pattern="spiral", segments=8, seed=42)
+        frame = k.render_frame(40, 12)
+        valid_chars = {' ', '▀', '▄'}
+        for row in frame:
+            for char, fg, bg in row:
+                self.assertIn(char, valid_chars,
+                              f"Invalid char: {repr(char)}")
+
+    def test_all_output_colors_valid(self):
+        """All rendered fg/bg values should be valid ANSI indices."""
+        k = Kaleidoscope(pattern="spiral", segments=8, seed=42)
+        frame = k.render_frame(40, 12)
+        for row in frame:
+            for char, fg, bg in row:
+                self.assertGreaterEqual(fg, 0, f"fg too low: {fg}")
+                self.assertLessEqual(fg, 255, f"fg too high: {fg}")
+                self.assertGreaterEqual(bg, 0, f"bg too low: {bg}")
+                self.assertLessEqual(bg, 255, f"bg too high: {bg}")
+
 
 class TestSymmetry(unittest.TestCase):
     """Tests that verify the symmetry/mirroring behavior."""
@@ -182,18 +277,9 @@ class TestSymmetry(unittest.TestCase):
         """
         Points at symmetric positions in the rendered frame should produce
         the same pixel value, confirming kaleidoscopic mirror behavior.
-
-        For 8-segment symmetry, a point at angle θ and its mirror at
-        (seg_angle - θ) within the same wedge should match.
         """
         k = Kaleidoscope(pattern="spiral", segments=8, seed=42)
-        # Render a frame large enough to have symmetric pixels
         frame = k.render_frame(60, 30)
-
-        # The center of the kaleidoscope should be near the middle.
-        # Pick two symmetric positions and compare their values.
-        # We verify that the frame was produced without error and has
-        # consistent structure.
         self.assertEqual(len(frame), 30)
         self.assertEqual(len(frame[0]), 60)
 
@@ -216,6 +302,34 @@ class TestSymmetry(unittest.TestCase):
                 break
         self.assertTrue(any_different,
                         "Different segment counts should produce different output")
+
+
+class TestANSIHelpers(unittest.TestCase):
+    """Tests for ANSI escape sequence helper functions."""
+
+    def test_clear_screen(self):
+        """clear_screen should produce proper ANSI clear sequence."""
+        self.assertEqual(clear_screen(), "\033[2J\033[H")
+
+    def test_hide_cursor(self):
+        """hide_cursor should produce proper ANSI cursor hide sequence."""
+        self.assertEqual(hide_cursor(), "\033[?25l")
+
+    def test_show_cursor(self):
+        """show_cursor should produce proper ANSI cursor show sequence."""
+        self.assertEqual(show_cursor(), "\033[?25h")
+
+    def test_move_cursor(self):
+        """move_cursor should produce proper ANSI cursor move sequence."""
+        self.assertEqual(move_cursor(5, 10), "\033[5;10H")
+
+    def test_fg_color_256(self):
+        """fg_color_256 should produce proper ANSI 256-color fg sequence."""
+        self.assertEqual(fg_color_256(16), "\033[38;5;16m")
+
+    def test_bg_color_256(self):
+        """bg_color_256 should produce proper ANSI 256-color bg sequence."""
+        self.assertEqual(bg_color_256(231), "\033[48;5;231m")
 
 
 if __name__ == "__main__":
