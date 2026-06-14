@@ -4,6 +4,21 @@ Procedural Constellation Map Generator
 =======================================
 Generates a rich, navigable ASCII star map with procedurally created
 constellations, mythical names, lore, and celestial objects.
+
+Features:
+  - 6 distinct constellation shapes (chain, triangle, cross, arc, cluster, spiral)
+  - Greek letter star designations
+  - Colored ASCII nebulae
+  - Deep sky objects (galaxies, pulsars, quasars, black holes, clusters)
+  - Procedural meteor showers
+  - Rich lore engine with template-based mythology
+  - Coordinate grid overlay
+  - Interactive navigation mode
+  - Constellation search
+  - Map statistics
+  - JSON export
+  - Reproducible maps via --seed
+  - ANSI color support
 """
 
 import random
@@ -15,6 +30,8 @@ import os
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional, Dict
 from collections import defaultdict
+
+__version__ = "1.1.0"
 
 # ─── Data Sources ──────────────────────────────────────────────────────────────
 
@@ -34,7 +51,7 @@ CONSTELLATION_PREFIXES = [
     "Kal", "Lyr", "Mor", "Nyx", "Oru", "Pha", "Que", "Rho", "Sel", "Thr",
     "Uld", "Vex", "Wy", "Xan", "Yso", "Zep", "Aur", "Bor", "Cel", "Dum",
     "Eri", "Flu", "Gor", "Hes", "Ian", "Jun", "Kry", "Lum", "Myr", "Nar",
-    "Osa", "Pyr", "Qui", "Rav", "Som", "Tel", "Umi", "Vel", "Wy", "Zar"
+    "Osa", "Pyr", "Qui", "Rav", "Som", "Tel", "Umi", "Vel", "Wyn", "Zar"
 ]
 
 CONSTELLATION_SUFFIXES = [
@@ -45,8 +62,8 @@ CONSTELLATION_SUFFIXES = [
 
 CONSTELLATION_TYPES = [
     "The Guardian", "The Wanderer", "The Phoenix", "The Serpent", "The Crown",
-    "The Scepter", "The Shield", "The Dragon", "The Phoenix", "The Oracle",
-    "The Sentinel", "The Harbinger", "The Wanderer", "The Flame", "The Frost",
+    "The Scepter", "The Shield", "The Dragon", "The Oracle",
+    "The Sentinel", "The Harbinger", "The Flame", "The Frost",
     "The Tempest", "The Void", "The Gate", "The Key", "The Spiral",
     "The Bridge", "The Forge", "The Loom", "The Well", "The Beacon",
     "The Compass", "The Anchor", "The Prism", "The Chalice", "The Mantle",
@@ -95,6 +112,10 @@ LORE_FILLINGS = {
     "smith": ["the star-keeper Aethon", "the celestial forge-maiden", "the cosmic architect Nyxar"],
     "material": ["shards of dead stars", "the first light of creation", "crystallized time"],
     "property": ["the memory of their making", "an undying radiance", "the echo of forgotten songs"],
+    # Additional fillings for expanded lore templates
+    "object": ["celestial harp", "star-forged blade", "crystal scepter", "ancient compass"],
+    "appears": ["shines with renewed brilliance", "emerges from shadow", "sings across the void"],
+    "region": ["Northern Reaches", "Amber Wastes", "Silver Coast", "Twilight Marches"],
 }
 
 NEBULA_NAMES = [
@@ -110,7 +131,30 @@ CELESTIAL_OBJECTS = [
     ("pulsar", None), ("quasar", None), ("black hole", None),
 ]
 
+METEOR_SHOWER_NAMES = [
+    "Perseid", "Leonid", "Geminid", "Orionid", "Lyrid",
+    "Eta Aquariid", "Draconid", "Taurid", "Quadrantid", "Delta Aquariid",
+    "Aethonid", "Nyxariid", "Starfall", "Celestiid",
+]
+
 BRIGHT_STARS = "✦✧⋆✶★☆*·°•∘"
+
+# Deterministic brightness characters based on magnitude (no random.choice)
+# This ensures reproducibility across runs with the same seed
+_BRIGHTNESS_TABLE = {
+    # mag < 1.0: very bright
+    0: "★",
+    # mag 1.0-2.0: bright
+    1: "✦",
+    2: "✧",
+    # mag 2.0-3.0: medium
+    3: "⋆",
+    # mag 3.0-4.5: dim
+    4: "·",
+    # mag >= 4.5: very dim
+    5: "∘",
+}
+
 
 # ─── Star ──────────────────────────────────────────────────────────────────────
 
@@ -122,20 +166,23 @@ class Star:
     name: Optional[str] = None
     greek_letter: Optional[str] = None
     constellation_id: Optional[int] = None
-    
+
     @property
     def brightness_char(self) -> str:
+        """Return a deterministic display character based on magnitude."""
         if self.magnitude < 1.0:
-            return random.choice("★✦")
+            return _BRIGHTNESS_TABLE[0]
         elif self.magnitude < 2.0:
-            return random.choice("✧✶")
+            # Use a secondary bright symbol for variety based on magnitude precision
+            sub = int((self.magnitude - 1.0) * 10) % 2
+            return _BRIGHTNESS_TABLE[1 + sub]
         elif self.magnitude < 3.0:
-            return "⋆"
+            return _BRIGHTNESS_TABLE[3]
         elif self.magnitude < 4.5:
-            return "·"
+            return _BRIGHTNESS_TABLE[4]
         else:
-            return "∘"
-    
+            return _BRIGHTNESS_TABLE[5]
+
     @property
     def display_char(self) -> str:
         return self.brightness_char
@@ -153,8 +200,9 @@ class Constellation:
     connections: List[Tuple[int, int]] = field(default_factory=list)  # indices into self.stars
     lore: str = ""
     center: Tuple[float, float] = (0, 0)
-    
+
     def assign_greek_letters(self):
+        """Assign Greek letter designations to stars, brightest first."""
         sorted_stars = sorted(self.stars, key=lambda s: s.magnitude)
         for i, star in enumerate(sorted_stars):
             if i < len(GREEK_LETTERS):
@@ -187,11 +235,26 @@ class Nebula:
     color: str  # ANSI color name
 
 
+# ─── Meteor ────────────────────────────────────────────────────────────────────
+
+@dataclass
+class MeteorShower:
+    """A procedurally generated meteor shower streaking across the sky."""
+    name: str
+    radiant_x: float
+    radiant_y: float
+    angle: float       # Direction of streak (radians)
+    length: int         # Number of characters in the streak
+    intensity: int       # Number of individual meteors
+    peak_phrase: str    # Flavor text for peak activity
+
+
 # ─── Star Map Generator ────────────────────────────────────────────────────────
 
 class StarMapGenerator:
     def __init__(self, width=80, height=40, seed=None, num_constellations=12,
-                 num_background_stars=200, num_nebulae=3, num_deep_objects=8):
+                 num_background_stars=200, num_nebulae=3, num_deep_objects=8,
+                 num_meteor_showers=2):
         self.width = width
         self.height = height
         self.seed = seed or random.randint(0, 999999)
@@ -200,25 +263,28 @@ class StarMapGenerator:
         self.num_background_stars = num_background_stars
         self.num_nebulae = num_nebulae
         self.num_deep_objects = num_deep_objects
-        
+        self.num_meteor_showers = num_meteor_showers
+
         self.constellations: List[Constellation] = []
         self.background_stars: List[Star] = []
         self.nebulae: List[Nebula] = []
         self.deep_objects: List[CelestialObject] = []
-        
+        self.meteor_showers: List[MeteorShower] = []
+
     def generate(self):
         """Generate the complete star map."""
         self._generate_nebulae()
         self._generate_constellations()
         self._generate_background_stars()
         self._generate_deep_objects()
+        self._generate_meteor_showers()
         return self
-    
+
     def _generate_name(self) -> str:
         prefix = self.rng.choice(CONSTELLATION_PREFIXES)
         suffix = self.rng.choice(CONSTELLATION_SUFFIXES)
         return prefix + suffix
-    
+
     def _generate_lore(self, constellation: Constellation) -> str:
         template = self.rng.choice(LORE_TEMPLATES)
         fillings = {}
@@ -229,14 +295,14 @@ class StarMapGenerator:
             return template.format(**fillings)
         except KeyError:
             return f"Little is known of {constellation.full_name}, save that it has shone since before memory."
-    
+
     def _is_too_close(self, x, y, min_dist=8.0, existing_points=None):
         points = existing_points or []
         for px, py in points:
             if math.hypot(x - px, y - py) < min_dist:
                 return True
         return False
-    
+
     def _generate_nebulae(self):
         nebula_colors = ["crimson", "emerald", "sapphire", "amber", "violet", "silver", "ashen"]
         centers = []
@@ -252,14 +318,14 @@ class StarMapGenerator:
             color = self.rng.choice(nebula_colors)
             name = self.rng.choice(NEBULA_NAMES)
             self.nebulae.append(Nebula(x, y, radius, name, density, color))
-    
+
     def _generate_constellations(self):
         centers = []
         for i in range(self.num_constellations):
             name = self._generate_name()
             title = self.rng.choice(CONSTELLATION_TYPES)
             full_name = f"{name}, {title}"
-            
+
             # Find a good center point
             for attempt in range(100):
                 cx = self.rng.uniform(6, self.width - 6)
@@ -267,7 +333,7 @@ class StarMapGenerator:
                 if not self._is_too_close(cx, cy, 10.0, centers):
                     break
             centers.append((cx, cy))
-            
+
             constellation = Constellation(
                 id=i,
                 name=name,
@@ -275,28 +341,28 @@ class StarMapGenerator:
                 full_name=full_name,
                 center=(cx, cy)
             )
-            
+
             # Generate constellation stars
             num_stars = self.rng.randint(3, 9)
             constellation_shape = self.rng.choice(["chain", "triangle", "cross", "arc", "cluster", "spiral"])
             stars = self._generate_constellation_shape(cx, cy, num_stars, constellation_shape)
             constellation.stars = stars
-            
+
             # Generate connections based on shape
             constellation.connections = self._generate_connections(len(stars), constellation_shape)
-            
+
             # Assign names to bright stars
             constellation.assign_greek_letters()
-            
+
             # Generate lore
             constellation.lore = self._generate_lore(constellation)
-            
+
             self.constellations.append(constellation)
-    
+
     def _generate_constellation_shape(self, cx, cy, num_stars, shape) -> List[Star]:
         stars = []
         spread = self.rng.uniform(1.5, 3.5)
-        
+
         if shape == "chain":
             # Stars in a roughly linear chain
             angle = self.rng.uniform(0, math.pi)
@@ -308,7 +374,7 @@ class StarMapGenerator:
                 if i == 0 or i == num_stars - 1:
                     mag = min(mag, 2.0)
                 stars.append(Star(x, y, mag))
-                
+
         elif shape == "triangle":
             # Core triangle + extras
             for i in range(min(3, num_stars)):
@@ -322,7 +388,7 @@ class StarMapGenerator:
                 y = cy + self.rng.uniform(-spread, spread)
                 mag = self.rng.uniform(1.5, 4.0)
                 stars.append(Star(x, y, mag))
-                
+
         elif shape == "cross":
             # Cross pattern
             for i in range(num_stars):
@@ -337,7 +403,7 @@ class StarMapGenerator:
                     y = cy + self.rng.uniform(-spread, spread)
                 mag = self.rng.uniform(0.5, 3.5)
                 stars.append(Star(x, y, mag))
-                
+
         elif shape == "arc":
             # Curved arc
             arc_angle = self.rng.uniform(math.pi * 0.5, math.pi * 1.2)
@@ -352,7 +418,7 @@ class StarMapGenerator:
                 if i == num_stars // 2:
                     mag = min(mag, 1.5)
                 stars.append(Star(x, y, mag))
-                
+
         elif shape == "cluster":
             # Tight cluster
             for i in range(num_stars):
@@ -364,7 +430,7 @@ class StarMapGenerator:
                 if r < spread * 0.3:
                     mag = min(mag, 2.0)
                 stars.append(Star(x, y, mag))
-                
+
         elif shape == "spiral":
             # Loose spiral
             turns = self.rng.uniform(1.0, 2.5)
@@ -376,14 +442,14 @@ class StarMapGenerator:
                 y = cy + r * math.sin(angle) + self.rng.gauss(0, 0.2)
                 mag = self.rng.uniform(0.5, 3.5)
                 stars.append(Star(x, y, mag))
-        
+
         # Clamp to bounds
         for star in stars:
             star.x = max(0.5, min(self.width - 0.5, star.x))
             star.y = max(0.5, min(self.height - 0.5, star.y))
-            
+
         return stars
-    
+
     def _generate_connections(self, num_stars, shape) -> List[Tuple[int, int]]:
         connections = []
         if shape == "chain" or shape == "arc" or shape == "spiral":
@@ -404,11 +470,10 @@ class StarMapGenerator:
             for i in range(4, num_stars):
                 connections.append((i, 0))
         elif shape == "cluster":
-            # Connect each star to the closest one
+            # Connect each star to the closest one (minimum spanning tree approach)
             connected = {0}
             unconnected = set(range(1, num_stars))
             while unconnected:
-                # Find closest pair
                 best = None
                 best_dist = float('inf')
                 for c in connected:
@@ -422,7 +487,7 @@ class StarMapGenerator:
                     connected.add(best[1])
                     unconnected.discard(best[1])
         return connections
-    
+
     def _generate_background_stars(self):
         for _ in range(self.num_background_stars):
             x = self.rng.uniform(0, self.width)
@@ -431,7 +496,7 @@ class StarMapGenerator:
             mag = self.rng.gauss(4.5, 1.5)
             mag = max(1.0, min(6.5, mag))
             self.background_stars.append(Star(x, y, mag))
-    
+
     def _generate_deep_objects(self):
         symbols = {
             "galaxy": "ꙮ",
@@ -446,7 +511,7 @@ class StarMapGenerator:
             y = self.rng.uniform(2, self.height - 2)
             obj_type, sub_type = self.rng.choice(CELESTIAL_OBJECTS)
             symbol = symbols.get(obj_type, "∘")
-            
+
             if obj_type == "galaxy":
                 name = f"{self.rng.choice(GREEK_LETTERS)} Galaxy"
                 desc = f"A {sub_type} galaxy, millions of light-years distant."
@@ -468,18 +533,95 @@ class StarMapGenerator:
             else:
                 name = f"OBJ-{self.rng.randint(1000, 9999)}"
                 desc = "An unidentified celestial object."
-                
+
             self.deep_objects.append(CelestialObject(x, y, obj_type, sub_type, name, symbol, desc))
+
+    def _generate_meteor_showers(self):
+        """Generate procedural meteor showers that streak across the sky."""
+        peak_phrases = [
+            "peak activity expected tonight",
+            "best viewed after midnight",
+            "expect up to 100 meteors per hour",
+            "faint but persistent trails",
+            "bright fireballs possible",
+            "notable for slow-moving meteors",
+            "dust from an ancient comet",
+            "remnants of a shattered asteroid",
+        ]
+        for _ in range(self.num_meteor_showers):
+            name = self.rng.choice(METEOR_SHOWER_NAMES)
+            radiant_x = self.rng.uniform(5, self.width - 5)
+            radiant_y = self.rng.uniform(3, self.height - 3)
+            angle = self.rng.uniform(0, 2 * math.pi)
+            length = self.rng.randint(4, 12)
+            intensity = self.rng.randint(3, 15)
+            peak_phrase = self.rng.choice(peak_phrases)
+            self.meteor_showers.append(MeteorShower(
+                name=name,
+                radiant_x=radiant_x,
+                radiant_y=radiant_y,
+                angle=angle,
+                length=length,
+                intensity=intensity,
+                peak_phrase=peak_phrase,
+            ))
+
+    def get_statistics(self) -> Dict:
+        """Compute and return statistics about the generated star map."""
+        total_constellation_stars = sum(len(c.stars) for c in self.constellations)
+        brightest_star = None
+        brightest_mag = float('inf')
+        for c in self.constellations:
+            for s in c.stars:
+                if s.magnitude < brightest_mag:
+                    brightest_mag = s.magnitude
+                    brightest_star = s
+        for s in self.background_stars:
+            if s.magnitude < brightest_mag:
+                brightest_mag = s.magnitude
+                brightest_star = s
+
+        shape_counts = defaultdict(int)
+        # We don't store shape per constellation, but we can count connection patterns
+        avg_conn = 0
+        if self.constellations:
+            avg_conn = sum(len(c.connections) for c in self.constellations) / len(self.constellations)
+
+        return {
+            "total_stars": total_constellation_stars + len(self.background_stars),
+            "constellation_stars": total_constellation_stars,
+            "background_stars": len(self.background_stars),
+            "num_constellations": len(self.constellations),
+            "num_nebulae": len(self.nebulae),
+            "num_deep_objects": len(self.deep_objects),
+            "num_meteor_showers": len(self.meteor_showers),
+            "brightest_magnitude": round(brightest_mag, 2) if brightest_star else None,
+            "avg_constellation_connections": round(avg_conn, 2),
+            "avg_stars_per_constellation": round(total_constellation_stars / max(1, len(self.constellations)), 2),
+            "map_area": self.width * self.height,
+            "star_density": round((total_constellation_stars + len(self.background_stars)) / max(1, self.width * self.height), 4),
+        }
+
+    def find_constellation(self, query: str) -> List[Constellation]:
+        """Search for constellations matching the query string (case-insensitive)."""
+        query_lower = query.lower()
+        results = []
+        for c in self.constellations:
+            if (query_lower in c.name.lower() or
+                query_lower in c.title.lower() or
+                query_lower in c.full_name.lower()):
+                results.append(c)
+        return results
 
 
 # ─── Renderer ──────────────────────────────────────────────────────────────────
 
 class StarMapRenderer:
     """Renders the star map to ASCII with optional ANSI colors."""
-    
+
     NEBULA_CHARS = "░▒▓"
     CONSTELLATION_LINE = "─│╲╱╳·"
-    
+
     # ANSI color codes
     COLORS = {
         "reset": "\033[0m",
@@ -504,69 +646,89 @@ class StarMapRenderer:
         "coordinate": "\033[38;5;245m",
         "info": "\033[38;5;253m",
         "lore": "\033[38;5;180m",
+        "meteor": "\033[38;5;220m",
+        "grid": "\033[38;5;236m",
+        "stat_label": "\033[38;5;153m",
+        "stat_value": "\033[38;5;229m",
     }
-    
+
     def __init__(self, star_map: StarMapGenerator, use_color=True, show_lines=True,
-                 show_labels=True, show_grid=False, viewport_x=0, viewport_y=0,
+                 show_labels=True, show_grid=False, show_meteors=True,
+                 viewport_x=0, viewport_y=0,
                  viewport_w=None, viewport_h=None):
         self.star_map = star_map
         self.use_color = use_color
         self.show_lines = show_lines
         self.show_labels = show_labels
         self.show_grid = show_grid
+        self.show_meteors = show_meteors
         self.vx = viewport_x
         self.vy = viewport_y
         self.vw = viewport_w or star_map.width
         self.vh = viewport_h or star_map.height
-    
+
     def _c(self, color_name: str, text: str) -> str:
         if not self.use_color:
             return text
         return f"{self.COLORS.get(color_name, '')}{text}{self.COLORS['reset']}"
-    
+
     def render(self) -> str:
         """Render the full star map as a string."""
         lines = []
-        
+
         # Title
         seed_str = f"Seed: {self.star_map.seed:06d}"
         title = f"✦ Celestial Atlas — Procedural Constellation Map ✦"
         lines.append(self._c("title", title.center(self.vw + 20)))
         lines.append(self._c("coordinate", seed_str.center(self.vw + 20)))
         lines.append("")
-        
+
         # Build the canvas
-        canvas = self._build_canvas()
-        
+        canvas, color_map = self._build_canvas()
+
         # Render the canvas with border
-        lines.append(self._render_canvas_with_border(canvas))
-        
+        lines.append(self._render_canvas_with_border(canvas, color_map))
+
         # Legend
         lines.append("")
         lines.append(self._render_legend())
-        
+
         # Constellation catalog
         lines.append("")
         lines.append(self._render_catalog())
-        
+
         return "\n".join(lines)
-    
-    def _build_canvas(self) -> List[List[str]]:
-        """Build a 2D character canvas of the star map."""
+
+    def render_compact(self) -> str:
+        """Render only the visual map (no catalog/legend)."""
+        canvas, color_map = self._build_canvas()
+        return self._render_canvas_with_border(canvas, color_map)
+
+    def _build_canvas(self) -> Tuple[List[List[str]], List[List[str]]]:
+        """Build a 2D character canvas of the star map. Returns (canvas, color_map)."""
         w = self.vw
         h = self.vh
         canvas = [[" " for _ in range(w)] for _ in range(h)]
         color_map = [["" for _ in range(w)] for _ in range(h)]  # track colors
-        
-        # Draw nebulae first (background)
+
+        # Draw grid first (lowest layer)
+        if self.show_grid:
+            self._draw_grid(canvas, color_map)
+
+        # Draw nebulae (background)
         for nebula in self.star_map.nebulae:
             self._draw_nebula(canvas, color_map, nebula)
-        
+
+        # Draw meteor shower streaks
+        if self.show_meteors:
+            for shower in self.star_map.meteor_showers:
+                self._draw_meteor_shower(canvas, color_map, shower)
+
         # Draw constellation lines
         if self.show_lines:
             for constellation in self.star_map.constellations:
                 self._draw_constellation_lines(canvas, color_map, constellation)
-        
+
         # Draw background stars
         for star in self.star_map.background_stars:
             sx, sy = int(round(star.x)), int(round(star.y))
@@ -577,7 +739,7 @@ class StarMapRenderer:
                     color_map[sy][sx] = "star_medium"
                 else:
                     color_map[sy][sx] = "star_dim"
-        
+
         # Draw constellation stars (on top)
         for constellation in self.star_map.constellations:
             for star in constellation.stars:
@@ -586,14 +748,14 @@ class StarMapRenderer:
                     ch = star.display_char
                     canvas[sy][sx] = ch
                     color_map[sy][sx] = "star_bright"
-        
+
         # Draw deep sky objects
         for obj in self.star_map.deep_objects:
             ox, oy = int(round(obj.x)), int(round(obj.y))
             if 0 <= ox < w and 0 <= oy < h:
                 canvas[oy][ox] = obj.symbol
                 color_map[oy][ox] = "deep_object"
-        
+
         # Draw constellation labels
         if self.show_labels:
             for constellation in self.star_map.constellations:
@@ -606,9 +768,25 @@ class StarMapRenderer:
                     if 0 <= px < w and 0 <= ly < h:
                         canvas[ly][px] = ch.lower() if ch.isupper() and i > 0 else ch
                         color_map[ly][px] = "constellation_label"
-        
-        return canvas
-    
+
+        return canvas, color_map
+
+    def _draw_grid(self, canvas, color_map):
+        """Draw a subtle coordinate grid on the canvas."""
+        w, h = self.vw, self.vh
+        # Vertical lines every 10 chars
+        for x in range(10, w, 10):
+            for y in range(h):
+                if canvas[y][x] == " ":
+                    canvas[y][x] = "┊"
+                    color_map[y][x] = "grid"
+        # Horizontal lines every 10 chars
+        for y in range(10, h, 10):
+            for x in range(w):
+                if canvas[y][x] == " ":
+                    canvas[y][x] = "┄"
+                    color_map[y][x] = "grid"
+
     def _draw_nebula(self, canvas, color_map, nebula: Nebula):
         w, h = self.vw, self.vh
         rng = random.Random(int(nebula.x * 1000 + nebula.y * 1000))
@@ -630,29 +808,64 @@ class StarMapRenderer:
                                 else:
                                     canvas[py][px] = "░"
                                 color_map[py][px] = nebula.color
-    
+
+    def _draw_meteor_shower(self, canvas, color_map, shower: MeteorShower):
+        """Draw a meteor shower as a streak of bright characters."""
+        w, h = self.vw, self.vh
+        # Draw the main streak line from the radiant point
+        for i in range(shower.length):
+            x = shower.radiant_x + i * math.cos(shower.angle) * 1.5
+            y = shower.radiant_y + i * math.sin(shower.angle) * 0.8
+            ix, iy = int(round(x)), int(round(y))
+            if 0 <= ix < w and 0 <= iy < h:
+                # Meteor characters fade from bright to dim
+                if i == 0:
+                    ch = "★"
+                elif i < shower.length // 3:
+                    ch = "✦"
+                elif i < 2 * shower.length // 3:
+                    ch = "·"
+                else:
+                    ch = "∘"
+                # Only draw if the cell is empty or has a dim background
+                if canvas[iy][ix] in (" ", "∘", "·", "░", "▒", "▓", "┊", "┄"):
+                    canvas[iy][ix] = ch
+                    color_map[iy][ix] = "meteor"
+        # Scatter some individual meteor dots around the radiant
+        scatter_rng = random.Random(int(shower.radiant_x * 100 + shower.radiant_y * 100))
+        for _ in range(shower.intensity):
+            offset_dist = scatter_rng.uniform(0, shower.length * 1.2)
+            offset_angle = shower.angle + scatter_rng.gauss(0, 0.3)
+            mx = shower.radiant_x + offset_dist * math.cos(offset_angle) * 1.5
+            my = shower.radiant_y + offset_dist * math.sin(offset_angle) * 0.8
+            mix, miy = int(round(mx)), int(round(my))
+            if 0 <= mix < w and 0 <= miy < h:
+                if canvas[miy][mix] in (" ", "∘", "░", "┊", "┄"):
+                    canvas[miy][mix] = scatter_rng.choice("·∘")
+                    color_map[miy][mix] = "meteor"
+
     def _draw_constellation_lines(self, canvas, color_map, constellation: Constellation):
         for i, j in constellation.connections:
             if i < len(constellation.stars) and j < len(constellation.stars):
                 s1 = constellation.stars[i]
                 s2 = constellation.stars[j]
                 self._draw_line(canvas, color_map, s1.x, s1.y, s2.x, s2.y)
-    
+
     def _draw_line(self, canvas, color_map, x1, y1, x2, y2):
         """Draw a line between two points using Bresenham's algorithm."""
         w, h = self.vw, self.vh
         ix1, iy1, ix2, iy2 = int(round(x1)), int(round(y1)), int(round(x2)), int(round(y2))
-        
+
         dx = abs(ix2 - ix1)
         dy = abs(iy2 - iy1)
         sx = 1 if ix1 < ix2 else -1
         sy = 1 if iy1 < iy2 else -1
         err = dx - dy
-        
+
         x, y = ix1, iy1
         while True:
             if 0 <= x < w and 0 <= y < h:
-                if canvas[y][x] == " " or canvas[y][x] in "░▒▓":
+                if canvas[y][x] == " " or canvas[y][x] in "░▒▓┊┄":
                     canvas[y][x] = "·"
                     color_map[y][x] = "constellation_line"
             if x == ix2 and y == iy2:
@@ -664,46 +877,83 @@ class StarMapRenderer:
             if e2 < dx:
                 err += dx
                 y += sy
-    
-    def _render_canvas_with_border(self, canvas) -> str:
+
+    def _render_canvas_with_border(self, canvas, color_map) -> str:
+        """Render the canvas with border and per-character color support."""
         w = self.vw
         lines = []
-        
-        # Top border with coordinate markers
-        border_top = self._c("border", "┌" + "─" * w + "┐")
-        lines.append(border_top)
-        
+
+        # Top border with coordinate markers every 10 chars
+        top_border = "┌"
+        for x in range(w):
+            if self.show_grid and x > 0 and x % 10 == 0:
+                top_border += "┬"
+            else:
+                top_border += "─"
+        top_border += "┐"
+        lines.append(self._c("border", top_border))
+
         for y, row in enumerate(canvas):
             line = self._c("border", "│")
             for x, ch in enumerate(row):
-                # Check if there's a color for this cell
-                # We'll just apply the character; colors applied per-char would be too complex
-                line += ch
+                if self.use_color and color_map[y][x]:
+                    # Apply per-character color from the color map
+                    color_code = self.COLORS.get(color_map[y][x], "")
+                    if color_code:
+                        line += f"{color_code}{ch}{self.COLORS['reset']}"
+                    else:
+                        line += ch
+                else:
+                    line += ch
             line += self._c("border", "│")
             lines.append(line)
-        
-        border_bottom = self._c("border", "└" + "─" * w + "┘")
-        lines.append(border_bottom)
-        
+
+        # Bottom border with coordinate markers
+        bot_border = "└"
+        for x in range(w):
+            if self.show_grid and x > 0 and x % 10 == 0:
+                bot_border += "┴"
+            else:
+                bot_border += "─"
+        bot_border += "┘"
+        lines.append(self._c("border", bot_border))
+
+        # Coordinate labels along the bottom if grid is shown
+        if self.show_grid:
+            coord_line = " "
+            for x in range(w):
+                if x % 10 == 0 and x > 0:
+                    label = str(x)
+                    for ci, cch in enumerate(label):
+                        if x - len(label) + 1 + ci >= 0:
+                            coord_line += cch if ci == len(label) - 1 else " "
+                    # Pad remaining positions
+                    remaining = 10 - len(label)
+                    coord_line += " " * remaining
+                else:
+                    coord_line += " "
+            lines.append(self._c("coordinate", coord_line))
+
         return "\n".join(lines)
-    
+
     def _render_legend(self) -> str:
         lines = []
         lines.append(self._c("title", "── Legend ──"))
-        
+
         legend_items = [
-            ("★✦", "Bright star (mag < 1)"),
-            ("✧✶", "Medium star (mag 1-2)"),
+            ("★", "Bright star (mag < 1)"),
+            ("✦✧", "Medium star (mag 1-2)"),
             ("⋆", "Faint star (mag 2-3)"),
             ("·", "Dim star / constellation line"),
             ("∘", "Very dim star (mag > 4.5)"),
             ("·", "Constellation connection"),
             ("░▒▓", "Nebula"),
+            ("·∘★", "Meteor shower"),
         ]
-        
+
         for sym, desc in legend_items:
             lines.append(f"  {sym}  {desc}")
-        
+
         # Deep objects
         lines.append("")
         deep_items = [
@@ -716,14 +966,18 @@ class StarMapRenderer:
         ]
         for sym, desc in deep_items:
             lines.append(f"  {sym}  {desc}")
-        
+
+        if self.show_grid:
+            lines.append("")
+            lines.append(f"  ┊┄  Coordinate grid")
+
         return "\n".join(lines)
-    
+
     def _render_catalog(self) -> str:
         lines = []
         lines.append(self._c("title", "── Constellation Catalog ──"))
         lines.append("")
-        
+
         for c in sorted(self.star_map.constellations, key=lambda c: c.id):
             star_count = len(c.stars)
             brightest = min(s.magnitude for s in c.stars) if c.stars else 0
@@ -736,7 +990,7 @@ class StarMapRenderer:
                 lines.append(self._c("coordinate", f"      Notable stars: {star_names}"))
             lines.append(self._c("lore", f"      {c.lore}"))
             lines.append("")
-        
+
         # Deep sky objects
         if self.star_map.deep_objects:
             lines.append(self._c("title", "── Deep Sky Objects ──"))
@@ -746,7 +1000,7 @@ class StarMapRenderer:
                 lines.append(self._c("deep_object", f"  {obj.symbol} {obj.name}"))
                 lines.append(self._c("info", f"      {obj.description}"))
                 lines.append("")
-        
+
         # Nebulae
         if self.star_map.nebulae:
             lines.append(self._c("title", "── Nebulae ──"))
@@ -755,23 +1009,74 @@ class StarMapRenderer:
                 lines.append(self._c(neb.color, f"  {neb.name}"))
                 lines.append(self._c("info", f"      Radius: {neb.radius:.1f} ly  |  Density: {neb.density:.0%}"))
                 lines.append("")
-        
+
+        # Meteor showers
+        if self.star_map.meteor_showers:
+            lines.append(self._c("title", "── Meteor Showers ──"))
+            lines.append("")
+            for shower in self.star_map.meteor_showers:
+                lines.append(self._c("meteor", f"  ✦ {shower.name}"))
+                angle_deg = math.degrees(shower.angle) % 360
+                lines.append(self._c("info", f"      Radiant: ({shower.radiant_x:.1f}, {shower.radiant_y:.1f})  |  "
+                                             f"Angle: {angle_deg:.0f}°  |  {shower.peak_phrase}"))
+                lines.append("")
+
+        return "\n".join(lines)
+
+    def render_statistics(self) -> str:
+        """Render a formatted statistics summary."""
+        stats = self.star_map.get_statistics()
+        lines = []
+        lines.append(self._c("title", "── Map Statistics ──"))
+        lines.append("")
+        lines.append(self._c("stat_label", f"  Total stars:           ") + self._c("stat_value", f"{stats['total_stars']}"))
+        lines.append(self._c("stat_label", f"  Constellation stars:   ") + self._c("stat_value", f"{stats['constellation_stars']}"))
+        lines.append(self._c("stat_label", f"  Background stars:      ") + self._c("stat_value", f"{stats['background_stars']}"))
+        lines.append(self._c("stat_label", f"  Constellations:        ") + self._c("stat_value", f"{stats['num_constellations']}"))
+        lines.append(self._c("stat_label", f"  Nebulae:               ") + self._c("stat_value", f"{stats['num_nebulae']}"))
+        lines.append(self._c("stat_label", f"  Deep sky objects:      ") + self._c("stat_value", f"{stats['num_deep_objects']}"))
+        lines.append(self._c("stat_label", f"  Meteor showers:        ") + self._c("stat_value", f"{stats['num_meteor_showers']}"))
+        lines.append(self._c("stat_label", f"  Brightest magnitude:   ") + self._c("stat_value", f"{stats['brightest_magnitude']:.2f}" if stats['brightest_magnitude'] is not None else "N/A"))
+        lines.append(self._c("stat_label", f"  Avg connections:       ") + self._c("stat_value", f"{stats['avg_constellation_connections']}"))
+        lines.append(self._c("stat_label", f"  Avg stars/constellation: ") + self._c("stat_value", f"{stats['avg_stars_per_constellation']}"))
+        lines.append(self._c("stat_label", f"  Map area:             ") + self._c("stat_value", f"{stats['map_area']} chars²"))
+        lines.append(self._c("stat_label", f"  Star density:         ") + self._c("stat_value", f"{stats['star_density']:.4f} stars/char²"))
+        return "\n".join(lines)
+
+    def render_search_results(self, results: List[Constellation]) -> str:
+        """Render search results for constellations."""
+        if not results:
+            return self._c("info", "No constellations found matching your query.")
+
+        lines = []
+        lines.append(self._c("title", f"── Search Results ({len(results)} found) ──"))
+        lines.append("")
+        for c in results:
+            star_count = len(c.stars)
+            brightest = min(s.magnitude for s in c.stars) if c.stars else 0
+            lines.append(self._c("constellation_label", f"  {c.full_name}"))
+            lines.append(self._c("info", f"      Stars: {star_count}  |  Brightest: mag {brightest:.1f}"))
+            lines.append(self._c("coordinate", f"      Center: ({c.center[0]:.1f}, {c.center[1]:.1f})"))
+            lines.append(self._c("lore", f"      {c.lore}"))
+            lines.append("")
         return "\n".join(lines)
 
 
 # ─── Interactive Navigator ─────────────────────────────────────────────────────
 
 class StarMapNavigator:
-    """Simple interactive navigator for exploring the star map."""
-    
+    """Interactive navigator for exploring the star map in the terminal."""
+
     def __init__(self, star_map: StarMapGenerator):
         self.star_map = star_map
         self.cursor_x = star_map.width // 2
         self.cursor_y = star_map.height // 2
         self.selected_constellation = None
-        self.info_mode = False
-    
+        self.renderer = StarMapRenderer(star_map, use_color=True, show_lines=True,
+                                        show_labels=True)
+
     def find_nearest_constellation(self, x, y) -> Optional[Constellation]:
+        """Find the constellation whose center is closest to the given coordinates."""
         best = None
         best_dist = float('inf')
         for c in self.star_map.constellations:
@@ -780,8 +1085,9 @@ class StarMapNavigator:
                 best_dist = dist
                 best = c
         return best
-    
+
     def find_nearest_star(self, x, y) -> Optional[Star]:
+        """Find the nearest constellation star to the given coordinates."""
         best = None
         best_dist = float('inf')
         for c in self.star_map.constellations:
@@ -791,6 +1097,129 @@ class StarMapNavigator:
                     best_dist = dist
                     best = s
         return best
+
+    def find_object_at(self, x, y, radius=2.0) -> Optional[CelestialObject]:
+        """Find a deep sky object near the given coordinates."""
+        for obj in self.star_map.deep_objects:
+            if math.hypot(obj.x - x, obj.y - y) < radius:
+                return obj
+        return None
+
+    def get_info_at(self, x, y) -> str:
+        """Get a formatted string describing what's at or near the given map coordinates."""
+        lines = []
+        lines.append(f"Position: ({x}, {y})")
+
+        # Check for constellation
+        const = self.find_nearest_constellation(x, y)
+        if const:
+            dist = math.hypot(const.center[0] - x, const.center[1] - y)
+            if dist < 6:
+                lines.append(f"Nearest constellation: {const.full_name} (dist: {dist:.1f})")
+                lines.append(f"  Lore: {const.lore}")
+
+        # Check for star
+        star = self.find_nearest_star(x, y)
+        if star:
+            dist = math.hypot(star.x - x, star.y - y)
+            if dist < 3:
+                name = star.name or "unnamed"
+                lines.append(f"Nearest star: {name} (mag {star.magnitude:.2f}, dist: {dist:.1f})")
+
+        # Check for deep object
+        obj = self.find_object_at(x, y)
+        if obj:
+            lines.append(f"Deep sky object: {obj.name} — {obj.description}")
+
+        if len(lines) == 1:
+            lines.append("Empty sky at this position.")
+
+        return "\n".join(lines)
+
+    def run(self):
+        """Run the interactive navigation loop (requires a terminal with tty support)."""
+        import tty
+        import termios
+
+        print("✦ Interactive Constellation Navigator ✦")
+        print("Use arrow keys to move, 'i' for info, 'q' to quit")
+        print()
+
+        # Save original terminal settings
+        fd = sys.stdin.fileno()
+        try:
+            old_settings = termios.tcgetattr(fd)
+        except termios.error:
+            # Not a real terminal — fall back to line mode
+            self._run_line_mode()
+            return
+
+        try:
+            tty.setraw(fd)
+            while True:
+                # Render current view
+                self._render_view()
+                # Read key
+                ch = sys.stdin.read(1)
+                if ch == 'q' or ch == '\x03':  # q or Ctrl-C
+                    break
+                elif ch == '\x1b':  # escape sequence (arrow keys)
+                    ch2 = sys.stdin.read(1)
+                    if ch2 == '[':
+                        ch3 = sys.stdin.read(1)
+                        if ch3 == 'A':    # up
+                            self.cursor_y = max(0, self.cursor_y - 1)
+                        elif ch3 == 'B':  # down
+                            self.cursor_y = min(self.star_map.height - 1, self.cursor_y + 1)
+                        elif ch3 == 'C':  # right
+                            self.cursor_x = min(self.star_map.width - 1, self.cursor_x + 1)
+                        elif ch3 == 'D':  # left
+                            self.cursor_x = max(0, self.cursor_x - 1)
+                elif ch == 'i':
+                    # Show info at cursor position
+                    sys.stdout.write("\r\n" + self.get_info_at(self.cursor_x, self.cursor_y) + "\r\n")
+                    sys.stdout.write("Press any key to continue...\r\n")
+                    sys.stdin.read(1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            print()  # Clean exit newline
+
+    def _run_line_mode(self):
+        """Fallback navigation mode for non-tty environments."""
+        print("Running in line mode (no tty detected). Type 'help' for commands.")
+        while True:
+            try:
+                cmd = input(f"({self.cursor_x},{self.cursor_y})> ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                break
+
+            if cmd in ('q', 'quit', 'exit'):
+                break
+            elif cmd == 'help':
+                print("Commands: w/up  s/down  a/left  d/right  i/info  q/quit")
+            elif cmd in ('w', 'up'):
+                self.cursor_y = max(0, self.cursor_y - 1)
+            elif cmd in ('s', 'down'):
+                self.cursor_y = min(self.star_map.height - 1, self.cursor_y + 1)
+            elif cmd in ('a', 'left'):
+                self.cursor_x = max(0, self.cursor_x - 1)
+            elif cmd in ('d', 'right'):
+                self.cursor_x = min(self.star_map.width - 1, self.cursor_x + 1)
+            elif cmd in ('i', 'info'):
+                print(self.get_info_at(self.cursor_x, self.cursor_y))
+            else:
+                print("Unknown command. Type 'help' for commands.")
+
+    def _render_view(self):
+        """Render the current view with cursor indicator to stdout."""
+        # Clear screen and move to top
+        sys.stdout.write("\033[2J\033[H")
+        # Render compact map
+        output = self.renderer.render_compact()
+        sys.stdout.write(output + "\r\n")
+        # Show cursor position and info
+        sys.stdout.write(f"\r\nCursor: ({self.cursor_x}, {self.cursor_y})  [arrows=move, i=info, q=quit]\r\n")
+        sys.stdout.flush()
 
 
 # ─── JSON Export ────────────────────────────────────────────────────────────────
@@ -804,8 +1233,10 @@ def export_json(star_map: StarMapGenerator, filepath: str):
         "constellations": [],
         "deep_objects": [],
         "nebulae": [],
+        "meteor_showers": [],
+        "statistics": star_map.get_statistics(),
     }
-    
+
     for c in star_map.constellations:
         c_data = {
             "id": c.id,
@@ -827,7 +1258,7 @@ def export_json(star_map: StarMapGenerator, filepath: str):
             "connections": c.connections,
         }
         data["constellations"].append(c_data)
-    
+
     for obj in star_map.deep_objects:
         data["deep_objects"].append({
             "x": round(obj.x, 2),
@@ -837,7 +1268,7 @@ def export_json(star_map: StarMapGenerator, filepath: str):
             "name": obj.name,
             "description": obj.description,
         })
-    
+
     for neb in star_map.nebulae:
         data["nebulae"].append({
             "x": round(neb.x, 2),
@@ -846,7 +1277,18 @@ def export_json(star_map: StarMapGenerator, filepath: str):
             "name": neb.name,
             "density": round(neb.density, 2),
         })
-    
+
+    for shower in star_map.meteor_showers:
+        data["meteor_showers"].append({
+            "name": shower.name,
+            "radiant_x": round(shower.radiant_x, 2),
+            "radiant_y": round(shower.radiant_y, 2),
+            "angle": round(math.degrees(shower.angle), 2),
+            "length": shower.length,
+            "intensity": shower.intensity,
+            "peak_phrase": shower.peak_phrase,
+        })
+
     with open(filepath, "w") as f:
         json.dump(data, f, indent=2)
 
@@ -859,16 +1301,22 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  constellation-map                    # Random map, 80x40
-  constellation-map --seed 42          # Reproducible map
-  constellation-map --width 120 --height 50  # Larger map
-  constellation-map --no-color         # No ANSI colors
-  constellation-map --no-lines         # Hide constellation lines
-  constellation-map --export map.json  # Export as JSON
-  constellation-map --constellations 20  # More constellations
+  constellation_map                        # Random map, 80x40
+  constellation_map --seed 42               # Reproducible map
+  constellation_map --width 120 --height 50 # Larger map
+  constellation_map --no-color              # No ANSI colors
+  constellation_map --no-lines              # Hide constellation lines
+  constellation_map --export map.json       # Export as JSON
+  constellation_map --constellations 20     # More constellations
+  constellation_map --find Phoenix          # Search for constellations
+  constellation_map --stats                 # Show map statistics
+  constellation_map --grid                  # Show coordinate grid
+  constellation_map --interactive           # Interactive navigation mode
+  constellation_map --no-meteors            # Hide meteor showers
         """
     )
-    
+
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("--seed", type=int, default=None,
                         help="Random seed for reproducible maps")
     parser.add_argument("--width", type=int, default=80,
@@ -883,21 +1331,33 @@ Examples:
                         help="Number of nebulae (default: 3)")
     parser.add_argument("--deep-objects", type=int, default=8,
                         help="Number of deep sky objects (default: 8)")
+    parser.add_argument("--meteor-showers", type=int, default=2,
+                        help="Number of meteor showers (default: 2)")
     parser.add_argument("--no-color", action="store_true",
                         help="Disable ANSI colors")
     parser.add_argument("--no-lines", action="store_true",
                         help="Hide constellation connection lines")
     parser.add_argument("--no-labels", action="store_true",
                         help="Hide constellation labels")
+    parser.add_argument("--no-meteors", action="store_true",
+                        help="Hide meteor shower streaks")
+    parser.add_argument("--grid", action="store_true",
+                        help="Show coordinate grid overlay")
     parser.add_argument("--compact", action="store_true",
                         help="Compact output: no catalog, just the map")
     parser.add_argument("--export", type=str, default=None,
                         help="Export star map data as JSON to file")
     parser.add_argument("--catalog-only", action="store_true",
                         help="Only show the constellation catalog")
-    
+    parser.add_argument("--find", type=str, default=None,
+                        help="Search for constellations by name or title")
+    parser.add_argument("--stats", action="store_true",
+                        help="Show map statistics")
+    parser.add_argument("--interactive", action="store_true",
+                        help="Launch interactive navigation mode")
+
     args = parser.parse_args()
-    
+
     # Generate
     gen = StarMapGenerator(
         width=args.width,
@@ -907,43 +1367,55 @@ Examples:
         num_background_stars=args.stars,
         num_nebulae=args.nebulae,
         num_deep_objects=args.deep_objects,
+        num_meteor_showers=args.meteor_showers,
     )
     gen.generate()
-    
+
     # Export JSON if requested
     if args.export:
         export_json(gen, args.export)
         print(f"Star map exported to {args.export}")
         return
-    
-    # Render
+
+    # Create renderer
     renderer = StarMapRenderer(
         gen,
         use_color=not args.no_color,
         show_lines=not args.no_lines,
         show_labels=not args.no_labels,
+        show_grid=args.grid,
+        show_meteors=not args.no_meteors,
     )
-    
+
+    # Search mode
+    if args.find:
+        results = gen.find_constellation(args.find)
+        print(renderer.render_search_results(results))
+        return
+
+    # Statistics mode
+    if args.stats:
+        print(renderer.render_statistics())
+        return
+
+    # Interactive mode
+    if args.interactive:
+        navigator = StarMapNavigator(gen)
+        navigator.run()
+        return
+
+    # Catalog-only mode
     if args.catalog_only:
         print(renderer._render_catalog())
-    else:
-        output = renderer.render()
-        if args.compact:
-            # Only show the visual map portion
-            lines = output.split("\n")
-            map_lines = []
-            in_map = False
-            for line in lines:
-                if line.startswith("┌"):
-                    in_map = True
-                if in_map:
-                    map_lines.append(line)
-                if line.startswith("└"):
-                    in_map = False
-                    break
-            print("\n".join(map_lines))
-        else:
-            print(output)
+        return
+
+    # Compact mode
+    if args.compact:
+        print(renderer.render_compact())
+        return
+
+    # Full render
+    print(renderer.render())
 
 
 if __name__ == "__main__":
