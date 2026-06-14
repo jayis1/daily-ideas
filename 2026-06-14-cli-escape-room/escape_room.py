@@ -1,22 +1,53 @@
 #!/usr/bin/env python3
 """
-CLI Escape Room — A text-based escape room game for your terminal.
+CLI Escape Room v2.0.0 — A text-based escape room game for your terminal.
 Explore rooms, find items, solve puzzles, and escape!
+
+Usage:
+    python3 escape_room.py           # Start the game
+    python3 escape_room.py --help    # Show help
+    python3 escape_room.py --version # Show version
+
+Features:
+    - 6 interconnected rooms with atmospheric descriptions
+    - 12+ collectible items with interconnected puzzle chains
+    - Save/load game state to resume later
+    - Contextual hint system for when you're stuck
+    - Scoring system with rank tiers
+    - Drop items in rooms and pick them up later
+    - Command history review
+    - Dark rooms, locked doors, combination locks, keypads
+    - Typewriter-style narrative output
 """
 
 import sys
+import os
 import time
 import textwrap
+import json
+import random
+import argparse
+
+# ─── Version ────────────────────────────────────────────────────────
+
+VERSION = "2.0.0"
+
+# ─── Save file location ───────────────────────────────────────────
+
+SAVE_DIR = os.path.expanduser("~/.cli-escape-room")
+SAVE_FILE = os.path.join(SAVE_DIR, "save.json")
 
 # ─── Display helpers ────────────────────────────────────────────────
 
 WIDTH = 70
 
 def clear():
+    """Clear the terminal screen."""
     sys.stdout.write("\033[2J\033[H")
     sys.stdout.flush()
 
 def narrate(text, delay=0.015):
+    """Print text with typewriter effect, word-wrapped to WIDTH."""
     for line in textwrap.wrap(text, width=WIDTH):
         for ch in line:
             sys.stdout.write(ch)
@@ -25,10 +56,18 @@ def narrate(text, delay=0.015):
         print()
     print()
 
+def narrate_fast(text):
+    """Print text instantly (no typewriter delay), word-wrapped to WIDTH."""
+    for line in textwrap.wrap(text, width=WIDTH):
+        print(line)
+    print()
+
 def divider():
+    """Print a horizontal divider line."""
     print("─" * WIDTH)
 
 def box(text):
+    """Print text inside a box."""
     w = WIDTH
     lines = textwrap.wrap(text, width=w - 4)
     print(f"┌{'─' * (w-2)}┐")
@@ -37,7 +76,55 @@ def box(text):
     print(f"└{'─' * (w-2)}┘")
 
 def prompt():
+    """Display the game prompt and return user input."""
     return input("\n\033[1;36m▸ What do you do?\033[0m ").strip().lower()
+
+# ─── Ambient messages ───────────────────────────────────────────────
+
+AMBIENT = {
+    "cell": [
+        "A drop of water falls from the ceiling with a soft plink.",
+        "The fluorescent light buzzes and flickers momentarily.",
+        "Somewhere deep in the walls, pipes groan.",
+        "A faint draft tickles your neck.",
+    ],
+    "corridor": [
+        "The grandfather clock's pendulum swings silently.",
+        "A distant rumble vibrates through the floor.",
+        "The keypad beeps once, as if reminding you it's there.",
+        "Dust motes drift through the dim light.",
+    ],
+    "study": [
+        "A page in a book turns on its own — must be the draft.",
+        "The fireplace crackles faintly, though there's no fire.",
+        "You hear the ticking of a clock through the wall.",
+        "The leather chair creaks as if someone just stood up.",
+    ],
+    "lab": [
+        "The terminal flickers with a brief burst of static.",
+        "A faint smell of ozone drifts from the panels.",
+        "A relay clicks somewhere inside the wall.",
+        "The device on the bench hums for a moment, then falls silent.",
+    ],
+    "hidden_passage": [
+        "Water drips steadily from an unseen pipe above.",
+        "You hear your own heartbeat echoing off the concrete.",
+        "The air feels heavier here, thick and damp.",
+        "A rat scurries across the far end of the passage.",
+    ],
+    "control_room": [
+        "A monitor briefly shows a face — then static.",
+        "The emergency lights pulse faster for a moment.",
+        "The console emits a soft electronic chime.",
+        "You hear a mechanical whirring behind the exit door.",
+    ],
+}
+
+def maybe_ambient(room_id, chance=0.2):
+    """Randomly display an atmospheric message for the current room."""
+    if room_id in AMBIENT and random.random() < chance:
+        msg = random.choice(AMBIENT[room_id])
+        print(f"\033[2;3m  {msg}\033[0m")
 
 # ─── Item definitions ───────────────────────────────────────────────
 
@@ -94,11 +181,17 @@ ITEMS = {
         "name": "ID Card",
         "desc": "An ID badge for 'Dr. Elara Voss — Project Mnemosyne'. Has a magnetic stripe.",
     },
+    "combined_note": {
+        "name": "Combined Note",
+        "desc": "The two note halves, pieced together: '...the safe combination begins with...7 turns right, then 3 left, and 9 right to open.'",
+    },
 }
 
 # ─── Game State ─────────────────────────────────────────────────────
 
 class GameState:
+    """Manages all game state: rooms, inventory, flags, moves, timing."""
+
     def __init__(self):
         self.current_room = "cell"
         self.inventory = []
@@ -106,6 +199,8 @@ class GameState:
         self.moves = 0
         self.start_time = time.time()
         self.escaped = False
+        self.command_history = []
+        self.dropped_items = {}  # room_id -> [item_ids dropped in that room]
 
         # Room descriptions
         self.rooms = {
@@ -222,12 +317,15 @@ class GameState:
 
     @property
     def room(self):
+        """Return the current room dict."""
         return self.rooms[self.current_room]
 
     def has_item(self, item_id):
+        """Check if an item is in the player's inventory."""
         return item_id in self.inventory
 
     def take_item(self, item_id, from_room=True):
+        """Add an item to inventory. Optionally remove it from the current room."""
         if item_id not in self.inventory:
             self.inventory.append(item_id)
             if from_room:
@@ -236,15 +334,160 @@ class GameState:
                     room_items.remove(item_id)
 
     def remove_item(self, item_id):
+        """Remove an item from inventory."""
         if item_id in self.inventory:
             self.inventory.remove(item_id)
 
+    def drop_item(self, item_id):
+        """Drop an item from inventory into the current room."""
+        if item_id in self.inventory:
+            self.inventory.remove(item_id)
+            if self.current_room not in self.dropped_items:
+                self.dropped_items[self.current_room] = []
+            self.dropped_items[self.current_room].append(item_id)
+            return True
+        return False
+
+    def pickup_dropped(self, item_id):
+        """Pick up an item that was previously dropped in the current room."""
+        if self.current_room in self.dropped_items:
+            room_drops = self.dropped_items[self.current_room]
+            if item_id in room_drops:
+                room_drops.remove(item_id)
+                if not room_drops:
+                    del self.dropped_items[self.current_room]
+                self.inventory.append(item_id)
+                return True
+        return False
+
     def unlock(self, direction):
+        """Remove a locked direction from the current room."""
         if direction in self.room["locked"]:
             del self.room["locked"][direction]
 
     def is_locked(self, direction):
+        """Check if a direction is locked in the current room."""
         return direction in self.room["locked"]
+
+    def elapsed_seconds(self):
+        """Return seconds elapsed since game start."""
+        return int(time.time() - self.start_time)
+
+    def score(self):
+        """Calculate escape score based on time, moves, and items.
+
+        Scoring:
+            Base: 1000 points
+            -5 per move
+            -2 per second elapsed
+            +50 per item found (max +650 for 13 items)
+            +200 bonus for finding all items
+            +100 bonus for completing in under 5 minutes
+            +50 bonus for completing in under 10 moves
+        """
+        base = 1000
+        move_penalty = self.moves * 5
+        time_penalty = self.elapsed_seconds() * 2
+
+        items_found = len([i for i in self.inventory if i in ITEMS])
+        item_bonus = items_found * 50
+        all_items_bonus = 200 if items_found >= 13 else 0
+        speed_bonus = 100 if self.elapsed_seconds() < 300 else 0
+        efficient_bonus = 50 if self.moves < 10 else 0
+
+        total = base - move_penalty - time_penalty + item_bonus + all_items_bonus + speed_bonus + efficient_bonus
+        return max(total, 0)  # Floor at 0
+
+    @staticmethod
+    def rank_for_score(score):
+        """Return a rank tier string for a given score."""
+        if score >= 1500:
+            return "S — Master Escapist"
+        elif score >= 1200:
+            return "A — Expert Puzzler"
+        elif score >= 900:
+            return "B — Skilled Explorer"
+        elif score >= 600:
+            return "C — Capable Survivor"
+        elif score >= 300:
+            return "D — Lucky Escapee"
+        else:
+            return "F — Barely Made It"
+
+    def to_dict(self):
+        """Serialize game state to a dict for saving."""
+        return {
+            "current_room": self.current_room,
+            "inventory": self.inventory,
+            "flags": list(self.flags),
+            "moves": self.moves,
+            "start_time": self.start_time,
+            "escaped": self.escaped,
+            "command_history": self.command_history[-50:],  # last 50 commands
+            "dropped_items": self.dropped_items,
+            "rooms": {
+                room_id: {
+                    "items": room["items"],
+                    "locked": room["locked"],
+                    "visited": room["visited"],
+                }
+                for room_id, room in self.rooms.items()
+            },
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        """Deserialize game state from a dict (loaded from save file)."""
+        state = cls.__new__(cls)
+        state.current_room = data["current_room"]
+        state.inventory = data["inventory"]
+        state.flags = set(data["flags"])
+        state.moves = data["moves"]
+        state.start_time = data["start_time"]
+        state.escaped = data["escaped"]
+        state.command_history = data.get("command_history", [])
+        state.dropped_items = data.get("dropped_items", {})
+
+        # Reconstruct rooms — re-init to get full descriptions, then overlay saved state
+        base = cls()
+        state.rooms = base.rooms
+        for room_id, saved_room in data.get("rooms", {}).items():
+            if room_id in state.rooms:
+                state.rooms[room_id]["items"] = saved_room["items"]
+                state.rooms[room_id]["locked"] = saved_room["locked"]
+                state.rooms[room_id]["visited"] = saved_room["visited"]
+
+        return state
+
+    def save(self):
+        """Save game state to disk."""
+        os.makedirs(SAVE_DIR, exist_ok=True)
+        with open(SAVE_FILE, "w") as f:
+            json.dump(self.to_dict(), f, indent=2)
+
+    @classmethod
+    def load(cls):
+        """Load game state from disk. Returns None if no save exists."""
+        if not os.path.exists(SAVE_FILE):
+            return None
+        try:
+            with open(SAVE_FILE, "r") as f:
+                data = json.load(f)
+            return cls.from_dict(data)
+        except (json.JSONDecodeError, KeyError, TypeError):
+            return None
+
+    @classmethod
+    def has_save(cls):
+        """Check if a save file exists."""
+        return os.path.exists(SAVE_FILE)
+
+    @classmethod
+    def delete_save(cls):
+        """Delete the save file."""
+        if os.path.exists(SAVE_FILE):
+            os.remove(SAVE_FILE)
+
 
 # ─── Interactables (examined via "look at X" or "use X on Y") ──────
 
@@ -396,12 +639,126 @@ INTERACTABLES = {
 # Track one-time interactables
 used_interactables = set()
 
+# ─── Hint system ────────────────────────────────────────────────────
+
+def get_hint(state):
+    """Return a contextual hint based on the current room and game state.
+
+    Walks through a priority-ordered checklist of puzzle progress
+    and returns the most relevant next step.
+    """
+    room = state.current_room
+    flags = state.flags
+    inv = state.inventory
+
+    # --- Cell phase ---
+    if room == "cell":
+        if not state.has_item("rusty_key"):
+            return "Look around carefully. There might be something useful on the ground."
+        if state.is_locked("north"):
+            if state.has_item("rusty_key"):
+                return "You have a key and there's a padlock on the door. Try 'use rusty key on padlock'."
+        if not state.has_item("note_fragment_2"):
+            return "That loose brick looks suspicious. Try 'look at loose brick'."
+        if not state.has_item("cabinet_key"):
+            if not state.has_item("screwdriver"):
+                return "The desk drawer is stuck. You need a tool to pry it open. Explore other rooms."
+            else:
+                return "Try using the screwdriver on the desk drawer."
+
+    # --- Hidden passage ---
+    if room == "hidden_passage":
+        if not state.has_item("screwdriver"):
+            return "Check the shelf — someone may have left something useful there."
+        if not state.has_item("id_card"):
+            if not state.has_item("oil_can"):
+                return "The vent grate is rusted shut. You'll need something to loosen it. Try the laboratory."
+            else:
+                return "You have oil! Try 'use oil can on vent'."
+        return "You've found everything here. Time to explore other rooms."
+
+    # --- Corridor ---
+    if room == "corridor":
+        if state.is_locked("north"):
+            return "The keypad needs a 4-digit code. Examine things that show numbers — the clock seems important."
+        if state.is_locked("east"):
+            if state.has_item("cabinet_key"):
+                return "The lab door has a leaf-shaped lock. Your cabinet key might work."
+            return "The lab door is locked with a leaf-shaped brass lock. Look for a matching key."
+        if not state.has_item("old_photograph"):
+            return "Have you examined the grandfather clock closely? There might be something behind it."
+
+    # --- Study ---
+    if room == "study":
+        if "safe_opened" not in flags:
+            if "safe_combo" not in flags:
+                if not (state.has_item("note_fragment_1") and state.has_item("note_fragment_2")):
+                    return "You need to find clue fragments. Search other rooms for torn notes."
+                else:
+                    return "You have both note halves! Try 'combine notes' to read the safe combination."
+            else:
+                return "You know the combination! Examine the painting to find the safe, then use the combination."
+        if not state.has_item("flashlight"):
+            if state.has_item("cabinet_key"):
+                return "The filing cabinet needs a key. Try 'use cabinet key on filing cabinet'."
+            return "The filing cabinet is locked. You need a key with a leaf-shaped handle."
+
+    # --- Lab ---
+    if room == "lab":
+        if "cabinet_opened" not in flags:
+            return "The glass cabinet has a 3-digit code lock. Check the hidden passage for clues."
+        if "power_restored" not in flags:
+            has_red = "red_connected" in flags or state.has_item("red_wire")
+            has_blue = "blue_connected" in flags or state.has_item("blue_wire")
+            if not has_blue:
+                return "The blue wire is on the bench. Pick it up and connect it to the electrical panel."
+            if not has_red:
+                return "You need a red wire. The glass cabinet might have one."
+            return "You have wires! Use 'use red wire on panel' and 'use blue wire on panel'."
+        return "Power is restored. Keep exploring!"
+
+    # --- Control room ---
+    if room == "control_room":
+        if not state.has_item("flashlight"):
+            return "It's dark in here! You need a flashlight. Check the study."
+        if "id_scanned" not in flags:
+            if not state.has_item("id_card"):
+                return "The console needs an ID card. Check the hidden passage vent grate."
+            return "You have the ID card! Try 'use id card on console'."
+        if "gem_placed" not in flags:
+            if not state.has_item("mysterious_gem"):
+                return "The console needs a gem. Maybe the study safe has one?"
+            return "Place the gem in the console indentation! Try 'use gem on console'."
+        if state.is_locked("exit"):
+            return "The exit should be unlocked now. Try 'go exit'!"
+        return "Almost free! Head through the exit."
+
+    # --- Generic fallback ---
+    if not state.has_item("rusty_key"):
+        return "Search the cell for useful items."
+    if state.is_locked("north") and state.current_room == "cell":
+        return "Use the key on the padlock to leave the cell."
+    if "safe_combo" not in flags:
+        return "Look for torn note fragments and combine them."
+    if "safe_opened" not in flags:
+        return "Use the safe combination on the safe behind the painting in the study."
+    if "power_restored" not in flags:
+        return "The lab needs power. Connect wires to the electrical panel."
+    if not state.has_item("flashlight"):
+        return "Find a flashlight before entering dark rooms."
+    return "Keep exploring and examining things. Every clue has a purpose."
+
 # ─── Command Parser ─────────────────────────────────────────────────
 
 def parse_command(cmd):
+    """Parse raw user input into a (verb, args) tuple.
+
+    Supports aliases, multi-word commands like 'pick up' and 'look at',
+    and direction shortcuts (n/s/e/w).
+    """
     cmd = cmd.strip().lower()
     if not cmd:
-        return None, []
+        return None, ""
 
     aliases = {
         "look": ["l", "examine", "x", "inspect", "check"],
@@ -413,7 +770,16 @@ def parse_command(cmd):
         "combine": ["join", "merge"],
         "read": ["view"],
         "quit": ["exit", "q"],
+        "save": [],
+        "load": [],
+        "hint": [],
+        "status": [],
+        "drop": ["leave", "discard"],
+        "history": ["log"],
     }
+
+    # Direction shortcuts
+    direction_shortcuts = {"n": "north", "s": "south", "e": "east", "w": "west"}
 
     verb_map = {}
     for main, alts in aliases.items():
@@ -425,6 +791,7 @@ def parse_command(cmd):
     verb = words[0]
     args = " ".join(words[1:]) if len(words) > 1 else ""
 
+    # Multi-word command handling
     if cmd.startswith("pick up"):
         verb = "take"
         args = cmd[7:].strip()
@@ -432,8 +799,17 @@ def parse_command(cmd):
         verb = "look"
         args = cmd[7:].strip()
 
+    # Direction shortcuts: "n" → go north
+    # Must check before verb resolution since 'n'/'s'/'e'/'w' aren't in aliases
+    if verb in direction_shortcuts:
+        args = direction_shortcuts[verb]
+        verb = "go"
+
     resolved = verb_map.get(verb, verb)
-    return resolved, args
+    # Ensure args is always a string
+    if isinstance(args, list):
+        args = " ".join(args)
+    return resolved, str(args)
 
 # ─── Game Actions ───────────────────────────────────────────────────
 
@@ -447,7 +823,26 @@ def get_interactable(state, target):
             return key, obj
     return None, None
 
+def get_all_visible_items(state):
+    """Return a list of (item_id, item_data) for all items visible in the room.
+
+    Includes room items, interactable-given items, and dropped items.
+    """
+    room = state.room
+    visible = []
+    # Room floor items
+    for item_id in room["items"]:
+        if item_id in ITEMS:
+            visible.append((item_id, ITEMS[item_id], "floor"))
+    # Dropped items
+    if state.current_room in state.dropped_items:
+        for item_id in state.dropped_items[state.current_room]:
+            if item_id in ITEMS:
+                visible.append((item_id, ITEMS[item_id], "dropped"))
+    return visible
+
 def do_look(state, target=""):
+    """Handle the 'look' command: describe the room or examine a specific thing."""
     room = state.room
 
     # Dark room check
@@ -459,11 +854,17 @@ def do_look(state, target=""):
         desc = room["first_desc"] if not room["visited"] else room["desc"]
         narrate(desc)
 
-        # Show items
+        # Show items on the floor
         if room["items"]:
             item_names = [ITEMS[i]["name"] for i in room["items"] if i in ITEMS]
             if item_names:
                 narrate("You notice: " + ", ".join(item_names))
+
+        # Show dropped items
+        if state.current_room in state.dropped_items and state.dropped_items[state.current_room]:
+            dropped_names = [ITEMS[i]["name"] for i in state.dropped_items[state.current_room] if i in ITEMS]
+            if dropped_names:
+                narrate("On the ground (dropped): " + ", ".join(dropped_names))
 
         # Show interactables
         room_id = state.current_room
@@ -490,6 +891,13 @@ def do_look(state, target=""):
             narrate(ITEMS[item_id]["desc"])
             return
 
+    # Check dropped items in room
+    if state.current_room in state.dropped_items:
+        for item_id in state.dropped_items[state.current_room]:
+            if item_id in ITEMS and target in ITEMS[item_id]["name"].lower():
+                narrate(ITEMS[item_id]["desc"])
+                return
+
     # Check inventory items
     for item_id in state.inventory:
         if item_id in ITEMS and target in ITEMS[item_id]["name"].lower():
@@ -515,6 +923,7 @@ def do_look(state, target=""):
     narrate("You don't see that here.")
 
 def do_go(state, direction):
+    """Handle the 'go' command: move to another room."""
     room = state.room
 
     if room.get("dark") and not state.has_item("flashlight"):
@@ -552,19 +961,29 @@ def do_go(state, direction):
     state.room["visited"] = True
     narrate(f"You head {matched_dir}...")
     do_look(state)
+    maybe_ambient(state.current_room, chance=0.25)
 
 def do_take(state, target):
+    """Handle the 'take' command: pick up an item."""
     room = state.room
     if not target:
         narrate("Take what?")
         return
 
-    # Check room items
+    # Check room items first
     for item_id in room["items"]:
         if item_id in ITEMS and target in ITEMS[item_id]["name"].lower():
             state.take_item(item_id)
             narrate(f"You pick up the {ITEMS[item_id]['name']}.")
             return
+
+    # Check dropped items in this room
+    if state.current_room in state.dropped_items:
+        for item_id in state.dropped_items[state.current_room]:
+            if item_id in ITEMS and target in ITEMS[item_id]["name"].lower():
+                state.pickup_dropped(item_id)
+                narrate(f"You pick up the {ITEMS[item_id]['name']}.")
+                return
 
     # Check interactables that auto-give on inspect (already handled in do_look)
     key, obj = get_interactable(state, target)
@@ -580,7 +999,29 @@ def do_take(state, target):
 
     narrate("There's nothing like that to take here.")
 
+def do_drop(state, target):
+    """Handle the 'drop' command: leave an item in the current room."""
+    if not target:
+        narrate("Drop what?")
+        return
+
+    # Find the item in inventory
+    item_id = None
+    for iid in state.inventory:
+        if iid in ITEMS and target in ITEMS[iid]["name"].lower():
+            item_id = iid
+            break
+
+    if not item_id:
+        narrate("You don't have that item.")
+        return
+
+    name = ITEMS[item_id]["name"]
+    state.drop_item(item_id)
+    narrate(f"You drop the {name} on the ground.")
+
 def do_use(state, target):
+    """Handle the 'use' command: use an item on something."""
     room = state.room
     if not target:
         narrate("Use what on what? Try: use <item> on <thing>")
@@ -595,7 +1036,7 @@ def do_use(state, target):
         item_name = target
         target_name = ""
 
-    # Special: combine note fragments
+    # Special: combine note fragments via 'use'
     if "note" in item_name or "fragment" in item_name:
         if state.has_item("note_fragment_1") and state.has_item("note_fragment_2"):
             if "safe_combo" not in state.flags:
@@ -723,6 +1164,7 @@ def do_use(state, target):
         narrate(f"Using the {ITEMS[item_id]['name']} on the {obj['name']} doesn't seem to help.")
 
 def do_combine(state, target):
+    """Handle the 'combine' command: merge two items."""
     if "note" in target or "fragment" in target:
         if state.has_item("note_fragment_1") and state.has_item("note_fragment_2"):
             if "safe_combo" not in state.flags:
@@ -740,6 +1182,7 @@ def do_combine(state, target):
         narrate("You can't combine those items.")
 
 def do_inventory(state):
+    """Display the player's inventory."""
     if not state.inventory:
         narrate("Your pockets are empty.")
         return
@@ -750,11 +1193,63 @@ def do_inventory(state):
     print("└────────────────────────────────────────────────────────────────┘\n")
 
 def do_help(state):
+    """Display command help."""
     box(
         "COMMANDS: look [thing] | go <direction> | take <item> | "
-        "use <item> on <thing> | combine <things> | inventory | help | quit. "
-        "Directions: north, south, east, west. Tip: examine everything, combine clues!"
+        "use <item> on <thing> | combine <things> | drop <item> | "
+        "inventory | hint | status | save | load | history | help | quit. "
+        "Directions: n/north, s/south, e/east, w/west. Tip: examine everything!"
     )
+
+def do_status(state):
+    """Show current game status: room, moves, time."""
+    elapsed = state.elapsed_seconds()
+    mins, secs = divmod(elapsed, 60)
+    room_name = state.room["name"]
+
+    print(f"\n┌─ STATUS ──────────────────────────────────────────────────────┐")
+    print(f"│  Room:  {room_name:<56} │")
+    print(f"│  Moves: {state.moves:<56} │")
+    print(f"│  Time:  {mins}m {secs}s{' ' * (54 - len(f'{mins}m {secs}s'))} │")
+    items_count = len([i for i in state.inventory if i in ITEMS])
+    print(f"│  Items: {items_count:<56} │")
+    if GameState.has_save():
+        print(f"│  Save:  Available{' ' * 45} │")
+    print(f"└────────────────────────────────────────────────────────────────┘\n")
+
+def do_hint(state):
+    """Display a contextual hint."""
+    hint = get_hint(state)
+    print(f"\n\033[1;33m💡 Hint: {hint}\033[0m\n")
+
+def do_save(state):
+    """Save the current game to disk."""
+    try:
+        state.save()
+        narrate("Game saved! You can resume later with 'load'.")
+    except OSError as e:
+        narrate(f"Could not save game: {e}")
+
+def do_load(state):
+    """Load a saved game from disk, replacing current state."""
+    loaded = GameState.load()
+    if loaded is None:
+        narrate("No saved game found.")
+        return None
+    narrate("Game loaded! You pick up where you left off...")
+    return loaded
+
+def do_history(state):
+    """Show recent command history."""
+    if not state.command_history:
+        narrate("No commands in history yet.")
+        return
+    print("\n┌─ COMMAND HISTORY ─────────────────────────────────────────────┐")
+    # Show last 20 commands
+    recent = state.command_history[-20:]
+    for i, cmd in enumerate(recent, 1):
+        print(f"│  {i:>2}. {cmd:<55} │")
+    print("└────────────────────────────────────────────────────────────────┘\n")
 
 def do_enter_code(state, target):
     """Handle entering codes at various places."""
@@ -804,11 +1299,15 @@ def do_enter_code(state, target):
     narrate("There's nothing here to enter a code into.")
 
 def handle_keypad(state):
-    """Interactive keypad entry."""
+    """Interactive keypad entry with limited attempts."""
     narrate("The keypad display blinks, waiting for a 4-digit code.")
     attempts = 3
     while attempts > 0:
-        code = input("\033[1;33m    ▸ Enter 4-digit code: \033[0m").strip()
+        try:
+            code = input("\033[1;33m    ▸ Enter 4-digit code: \033[0m").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
         if code == "3333":
             narrate("✓ ACCESS GRANTED! The keypad turns green and the iron door clicks open.")
             state.unlock("north")
@@ -821,11 +1320,15 @@ def handle_keypad(state):
                 narrate("✗ INVALID CODE. The keypad resets. You can try again later.")
 
 def handle_cabinet_code(state):
-    """Interactive cabinet code entry."""
+    """Interactive cabinet code entry with limited attempts."""
     narrate("The cabinet lock requires a 3-digit code.")
     attempts = 3
     while attempts > 0:
-        code = input("\033[1;33m    ▸ Enter 3-digit code: \033[0m").strip().replace("-", "").replace(" ", "")
+        try:
+            code = input("\033[1;33m    ▸ Enter 3-digit code: \033[0m").strip().replace("-", "").replace(" ", "")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
         if code == "472":
             state.flags.add("cabinet_opened")
             narrate("Click-click-click! The cabinet opens! Inside: a red wire and an oil can!")
@@ -843,7 +1346,11 @@ def handle_safe_combination(state):
     """Interactive safe combination entry."""
     narrate("The safe requires a combination: direction + number, direction + number, direction + number.")
     narrate("Example: right 7, left 3, right 9")
-    combo = input("\033[1;33m    ▸ Enter combination: \033[0m").strip().lower()
+    try:
+        combo = input("\033[1;33m    ▸ Enter combination: \033[0m").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return
     # Accept various formats
     combo_clean = combo.replace(",", "").replace(" ", "").replace(".", "")
     if "right7" in combo_clean and "left3" in combo_clean and "right9" in combo_clean:
@@ -857,9 +1364,10 @@ def handle_safe_combination(state):
     else:
         narrate("The dial doesn't move. You need the right combination.")
 
-# ─── Main game loop ─────────────────────────────────────────────────
+# ─── Title and Victory screens ──────────────────────────────────────
 
 def show_title():
+    """Display the ASCII art title screen."""
     clear()
     title = r"""
     ╔═══════════════════════════════════════════════════════════════════╗
@@ -878,7 +1386,7 @@ def show_title():
     ║              ██║ ╚████║███████╗███████║╚██████╔╝                  ║
     ║              ╚═╝  ╚═══╝╚══════╝╚══════╝ ╚═════╝                   ║
     ║                                                                   ║
-    ║   ── A Text-Based Puzzle Adventure ──                            ║
+    ║   ── A Text-Based Puzzle Adventure ── v""" + VERSION + r"""                    ║
     ║                                                                   ║
     ║   You wake up in a locked cell. No memory of how you got here.    ║
     ║   Find items. Solve puzzles. Escape.                            ║
@@ -887,11 +1395,19 @@ def show_title():
     ╚═══════════════════════════════════════════════════════════════════╝
     """
     print(title)
-    input()
+    try:
+        input()
+    except (EOFError, KeyboardInterrupt):
+        sys.exit(0)
 
 def show_victory(state):
-    elapsed = int(time.time() - state.start_time)
+    """Display the victory screen with score and rank."""
+    elapsed = state.elapsed_seconds()
     mins, secs = divmod(elapsed, 60)
+    final_score = state.score()
+    rank = GameState.rank_for_score(final_score)
+    items_found = len([i for i in state.inventory if i in ITEMS])
+
     clear()
     print(r"""
     ╔═══════════════════════════════════════════════════════════════════╗
@@ -915,11 +1431,20 @@ def show_victory(state):
     ║                                                                   ║
     ╚═══════════════════════════════════════════════════════════════════╝
     """)
-    items_found = len([i for i in state.inventory if i in ITEMS])
-    print(f"    Time: {mins}m {secs}s  |  Moves: {state.moves}  |  Items: {items_found}")
+    print(f"    Time:   {mins}m {secs}s")
+    print(f"    Moves:  {state.moves}")
+    print(f"    Items:  {items_found}")
+    print(f"    Score:  {final_score}")
+    print(f"    Rank:   {rank}")
     print()
 
+    # Clean up save file on successful escape
+    GameState.delete_save()
+
+# ─── Main game loop ─────────────────────────────────────────────────
+
 def run_game():
+    """Main game loop: initialize state, handle commands, manage game flow."""
     state = GameState()
     show_title()
 
@@ -932,12 +1457,33 @@ def run_game():
     do_look(state)
 
     while not state.escaped:
-        cmd = prompt()
+        try:
+            cmd = prompt()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            narrate("You give up and sit down. The walls close in slowly...")
+            break
+
+        if not cmd:
+            continue
+
+        # Record command history
+        state.command_history.append(cmd)
+
         verb, args = parse_command(cmd)
 
         if verb is None:
             continue
         elif verb == "quit":
+            # Offer to save before quitting
+            if not state.escaped:
+                narrate("Save before quitting? (y/n)")
+                try:
+                    answer = input("\033[1;36m▸ \033[0m").strip().lower()
+                except (EOFError, KeyboardInterrupt):
+                    answer = "n"
+                if answer.startswith("y"):
+                    do_save(state)
             narrate("You give up and sit down. The walls close in slowly...")
             break
         elif verb == "help":
@@ -948,6 +1494,8 @@ def run_game():
             do_go(state, args)
         elif verb == "take":
             do_take(state, args)
+        elif verb == "drop":
+            do_drop(state, args)
         elif verb == "use":
             do_use(state, args)
         elif verb == "combine":
@@ -956,6 +1504,20 @@ def run_game():
             do_inventory(state)
         elif verb == "read":
             do_look(state, args)
+        elif verb == "hint":
+            do_hint(state)
+        elif verb == "status":
+            do_status(state)
+        elif verb == "save":
+            do_save(state)
+        elif verb == "load":
+            loaded = do_load(state)
+            if loaded is not None:
+                state = loaded
+                # Show current room after loading
+                do_look(state)
+        elif verb == "history":
+            do_history(state)
         elif args and any(kw in cmd for kw in ["3333", "472", "4-7-2"]):
             do_enter_code(state, cmd)
         else:
@@ -975,12 +1537,143 @@ def run_game():
 
         state.moves += 1
 
+        # Random ambient message after some commands
+        maybe_ambient(state.current_room, chance=0.12)
+
     if state.escaped:
         show_victory(state)
 
+# ─── CLI entry point ─────────────────────────────────────────────────
+
+def main():
+    """Parse CLI arguments and start the game."""
+    parser = argparse.ArgumentParser(
+        prog="escape_room",
+        description="CLI Escape Room — A text-based puzzle adventure for your terminal. "
+                     "Explore rooms, find items, solve puzzles, and escape!",
+        epilog="Type 'help' inside the game for command reference.",
+    )
+    parser.add_argument(
+        "--version", "-V",
+        action="version",
+        version=f"%(prog)s {VERSION}",
+        help="Show version number and exit",
+    )
+
+    # If there's a save file, offer to resume
+    if GameState.has_save():
+        print("A saved game was found!")
+        print("  [1] Resume saved game")
+        print("  [2] Start new game")
+        print("  [3] Delete save and start new")
+        try:
+            choice = input("Choose (1/2/3): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            sys.exit(0)
+
+        if choice == "1":
+            state = GameState.load()
+            if state is None:
+                print("Error loading save. Starting new game.")
+                run_game()
+            else:
+                clear()
+                narrate("Game loaded! You pick up where you left off...")
+                do_look(state)
+                while not state.escaped:
+                    try:
+                        cmd = prompt()
+                    except (EOFError, KeyboardInterrupt):
+                        print()
+                        narrate("You give up and sit down. The walls close in slowly...")
+                        break
+
+                    if not cmd:
+                        continue
+                    state.command_history.append(cmd)
+                    verb, args = parse_command(cmd)
+
+                    if verb is None:
+                        continue
+                    elif verb == "quit":
+                        narrate("Save before quitting? (y/n)")
+                        try:
+                            answer = input("\033[1;36m▸ \033[0m").strip().lower()
+                        except (EOFError, KeyboardInterrupt):
+                            answer = "n"
+                        if answer.startswith("y"):
+                            do_save(state)
+                        narrate("You give up and sit down. The walls close in slowly...")
+                        break
+                    elif verb == "help":
+                        do_help(state)
+                    elif verb == "look":
+                        do_look(state, args)
+                    elif verb == "go":
+                        do_go(state, args)
+                    elif verb == "take":
+                        do_take(state, args)
+                    elif verb == "drop":
+                        do_drop(state, args)
+                    elif verb == "use":
+                        do_use(state, args)
+                    elif verb == "combine":
+                        do_combine(state, args)
+                    elif verb == "inventory":
+                        do_inventory(state)
+                    elif verb == "read":
+                        do_look(state, args)
+                    elif verb == "hint":
+                        do_hint(state)
+                    elif verb == "status":
+                        do_status(state)
+                    elif verb == "save":
+                        do_save(state)
+                    elif verb == "load":
+                        loaded = do_load(state)
+                        if loaded is not None:
+                            state = loaded
+                            do_look(state)
+                    elif verb == "history":
+                        do_history(state)
+                    elif args and any(kw in cmd for kw in ["3333", "472", "4-7-2"]):
+                        do_enter_code(state, cmd)
+                    else:
+                        key, obj = get_interactable(state, cmd)
+                        if obj:
+                            if obj.get("is_keypad") and "north" in state.room["locked"]:
+                                handle_keypad(state)
+                            elif obj.get("is_cabinet_lock") and "cabinet_opened" not in state.flags:
+                                handle_cabinet_code(state)
+                            elif obj.get("is_safe") and "safe_opened" not in state.flags:
+                                handle_safe_combination(state)
+                            else:
+                                narrate(obj["inspect"])
+                        else:
+                            narrate(f"You can't '{cmd}'. Type 'help' for commands.")
+
+                    state.moves += 1
+                    maybe_ambient(state.current_room, chance=0.12)
+
+                if state.escaped:
+                    show_victory(state)
+        elif choice == "3":
+            GameState.delete_save()
+            print("Save deleted. Starting new game...\n")
+            run_game()
+        else:
+            run_game()
+    else:
+        # No save file — just start normally
+        # Parse args first to handle --help/--version
+        parser.parse_args()
+        run_game()
+
+
 if __name__ == "__main__":
     try:
-        run_game()
+        main()
     except KeyboardInterrupt:
         print("\n\nGame interrupted. The walls remain closed...")
         sys.exit(0)
