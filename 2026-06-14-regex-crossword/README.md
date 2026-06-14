@@ -1,6 +1,6 @@
 # Regex Crossword Generator & Solver
 
-**v1.2.0** — A CLI tool for generating and solving **regex crossword puzzles** — a mind-bending puzzle type where each cell must satisfy both a row regex constraint and a column regex constraint simultaneously. Think of it as a cross between Sudoku and regular expressions!
+**v1.3.0** — A CLI tool for generating and solving **regex crossword puzzles** — a mind-bending puzzle type where each cell must satisfy both a row regex constraint and a column regex constraint simultaneously. Think of it as a cross between Sudoku and regular expressions!
 
 ## What is a Regex Crossword?
 
@@ -15,23 +15,23 @@ Example (2×2 tutorial puzzle):
 ```
         C1       C2
    ┌─────────┬─────────┐
-R1 │  A  │  B  │   ← matches /A./
+R1 │  A  │  B  │   ← matches /AB/
    ├─────────┼─────────┤
-R2 │  C  │  1  │   ← matches /.1/
+R2 │  C  │  1  │   ← matches /C1/
    └─────────┴─────────┘
       ↑        ↑
-   /A./     /.1/
+   /AC/     /B1/
 ```
 
-- Row 1 `AB` matches `/A./` ✓
-- Row 2 `C1` matches `/.1/` ✓
-- Column 1 `AC` matches `/A./` ✓
-- Column 2 `B1` matches `/.1/` ✓
+- Row 1 `AB` matches `/AB/` ✓
+- Row 2 `C1` matches `/C1/` ✓
+- Column 1 `AC` matches `/AC/` ✓
+- Column 2 `B1` matches `/B1/` ✓
 
 ## Features
 
 ### Core Puzzles & Solving
-- **6 built-in puzzles** of varying difficulty (tutorial → alpha_chaos)
+- **6 built-in puzzles** of varying difficulty (all with verified unique solutions)
 - **Random puzzle generation** with configurable grid size (2×2 to 8×8)
 - **3 difficulty levels** controlling regex complexity (simple literals → alternations → quantifiers)
 - **6 character sets**: hex, alpha, digits, vowels, alphanumeric, binary
@@ -58,26 +58,37 @@ R2 │  C  │  1  │   ← matches /.1/
 - **Hint counter** — tracks how many hints/auto-solves you've used
 - **Game statistics** — on completion, shows moves, hints, and time
 - **JSON export** (`--export`) — export any puzzle as JSON for sharing
-- **JSON import** (`--import`) — import and play puzzles from JSON files
+- **JSON import** (`--import`) — import and play puzzles from JSON files (with dimension validation)
 - **Solution uniqueness checker** (`--unique`) — verify if a puzzle has a unique solution
 - **Solution counter** (`count_solutions()`) — count the number of valid solutions (up to a limit)
 - **`--version` flag** — display version number
 
 ## What's New
 
+### v1.3.0 — Bug Fix Release
+- **Fixed: Non-unique predefined puzzles** — Tutorial, binary_blitz, and vowel_vortex puzzles had multiple valid solutions, causing the solver to find a different answer than the stored one. All predefined puzzles now have verified unique solutions:
+  - Tutorial: tightened from `/A./` and `/.1/` to `/AB/` and `/C1/` (literal patterns)
+  - Medium: tightened from loose `[A-Z]{3}` patterns to `/A.C/`, `/E.G/` with literal column constraints, and reduced charset from 28 to 9 characters
+  - Binary Blitz: tightened from `/0[01]{2}/` and `/[01]1[01]/` to `/0[01]0/` and `/011/`
+  - Vowel Vortex: tightened from `/[AEIOU]{3}/` patterns (125+ solutions!) to `/AEI/`, `/OUA/`, `/EIO/` rows with `[AO]OE`, `[EI]UI`, `I[AO]O` columns (unique solution)
+- **Fixed: `format_duration` negative values** — Previously returned negative strings like `-1.0s`; now clamps to `0.0s`
+- **Fixed: `from_json` dimension mismatch crash** — JSON import with mismatched `rows`/`cols` and pattern/solution dimensions caused `IndexError` at runtime. Now validates dimensions and raises `ValueError` with a clear message
+- **Added: `RegexCrossword.__post_init__` validation** — Creating a puzzle with mismatched dimensions (e.g., `rows=2` but only 1 `row_pattern`) now raises `ValueError` immediately instead of failing silently or crashing later
+- **Added: 8 new regression tests** covering puzzle uniqueness, negative duration, JSON dimension validation, and constructor validation (60 total tests, all passing)
+
 ### v1.2.0 — Bug Fix Release
-- **Fixed: Crash with small charsets at difficulty 3** — `generate_relaxed_pattern()` produced `[^]` (invalid empty negated class) when the charset had only 1 unique character. Now falls back to `.` when there aren't enough other characters for a negated class.
-- **Fixed: `random.sample` crash with duplicate chars in charset** — When a charset string contained duplicate characters (e.g., `"AABB"`), `random.sample` could request more items than available unique characters. Now uses `set()` to deduplicate before sampling.
-- **Fixed: Variable shadowing in column validation** — In `validate_solution()`, `solve_puzzle_bruteforce()`, and `print_solution()`, the comprehension variable `r` shadowed the outer loop variable `r`, causing incorrect column validation (always checking the last row instead of iterating all rows). Renamed to `row` to fix the shadowing.
-- **Fixed: Regex metacharacters not escaped in negated classes** — Characters in negated class patterns are now individually escaped with `re.escape()`, preventing malformed regex from special characters like `]`, `-`, etc.
-- **Added: Input validation for charset** — `generate_smart_puzzle()` now raises `ValueError` for empty charsets or charsets with fewer than 2 unique characters at difficulty 3 (which requires negated classes).
-- **Added: 7 new regression tests** covering charset edge cases, negated class validity, variable shadowing, and version check (52 total tests, all passing).
+- Fixed crash with small charsets at difficulty 3
+- Fixed `random.sample` crash with duplicate chars in charset
+- Fixed variable shadowing in column validation
+- Fixed regex metacharacters not escaped in negated classes
+- Added input validation for charset
+- Added 7 regression tests (52 total)
 
 ### v1.1.0 — Feature Release
 - Timer mode, move/hint counters, game statistics
 - JSON export/import, solution uniqueness checker
 - 2 new built-in puzzles (binary_blitz, alpha_chaos)
-- Binary charset, robust error handling, extended grid size, named puzzles
+- Binary charset, robust error handling
 
 ## Installation
 
@@ -190,12 +201,14 @@ python3 regex_crossword.py --version
 
 | Name | Size | Description |
 |------|------|-------------|
-| `tutorial` | 2×2 | Simple dot-matching patterns |
+| `tutorial` | 2×2 | Literal patterns — great for learning |
 | `easy` | 3×3 | Literal row/column strings |
-| `medium` | 3×3 | Character classes and quantifiers |
-| `vowel_vortex` | 3×3 | All vowels, `{3}` quantifiers |
+| `medium` | 3×3 | Dot wildcards, `\d`, `[A-F]` character classes |
+| `vowel_vortex` | 3×3 | Vowels only with character class columns |
 | `binary_blitz` | 3×3 | Binary (0/1) with character classes |
 | `alpha_chaos` | 4×4 | Letter ranges `[A-D]`, `[E-H]`, etc. |
+
+All built-in puzzles have **verified unique solutions**.
 
 ## Difficulty Levels
 
@@ -223,15 +236,15 @@ Puzzles exported as JSON follow this structure:
   "name": "tutorial",
   "rows": 2,
   "cols": 2,
-  "row_patterns": ["A.", ".1"],
-  "col_patterns": ["A.", ".1"],
+  "row_patterns": ["AB", "C1"],
+  "col_patterns": ["AC", "B1"],
   "solution": [["A", "B"], ["C", "1"]],
   "charset": "ABC123",
-  "version": "1.2.0"
+  "version": "1.3.0"
 }
 ```
 
-You can share puzzles by sending the JSON file, and anyone can import them with `--import`.
+You can share puzzles by sending the JSON file, and anyone can import them with `--import`. The importer validates that dimensions, pattern counts, and solution sizes are all consistent — mismatched data will raise a clear `ValueError`.
 
 ## How It Works
 
@@ -257,7 +270,7 @@ The solver uses **backtracking with constraint checking**:
 
 ### Solution Uniqueness
 
-The `count_solutions()` function searches for multiple solutions (up to a configurable limit). This lets you verify that a puzzle has a unique solution, which makes it more interesting to solve.
+The `count_solutions()` function searches for multiple solutions (up to a configurable limit). All built-in puzzles are verified to have exactly **1 unique solution**. This makes them more satisfying to solve since there's only one correct answer.
 
 ### Interactive Solver
 
@@ -279,17 +292,18 @@ The terminal UI provides real-time feedback:
 python3 test_regex_crossword.py
 ```
 
-The test suite (52 tests) covers:
+The test suite (60 tests) covers:
 
-- Puzzle creation and validation
+- Puzzle creation, validation, and dimension checking
 - Row/column constraint checking (including invalid regex patterns)
-- All 6 predefined puzzles (valid solutions verified)
-- Solver (backtracking and brute force)
+- All 6 predefined puzzles (valid unique solutions verified)
+- Solver matches stored solution for all puzzles
+- Puzzle uniqueness (tutorial, binary_blitz, vowel_vortex)
 - Random puzzle generation at all difficulty levels and charsets
 - Interactive rendering (no crashes)
 - Solution validation and error reporting
-- JSON export/import roundtrip and error handling
-- `count_solutions()` and `format_duration()`
+- JSON export/import roundtrip and dimension validation
+- `count_solutions()` and `format_duration()` (including edge cases)
 - CLI flags (`--version`, `--help`, `--list`, `--export`, `--print`)
 - Input validation for puzzle generation
 - Binary charset support
@@ -297,47 +311,9 @@ The test suite (52 tests) covers:
 - Single-character and empty charset rejection
 - Negated class regex validity across all charsets
 - Variable shadowing fix verification (column validation)
+- Negative duration handling
+- Dimension mismatch detection in JSON import and constructor
 - Version consistency
-
-## Example Session
-
-```
-$ python3 regex_crossword.py --timer --play easy
-
-╔════════════════════════════════╗
-║      REGEX CROSSWORD           ║
-╚════════════════════════════════╝
-
-  C1: /A1D/
-  C2: /B2E/
-  C3: /C3F/
-
-     ┌────┬────┬────┐
- R1 │ ·  │ ·  │ ·  │  /ABC/
-    ├────┼────┼────┤
- R2 │ ·  │ ·  │ ·  │  /123/
-    ├────┼────┼────┤
- R3 │ ·  │ ·  │ ·  │  /DEF/
-    └────┴────┴────┘
-
-  R1: /ABC/ (partial)
-  R2: /123/ (partial)
-  R3: /DEF/ (partial)
-  C1: /A1D/ (partial)
-  C2: /B2E/ (partial)
-  C3: /C3F/ (partial)
-
-  Moves: 0  Hints: 0  Time: 0.0s
-Controls: ↑↓←→=move  Type=fill  Del=clear  H=hint  S=solve  Q=quit  R=reset  Tab=next  T=timer
-Cursor: Row 1, Col 1  Charset: ABCDEF123
-```
-
-Fill in the cells and watch them turn green as both row and column constraints are satisfied. When you complete the puzzle, you'll see:
-
-```
-🎉 CONGRATULATIONS! Puzzle solved! 🎉
-  Moves: 9  Hints: 0  Time: 42.3s
-```
 
 ## Known Issues
 
@@ -346,8 +322,9 @@ Fill in the cells and watch them turn green as both row and column constraints a
 
 ## Changelog
 
-- **v1.2.0** — Bug fix release: fixed crashes with small charsets at difficulty 3 (`[^]` invalid regex, `random.sample` with duplicate chars), fixed variable shadowing bug in column validation across 3 functions, added charset input validation, added regex escaping in negated classes, added 7 regression tests (52 total).
-- **v1.1.0** — Feature release: timer mode, move/hint counters, game statistics, JSON export/import, solution uniqueness checker, binary charset, 2 new puzzles, robust error handling.
+- **v1.3.0** — Bug fix release: fixed non-unique predefined puzzles (tutorial, medium, binary_blitz, vowel_vortex now all have verified unique solutions), fixed `format_duration` negative value handling, added dimension validation to `from_json` and `RegexCrossword.__post_init__` to prevent silent dimension mismatches, added 8 regression tests (60 total).
+- **v1.2.0** — Bug fix release: fixed crashes with small charsets at difficulty 3, `random.sample` with duplicate chars, variable shadowing in column validation, regex metacharacters in negated classes, added charset input validation (52 tests).
+- **v1.1.0** — Feature release: timer mode, move/hint counters, game statistics, JSON export/import, solution uniqueness checker, binary charset, 2 new puzzles.
 - **v1.0.0** — Initial release: core puzzle generation, solving, interactive play, 4 built-in puzzles.
 
 ## License

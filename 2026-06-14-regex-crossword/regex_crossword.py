@@ -32,7 +32,7 @@ import itertools
 from dataclasses import dataclass, asdict
 from typing import List, Optional, Tuple, Set, Dict, Any
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 # ─── Puzzle Definition ────────────────────────────────────────────────
 
@@ -46,6 +46,26 @@ class RegexCrossword:
     solution: List[List[str]]  # solution[row][col] = single character
     charset: str = "0123456789ABCDEF"  # default hex
     name: str = ""  # optional puzzle name
+
+    def __post_init__(self):
+        """Validate puzzle dimensions are consistent."""
+        if len(self.row_patterns) != self.rows:
+            raise ValueError(
+                f"Expected {self.rows} row_patterns, got {len(self.row_patterns)}"
+            )
+        if len(self.col_patterns) != self.cols:
+            raise ValueError(
+                f"Expected {self.cols} col_patterns, got {len(self.col_patterns)}"
+            )
+        if len(self.solution) != self.rows:
+            raise ValueError(
+                f"Expected {self.rows} solution rows, got {len(self.solution)}"
+            )
+        for i, row in enumerate(self.solution):
+            if len(row) != self.cols:
+                raise ValueError(
+                    f"Expected {self.cols} columns in solution row {i}, got {len(row)}"
+                )
 
     def check_row(self, row: int, grid: List[List[Optional[str]]]) -> Optional[bool]:
         """Check if the row matches its regex. Returns None if row is incomplete."""
@@ -126,6 +146,18 @@ class RegexCrossword:
         for key in ("rows", "cols", "row_patterns", "col_patterns", "solution"):
             if key not in data:
                 raise ValueError(f"Missing required field: {key}")
+        # Validate dimensions match
+        rows = data["rows"]
+        cols = data["cols"]
+        if len(data["row_patterns"]) != rows:
+            raise ValueError(f"Expected {rows} row_patterns, got {len(data['row_patterns'])}")
+        if len(data["col_patterns"]) != cols:
+            raise ValueError(f"Expected {cols} col_patterns, got {len(data['col_patterns'])}")
+        if len(data["solution"]) != rows:
+            raise ValueError(f"Expected {rows} solution rows, got {len(data['solution'])}")
+        for i, row in enumerate(data["solution"]):
+            if len(row) != cols:
+                raise ValueError(f"Expected {cols} columns in solution row {i}, got {len(row)}")
         return cls.from_dict(data)
 
 
@@ -295,21 +327,21 @@ def generate_smart_puzzle(rows: int = 3, cols: int = 3, difficulty: int = 1,
 PUZZLES: Dict[str, RegexCrossword] = {}
 
 def _init_puzzles():
-    """Initialize predefined puzzles with verified solutions."""
-    # Tutorial: 2x2, very simple
+    """Initialize predefined puzzles with verified unique solutions."""
+    # Tutorial: 2x2, unique solution (literal patterns for learning)
     p = RegexCrossword(
         rows=2, cols=2,
-        row_patterns=["A.", ".1"],
-        col_patterns=["A.", ".1"],
+        row_patterns=["AB", "C1"],
+        col_patterns=["AC", "B1"],
         solution=[["A", "B"], ["C", "1"]],
         charset="ABC123",
         name="tutorial",
     )
     # Verify
-    assert re.fullmatch("A.", "AB")
-    assert re.fullmatch(".1", "C1")
-    assert re.fullmatch("A.", "AC")
-    assert re.fullmatch(".1", "B1")
+    assert re.fullmatch("AB", "AB")
+    assert re.fullmatch("C1", "C1")
+    assert re.fullmatch("AC", "AC")
+    assert re.fullmatch("B1", "B1")
     PUZZLES["tutorial"] = p
     
     # Easy: 3x3 with hex-like characters
@@ -330,56 +362,56 @@ def _init_puzzles():
     assert re.fullmatch("C3F", "C3F")
     PUZZLES["easy"] = p
     
-    # Medium: 3x3 with regex features
+    # Medium: 3x3 with regex features (unique solution)
     p = RegexCrossword(
         rows=3, cols=3,
-        row_patterns=["ABC", "\\d[A-F]\\d", "[A-Z]{3}"],
-        col_patterns=["[A-F]\\d[A-Z]", "[A-Z]{3}", "[A-Z]\\d[A-Z]"],
+        row_patterns=["A.C", "\\d[A-F]\\d", "E.G"],
+        col_patterns=["A4E", "BDF", "C5G"],
         solution=[["A", "B", "C"], ["4", "D", "5"], ["E", "F", "G"]],
-        charset="ABCDEFGHIJKLMNOPQRSTUVWXYZ45",
+        charset="ABCDEFG45",
         name="medium",
     )
     # Verify
-    assert re.fullmatch("ABC", "ABC")
+    assert re.fullmatch("A.C", "ABC")
     assert re.fullmatch("\\d[A-F]\\d", "4D5")
-    assert re.fullmatch("[A-Z]{3}", "EFG")
-    assert re.fullmatch("[A-F]\\d[A-Z]", "A4E")
-    assert re.fullmatch("[A-Z]{3}", "BDF")
-    assert re.fullmatch("[A-Z]\\d[A-Z]", "C5G")
+    assert re.fullmatch("E.G", "EFG")
+    assert re.fullmatch("A4E", "A4E")
+    assert re.fullmatch("BDF", "BDF")
+    assert re.fullmatch("C5G", "C5G")
     PUZZLES["medium"] = p
     
-    # Vowel vortex: all vowels
+    # Vowel vortex: all vowels, unique solution
     p = RegexCrossword(
         rows=3, cols=3,
-        row_patterns=["[AEIOU]{3}", "[AEIOU]{3}", "[AEIOU]{3}"],
-        col_patterns=["[AEIOU]{3}", "[AEIOU]{3}", "[AEIOU]{3}"],
+        row_patterns=["AEI", "OUA", "EIO"],
+        col_patterns=["[AO]OE", "[EI]UI", "I[AO]O"],
         solution=[["A", "E", "I"], ["O", "U", "A"], ["E", "I", "O"]],
         charset="AEIOU",
         name="vowel_vortex",
     )
-    assert re.fullmatch("[AEIOU]{3}", "AEI")
-    assert re.fullmatch("[AEIOU]{3}", "OUA")
-    assert re.fullmatch("[AEIOU]{3}", "EIO")
-    assert re.fullmatch("[AEIOU]{3}", "AOE")
-    assert re.fullmatch("[AEIOU]{3}", "EUI")
-    assert re.fullmatch("[AEIOU]{3}", "IAO")
+    assert re.fullmatch("AEI", "AEI")
+    assert re.fullmatch("OUA", "OUA")
+    assert re.fullmatch("EIO", "EIO")
+    assert re.fullmatch("[AO]OE", "AOE")
+    assert re.fullmatch("[EI]UI", "EUI")
+    assert re.fullmatch("I[AO]O", "IAO")
     PUZZLES["vowel_vortex"] = p
 
-    # Binary Blitz: 3x3 using only 0 and 1, with quantifiers
+    # Binary Blitz: 3x3 using only 0 and 1, with character classes (unique solution)
     p = RegexCrossword(
         rows=3, cols=3,
-        row_patterns=["0[01]{2}", "[01]1[01]", "1[01]0"],
-        col_patterns=["0[01]1", "[01]1[01]", "[01]{2}0"],
+        row_patterns=["0[01]0", "011", "1[01]0"],
+        col_patterns=["001", "1[01]0", "0[01]0"],
         solution=[["0", "1", "0"], ["0", "1", "1"], ["1", "0", "0"]],
         charset="01",
         name="binary_blitz",
     )
-    assert re.fullmatch("0[01]{2}", "010")
-    assert re.fullmatch("[01]1[01]", "011")
+    assert re.fullmatch("0[01]0", "010")
+    assert re.fullmatch("011", "011")
     assert re.fullmatch("1[01]0", "100")
-    assert re.fullmatch("0[01]1", "001")
-    assert re.fullmatch("[01]1[01]", "110")
-    assert re.fullmatch("[01]{2}0", "010")
+    assert re.fullmatch("001", "001")
+    assert re.fullmatch("1[01]0", "110")
+    assert re.fullmatch("0[01]0", "010")
     PUZZLES["binary_blitz"] = p
 
     # Alpha Chaos: 4x4 with diverse patterns
@@ -631,6 +663,8 @@ def clear_screen():
 
 def format_duration(seconds: float) -> str:
     """Format a duration in seconds to a human-readable string."""
+    if seconds < 0:
+        seconds = 0
     if seconds < 60:
         return f"{seconds:.1f}s"
     minutes = int(seconds // 60)
