@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from typing import List, Tuple, Optional, Dict
 from collections import defaultdict
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # ─── Data Sources ──────────────────────────────────────────────────────────────
 
@@ -280,7 +280,16 @@ class StarMapGenerator:
         self._generate_meteor_showers()
         return self
 
-    def _generate_name(self) -> str:
+    def _generate_name(self, existing_names=None) -> str:
+        """Generate a unique constellation name, retrying if it collides with existing names."""
+        existing = existing_names or set()
+        for _ in range(100):  # Retry up to 100 times to find a unique name
+            prefix = self.rng.choice(CONSTELLATION_PREFIXES)
+            suffix = self.rng.choice(CONSTELLATION_SUFFIXES)
+            name = prefix + suffix
+            if name not in existing:
+                return name
+        # Extremely unlikely fallback: append a digit
         prefix = self.rng.choice(CONSTELLATION_PREFIXES)
         suffix = self.rng.choice(CONSTELLATION_SUFFIXES)
         return prefix + suffix
@@ -321,8 +330,10 @@ class StarMapGenerator:
 
     def _generate_constellations(self):
         centers = []
+        existing_names = set()
         for i in range(self.num_constellations):
-            name = self._generate_name()
+            name = self._generate_name(existing_names)
+            existing_names.add(name)
             title = self.rng.choice(CONSTELLATION_TYPES)
             full_name = f"{name}, {title}"
 
@@ -451,15 +462,21 @@ class StarMapGenerator:
         return stars
 
     def _generate_connections(self, num_stars, shape) -> List[Tuple[int, int]]:
+        if num_stars < 1:
+            return []
         connections = []
         if shape == "chain" or shape == "arc" or shape == "spiral":
             for i in range(num_stars - 1):
                 connections.append((i, i + 1))
         elif shape == "triangle":
-            connections = [(0, 1), (1, 2), (2, 0)]
-            for i in range(3, num_stars):
-                # Connect to nearest existing star
-                connections.append((i, i - 1))
+            if num_stars >= 3:
+                connections = [(0, 1), (1, 2), (2, 0)]
+                for i in range(3, num_stars):
+                    # Connect to nearest existing star
+                    connections.append((i, i - 1))
+            elif num_stars == 2:
+                connections = [(0, 1)]
+            # num_stars == 1: no connections
         elif shape == "cross":
             if num_stars >= 2:
                 connections.append((0, 1))
@@ -517,7 +534,8 @@ class StarMapGenerator:
                 desc = f"A {sub_type} galaxy, millions of light-years distant."
             elif obj_type == "nebula":
                 name = f"{self._generate_name()} Nebula"
-                desc = f"An {sub_type} nebula, birthplace of stars."
+                article = "An" if sub_type[0].lower() in "aeiou" else "A"
+                desc = f"{article} {sub_type} nebula, birthplace of stars."
             elif obj_type == "cluster":
                 name = f"{self._generate_name()} Cluster"
                 desc = f"A {sub_type} star cluster."

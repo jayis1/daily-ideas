@@ -643,6 +643,80 @@ def test_renderer_legend_includes_grid():
 import math
 
 
+def test_unique_constellation_names():
+    """Constellation names should be unique even with many constellations."""
+    # With 20 constellations, collisions were common before the fix
+    gen = StarMapGenerator(seed=8, num_constellations=20)
+    gen.generate()
+    names = [c.name for c in gen.constellations]
+    unique = set(names)
+    assert len(names) == len(unique), f"Duplicate constellation names found: {[n for n in names if names.count(n) > 1]}"
+
+    # Also test with 50 constellations
+    gen2 = StarMapGenerator(seed=42, num_constellations=50)
+    gen2.generate()
+    names2 = [c.name for c in gen2.constellations]
+    unique2 = set(names2)
+    assert len(names2) == len(unique2), f"Duplicate constellation names with 50: {[n for n in names2 if names2.count(n) > 1]}"
+
+
+def test_nebula_description_grammar():
+    """Deep sky objects should use correct a/an article before subtypes."""
+    gen = StarMapGenerator(seed=1, num_constellations=0, num_deep_objects=50,
+                          num_background_stars=0, num_nebulae=0)
+    gen.generate()
+    for obj in gen.deep_objects:
+        if obj.obj_type == "nebula" and obj.sub_type:
+            # "planetary" and "reflection" start with consonants -> should use "A"
+            # "emission" starts with vowel -> should use "An"
+            if obj.sub_type[0].lower() in "aeiou":
+                assert obj.description.startswith("An "), \
+                    f"Vowel-starting '{obj.sub_type}' should use 'An': {obj.description}"
+            else:
+                assert obj.description.startswith("A "), \
+                    f"Consonant-starting '{obj.sub_type}' should use 'A': {obj.description}"
+
+
+def test_triangle_connections_edge_cases():
+    """Triangle connections should be valid for any star count."""
+    gen = StarMapGenerator(seed=42)
+    # 1 star: no connections
+    conns = gen._generate_connections(1, "triangle")
+    assert len(conns) == 0, f"Triangle with 1 star should have 0 connections, got {conns}"
+    # 2 stars: one connection
+    conns = gen._generate_connections(2, "triangle")
+    assert len(conns) == 1, f"Triangle with 2 stars should have 1 connection, got {conns}"
+    # All connections should reference valid indices
+    for i, j in conns:
+        assert i < 2 and j < 2, f"Invalid connection ({i},{j}) for 2 stars"
+    # 3 stars: full triangle
+    conns = gen._generate_connections(3, "triangle")
+    assert len(conns) == 3, f"Triangle with 3 stars should have 3 connections, got {conns}"
+    for i, j in conns:
+        assert i < 3 and j < 3, f"Invalid connection ({i},{j}) for 3 stars"
+
+
+def test_connections_zero_stars():
+    """All shapes should handle 0 stars gracefully."""
+    gen = StarMapGenerator(seed=42)
+    for shape in ["chain", "triangle", "cross", "arc", "cluster", "spiral"]:
+        conns = gen._generate_connections(0, shape)
+        assert conns == [], f"Shape {shape} with 0 stars should return empty connections, got {conns}"
+
+
+def test_connections_single_star():
+    """All shapes should handle 1 star (no connections)."""
+    gen = StarMapGenerator(seed=42)
+    for shape in ["chain", "triangle", "cross", "arc", "cluster", "spiral"]:
+        conns = gen._generate_connections(1, shape)
+        assert conns == [], f"Shape {shape} with 1 star should have no connections, got {conns}"
+
+
+def test_version_updated():
+    """Version should be 1.2.0 after bug fixes."""
+    assert __version__ == "1.2.0", f"Expected version 1.2.0, got {__version__}"
+
+
 if __name__ == "__main__":
     test_count = 0
     failures = 0
