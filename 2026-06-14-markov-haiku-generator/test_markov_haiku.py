@@ -439,6 +439,102 @@ def test_version():
     assert all(p.isdigit() for p in parts)
 
 
+# ─── Bug fix tests ─────────────────────────────────────────────────────────────
+
+def test_cjk_format_box_width():
+    """CJK format box should accommodate long lines without overflow."""
+    gen = HaikuGenerator()
+    gen.train_default()
+    # Test with lines that would overflow a 24-char inner width
+    long_lines = ["The temple bell echoes through the dark",
+                  "A frog jumps into the still",
+                  "Sunset paints the clouds"]
+    formatted = gen.format_haiku(long_lines, style="cjk")
+    # All content lines should have consistent width between ║ markers
+    content_lines = [l for l in formatted.split("\n") if "║" in l and "═" not in l]
+    widths = set()
+    for line in content_lines:
+        parts = line.split("║")
+        if len(parts) >= 3:
+            widths.add(len(parts[1]))
+    # All content lines should have the same width
+    assert len(widths) == 1, f"Inconsistent CJK box widths: {widths}"
+
+
+def test_cjk_format_short_lines():
+    """CJK format should properly pad short lines."""
+    gen = HaikuGenerator()
+    gen.train_default()
+    short_lines = ["Cat", "Dog runs", "Bird flies high"]
+    formatted = gen.format_haiku(short_lines, style="cjk")
+    # All content lines should have consistent width
+    content_lines = [l for l in formatted.split("\n") if "║" in l and "═" not in l]
+    widths = set()
+    for line in content_lines:
+        parts = line.split("║")
+        if len(parts) >= 3:
+            widths.add(len(parts[1]))
+    assert len(widths) == 1, f"Inconsistent CJK box widths: {widths}"
+
+
+def test_pretty_format_box_width():
+    """Pretty format should accommodate long lines."""
+    gen = HaikuGenerator()
+    gen.train_default()
+    long_lines = ["The temple bell echoes through the dark and ancient valley",
+                  "A frog jumps into",
+                  "Sunset paints the clouds"]
+    formatted = gen.format_haiku(long_lines, style="pretty")
+    # Should not crash and should produce output
+    assert "│" in formatted
+
+
+def test_train_none():
+    """train(None) should not crash."""
+    gen = HaikuGenerator()
+    gen.train(None)
+    gen.train_default()
+    assert len(gen.chain.all_words) > 0
+
+
+def test_train_non_string():
+    """train(non-string) should not crash."""
+    gen = HaikuGenerator()
+    gen.train(42)
+    gen.train_default()
+    assert len(gen.chain.all_words) > 0
+
+
+def test_markov_train_none():
+    """MarkovChain.train(None) should not crash."""
+    chain = MarkovChain(order=2)
+    chain.train(None)
+    chain.train(DEFAULT_CORPUS)
+    assert len(chain.all_words) > 0
+
+
+def test_markov_train_non_string():
+    """MarkovChain.train(non-string) should not crash."""
+    chain = MarkovChain(order=2)
+    chain.train(42)
+    chain.train(DEFAULT_CORPUS)
+    assert len(chain.all_words) > 0
+
+
+def test_format_stats_extra_lines():
+    """format_stats should show extra lines beyond target count."""
+    gen = HaikuGenerator()
+    gen.train_default()
+    # Pass 5 lines with haiku type (expects 3 targets)
+    lines = ["Cherry blossoms fall", "Moonlight paints the garden in silver",
+             "A single raindrop", "Autumn leaves drift down",
+             "The ancient pine survives"]
+    stats = gen.format_stats(lines, poem_type="haiku")
+    # Should show all 5 lines (3 with targets + 2 extra)
+    assert "Line 4:" in stats
+    assert "Line 5:" in stats
+
+
 # ─── Run all tests ─────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

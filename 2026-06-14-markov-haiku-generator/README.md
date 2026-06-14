@@ -16,7 +16,8 @@ The tool automatically detects the **season** (spring, summer, autumn, winter) o
 - **Automatic season detection** with seasonal emoji (🌸🌿🍂❄️) and ANSI colors
 - **Season filter** — `--season winter` biases output toward a specific season
 - **Syllable stats** — `--stats` shows per-word syllable breakdown for every poem
-- **Three display styles**: pretty (bordered box with emoji), CJK (Japanese-inspired frame), and minimal (plain lines)
+- **Three display styles**: pretty (dynamic-width bordered box with emoji), CJK (Japanese-inspired dynamic-width frame), and minimal (plain lines)
+- **Dynamic box widths** — CJK and pretty formats automatically adjust box width to fit line content, with truncation and ellipsis for very long lines
 - **Interactive mode** — generate poems on demand, switch between haiku/tanka, cycle styles, add training text, view vocabulary stats
 - **Built-in nature corpus** with 80+ poetic lines for out-of-the-box generation
 - **Custom text training** — feed it any text file to change the vocabulary
@@ -24,6 +25,7 @@ The tool automatically detects the **season** (spring, summer, autumn, winter) o
 - **Reproducible output** with `--seed` flag
 - **`--version` and `--help` flags**
 - **Word repetition reduction** — recently-used words are deprioritized in generation
+- **Robust input handling** — `train(None)` and `train(non-string)` are handled gracefully without crashing
 - **No external dependencies** — pure Python 3.6+
 
 ## How to Install
@@ -66,9 +68,9 @@ python3 markov_haiku.py my_poems.txt -n 3
 ### Choose a display style
 
 ```bash
-python3 markov_haiku.py -s cjk       # Japanese-inspired frame
+python3 markov_haiku.py -s cjk       # Japanese-inspired dynamic-width frame
 python3 markov_haiku.py -s minimal   # Just the lines
-python3 markov_haiku.py -s pretty    # Bordered box with emoji (default)
+python3 markov_haiku.py -s pretty    # Dynamic-width bordered box with emoji (default)
 ```
 
 ### Show syllable breakdown per word
@@ -153,24 +155,24 @@ options:
 
 **Pretty style haiku:**
 ```
-  ☀️  ┌────────────────────────────────────────┐
-     │         Crimson leaves fall             │
-     │     A frog jumps into the still         │
-     │         A cricket chirps in             │
-  ☀️  └────────────────────────────────────────┘
+  ☀️  ┌────────────────────────────────────┐
+     │          A frog jumps into           │
+     │    The temple bell echoes through    │
+     │       Sunset paints the clouds       │
+  ☀️  └────────────────────────────────────┘
       ── Summer ──
 ```
 
 **CJK style tanka:**
 ```
-  ╔══════════════════════════╗
-  ║  A caterpillar          ║
-  ║  Gentle waves lap against║
-  ║  The bamboo forest       ║
-  ║  Stars shine above the   ║
-  ║  Snow melts quietly      ║
-  ╚══════════════════════════╝
-     🌿 Summer (tanka)
+  ╔══════════════════════════════════╗
+  ║  A frog jumps into               ║
+  ║  The temple bell echoes through  ║
+  ║  Sunset paints the clouds        ║
+  ║  Stars shine above the endless   ║
+  ║  Snow melts quietly beneath the  ║
+  ╚══════════════════════════════════╝
+     🦋 Summer (tanka)
 ```
 
 **Minimal style:**
@@ -199,11 +201,13 @@ python3 markov_haiku.py -i
 
 4. **Season detection**: Each poem's text is scanned for seasonal keywords (e.g., "cherry" → spring, "snow" → winter) and tagged with the matching season and emoji.
 
+5. **Formatting**: The pretty and CJK styles dynamically calculate box width based on the longest line, ensuring proper alignment. Lines that exceed the maximum width are truncated with an ellipsis (…).
+
 ## File Structure
 
 ```
 markov_haiku.py       — Main module (CLI + all logic)
-test_markov_haiku.py  — Test suite (38 tests)
+test_markov_haiku.py  — Test suite (46 tests)
 README.md             — This file
 ```
 
@@ -213,9 +217,18 @@ README.md             — This file
 python3 test_markov_haiku.py
 ```
 
-All 38 tests cover: syllable counting, syllable breakdown, Markov chain training/generation, haiku structure enforcement, tanka generation, season detection, season bias filtering, formatting (pretty/CJK/minimal), stats display, custom training, reproducibility, empty input handling, order validation, Colors class, and version string.
+All 46 tests cover: syllable counting, syllable breakdown, Markov chain training/generation, haiku structure enforcement, tanka generation, season detection, season bias filtering, formatting (pretty/CJK/minimal), CJK box alignment, stats display, custom training, reproducibility, empty input handling, order validation, None/non-string input handling, format_stats with mismatched line counts, Colors class, and version string.
 
 ## Changelog
+
+### v1.1.1
+- **Fixed CJK format box overflow** — Long poem lines (22+ characters) no longer break the ║ box alignment. The CJK format now dynamically calculates box width based on line content, with a max width of 40 characters and ellipsis truncation for very long lines.
+- **Fixed pretty format potential overflow** — The pretty format now dynamically expands its border width to accommodate long lines, preventing misalignment.
+- **Fixed `train(None)` crash** — `HaikuGenerator.train(None)` and `MarkovChain.train(None)` no longer crash. Both methods now explicitly check for `None` and non-string types before processing.
+- **Fixed `format_stats` silent line dropping** — When `format_stats()` receives more lines than the target syllable pattern expects (e.g., 5 lines with `poem_type="haiku"`), it now shows the extra lines with their syllable counts instead of silently dropping them.
+- **Added dynamic box width calculation** for both CJK and pretty formats.
+- **Added ellipsis truncation** for lines exceeding maximum CJK box width.
+- **Added 8 new tests** for the bug fixes (46 total, up from 38).
 
 ### v1.1.0
 - Added **tanka mode** (`--tanka`) generating 5-7-5-7-7 poems

@@ -12,7 +12,7 @@ import sys
 import os
 from collections import defaultdict
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 
 # ─── ANSI Colors ─────────────────────────────────────────────────────────────
@@ -213,7 +213,7 @@ class MarkovChain:
         question marks, and newlines). Each sentence contributes transition
         probabilities to both the N-gram and single-word (fallback) chains.
         """
-        if not text or not text.strip():
+        if text is None or not isinstance(text, str) or not text.strip():
             return
 
         sentences = re.split(r'[.!?\n]+', text)
@@ -544,7 +544,7 @@ class HaikuGenerator:
 
     def train(self, text):
         """Train on provided text."""
-        if not text or not text.strip():
+        if text is None or not isinstance(text, str) or not text.strip():
             return
         self.chain.train(text)
 
@@ -696,12 +696,15 @@ class HaikuGenerator:
             return "\n".join(lines)
 
         if style == "pretty":
-            border = "─" * 40
+            # Calculate dynamic border width (min 40, expands for long lines)
+            max_line_len = max((len(l) for l in lines), default=0)
+            content_width = max(36, max_line_len + 2)
+            border = "─" * content_width
             label = poem_type.upper() if poem_type == "tanka" else ""
             result = []
             result.append(f"  {emoji}  ┌{border}┐")
             for line in lines:
-                padded = line.center(36)
+                padded = line.center(content_width)
                 result.append(f"     │ {padded} │")
             result.append(f"  {emoji}  └{border}┘")
             season_label = season.capitalize()
@@ -713,12 +716,18 @@ class HaikuGenerator:
 
         if style == "cjk":
             result = []
-            result.append("  ╔══════════════════════════╗")
+            # Calculate dynamic box width based on longest line (min 24, max 40)
+            max_len = max((len(l) for l in lines), default=0)
+            inner_width = max(24, min(max_len + 4, 40))
+            result.append(f"  ╔{'═' * inner_width}╗")
             for line in lines:
                 padded = f"  {line}"
-                padded = padded.ljust(24)
+                if len(padded) > inner_width:
+                    # Truncate with ellipsis to fit box
+                    padded = padded[:inner_width - 2] + "…"
+                padded = padded.ljust(inner_width)
                 result.append(f"  ║{padded}║")
-            result.append("  ╚══════════════════════════╝")
+            result.append(f"  ╚{'═' * inner_width}╝")
             label = f" ({poem_type})" if poem_type == "tanka" else ""
             result.append(f"     {emoji} {Colors.season_color(season, season.capitalize())}{label}")
             return "\n".join(result)
@@ -730,10 +739,12 @@ class HaikuGenerator:
 
         Shows each word with its syllable count, e.g.:
             Line 1 (5): Cherry(2) blossoms(2) fall(1)
+
+        If the number of lines doesn't match the expected target count
+        for the poem type, extra lines are shown without a target marker.
         """
         if not lines:
             return "  (no poem to analyze)"
-
         targets = [5, 7, 5, 7, 7] if poem_type == "tanka" else [5, 7, 5]
         output_lines = []
         for i, (line, target) in enumerate(zip(lines, targets)):
@@ -745,6 +756,16 @@ class HaikuGenerator:
             marker = "✓" if total == target else f"✗ (got {total})"
             output_lines.append(
                 f"  Line {i+1} ({target}): {' '.join(word_parts)} {marker}"
+            )
+        # If there are more lines than targets (mismatched poem_type), show remaining lines
+        for i in range(len(targets), len(lines)):
+            breakdown = syllable_breakdown(lines[i])
+            word_parts = []
+            for word, sc in breakdown:
+                word_parts.append(f"{word}({sc})")
+            total = syllable_count_phrase(lines[i])
+            output_lines.append(
+                f"  Line {i+1}: {' '.join(word_parts)} ({total})"
             )
         return "\n".join(output_lines)
 
