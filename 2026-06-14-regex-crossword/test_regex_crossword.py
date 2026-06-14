@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the Regex Crossword Generator & Solver (v1.1.0)."""
+"""Tests for the Regex Crossword Generator & Solver (v1.2.0)."""
 
 import sys
 import os
@@ -101,7 +101,7 @@ def test_predefined_puzzles_valid():
         
         # Check column patterns
         for c in range(puzzle.cols):
-            col_str = "".join(puzzle.solution[r][c] for r in range(puzzle.rows))
+            col_str = "".join(puzzle.solution[row][c] for row in range(puzzle.rows))
             assert re.fullmatch(puzzle.col_patterns[c], col_str), \
                 f"Puzzle '{name}': Col {c} solution '{col_str}' doesn't match /{puzzle.col_patterns[c]}/"
     
@@ -194,7 +194,7 @@ def test_generate_puzzle():
                 f"Generated puzzle row {r}: '{row_str}' doesn't match /{puzzle.row_patterns[r]}/"
         
         for c in range(puzzle.cols):
-            col_str = "".join(puzzle.solution[r][c] for r in range(puzzle.rows))
+            col_str = "".join(puzzle.solution[row][c] for row in range(puzzle.rows))
             assert re.fullmatch(puzzle.col_patterns[c], col_str), \
                 f"Generated puzzle col {c}: '{col_str}' doesn't match /{puzzle.col_patterns[c]}/"
     
@@ -216,7 +216,7 @@ def test_generate_different_difficulties():
                 f"Difficulty {diff}, row {r}: '{row_str}' doesn't match /{puzzle.row_patterns[r]}/"
         
         for c in range(puzzle.cols):
-            col_str = "".join(puzzle.solution[r][c] for r in range(puzzle.rows))
+            col_str = "".join(puzzle.solution[row][c] for row in range(puzzle.rows))
             assert re.fullmatch(puzzle.col_patterns[c], col_str), \
                 f"Difficulty {diff}, col {c}: '{col_str}' doesn't match /{puzzle.col_patterns[c]}/"
     
@@ -345,7 +345,7 @@ def test_larger_puzzle():
         assert re.fullmatch(puzzle.row_patterns[r], row_str)
     
     for c in range(puzzle.cols):
-        col_str = "".join(puzzle.solution[r][c] for r in range(puzzle.rows))
+        col_str = "".join(puzzle.solution[row][c] for row in range(puzzle.rows))
         assert re.fullmatch(puzzle.col_patterns[c], col_str)
     
     print("✓ test_larger_puzzle")
@@ -590,7 +590,7 @@ def test_cli_version():
     r = subprocess.run(["python3", "regex_crossword.py", "--version"],
                       capture_output=True, text=True,
                       cwd=os.path.dirname(__file__))
-    assert "1.1.0" in (r.stdout + r.stderr), f"Version should be in output, got stdout={r.stdout} stderr={r.stderr}"
+    assert "1.2.0" in (r.stdout + r.stderr), f"Version should be in output, got stdout={r.stdout} stderr={r.stderr}"
     print("✓ test_cli_version")
 
 
@@ -685,6 +685,103 @@ def test_binary_charset_in_charset_map():
     print("✓ test_binary_charset_in_charset_map")
 
 
+# ─── New tests for v1.2.0 bug fixes ──────────────────────────────────
+
+def test_generate_small_charset_difficulty3():
+    """Test that difficulty 3 with small charsets doesn't crash."""
+    # Binary charset (2 unique chars) should work at difficulty 3
+    random.seed(42)
+    for _ in range(10):
+        puzzle = generate_smart_puzzle(rows=2, cols=2, difficulty=3, charset_name="binary")
+        assert puzzle.rows == 2 and puzzle.cols == 2
+        # Verify solution is valid
+        for r in range(puzzle.rows):
+            row_str = "".join(puzzle.solution[r])
+            assert re.fullmatch(puzzle.row_patterns[r], row_str), \
+                f"Binary diff-3 row {r}: '{row_str}' doesn't match /{puzzle.row_patterns[r]}/"
+    print("✓ test_generate_small_charset_difficulty3")
+
+
+def test_generate_single_char_charset_raises():
+    """Test that a 1-char charset raises ValueError for difficulty 3."""
+    try:
+        generate_smart_puzzle(rows=2, cols=2, difficulty=3, charset_name="A")
+        assert False, "Should raise ValueError for 1-char charset at difficulty 3"
+    except ValueError as e:
+        assert "unique" in str(e).lower() or "character" in str(e).lower()
+    print("✓ test_generate_single_char_charset_raises")
+
+
+def test_generate_empty_charset_raises():
+    """Test that an empty charset raises ValueError."""
+    try:
+        generate_smart_puzzle(rows=2, cols=2, difficulty=1, charset_name="")
+        assert False, "Should raise ValueError for empty charset"
+    except ValueError:
+        pass  # Expected
+    print("✓ test_generate_empty_charset_raises")
+
+
+def test_negated_class_produces_valid_regex():
+    """Test that negated class patterns produce valid regex for all built-in charsets."""
+    for charset_name in ["alpha", "hex", "vowel", "digit", "alnum", "binary"]:
+        random.seed(42)
+        for _ in range(20):
+            puzzle = generate_smart_puzzle(rows=2, cols=2, difficulty=3, charset_name=charset_name)
+            # Verify all patterns are valid regex
+            for rp in puzzle.row_patterns:
+                try:
+                    re.compile(rp)
+                except re.error:
+                    assert False, f"Invalid regex pattern /{rp}/ for charset {charset_name}"
+            for cp in puzzle.col_patterns:
+                try:
+                    re.compile(cp)
+                except re.error:
+                    assert False, f"Invalid regex pattern /{cp}/ for charset {charset_name}"
+    print("✓ test_negated_class_produces_valid_regex")
+
+
+def test_variable_shadowing_fix_validate():
+    """Test that validate_solution correctly validates columns (variable shadowing fix)."""
+    # This test would fail with the old code that used `r` in both outer and inner loops
+    puzzle = RegexCrossword(
+        rows=3, cols=3,
+        row_patterns=["ABC", "DEF", "GHI"],
+        col_patterns=["ADG", "BEH", "CFI"],
+        solution=[["A", "B", "C"], ["D", "E", "F"], ["G", "H", "I"]],
+        charset="ABCDEFGHI",
+    )
+    valid, errors = validate_solution(puzzle, puzzle.solution)
+    assert valid, f"Correct solution should validate: {errors}"
+    
+    # Wrong solution should fail
+    wrong = [["X", "Y", "Z"], ["X", "Y", "Z"], ["X", "Y", "Z"]]
+    valid, errors = validate_solution(puzzle, wrong)
+    assert not valid, "Wrong solution should not validate"
+    print("✓ test_variable_shadowing_fix_validate")
+
+
+def test_variable_shadowing_fix_bruteforce():
+    """Test that bruteforce solver correctly validates columns."""
+    puzzle = RegexCrossword(
+        rows=3, cols=3,
+        row_patterns=["ABC", "DEF", "GHI"],
+        col_patterns=["ADG", "BEH", "CFI"],
+        solution=[["A", "B", "C"], ["D", "E", "F"], ["G", "H", "I"]],
+        charset="ABCDEFGHI",
+    )
+    result = solve_puzzle_bruteforce(puzzle)
+    assert result == puzzle.solution, f"Bruteforce should find correct solution, got {result}"
+    print("✓ test_variable_shadowing_fix_bruteforce")
+
+
+def test_version_1_2_0():
+    """Test that version is 1.2.0."""
+    assert __version__ == "1.2.0", f"Version should be 1.2.0, got {__version__}"
+    print("✓ test_version_1_2_0")
+
+
 def main():
     import random
     
@@ -736,6 +833,14 @@ def main():
         test_binary_charset_in_charset_map,
         test_solve_binary_blitz,
         test_alpha_chaos_validates,
+        # v1.2.0 bug fix tests
+        test_generate_small_charset_difficulty3,
+        test_generate_single_char_charset_raises,
+        test_generate_empty_charset_raises,
+        test_negated_class_produces_valid_regex,
+        test_variable_shadowing_fix_validate,
+        test_variable_shadowing_fix_bruteforce,
+        test_version_1_2_0,
     ]
     
     passed = 0

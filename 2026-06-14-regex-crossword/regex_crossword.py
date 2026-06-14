@@ -32,7 +32,7 @@ import itertools
 from dataclasses import dataclass, asdict
 from typing import List, Optional, Tuple, Set, Dict, Any
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # ─── Puzzle Definition ────────────────────────────────────────────────
 
@@ -208,9 +208,19 @@ def generate_relaxed_pattern(chars: List[str], charset: str, difficulty: int = 1
             elif r < 0.30:
                 patterns.append(".")
             elif r < 0.45:
-                # Negated class
-                others = random.sample([c for c in charset if c != ch], min(3, len(charset)-1))
-                patterns.append(f"[^{''.join(sorted(others))}]")
+                # Negated class — use unique chars only, and fall back to
+                # a simple character class if there aren't enough other chars
+                # to form a valid negated class.
+                unique_others = sorted(set(c for c in charset if c != ch))
+                if len(unique_others) >= 1:
+                    sample_size = min(3, len(unique_others))
+                    others = random.sample(unique_others, sample_size)
+                    # Escape each char individually to handle regex metacharacters
+                    escaped = "".join(re.escape(c) for c in others)
+                    patterns.append(f"[^{escaped}]")
+                else:
+                    # Not enough other chars for a negated class; use dot or literal
+                    patterns.append(".")
             elif r < 0.55:
                 patterns.append(f"[{re.escape(ch)}]")
             else:
@@ -230,6 +240,16 @@ def generate_smart_puzzle(rows: int = 3, cols: int = 3, difficulty: int = 1,
         raise ValueError(f"Difficulty must be 1, 2, or 3, got {difficulty}")
     
     charset = CHARSET_MAP.get(charset_name, charset_name)
+    
+    # Deduplicate and validate charset
+    if len(charset) == 0:
+        raise ValueError("Charset must contain at least one character")
+    unique_chars = len(set(charset))
+    if unique_chars < 2 and difficulty >= 3:
+        raise ValueError(
+            f"Difficulty 3 requires at least 2 unique characters in charset, "
+            f"got {unique_chars} unique char(s) in '{charset}'"
+        )
     
     # Generate a random solution grid
     solution = []
@@ -564,7 +584,7 @@ def solve_puzzle_bruteforce(puzzle: RegexCrossword, charset: Optional[str] = Non
         
         if valid:
             for c in range(puzzle.cols):
-                col_str = "".join(grid[r][c] for r in range(puzzle.rows))
+                col_str = "".join(grid[row][c] for row in range(puzzle.rows))
                 try:
                     if not re.fullmatch(puzzle.col_patterns[c], col_str):
                         valid = False
@@ -592,7 +612,7 @@ def validate_solution(puzzle: RegexCrossword, grid: List[List[str]]) -> Tuple[bo
             errors.append(f"Row {r+1} pattern /{puzzle.row_patterns[r]}/ is invalid: {e}")
     
     for c in range(puzzle.cols):
-        col_str = "".join(grid[r][c] for r in range(puzzle.rows))
+        col_str = "".join(grid[row][c] for row in range(puzzle.rows))
         try:
             if not re.fullmatch(puzzle.col_patterns[c], col_str):
                 errors.append(f"Col {c+1} '{col_str}' doesn't match /{puzzle.col_patterns[c]}/")
@@ -936,7 +956,7 @@ def print_solution(puzzle: RegexCrossword):
         status = "✓" if ok else "✗"
         print(f"  R{r+1}: '{row_str}' vs /{puzzle.row_patterns[r]}/ {status}")
     for c in range(puzzle.cols):
-        col_str = "".join(puzzle.solution[r][c] for r in range(puzzle.rows))
+        col_str = "".join(puzzle.solution[row][c] for row in range(puzzle.rows))
         try:
             ok = re.fullmatch(puzzle.col_patterns[c], col_str) is not None
         except re.error:

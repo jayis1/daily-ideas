@@ -1,6 +1,6 @@
 # Regex Crossword Generator & Solver
 
-**v1.1.0** — A CLI tool for generating and solving **regex crossword puzzles** — a mind-bending puzzle type where each cell must satisfy both a row regex constraint and a column regex constraint simultaneously. Think of it as a cross between Sudoku and regular expressions!
+**v1.2.0** — A CLI tool for generating and solving **regex crossword puzzles** — a mind-bending puzzle type where each cell must satisfy both a row regex constraint and a column regex constraint simultaneously. Think of it as a cross between Sudoku and regular expressions!
 
 ## What is a Regex Crossword?
 
@@ -52,7 +52,7 @@ R2 │  C  │  1  │   ← matches /.1/
   - **Auto-solve** — reveal the entire solution
   - **Reset** — clear all cells and start over
 
-### New in v1.1.0
+### Extended Features
 - **Timer mode** (`--timer`) — tracks elapsed time while playing
 - **Move counter** — tracks how many cells you've filled
 - **Hint counter** — tracks how many hints/auto-solves you've used
@@ -62,11 +62,22 @@ R2 │  C  │  1  │   ← matches /.1/
 - **Solution uniqueness checker** (`--unique`) — verify if a puzzle has a unique solution
 - **Solution counter** (`count_solutions()`) — count the number of valid solutions (up to a limit)
 - **`--version` flag** — display version number
-- **2 new built-in puzzles**: `binary_blitz` (3×3, binary charset) and `alpha_chaos` (4×4, letter ranges)
-- **Binary charset** — puzzles using only `0` and `1`
-- **Robust error handling** — graceful handling of invalid regex patterns, bad JSON, missing fields
-- **Extended grid size** — now supports up to 8×8
-- **Named puzzles** — each puzzle carries its name for display and serialization
+
+## What's New
+
+### v1.2.0 — Bug Fix Release
+- **Fixed: Crash with small charsets at difficulty 3** — `generate_relaxed_pattern()` produced `[^]` (invalid empty negated class) when the charset had only 1 unique character. Now falls back to `.` when there aren't enough other characters for a negated class.
+- **Fixed: `random.sample` crash with duplicate chars in charset** — When a charset string contained duplicate characters (e.g., `"AABB"`), `random.sample` could request more items than available unique characters. Now uses `set()` to deduplicate before sampling.
+- **Fixed: Variable shadowing in column validation** — In `validate_solution()`, `solve_puzzle_bruteforce()`, and `print_solution()`, the comprehension variable `r` shadowed the outer loop variable `r`, causing incorrect column validation (always checking the last row instead of iterating all rows). Renamed to `row` to fix the shadowing.
+- **Fixed: Regex metacharacters not escaped in negated classes** — Characters in negated class patterns are now individually escaped with `re.escape()`, preventing malformed regex from special characters like `]`, `-`, etc.
+- **Added: Input validation for charset** — `generate_smart_puzzle()` now raises `ValueError` for empty charsets or charsets with fewer than 2 unique characters at difficulty 3 (which requires negated classes).
+- **Added: 7 new regression tests** covering charset edge cases, negated class validity, variable shadowing, and version check (52 total tests, all passing).
+
+### v1.1.0 — Feature Release
+- Timer mode, move/hint counters, game statistics
+- JSON export/import, solution uniqueness checker
+- 2 new built-in puzzles (binary_blitz, alpha_chaos)
+- Binary charset, robust error handling, extended grid size, named puzzles
 
 ## Installation
 
@@ -216,7 +227,7 @@ Puzzles exported as JSON follow this structure:
   "col_patterns": ["A.", ".1"],
   "solution": [["A", "B"], ["C", "1"]],
   "charset": "ABC123",
-  "version": "1.1.0"
+  "version": "1.2.0"
 }
 ```
 
@@ -231,6 +242,7 @@ You can share puzzles by sending the JSON file, and anyone can import them with 
 3. Pattern complexity is controlled by the difficulty level — easy patterns use literal characters and simple classes, while hard patterns use alternations and quantifiers
 4. Every generated pattern is verified to match its corresponding solution row/column
 5. Input validation ensures grid sizes (2–8) and difficulty (1–3) are within bounds
+6. Charsets are validated to have at least 1 character (2 unique characters for difficulty 3)
 
 ### Solving Algorithm
 
@@ -267,7 +279,7 @@ The terminal UI provides real-time feedback:
 python3 test_regex_crossword.py
 ```
 
-The test suite (45 tests) covers:
+The test suite (52 tests) covers:
 
 - Puzzle creation and validation
 - Row/column constraint checking (including invalid regex patterns)
@@ -281,6 +293,11 @@ The test suite (45 tests) covers:
 - CLI flags (`--version`, `--help`, `--list`, `--export`, `--print`)
 - Input validation for puzzle generation
 - Binary charset support
+- Small charset handling (binary at difficulty 3)
+- Single-character and empty charset rejection
+- Negated class regex validity across all charsets
+- Variable shadowing fix verification (column validation)
+- Version consistency
 
 ## Example Session
 
@@ -321,6 +338,17 @@ Fill in the cells and watch them turn green as both row and column constraints a
 🎉 CONGRATULATIONS! Puzzle solved! 🎉
   Moves: 9  Hints: 0  Time: 42.3s
 ```
+
+## Known Issues
+
+- The `--unique` flag and `count_solutions()` can be very slow on puzzles with large grids and/or large character sets, as they exhaustively search all possible solutions. Use with smaller puzzles for best results.
+- The interactive terminal UI requires a Unix-like system with `termios` support. On other systems, it falls back to text-only mode.
+
+## Changelog
+
+- **v1.2.0** — Bug fix release: fixed crashes with small charsets at difficulty 3 (`[^]` invalid regex, `random.sample` with duplicate chars), fixed variable shadowing bug in column validation across 3 functions, added charset input validation, added regex escaping in negated classes, added 7 regression tests (52 total).
+- **v1.1.0** — Feature release: timer mode, move/hint counters, game statistics, JSON export/import, solution uniqueness checker, binary charset, 2 new puzzles, robust error handling.
+- **v1.0.0** — Initial release: core puzzle generation, solving, interactive play, 4 built-in puzzles.
 
 ## License
 
