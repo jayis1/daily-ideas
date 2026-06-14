@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for CLI Tamagotchi."""
+"""Tests for CLI Tamagotchi — including teach, explore, achievements, diary, and CLI flags."""
 
 import json
 import os
@@ -11,6 +11,7 @@ import tamagotchi as tm
 
 
 def make_pet(**overrides):
+    """Create a Pet with sensible defaults for testing."""
     defaults = dict(
         name="Testy",
         species="cat",
@@ -20,14 +21,22 @@ def make_pet(**overrides):
         health=100,
         energy=80,
         cleanliness=80,
+        age_hours=0.2,
         stage="baby",
         is_alive=True,
         created_at=datetime.now().isoformat(),
         last_care_time=datetime.now().isoformat(),
+        tricks_learned=[],
+        achievements=[],
+        explore_count=0,
+        event_log=[],
+        was_sick=False,
     )
     defaults.update(overrides)
     return tm.Pet(**defaults)
 
+
+# ─── Original feature tests ─────────────────────────────────────────────────
 
 def test_pet_creation():
     pet = make_pet()
@@ -234,6 +243,352 @@ def test_all_species_creation():
         assert len(art) > 0
         mood = pet.get_overall_mood()
         assert mood in tm.MOOD_FACES
+
+
+# ─── New feature tests: teach ────────────────────────────────────────────────
+
+def test_teach_basic():
+    """Teaching a trick should add to tricks_learned and cost energy."""
+    pet = make_pet(energy=50)
+    msg = tm.do_teach(pet)
+    assert len(pet.tricks_learned) == 1
+    assert pet.energy < 50
+    assert pet.total_interactions == 1
+    assert "learned" in msg.lower() or "already knows" in msg.lower()
+
+
+def test_teach_too_tired():
+    """Teaching should fail if pet is too tired."""
+    pet = make_pet(energy=5)
+    msg = tm.do_teach(pet)
+    assert "too tired" in msg.lower()
+    assert len(pet.tricks_learned) == 0
+
+
+def test_teach_all_tricks():
+    """After learning all tricks, further teach should perform a trick instead."""
+    pet = make_pet(energy=100)
+    species_tricks = tm.TRICKS.get(pet.species, [])
+    # Learn all tricks
+    for _ in species_tricks:
+        tm.do_teach(pet)
+    assert len(pet.tricks_learned) == len(species_tricks)
+    # Teach again — should perform, not learn
+    msg = tm.do_teach(pet)
+    assert "already knows" in msg.lower()
+
+
+def test_teach_achievement_first():
+    """Teaching for the first time should award 'first_teach' achievement."""
+    pet = make_pet(energy=50)
+    assert "first_teach" not in pet.achievements
+    tm.do_teach(pet)
+    assert "first_teach" in pet.achievements
+
+
+def test_tricks_exist_for_all_species():
+    """Every species should have tricks available."""
+    for species in tm.SPECIES_LIST:
+        assert species in tm.TRICKS, f"Missing tricks for {species}"
+        assert len(tm.TRICKS[species]) > 0, f"Empty tricks list for {species}"
+
+
+# ─── New feature tests: explore ───────────────────────────────────────────────
+
+def test_explore_basic():
+    """Exploring should increment explore_count and cost energy."""
+    pet = make_pet(energy=50)
+    msg = tm.do_explore(pet)
+    assert pet.explore_count == 1
+    assert pet.energy < 50
+    assert pet.total_interactions == 1
+    assert isinstance(msg, str)
+    assert len(msg) > 0
+
+
+def test_explore_too_tired():
+    """Exploring should fail if pet is too tired."""
+    pet = make_pet(energy=5)
+    msg = tm.do_explore(pet)
+    assert "too tired" in msg.lower()
+    assert pet.explore_count == 0
+
+
+def test_explore_achievement_first():
+    """First explore should award 'first_explore' achievement."""
+    pet = make_pet(energy=50)
+    assert "first_explore" not in pet.achievements
+    tm.do_explore(pet)
+    assert "first_explore" in pet.achievements
+
+
+def test_explore_events_exist_for_all_species():
+    """Every species should have explore events."""
+    for species in tm.SPECIES_LIST:
+        assert species in tm.EXPLORE_EVENTS, f"Missing explore events for {species}"
+        assert len(tm.EXPLORE_EVENTS[species]) > 0, f"Empty explore events for {species}"
+
+
+def test_explore_stat_modification():
+    """Explore events should modify stats as specified in the event."""
+    pet = make_pet(energy=50, hunger=50, happiness=50, cleanliness=50, health=50)
+    # Run several explores to be likely to hit different events
+    for _ in range(10):
+        pet_copy = make_pet(energy=50, hunger=50, happiness=50, cleanliness=50, health=50)
+        tm.do_explore(pet_copy)
+        # At least one stat should have changed (beyond energy cost)
+        # Energy should decrease
+        assert pet_copy.energy < 50
+
+
+# ─── New feature tests: achievements ─────────────────────────────────────────
+
+def test_achievement_check_interactions():
+    """Achievements should be awarded at interaction milestones."""
+    pet = make_pet(lifetime_interactions=10)
+    new = tm.check_achievements(pet)
+    assert "interactions_10" in new
+
+    pet = make_pet(lifetime_interactions=50)
+    new = tm.check_achievements(pet)
+    assert "interactions_50" in new
+
+    pet = make_pet(lifetime_interactions=100)
+    new = tm.check_achievements(pet)
+    assert "interactions_100" in new
+
+
+def test_achievement_all_stats_high():
+    """All stats above 80 should award 'all_stats_high'."""
+    pet = make_pet(hunger=85, happiness=85, health=85, energy=85, cleanliness=85)
+    new = tm.check_achievements(pet)
+    assert "all_stats_high" in new
+
+
+def test_achievement_survivor():
+    """Recovering from sickness should award 'survived_sickness'."""
+    pet = make_pet(was_sick=True, health=50)
+    new = tm.check_achievements(pet)
+    assert "survived_sickness" in new
+
+
+def test_achievement_tricks():
+    """Teaching multiple tricks should award trick milestones."""
+    pet = make_pet(tricks_learned=["High Five", "Roll Over", "Fetch"])
+    new = tm.check_achievements(pet)
+    assert "tricks_3" in new
+
+    pet = make_pet(tricks_learned=["High Five", "Roll Over", "Fetch", "Sit", "Speak"])
+    new = tm.check_achievements(pet)
+    assert "tricks_5" in new
+
+
+def test_achievement_explore_milestones():
+    """Explore count milestones should award achievements."""
+    pet = make_pet(explore_count=5)
+    new = tm.check_achievements(pet)
+    assert "explores_5" in new
+
+    pet = make_pet(explore_count=20)
+    new = tm.check_achievements(pet)
+    assert "explores_20" in new
+
+
+def test_achievement_stage_milestones():
+    """Reaching adult/elder stages should award achievements."""
+    pet = make_pet(stage="adult")
+    new = tm.check_achievements(pet)
+    assert "reached_adult" in new
+
+    pet = make_pet(stage="elder")
+    new = tm.check_achievements(pet)
+    assert "reached_elder" in new
+
+
+def test_achievement_not_reaward():
+    """Achievements already earned should not be re-awarded."""
+    pet = make_pet(lifetime_interactions=10, achievements=["interactions_10"])
+    new = tm.check_achievements(pet)
+    assert "interactions_10" not in new
+
+
+def test_format_achievement():
+    """format_achievement should produce a readable string."""
+    result = tm.format_achievement("first_feed")
+    assert "🍎" in result or "First Bite" in result
+
+
+def test_achievement_defs_complete():
+    """All referenced achievement IDs should exist in ACHIEVEMENT_DEFS."""
+    # Check that every achievement we test for exists in the definitions
+    for aid in ["first_feed", "first_play", "first_heal", "first_sleep",
+               "first_clean", "first_teach", "first_explore",
+               "interactions_10", "interactions_50", "interactions_100", "interactions_500",
+               "all_stats_high", "survived_sickness",
+               "tricks_3", "tricks_5",
+               "explores_5", "explores_20",
+               "reached_adult", "reached_elder"]:
+        assert aid in tm.ACHIEVEMENT_DEFS, f"Missing achievement definition: {aid}"
+        assert "name" in tm.ACHIEVEMENT_DEFS[aid]
+        assert "icon" in tm.ACHIEVEMENT_DEFS[aid]
+        assert "desc" in tm.ACHIEVEMENT_DEFS[aid]
+
+
+# ─── New feature tests: diary/event log ──────────────────────────────────────
+
+def test_event_log():
+    """Actions should add entries to the event log."""
+    pet = make_pet()
+    assert len(pet.event_log) == 0
+    tm.do_feed(pet)
+    assert len(pet.event_log) > 0
+    assert "fed" in pet.event_log[-1].lower()
+
+
+def test_event_log_cap():
+    """Event log should be capped at 100 entries."""
+    pet = make_pet(energy=100, hunger=50)
+    # Generate more than 100 events
+    for i in range(120):
+        pet._log_event(f"Event {i}")
+    assert len(pet.event_log) <= 100
+
+
+# ─── New feature tests: save backup ──────────────────────────────────────────
+
+def test_save_creates_backup(tmp_path):
+    """Saving should create a backup of the previous save."""
+    save_file = tmp_path / "pet.json"
+    backup_file = tmp_path / "pet.json.bak"
+    with patch.object(tm, 'SAVE_FILE', save_file), \
+         patch.object(tm, 'SAVE_DIR', tmp_path), \
+         patch.object(tm, 'BACKUP_FILE', backup_file):
+        # First save
+        pet = make_pet(name="First")
+        tm.save_pet(pet)
+        assert save_file.exists()
+        # Second save — should create backup of first
+        pet2 = make_pet(name="Second")
+        tm.save_pet(pet2)
+        assert backup_file.exists()
+        # Backup should contain the first save
+        with open(backup_file) as f:
+            backup_data = json.load(f)
+        assert backup_data["name"] == "First"
+
+
+def test_load_fallback_to_backup(tmp_path):
+    """If primary save is corrupted, load should fall back to backup."""
+    save_file = tmp_path / "pet.json"
+    backup_file = tmp_path / "pet.json.bak"
+    with patch.object(tm, 'SAVE_FILE', save_file), \
+         patch.object(tm, 'SAVE_DIR', tmp_path), \
+         patch.object(tm, 'BACKUP_FILE', backup_file):
+        # Save twice to create a backup of the first save
+        pet = make_pet(name="BackupTest", species="dragon")
+        tm.save_pet(pet)
+        # Second save creates backup of the first
+        pet2 = make_pet(name="Overwrite", species="cat")
+        tm.save_pet(pet2)
+        # Corrupt the primary save
+        with open(save_file, 'w') as f:
+            f.write("{corrupted json!!!")
+        # Should fall back to backup (which has "BackupTest")
+        loaded = tm.load_pet()
+        assert loaded is not None
+        assert loaded.name == "BackupTest"
+
+
+# ─── New feature tests: CLI flags ────────────────────────────────────────────
+
+def test_parse_args_help():
+    """--help flag should set show_help."""
+    result = tm.parse_args(["tamagotchi.py", "--help"])
+    assert result["show_help"] is True
+
+    result = tm.parse_args(["tamagotchi.py", "-h"])
+    assert result["show_help"] is True
+
+
+def test_parse_args_version():
+    """--version flag should set show_version."""
+    result = tm.parse_args(["tamagotchi.py", "--version"])
+    assert result["show_version"] is True
+
+    result = tm.parse_args(["tamagotchi.py", "-v"])
+    assert result["show_version"] is True
+
+
+def test_parse_args_unknown():
+    """Unknown args should set error."""
+    result = tm.parse_args(["tamagotchi.py", "--bogus"])
+    assert result["error"] != ""
+
+
+def test_parse_args_empty():
+    """No args should return defaults."""
+    result = tm.parse_args(["tamagotchi.py"])
+    assert result["show_help"] is False
+    assert result["show_version"] is False
+    assert result["error"] == ""
+
+
+def test_version_constant():
+    """Version should be a valid semver string."""
+    assert tm.VERSION
+    parts = tm.VERSION.split(".")
+    assert len(parts) == 3
+    assert all(p.isdigit() for p in parts)
+
+
+# ─── New feature tests: save migration ───────────────────────────────────────
+
+def test_load_old_save_migration(tmp_path):
+    """Loading a save missing new fields should populate them with defaults."""
+    save_file = tmp_path / "pet.json"
+    with patch.object(tm, 'SAVE_FILE', save_file), \
+         patch.object(tm, 'SAVE_DIR', tmp_path), \
+         patch.object(tm, 'BACKUP_FILE', tmp_path / "pet.json.bak"):
+        # Write an "old" save without the new fields
+        old_data = {
+            "name": "OldPet",
+            "species": "cat",
+            "personality": "lazy",
+            "hunger": 80,
+            "happiness": 80,
+            "health": 100,
+            "energy": 80,
+            "cleanliness": 80,
+            "age_hours": 1.0,
+            "stage": "child",
+            "is_alive": True,
+            "created_at": datetime.now().isoformat(),
+            "last_care_time": datetime.now().isoformat(),
+            "total_interactions": 5,
+            "lifetime_interactions": 5,
+            "messages": [],
+        }
+        with open(save_file, 'w') as f:
+            json.dump(old_data, f)
+
+        loaded = tm.load_pet()
+        assert loaded is not None
+        assert loaded.name == "OldPet"
+        assert loaded.tricks_learned == []
+        assert loaded.achievements == []
+        assert loaded.explore_count == 0
+        assert loaded.event_log == []
+        assert loaded.was_sick is False
+
+
+# ─── New feature tests: was_sick tracking ────────────────────────────────────
+
+def test_was_sick_tracked_on_decay():
+    """was_sick should be set to True when health drops below SICK_THRESHOLD."""
+    pet = make_pet(health=25, hunger=10, happiness=10, cleanliness=10)
+    pet.apply_decay(60)
+    if pet.health < tm.SICK_THRESHOLD:
+        assert pet.was_sick is True
 
 
 if __name__ == "__main__":

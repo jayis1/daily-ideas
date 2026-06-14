@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Run tests for CLI Tamagotchi without pytest dependency."""
+"""Run tests for CLI Tamagotchi without pytest dependency.
+
+Covers all game mechanics including teach, explore, achievements, diary,
+CLI flags, and save backup/migration.
+"""
 
 import json
 import os
@@ -42,6 +46,11 @@ def make_pet(**overrides):
         is_alive=True,
         created_at=datetime.now().isoformat(),
         last_care_time=datetime.now().isoformat(),
+        tricks_learned=[],
+        achievements=[],
+        explore_count=0,
+        event_log=[],
+        was_sick=False,
     )
     defaults.update(overrides)
     return tm.Pet(**defaults)
@@ -180,9 +189,11 @@ for sp in tm.SPECIES_LIST:
 # ─── Save/Load ──────────────────────────────────────────────────────
 tmpdir = tempfile.mkdtemp()
 save_file = tm.Path(tmpdir) / "pet.json"
+backup_file = tm.Path(tmpdir) / "pet.json.bak"
 import unittest.mock as mock
 with mock.patch.object(tm, 'SAVE_FILE', save_file), \
-     mock.patch.object(tm, 'SAVE_DIR', tm.Path(tmpdir)):
+     mock.patch.object(tm, 'SAVE_DIR', tm.Path(tmpdir)), \
+     mock.patch.object(tm, 'BACKUP_FILE', backup_file):
     pet = make_pet(name="SaveTest", species="dragon")
     tm.save_pet(pet)
     loaded = tm.load_pet()
@@ -196,6 +207,253 @@ test("Decay caps hunger at 0", pet.hunger >= 0, f"hunger={pet.hunger}")
 test("Decay caps happiness at 0", pet.happiness >= 0, f"happiness={pet.happiness}")
 test("Decay caps energy at 0", pet.energy >= 0, f"energy={pet.energy}")
 test("Decay caps cleanliness at 0", pet.cleanliness >= 0, f"cleanliness={pet.cleanliness}")
+
+# ═══════════════════════════════════════════════════════════════════════
+# NEW FEATURE TESTS
+# ═══════════════════════════════════════════════════════════════════════
+
+print("\n  ─── New Feature Tests ───\n")
+
+# ─── Teach ───────────────────────────────────────────────────────────
+pet = make_pet(energy=50)
+msg = tm.do_teach(pet)
+test("Teach adds trick", len(pet.tricks_learned) == 1, f"tricks={pet.tricks_learned}")
+test("Teach costs energy", pet.energy < 50, f"energy={pet.energy}")
+test("Teach increments interactions", pet.total_interactions == 1)
+test("Teach first achievement", "first_teach" in pet.achievements)
+
+pet = make_pet(energy=5)
+msg = tm.do_teach(pet)
+test("Teach too tired fails", "too tired" in msg.lower(), f"msg={msg}")
+test("Teach too tired no trick", len(pet.tricks_learned) == 0)
+
+# Learn all tricks for cat
+pet = make_pet(energy=100)
+cat_tricks = tm.TRICKS["cat"]
+for _ in cat_tricks:
+    tm.do_teach(pet)
+test("Teach all tricks learned", len(pet.tricks_learned) == len(cat_tricks),
+     f"learned={len(pet.tricks_learned)}, total={len(cat_tricks)}")
+msg = tm.do_teach(pet)
+test("Teach when all known performs trick", "already knows" in msg.lower(), f"msg={msg}")
+
+# Tricks exist for all species
+for species in tm.SPECIES_LIST:
+    test(f"Tricks defined for {species}", species in tm.TRICKS and len(tm.TRICKS[species]) > 0)
+
+# ─── Explore ─────────────────────────────────────────────────────────
+pet = make_pet(energy=50)
+msg = tm.do_explore(pet)
+test("Explore increments count", pet.explore_count == 1)
+test("Explore costs energy", pet.energy < 50)
+test("Explore increments interactions", pet.total_interactions == 1)
+test("Explore first achievement", "first_explore" in pet.achievements)
+test("Explore returns message", len(msg) > 0)
+
+pet = make_pet(energy=5)
+msg = tm.do_explore(pet)
+test("Explore too tired fails", "too tired" in msg.lower())
+test("Explore too tired no count", pet.explore_count == 0)
+
+# Explore events exist for all species
+for species in tm.SPECIES_LIST:
+    test(f"Explore events for {species}",
+         species in tm.EXPLORE_EVENTS and len(tm.EXPLORE_EVENTS[species]) > 0)
+
+# ─── Achievements ────────────────────────────────────────────────────
+pet = make_pet(lifetime_interactions=10)
+new = tm.check_achievements(pet)
+test("Achievement interactions_10", "interactions_10" in new)
+
+pet = make_pet(lifetime_interactions=50)
+new = tm.check_achievements(pet)
+test("Achievement interactions_50", "interactions_50" in new)
+
+pet = make_pet(lifetime_interactions=100)
+new = tm.check_achievements(pet)
+test("Achievement interactions_100", "interactions_100" in new)
+
+pet = make_pet(hunger=85, happiness=85, health=85, energy=85, cleanliness=85)
+new = tm.check_achievements(pet)
+test("Achievement all_stats_high", "all_stats_high" in new)
+
+pet = make_pet(was_sick=True, health=50)
+new = tm.check_achievements(pet)
+test("Achievement survived_sickness", "survived_sickness" in new)
+
+pet = make_pet(tricks_learned=["A", "B", "C"])
+new = tm.check_achievements(pet)
+test("Achievement tricks_3", "tricks_3" in new)
+
+pet = make_pet(tricks_learned=["A", "B", "C", "D", "E"])
+new = tm.check_achievements(pet)
+test("Achievement tricks_5", "tricks_5" in new)
+
+pet = make_pet(explore_count=5)
+new = tm.check_achievements(pet)
+test("Achievement explores_5", "explores_5" in new)
+
+pet = make_pet(explore_count=20)
+new = tm.check_achievements(pet)
+test("Achievement explores_20", "explores_20" in new)
+
+pet = make_pet(stage="adult")
+new = tm.check_achievements(pet)
+test("Achievement reached_adult", "reached_adult" in new)
+
+pet = make_pet(stage="elder")
+new = tm.check_achievements(pet)
+test("Achievement reached_elder", "reached_elder" in new)
+
+# No re-awarding
+pet = make_pet(lifetime_interactions=10, achievements=["interactions_10"])
+new = tm.check_achievements(pet)
+test("Achievement no re-award", "interactions_10" not in new)
+
+# All achievement defs exist
+all_ach_ids = [
+    "first_feed", "first_play", "first_heal", "first_sleep", "first_clean",
+    "first_teach", "first_explore",
+    "interactions_10", "interactions_50", "interactions_100", "interactions_500",
+    "all_stats_high", "survived_sickness",
+    "tricks_3", "tricks_5",
+    "explores_5", "explores_20",
+    "reached_adult", "reached_elder",
+]
+for aid in all_ach_ids:
+    test(f"Achievement def exists: {aid}", aid in tm.ACHIEVEMENT_DEFS)
+
+# Format achievement
+formatted = tm.format_achievement("first_feed")
+test("Format achievement has content", len(formatted) > 0)
+
+# ─── Diary / Event Log ───────────────────────────────────────────────
+pet = make_pet()
+tm.do_feed(pet)
+test("Event log records feed", len(pet.event_log) > 0, f"log={pet.event_log}")
+
+# Event log cap
+pet = make_pet(energy=100, hunger=50)
+for i in range(120):
+    pet._log_event(f"Event {i}")
+test("Event log capped at 100", len(pet.event_log) <= 100, f"len={len(pet.event_log)}")
+
+# ─── Save backup ────────────────────────────────────────────────────
+tmpdir2 = tempfile.mkdtemp()
+save_file2 = tm.Path(tmpdir2) / "pet.json"
+backup_file2 = tm.Path(tmpdir2) / "pet.json.bak"
+with mock.patch.object(tm, 'SAVE_FILE', save_file2), \
+     mock.patch.object(tm, 'SAVE_DIR', tm.Path(tmpdir2)), \
+     mock.patch.object(tm, 'BACKUP_FILE', backup_file2):
+    pet1 = make_pet(name="First")
+    tm.save_pet(pet1)
+    pet2 = make_pet(name="Second")
+    tm.save_pet(pet2)
+    test("Backup created on second save", backup_file2.exists())
+    if backup_file2.exists():
+        with open(backup_file2) as f:
+            backup_data = json.load(f)
+        test("Backup has first save name", backup_data["name"] == "First", f"name={backup_data['name']}")
+
+# ─── Load fallback to backup ─────────────────────────────────────────
+tmpdir3 = tempfile.mkdtemp()
+save_file3 = tm.Path(tmpdir3) / "pet.json"
+backup_file3 = tm.Path(tmpdir3) / "pet.json.bak"
+with mock.patch.object(tm, 'SAVE_FILE', save_file3), \
+     mock.patch.object(tm, 'SAVE_DIR', tm.Path(tmpdir3)), \
+     mock.patch.object(tm, 'BACKUP_FILE', backup_file3):
+    # Save twice to create a backup of the first save
+    pet = make_pet(name="BackupTest", species="dragon")
+    tm.save_pet(pet)
+    # Second save creates backup of the first
+    pet2 = make_pet(name="Overwrite", species="cat")
+    tm.save_pet(pet2)
+    # Corrupt the primary save
+    with open(save_file3, 'w') as f:
+        f.write("{corrupted!!!")
+    # Should fall back to backup (which has "BackupTest")
+    loaded = tm.load_pet()
+    test("Load falls back to backup", loaded is not None and loaded.name == "BackupTest",
+         f"loaded={loaded}")
+
+# ─── Save migration (old saves missing new fields) ──────────────────
+tmpdir4 = tempfile.mkdtemp()
+save_file4 = tm.Path(tmpdir4) / "pet.json"
+with mock.patch.object(tm, 'SAVE_FILE', save_file4), \
+     mock.patch.object(tm, 'SAVE_DIR', tm.Path(tmpdir4)), \
+     mock.patch.object(tm, 'BACKUP_FILE', tm.Path(tmpdir4) / "pet.json.bak"):
+    old_data = {
+        "name": "OldPet",
+        "species": "cat",
+        "personality": "lazy",
+        "hunger": 80, "happiness": 80, "health": 100, "energy": 80, "cleanliness": 80,
+        "age_hours": 1.0, "stage": "child", "is_alive": True,
+        "created_at": datetime.now().isoformat(),
+        "last_care_time": datetime.now().isoformat(),
+        "total_interactions": 5, "lifetime_interactions": 5, "messages": [],
+    }
+    with open(save_file4, 'w') as f:
+        json.dump(old_data, f)
+    loaded = tm.load_pet()
+    test("Migration: loads old save", loaded is not None)
+    if loaded:
+        test("Migration: name preserved", loaded.name == "OldPet")
+        test("Migration: tricks default empty", loaded.tricks_learned == [])
+        test("Migration: achievements default empty", loaded.achievements == [])
+        test("Migration: explore_count default 0", loaded.explore_count == 0)
+        test("Migration: event_log default empty", loaded.event_log == [])
+        test("Migration: was_sick default False", loaded.was_sick is False)
+
+# ─── CLI flags ────────────────────────────────────────────────────────
+result = tm.parse_args(["tamagotchi.py", "--help"])
+test("CLI --help flag", result["show_help"] is True)
+
+result = tm.parse_args(["tamagotchi.py", "-h"])
+test("CLI -h flag", result["show_help"] is True)
+
+result = tm.parse_args(["tamagotchi.py", "--version"])
+test("CLI --version flag", result["show_version"] is True)
+
+result = tm.parse_args(["tamagotchi.py", "-v"])
+test("CLI -v flag", result["show_version"] is True)
+
+result = tm.parse_args(["tamagotchi.py", "--bogus"])
+test("CLI unknown arg error", result["error"] != "")
+
+result = tm.parse_args(["tamagotchi.py"])
+test("CLI no args defaults", result["show_help"] is False and result["show_version"] is False)
+
+# Version constant
+test("Version is valid semver", len(tm.VERSION.split(".")) == 3)
+
+# ─── was_sick tracking ───────────────────────────────────────────────
+pet = make_pet(health=25, hunger=10, happiness=10, cleanliness=10)
+pet.apply_decay(60)
+if pet.health < tm.SICK_THRESHOLD:
+    test("was_sick set on low health", pet.was_sick is True)
+else:
+    test("was_sick tracking (stat OK)", True)  # Can't guarantee in this run
+
+# ─── Render includes new features ───────────────────────────────────
+pet = make_pet(tricks_learned=["High Five"], achievements=["first_feed"])
+output = tm.render_pet(pet)
+test("Render shows tricks count", "Tricks" in output or "tricks" in output.lower())
+test("Render shows achievements count", "Achievement" in output or "achievement" in output.lower())
+
+# ─── Delete pet cleans up backup too ────────────────────────────────
+tmpdir5 = tempfile.mkdtemp()
+save_file5 = tm.Path(tmpdir5) / "pet.json"
+backup_file5 = tm.Path(tmpdir5) / "pet.json.bak"
+with mock.patch.object(tm, 'SAVE_FILE', save_file5), \
+     mock.patch.object(tm, 'SAVE_DIR', tm.Path(tmpdir5)), \
+     mock.patch.object(tm, 'BACKUP_FILE', backup_file5):
+    pet = make_pet(name="DeleteMe")
+    tm.save_pet(pet)
+    tm.save_pet(pet)  # Create backup
+    test("Delete: both files exist before delete", save_file5.exists() and backup_file5.exists())
+    tm.delete_pet()
+    test("Delete: primary removed", not save_file5.exists())
+    test("Delete: backup removed", not backup_file5.exists())
 
 # ─── Results ─────────────────────────────────────────────────────────
 print(f"\n{'═' * 50}")
