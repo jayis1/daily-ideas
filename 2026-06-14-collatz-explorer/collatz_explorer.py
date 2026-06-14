@@ -11,19 +11,25 @@ Given any positive integer n:
 The conjecture states that this sequence always reaches 1.
 
 Modes:
-  1. Sequence  — step-by-step sequence with parity indicators
-  2. Path      — compact dot-graph showing rises and falls
-  3. Histogram — bar chart of values reached in a sequence
-  4. Tree      — reverse tree showing numbers that converge to a target
-  5. Batch     — statistics across a range of starting numbers
-  6. Hailstone — animated hailstone sequence chart (static render)
+  1. Sequence   — step-by-step sequence with parity indicators
+  2. Path       — compact dot-graph showing rises and falls
+  3. Histogram  — bar chart of values reached in a sequence
+  4. Tree       — reverse tree showing numbers that converge to a target
+  5. Batch      — statistics across a range of starting numbers
+  6. Hailstone  — animated hailstone sequence chart (static render)
+  7. Converge   — convergence speed chart showing steps to reach 1 for a range
+  8. Density    — heat map of Collatz stopping times across a range
 """
 
 import sys
+import os
 import math
 import argparse
 from collections import defaultdict
 from typing import List, Tuple, Dict, Optional
+from functools import lru_cache
+
+__version__ = "1.1.0"
 
 # ── Color helpers ──────────────────────────────────────────────────────────
 
@@ -41,9 +47,12 @@ ANSI = {
     "bg_blue": "\033[44m",
 }
 
+_color_enabled = True  # Global toggle, set by --no-color or NO_COLOR env var
+
 
 def color(name: str, text: str) -> str:
-    if not sys.stdout.isatty():
+    """Apply ANSI color to text if colors are enabled."""
+    if not _color_enabled:
         return text
     return f"{ANSI.get(name, '')}{text}{ANSI['reset']}"
 
@@ -51,7 +60,17 @@ def color(name: str, text: str) -> str:
 # ── Core Collatz functions ────────────────────────────────────────────────
 
 def collatz_sequence(n: int) -> List[int]:
-    """Return the full Collatz sequence starting from n down to 1."""
+    """Return the full Collatz sequence starting from n down to 1.
+
+    Args:
+        n: A positive integer to start the sequence from.
+
+    Returns:
+        List of integers representing the Collatz sequence from n to 1.
+
+    Raises:
+        ValueError: If n is not a positive integer.
+    """
     if n < 1:
         raise ValueError("n must be a positive integer")
     seq = [n]
@@ -65,19 +84,49 @@ def collatz_sequence(n: int) -> List[int]:
 
 
 def collatz_steps(n: int) -> int:
-    """Return the number of steps for n to reach 1."""
-    count = 0
-    while n != 1:
-        if n % 2 == 0:
-            n = n // 2
-        else:
-            n = 3 * n + 1
-        count += 1
-    return count
+    """Return the number of steps for n to reach 1 (stopping time).
+
+    Uses memoization for performance on repeated calls.
+
+    Args:
+        n: A positive integer.
+
+    Returns:
+        The number of steps in the Collatz sequence before reaching 1.
+
+    Raises:
+        ValueError: If n is not a positive integer.
+    """
+    if n < 1:
+        raise ValueError("n must be a positive integer")
+    return _collatz_steps_cached(n)
+
+
+@lru_cache(maxsize=2**20)
+def _collatz_steps_cached(n: int) -> int:
+    """Memoized helper for collatz_steps."""
+    if n == 1:
+        return 0
+    if n % 2 == 0:
+        return 1 + _collatz_steps_cached(n // 2)
+    else:
+        return 1 + _collatz_steps_cached(3 * n + 1)
 
 
 def collatz_max(n: int) -> int:
-    """Return the maximum value reached in the Collatz sequence for n."""
+    """Return the maximum value reached in the Collatz sequence for n.
+
+    Args:
+        n: A positive integer.
+
+    Returns:
+        The peak value in the Collatz sequence starting from n.
+
+    Raises:
+        ValueError: If n is not a positive integer.
+    """
+    if n < 1:
+        raise ValueError("n must be a positive integer")
     peak = n
     while n != 1:
         if n % 2 == 0:
@@ -89,14 +138,54 @@ def collatz_max(n: int) -> int:
     return peak
 
 
+def collatz_stats(n: int) -> Dict[str, object]:
+    """Compute comprehensive statistics about the Collatz sequence for n.
+
+    Args:
+        n: A positive integer.
+
+    Returns:
+        Dictionary with keys: steps, peak, growth_factor, odd_ops, even_ops,
+        odd_even_ratio, reaches_1 (always True for valid input).
+    """
+    if n < 1:
+        raise ValueError("n must be a positive integer")
+    seq = collatz_sequence(n)
+    odd_count = sum(1 for v in seq[:-1] if v % 2 == 1)
+    even_count = sum(1 for v in seq[:-1] if v % 2 == 0)
+    peak = max(seq)
+    return {
+        "steps": len(seq) - 1,
+        "peak": peak,
+        "growth_factor": peak / n if n > 0 else 0,
+        "odd_ops": odd_count,
+        "even_ops": even_count,
+        "odd_even_ratio": even_count / odd_count if odd_count > 0 else float("inf"),
+        "reaches_1": True,
+    }
+
+
 # ── Reverse Collatz tree ──────────────────────────────────────────────────
 
 def reverse_collatz_tree(target: int, depth: int) -> Dict[int, List[int]]:
+    """Build a reverse tree: which numbers lead to `target` in <= `depth` steps?
+
+    Returns a dict mapping step -> list of numbers that reach target in that
+    many steps. Built via BFS: from any value, the two possible predecessors
+    are 2n (always valid) and (n-1)/3 (valid only when it produces an odd
+    integer > 1).
+
+    Args:
+        target: The number to build the reverse tree from.
+        depth: Maximum depth to search.
+
+    Returns:
+        Dictionary mapping step number to list of numbers at that step.
     """
-    Build a reverse tree: which numbers lead to `target` in <= `depth` steps?
-    Returns a dict mapping step -> list of numbers that reach target in that many steps.
-    """
-    # BFS backwards from target
+    if target < 1:
+        raise ValueError("target must be a positive integer")
+    if depth < 1:
+        raise ValueError("depth must be at least 1")
     layers: Dict[int, List[int]] = {0: [target]}
     visited = {target}
     for step in range(1, depth + 1):
@@ -123,31 +212,35 @@ def reverse_collatz_tree(target: int, depth: int) -> Dict[int, List[int]]:
 # ── Visualization: Sequence ───────────────────────────────────────────────
 
 def render_sequence(n: int, max_display: int = 50) -> str:
-    """Render step-by-step Collatz sequence with parity indicators."""
+    """Render step-by-step Collatz sequence with parity indicators.
+
+    Args:
+        n: Starting number.
+        max_display: Maximum number of steps to display before truncating.
+
+    Returns:
+        Multi-line string with the visualization.
+    """
     seq = collatz_sequence(n)
     total_steps = len(seq) - 1
     lines = []
     lines.append(color("bold", f"  Collatz Sequence for n = {n}"))
     lines.append(color("dim", f"  Steps to reach 1: {total_steps}"))
-    lines.append(color("dim", f"  Peak value: {max(seq)}"))
+    lines.append(color("dim", f"  Peak value: {max(seq):,}"))
     lines.append("")
 
     display = seq[:max_display]
     for i, val in enumerate(display):
         if i == 0:
-            arrow = "START"
-            parity = ""
+            parity = color("green", "START")
         elif val == 1:
-            arrow = "  →  "
             parity = color("green", " → 1! ")
         else:
             prev = seq[i - 1]
             if prev % 2 == 0:
-                arrow = "  ÷2  "
-                parity = color("cyan", f"{prev} → {val}")
+                parity = color("cyan", f"{prev:,} → {val:,}")
             else:
-                arrow = " ×3+1 "
-                parity = color("yellow", f"{prev} → {val}")
+                parity = color("yellow", f"{prev:,} → {val:,}")
 
         step_num = f"{i:>4}"
         val_str = f"{val:>12,}"
@@ -164,10 +257,17 @@ def render_sequence(n: int, max_display: int = 50) -> str:
 # ── Visualization: Path ────────────────────────────────────────────────────
 
 def render_path(n: int, width: int = 80) -> str:
-    """Render a compact dot-graph showing rises and falls of the sequence."""
+    """Render a compact dot-graph showing rises and falls of the sequence.
+
+    Args:
+        n: Starting number.
+        width: Chart width in characters.
+
+    Returns:
+        Multi-line string with the visualization.
+    """
     seq = collatz_sequence(n)
     total_steps = len(seq) - 1
-    height = min(30, total_steps + 2)
     lines = []
     lines.append(color("bold", f"  Collatz Path for n = {n}  (steps: {total_steps}, peak: {max(seq):,})"))
     lines.append("")
@@ -180,11 +280,11 @@ def render_path(n: int, width: int = 80) -> str:
     max_val = max(seq)
     min_val = min(seq)
     val_range = max_val - min_val if max_val != min_val else 1
+    height = min(30, total_steps + 2)
 
-    # Build rows
+    # Build grid
     grid = [[' ' for _ in range(min(width, total_steps + 1))] for _ in range(height)]
 
-    labels = []
     for i, val in enumerate(seq):
         if i >= width:
             break
@@ -221,7 +321,18 @@ def render_path(n: int, width: int = 80) -> str:
 # ── Visualization: Histogram ──────────────────────────────────────────────
 
 def render_histogram(n: int, bins: int = 20, bar_width: int = 50) -> str:
-    """Render a horizontal histogram of values reached in the Collatz sequence."""
+    """Render a horizontal histogram of values reached in the Collatz sequence.
+
+    Uses log-scale bins for better distribution of widely-varying values.
+
+    Args:
+        n: Starting number.
+        bins: Number of histogram bins.
+        bar_width: Maximum bar width in characters.
+
+    Returns:
+        Multi-line string with the visualization.
+    """
     seq = collatz_sequence(n)
     total_steps = len(seq) - 1
     lines = []
@@ -273,7 +384,16 @@ def render_histogram(n: int, bins: int = 20, bar_width: int = 50) -> str:
 # ── Visualization: Tree ───────────────────────────────────────────────────
 
 def render_tree(target: int, depth: int = 8, width: int = 80) -> str:
-    """Render a reverse Collatz tree showing numbers that converge to target."""
+    """Render a reverse Collatz tree showing numbers that converge to target.
+
+    Args:
+        target: The target number for the reverse tree.
+        depth: Maximum tree depth.
+        width: Display width in characters.
+
+    Returns:
+        Multi-line string with the visualization.
+    """
     layers = reverse_collatz_tree(target, depth)
     lines = []
     lines.append(color("bold", f"  Reverse Collatz Tree: numbers that reach {target}"))
@@ -286,7 +406,7 @@ def render_tree(target: int, depth: int = 8, width: int = 80) -> str:
         # Format numbers in columns
         num_strs = [str(n) for n in nums]
         col_width = max(len(s) for s in num_strs) + 2
-        cols = width // col_width
+        cols = width // max(col_width, 1)
 
         lines.append(color("cyan", f"  Step {step}:"))
         row = ""
@@ -307,7 +427,18 @@ def render_tree(target: int, depth: int = 8, width: int = 80) -> str:
 # ── Visualization: Batch statistics ───────────────────────────────────────
 
 def render_batch(start: int, end: int, width: int = 60) -> str:
-    """Render batch statistics and bar chart for a range of starting numbers."""
+    """Render batch statistics and bar chart for a range of starting numbers.
+
+    Args:
+        start: First number in the range (inclusive).
+        end: Last number in the range (inclusive).
+        width: Bar chart width in characters.
+
+    Returns:
+        Multi-line string with the visualization.
+    """
+    if end < start:
+        start, end = end, start
     lines = []
     lines.append(color("bold", f"  Collatz Batch Statistics: n ∈ [{start}, {end}]"))
     lines.append("")
@@ -353,7 +484,7 @@ def render_batch(start: int, end: int, width: int = 60) -> str:
 
     # Highlight interesting numbers
     lines.append(color("bold", "  Notable:"))
-    # Numbers that take more than 2 * avg steps
+    # Numbers that take more than 1.5 * avg steps
     outliers = [(n, s) for n, s, p in data if s > avg_steps * 1.5]
     if outliers:
         lines.append(color("yellow", f"  Slow convergence (>1.5× avg): {', '.join(f'{n}({s} steps)' for n, s in outliers)}"))
@@ -369,7 +500,16 @@ def render_batch(start: int, end: int, width: int = 60) -> str:
 # ── Visualization: Hailstone ──────────────────────────────────────────────
 
 def render_hailstone(n: int, width: int = 80, height: int = 24) -> str:
-    """Render a hailstone chart (value over time) using ASCII art."""
+    """Render a hailstone chart (value over time) using ASCII art.
+
+    Args:
+        n: Starting number.
+        width: Chart width in characters.
+        height: Chart height in characters.
+
+    Returns:
+        Multi-line string with the visualization.
+    """
     seq = collatz_sequence(n)
     total_steps = len(seq) - 1
     lines = []
@@ -431,8 +571,217 @@ def render_hailstone(n: int, width: int = 80, height: int = 24) -> str:
     lines.append("")
     odd_count = sum(1 for v in seq[:-1] if v % 2 == 1)
     even_count = sum(1 for v in seq[:-1] if v % 2 == 0)
-    lines.append(f"  Odd operations (3n+1): {odd_count}   Even operations (n÷2): {even_count}   Ratio: {even_count/odd_count:.2f}:1" if odd_count > 0 else f"  Even operations (n÷2): {even_count}")
+    if odd_count > 0:
+        lines.append(f"  Odd operations (3n+1): {odd_count}   Even operations (n÷2): {even_count}   Ratio: {even_count/odd_count:.2f}:1")
+    else:
+        lines.append(f"  Even operations (n÷2): {even_count}")
     lines.append(f"  Growth factor: peak {max(seq):,} is {max(seq)/n:.1f}× starting value")
+
+    return "\n".join(lines)
+
+
+# ── Visualization: Convergence Speed ──────────────────────────────────────
+
+def render_converge(start: int, end: int, width: int = 60, height: int = 24) -> str:
+    """Render a chart showing Collatz stopping times (convergence speed) for a range.
+
+    Creates an ASCII heat map where each position shows the stopping time for that
+    number, revealing patterns in convergence speed across different starting values.
+
+    Args:
+        start: First number in range.
+        end: Last number in range.
+        width: Chart width in characters.
+        height: Chart height in characters.
+
+    Returns:
+        Multi-line string with the visualization.
+    """
+    if end < start:
+        start, end = end, start
+    lines = []
+    lines.append(color("bold", f"  Collatz Convergence Speed: n ∈ [{start}, {end}]"))
+    lines.append("")
+
+    # Compute stopping times
+    stopping_times = {n: collatz_steps(n) for n in range(start, end + 1)}
+    max_steps = max(stopping_times.values()) if stopping_times else 1
+    min_steps = min(stopping_times.values()) if stopping_times else 0
+    step_range = max_steps - min_steps if max_steps != min_steps else 1
+
+    # ASCII heat map characters from low to high
+    heat_chars = " ░▒▓█"
+
+    # Determine how many numbers per row
+    nums_per_row = width - 6  # leave room for row labels
+    num_range = end - start + 1
+    nums_per_row = max(1, min(nums_per_row, 50))
+
+    lines.append(color("dim", f"  Min steps: {min_steps}  Max steps: {max_steps}  Avg: {sum(stopping_times.values())/len(stopping_times):.1f}"))
+    lines.append("")
+
+    # Legend
+    legend = "  Legend: "
+    for i, ch in enumerate(heat_chars):
+        low = min_steps + (i / len(heat_chars)) * step_range
+        high = min_steps + ((i + 1) / len(heat_chars)) * step_range
+        legend += color("cyan" if i < 2 else "yellow" if i < 3 else "red", f"{ch}{int(low)}-{int(high)} ")
+    lines.append(legend)
+    lines.append("")
+
+    # Heat map rows
+    n = start
+    while n <= end:
+        row_nums = list(range(n, min(n + nums_per_row, end + 1)))
+        row_str = f"  {n:>6} │"
+        for num in row_nums:
+            steps = stopping_times[num]
+            normalized = (steps - min_steps) / step_range if step_range > 0 else 0
+            idx = min(int(normalized * (len(heat_chars) - 1)), len(heat_chars) - 1)
+            if idx < 2:
+                ch = color("green", heat_chars[idx])
+            elif idx < 3:
+                ch = color("yellow", heat_chars[idx])
+            else:
+                ch = color("red", heat_chars[idx])
+            row_str += ch
+        lines.append(row_str)
+        n += nums_per_row
+
+    lines.append("")
+    # Print top-5 slowest converging numbers
+    slowest = sorted(stopping_times.items(), key=lambda x: -x[1])[:5]
+    lines.append(color("bold", "  Slowest convergence:"))
+    for n, steps in slowest:
+        peak = collatz_max(n)
+        lines.append(f"    n={n:>6}  steps={steps:>4}  peak={peak:>10,}")
+
+    return "\n".join(lines)
+
+
+# ── Visualization: Density ──────────────────────────────────────────────
+
+def render_density(start: int, end: int, width: int = 60, height: int = 20) -> str:
+    """Render a 2D density map of Collatz stopping times.
+
+    Displays a 2D grid where the x-axis is the starting number and the y-axis
+    represents stopping time, with characters colored by density.
+
+    Args:
+        start: First number in range.
+        end: Last number in range.
+        width: Chart width in characters.
+        height: Chart height in characters.
+
+    Returns:
+        Multi-line string with the visualization.
+    """
+    if end < start:
+        start, end = end, start
+    lines = []
+    lines.append(color("bold", f"  Collatz Density Map: n ∈ [{start}, {end}]"))
+    lines.append("")
+
+    num_range = end - start + 1
+    max_steps = max(collatz_steps(n) for n in range(start, end + 1))
+    min_steps = min(collatz_steps(n) for n in range(start, end + 1))
+    step_range = max_steps - min_steps if max_steps != min_steps else 1
+
+    # Sample columns to fit width
+    if num_range <= width:
+        col_step = 1
+        cols = num_range
+    else:
+        col_step = num_range / width
+        cols = width
+
+    # Build grid
+    grid = [[' ' for _ in range(cols)] for _ in range(height)]
+    density_chars = " ·:;=+*#%@"
+
+    for ci in range(cols):
+        if num_range <= width:
+            n = start + ci
+        else:
+            n = start + int(ci * col_step)
+        steps = collatz_steps(n)
+        row = height - 1 - int((steps - min_steps) / step_range * (height - 1))
+        row = max(0, min(height - 1, row))
+        ch_idx = min(int((steps - min_steps) / step_range * (len(density_chars) - 1)), len(density_chars) - 1) if step_range > 0 else 0
+        ch = density_chars[ch_idx]
+        if steps <= min_steps + step_range * 0.25:
+            ch = color("green", ch)
+        elif steps <= min_steps + step_range * 0.5:
+            ch = color("cyan", ch)
+        elif steps <= min_steps + step_range * 0.75:
+            ch = color("yellow", ch)
+        else:
+            ch = color("red", ch)
+        grid[row][ci] = ch
+
+    for r in range(height):
+        val = int(min_steps + (height - 1 - r) / (height - 1) * step_range) if height > 1 and step_range > 0 else 0
+        label = f"{val:>6}"
+        line = f"  {label} │{''.join(grid[r])}"
+        lines.append(line)
+
+    lines.append(f"  {'':>6} └{'─' * min(cols, width)}")
+    lines.append(f"  {'':>6}  {start}{str(end):>{min(cols, width) - len(str(start))}}")
+    lines.append("")
+    lines.append(color("dim", f"  X-axis: starting number ({start}–{end})"))
+    lines.append(color("dim", f"  Y-axis: stopping time (steps to reach 1)"))
+
+    return "\n".join(lines)
+
+
+# ── Stats mode ────────────────────────────────────────────────────────────
+
+def render_stats(n: int) -> str:
+    """Render detailed statistics about the Collatz sequence for a single number.
+
+    Args:
+        n: Starting number.
+
+    Returns:
+        Multi-line string with statistics.
+    """
+    stats = collatz_stats(n)
+    seq = collatz_sequence(n)
+
+    lines = []
+    lines.append(color("bold", f"  Collatz Statistics for n = {n:,}"))
+    lines.append("")
+    lines.append(f"  Starting value:     {n:,}")
+    lines.append(f"  Steps to reach 1:   {stats['steps']:,}")
+    lines.append(f"  Peak value:         {stats['peak']:,}")
+    lines.append(f"  Growth factor:      {stats['growth_factor']:.1f}×")
+    lines.append(f"  Odd operations:     {stats['odd_ops']:,}")
+    lines.append(f"  Even operations:    {stats['even_ops']:,}")
+    if stats['odd_even_ratio'] != float('inf'):
+        lines.append(f"  Even/Odd ratio:    {stats['odd_even_ratio']:.2f}:1")
+    else:
+        lines.append(f"  Even/Odd ratio:    N/A (no odd operations)")
+    lines.append("")
+
+    # Distribution summary
+    above_start = sum(1 for v in seq if v > n)
+    at_one = sum(1 for v in seq if v == 1)
+    lines.append(f"  Values above start: {above_start:,} / {len(seq):,} ({100*above_start/len(seq):.1f}%)")
+    lines.append(f"  Times at 1:         {at_one:,} (always 1 at end)")
+    lines.append("")
+
+    # Show the path parity pattern (first 40 operations)
+    ops = []
+    for i in range(min(40, len(seq) - 1)):
+        if seq[i] % 2 == 0:
+            ops.append(color("cyan", "÷"))
+        else:
+            ops.append(color("yellow", "×"))
+    pattern = " ".join(ops)
+    if len(seq) - 1 > 40:
+        pattern += color("dim", f" ... +{len(seq) - 1 - 40} more")
+    lines.append(f"  Operation pattern:  {pattern}")
+    lines.append(color("dim", f"  (÷ = even/halve, × = odd/triple+1)"))
 
     return "\n".join(lines)
 
@@ -459,6 +808,9 @@ def interactive_mode():
         "4": ("Tree",       "Reverse convergence tree"),
         "5": ("Batch",      "Statistics across a range"),
         "6": ("Hailstone",  "Value-over-time hailstone chart"),
+        "7": ("Converge",   "Convergence speed heat map"),
+        "8": ("Density",    "2D density map of stopping times"),
+        "s": ("Stats",      "Detailed statistics for a number"),
     }
 
     while True:
@@ -469,7 +821,7 @@ def interactive_mode():
         print(f"    {color('cyan', 'q')}. Quit")
         print()
 
-        choice = input(color("bold", "  Choose mode [1-6/q]: ")).strip().lower()
+        choice = input(color("bold", "  Choose mode [1-8/s/q]: ")).strip().lower()
         if choice == 'q' or choice == '':
             print(color("dim", "  Goodbye! May all your sequences reach 1."))
             break
@@ -478,35 +830,65 @@ def interactive_mode():
             print(color("red", "  Invalid choice."))
             continue
 
-        if choice == "4":
-            n = input("  Target number (default 1): ").strip()
-            n = int(n) if n else 1
-            d = input("  Tree depth (default 8): ").strip()
-            d = int(d) if d else 8
-            print()
-            print(render_tree(n, d))
-        elif choice == "5":
-            start = input("  Start of range (default 1): ").strip()
-            start = int(start) if start else 1
-            end = input("  End of range (default 20): ").strip()
-            end = int(end) if end else 20
-            if end - start > 50:
-                print(color("yellow", "  Clamping range to 50 numbers for readability."))
-                end = start + 49
-            print()
-            print(render_batch(start, end))
-        else:
-            n = input("  Starting number (default 27): ").strip()
-            n = int(n) if n else 27
-            print()
-            if choice == "1":
-                print(render_sequence(n))
-            elif choice == "2":
-                print(render_path(n))
-            elif choice == "3":
-                print(render_histogram(n))
-            elif choice == "6":
-                print(render_hailstone(n))
+        try:
+            if choice == "4":
+                n = input("  Target number (default 1): ").strip()
+                n = int(n) if n else 1
+                d = input("  Tree depth (default 8): ").strip()
+                d = int(d) if d else 8
+                print()
+                print(render_tree(n, d))
+            elif choice == "5":
+                start = input("  Start of range (default 1): ").strip()
+                start = int(start) if start else 1
+                end = input("  End of range (default 20): ").strip()
+                end = int(end) if end else 20
+                if end - start > 50:
+                    print(color("yellow", "  Clamping range to 50 numbers for readability."))
+                    end = start + 49
+                print()
+                print(render_batch(start, end))
+            elif choice == "7":
+                start = input("  Start of range (default 1): ").strip()
+                start = int(start) if start else 1
+                end = input("  End of range (default 50): ").strip()
+                end = int(end) if end else 50
+                if end - start > 100:
+                    print(color("yellow", "  Clamping range to 100 for readability."))
+                    end = start + 99
+                print()
+                print(render_converge(start, end))
+            elif choice == "8":
+                start = input("  Start of range (default 1): ").strip()
+                start = int(start) if start else 1
+                end = input("  End of range (default 50): ").strip()
+                end = int(end) if end else 50
+                if end - start > 100:
+                    print(color("yellow", "  Clamping range to 100 for readability."))
+                    end = start + 99
+                print()
+                print(render_density(start, end))
+            elif choice == "s":
+                n = input("  Number to analyze (default 27): ").strip()
+                n = int(n) if n else 27
+                print()
+                print(render_stats(n))
+            else:
+                n = input("  Starting number (default 27): ").strip()
+                n = int(n) if n else 27
+                print()
+                if choice == "1":
+                    print(render_sequence(n))
+                elif choice == "2":
+                    print(render_path(n))
+                elif choice == "3":
+                    print(render_histogram(n))
+                elif choice == "6":
+                    print(render_hailstone(n))
+        except ValueError as e:
+            print(color("red", f"  Error: {e}"))
+        except KeyboardInterrupt:
+            print(color("dim", "\n  Interrupted."))
 
 
 # ── CLI entry point ────────────────────────────────────────────────────────
@@ -520,30 +902,50 @@ Examples:
   %(prog)s                          Interactive mode
   %(prog)s -n 27 --mode hailstone   Hailstone chart for n=27
   %(prog)s -n 7 --mode sequence     Step-by-step for n=7
-  %(prog)s --batch 1 20             Batch stats for range [1,20]
-  %(prog)s --tree 1 --depth 10      Reverse tree from 1
+  %(prog)s -n 27 --mode stats        Detailed statistics for n=27
+  %(prog)s --batch 1 30              Batch stats for range [1,30]
+  %(prog)s --tree 1 --depth 10       Reverse tree from 1
+  %(prog)s --converge 1 50           Convergence speed chart
+  %(prog)s --density 1 50            Density map of stopping times
+  %(prog)s --export output.txt -n 27 --mode hailstone   Save to file
         """
     )
     parser.add_argument("-n", "--number", type=int, default=None, help="Starting number (default: 27)")
-    parser.add_argument("--mode", choices=["sequence", "path", "histogram", "tree", "batch", "hailstone"],
+    parser.add_argument("--mode", choices=["sequence", "path", "histogram", "tree", "batch", "hailstone", "converge", "density", "stats"],
                         default="hailstone", help="Visualization mode (default: hailstone)")
     parser.add_argument("--batch", nargs=2, type=int, metavar=("START", "END"), help="Batch mode: range of numbers")
     parser.add_argument("--tree", type=int, metavar="TARGET", help="Tree mode: target number")
+    parser.add_argument("--converge", nargs=2, type=int, metavar=("START", "END"), help="Converge mode: range of numbers")
+    parser.add_argument("--density", nargs=2, type=int, metavar=("START", "END"), help="Density mode: range of numbers")
     parser.add_argument("--depth", type=int, default=8, help="Tree depth (default: 8)")
     parser.add_argument("--width", type=int, default=70, help="Chart width (default: 70)")
     parser.add_argument("--height", type=int, default=22, help="Chart height (default: 22)")
     parser.add_argument("--bins", type=int, default=15, help="Histogram bins (default: 15)")
     parser.add_argument("--no-color", action="store_true", help="Disable colored output")
+    parser.add_argument("--export", metavar="FILE", help="Save output to a file instead of stdout")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
     args = parser.parse_args()
 
-    if args.no_color:
-        # Override color function
-        global ANSI
-        ANSI = {k: "" for k in ANSI}
+    global _color_enabled
+    if args.no_color or os.environ.get("NO_COLOR"):
+        _color_enabled = False
+
+    # Validate inputs early
+    if args.number is not None and args.number < 1:
+        parser.error("Starting number must be a positive integer")
+
+    # Helper to output either to stdout or file
+    def output(text):
+        if args.export:
+            with open(args.export, "a", encoding="utf-8") as f:
+                f.write(text + "\n")
+            print(f"  Output appended to {args.export}")
+        else:
+            print(text)
 
     # If no specific mode flags, run interactive
-    if args.number is None and args.batch is None and args.tree is None:
+    if args.number is None and args.batch is None and args.tree is None and args.converge is None and args.density is None:
         try:
             interactive_mode()
         except (KeyboardInterrupt, EOFError):
@@ -551,24 +953,51 @@ Examples:
         return
 
     # Determine mode and render
-    if args.batch:
-        start, end = args.batch
-        if end - start > 50:
-            print(f"Clamping range to 50 numbers for readability.")
-            end = start + 49
-        print(render_batch(start, end, width=args.width))
-    elif args.tree:
-        print(render_tree(args.tree, depth=args.depth, width=args.width))
-    elif args.number:
-        n = args.number
-        if args.mode == "sequence":
-            print(render_sequence(n))
-        elif args.mode == "path":
-            print(render_path(n, width=args.width))
-        elif args.mode == "histogram":
-            print(render_histogram(n, bins=args.bins, bar_width=args.width))
-        elif args.mode == "hailstone":
-            print(render_hailstone(n, width=args.width, height=args.height))
+    try:
+        if args.batch:
+            start, end = args.batch
+            if end - start > 50:
+                print("Clamping range to 50 numbers for readability.")
+                end = start + 49
+            output(render_batch(start, end, width=args.width))
+        elif args.tree:
+            output(render_tree(args.tree, depth=args.depth, width=args.width))
+        elif args.converge:
+            start, end = args.converge
+            if end - start > 100:
+                print("Clamping range to 100 for readability.")
+                end = start + 99
+            output(render_converge(start, end, width=args.width, height=args.height))
+        elif args.density:
+            start, end = args.density
+            if end - start > 100:
+                print("Clamping range to 100 for readability.")
+                end = start + 99
+            output(render_density(start, end, width=args.width, height=args.height))
+        elif args.number:
+            n = args.number
+            if args.mode == "sequence":
+                output(render_sequence(n))
+            elif args.mode == "path":
+                output(render_path(n, width=args.width))
+            elif args.mode == "histogram":
+                output(render_histogram(n, bins=args.bins, bar_width=args.width))
+            elif args.mode == "hailstone":
+                output(render_hailstone(n, width=args.width, height=args.height))
+            elif args.mode == "stats":
+                output(render_stats(n))
+            elif args.mode == "converge":
+                # Default range around n for converge mode with -n
+                start = max(1, n - 10)
+                end = n + 10
+                output(render_converge(start, end, width=args.width, height=args.height))
+            elif args.mode == "density":
+                start = max(1, n - 10)
+                end = n + 10
+                output(render_density(start, end, width=args.width, height=args.height))
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
