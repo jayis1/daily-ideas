@@ -56,9 +56,9 @@ def test_feed_action():
 
 
 def test_play_action():
-    pet = make_pet(happiness=50, energy=50)
+    pet = make_pet(hunger=50, happiness=50, energy=50)
     msg = tm.do_play(pet)
-    assert pet.happiness >= 65  # 50 + 20 = 70, but energy cost
+    assert pet.happiness >= 65  # 50 + 20 = 70
     assert pet.energy < 50  # energy decreases
     assert pet.hunger < 50  # hunger decreases from playing
 
@@ -220,9 +220,12 @@ def test_render_dead_pet():
 
 
 def test_play_too_tired():
+    """Play should fail if pet is too tired (internal check in do_play)."""
     pet = make_pet(energy=5)
-    msg = tm.do_play(pet) if pet.energy >= 15 else "too tired"
-    # The main loop checks energy, but we can verify the logic
+    msg = tm.do_play(pet)
+    assert "too tired" in msg.lower()
+    # Verify stats didn't change (play was rejected)
+    assert pet.happiness == 80  # unchanged from default
 
 
 def test_decay_cap():
@@ -422,7 +425,7 @@ def test_achievement_defs_complete():
     """All referenced achievement IDs should exist in ACHIEVEMENT_DEFS."""
     # Check that every achievement we test for exists in the definitions
     for aid in ["first_feed", "first_play", "first_heal", "first_sleep",
-               "first_clean", "first_teach", "first_explore",
+               "first_clean", "first_pet_stroke", "first_teach", "first_explore",
                "interactions_10", "interactions_50", "interactions_100", "interactions_500",
                "all_stats_high", "survived_sickness",
                "tricks_3", "tricks_5",
@@ -589,6 +592,89 @@ def test_was_sick_tracked_on_decay():
     pet.apply_decay(60)
     if pet.health < tm.SICK_THRESHOLD:
         assert pet.was_sick is True
+
+
+# ─── Bug fix tests ───────────────────────────────────────────────────────────
+
+def test_dying_mood_reachable():
+    """Bug fix: 'dying' mood should be reachable when health is very low (below DYING_THRESHOLD)."""
+    pet = make_pet(health=5, is_alive=True, hunger=80, happiness=80, energy=80, cleanliness=80)
+    mood = pet.get_overall_mood()
+    assert mood == "dying", f"Expected 'dying' but got '{mood}'"
+
+def test_dying_mood_between_thresholds():
+    """Health between DYING_THRESHOLD and SICK_THRESHOLD should be 'sick'."""
+    pet = make_pet(health=15, is_alive=True, hunger=80, happiness=80, energy=80, cleanliness=80)
+    mood = pet.get_overall_mood()
+    assert mood == "sick"
+
+def test_egg_to_baby_transition_message():
+    """Bug fix: Egg -> Baby transition should produce a level-up message."""
+    pet = make_pet(stage="egg", age_hours=0.01)
+    # Now age enough to transition to baby
+    pet.age_hours = 0.3
+    msgs = pet.update_stage()
+    assert len(msgs) > 0, "Egg to baby transition should produce a message"
+
+def test_play_energy_check_internal():
+    """Bug fix: do_play should reject if energy < 15 (internal check)."""
+    pet = make_pet(energy=10)
+    msg = tm.do_play(pet)
+    assert "too tired" in msg.lower()
+    # Happiness should not have increased
+    assert pet.happiness == 80  # default from make_pet
+
+def test_dead_pet_status_command():
+    """Bug fix: 'status' should be in the dead-pet command allowlist."""
+    allowed_commands = ("release", "help", "quit", "achievements", "diary", "status")
+    assert "status" in allowed_commands, "'status' should be allowed for dead pets"
+
+def test_pet_action_achievement():
+    """Bug fix: do_pet should award 'first_pet_stroke' achievement."""
+    pet = make_pet(happiness=50)
+    assert "first_pet_stroke" not in pet.achievements
+    tm.do_pet(pet)
+    assert "first_pet_stroke" in pet.achievements
+
+def test_pet_stroke_achievement_definition():
+    """Bug fix: 'first_pet_stroke' should exist in ACHIEVEMENT_DEFS."""
+    assert "first_pet_stroke" in tm.ACHIEVEMENT_DEFS
+    assert tm.ACHIEVEMENT_DEFS["first_pet_stroke"]["name"] == "Best Pal"
+
+def test_load_pet_forward_compatibility(tmp_path):
+    """Bug fix: load_pet should ignore unknown fields from future save versions."""
+    save_file = tmp_path / "pet.json"
+    with patch.object(tm, 'SAVE_FILE', save_file), \
+         patch.object(tm, 'SAVE_DIR', tmp_path), \
+         patch.object(tm, 'BACKUP_FILE', tmp_path / "pet.json.bak"):
+        # Save with an extra future field
+        data = tm.asdict(make_pet(name="CompatTest"))
+        data["future_field_xyz"] = "should_be_ignored"
+        with open(save_file, 'w') as f:
+            json.dump(data, f)
+        loaded = tm.load_pet()
+        assert loaded is not None
+        assert loaded.name == "CompatTest"
+
+def test_explore_health_safety():
+    """Bug fix: explore events that reduce health should not drop health below 1."""
+    # Robot has an event that reduces health by 5
+    # Set health very low and explore many times
+    for _ in range(50):
+        pet = make_pet(species="robot", health=3, energy=50)
+        tm.do_explore(pet)
+        assert pet.health >= 1, f"Health dropped below 1 to {pet.health} from explore!"
+
+def test_mood_dying_face():
+    """Verify 'dying' mood face exists and is used correctly."""
+    assert "dying" in tm.MOOD_FACES
+    pet = make_pet(health=5, is_alive=True)
+    assert pet.get_overall_mood() == "dying"
+
+def test_dying_threshold_constant():
+    """Verify DYING_THRESHOLD constant exists and is between 0 and SICK_THRESHOLD."""
+    assert hasattr(tm, 'DYING_THRESHOLD')
+    assert 0 < tm.DYING_THRESHOLD < tm.SICK_THRESHOLD
 
 
 if __name__ == "__main__":

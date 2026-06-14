@@ -29,7 +29,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 # ─── Version ─────────────────────────────────────────────────────────────────
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 
 # ─── Save file ───────────────────────────────────────────────────────────────
 SAVE_DIR = Path.home() / ".tamagotchi"
@@ -42,6 +42,7 @@ MAX_STAT = 100
 DECAY_RATE = 1  # per real-world minute
 AGE_MILESTONE_HOURS = 1  # age milestone every hour alive
 SICK_THRESHOLD = 20
+DYING_THRESHOLD = 10
 DEAD_THRESHOLD = 0
 
 # ─── ASCII Art ────────────────────────────────────────────────────────────────
@@ -446,6 +447,7 @@ ACHIEVEMENT_DEFS = {
     "first_heal": {"name": "Nurse", "desc": "Heal your pet for the first time", "icon": "💊"},
     "first_sleep": {"name": "Sweet Dreams", "desc": "Put your pet to sleep for the first time", "icon": "💤"},
     "first_clean": {"name": "Sparkling", "desc": "Clean your pet for the first time", "icon": "🧼"},
+    "first_pet_stroke": {"name": "Best Pal", "desc": "Pet your pet for the first time", "icon": "🤗"},
     "first_teach": {"name": "Teacher", "desc": "Teach your pet a trick for the first time", "icon": "🎓"},
     "first_explore": {"name": "Adventurer", "desc": "Let your pet explore for the first time", "icon": "🧭"},
     # Interaction milestones
@@ -507,10 +509,10 @@ class Pet:
         if not self.is_alive:
             return "dead"
         avg = (self.hunger + self.happiness + self.health + self.energy + self.cleanliness) / 5
+        if self.health < DYING_THRESHOLD:
+            return "dying"
         if self.health < SICK_THRESHOLD:
             return "sick"
-        if self.health < DEAD_THRESHOLD:
-            return "dying"
         if avg >= 90:
             return "ecstatic"
         if avg >= 75:
@@ -578,7 +580,7 @@ class Pet:
         else:
             new_stage = "elder"
 
-        if new_stage != old_stage and old_stage != "egg":
+        if new_stage != old_stage:
             template = random.choice(EVENT_MESSAGES["level_up"])
             messages.append(template.format(name=self.name, stage=new_stage))
             # Log stage transition
@@ -694,6 +696,9 @@ def load_pet() -> Pet | None:
             }
             for key, default in defaults.items():
                 data.setdefault(key, default)
+            # Filter out unknown fields for forward compatibility
+            valid_fields = {f.name for f in Pet.__dataclass_fields__.values()}
+            data = {k: v for k, v in data.items() if k in valid_fields}
             return Pet(**data)
         except (json.JSONDecodeError, TypeError, ValueError):
             continue  # Try backup
@@ -840,6 +845,8 @@ def do_feed(pet: Pet) -> str:
 
 def do_play(pet: Pet) -> str:
     """Play with the pet: increases happiness, costs energy and hunger."""
+    if pet.energy < 15:
+        return f"😴 {pet.name} is too tired to play! Try letting them sleep."
     responses = RESPONSES["play"].get(pet.species, ["*plays happily*"])
     msg = random.choice(responses)
     pet.happiness = min(MAX_STAT, pet.happiness + 20)
@@ -906,6 +913,8 @@ def do_pet(pet: Pet) -> str:
     pet.happiness = min(MAX_STAT, pet.happiness + 10)
     pet.total_interactions += 1
     pet.lifetime_interactions += 1
+    if "first_pet_stroke" not in pet.achievements:
+        pet.achievements.append("first_pet_stroke")
     pet._log_event("Was petted")
     return msg
 
@@ -963,9 +972,11 @@ def do_explore(pet: Pet) -> str:
         return "❓ There's nothing to explore here..."
 
     event_desc, stat_name, amount = random.choice(events)
-    # Apply the stat change
+    # Apply the stat change (health can't drop below 1 from exploring — that would be unfair)
     current = getattr(pet, stat_name)
     new_val = max(0, min(MAX_STAT, current + amount))
+    if stat_name == "health" and new_val < 1:
+        new_val = 1
     setattr(pet, stat_name, new_val)
 
     pet.energy = max(0, pet.energy - 8)
@@ -1274,10 +1285,13 @@ def main():
                 continue
 
         else:
-            if not pet.is_alive and cmd not in ("release", "help", "quit", "achievements", "diary"):
+            if not pet.is_alive and cmd not in ("release", "help", "quit", "achievements", "diary", "status"):
                 result_msg = f"💀 {pet.name} can't do that... they've passed away."
             else:
                 result_msg = f"❓ Unknown command: {cmd}. Type 'help' for options."
+            # Don't apply decay for invalid/unrecognized commands
+            pet.messages.append(result_msg)
+            continue
 
         # Apply passive decay per interaction
         pet.apply_decay(0.5)  # ~30 seconds per interaction
