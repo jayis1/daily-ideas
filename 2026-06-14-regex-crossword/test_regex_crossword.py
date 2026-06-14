@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
-"""Tests for the Regex Crossword Generator & Solver."""
+"""Tests for the Regex Crossword Generator & Solver (v1.1.0)."""
 
 import sys
 import os
 import re
+import json
 import random
+import io
+import contextlib
 
 sys.path.insert(0, os.path.dirname(__file__))
 
 from regex_crossword import (
     RegexCrossword, generate_smart_puzzle,
     solve_puzzle, solve_puzzle_bruteforce, validate_solution,
-    print_puzzle_text, print_solution, PUZZLES, CHARSET_MAP
+    count_solutions, print_puzzle_text, print_solution, 
+    PUZZLES, CHARSET_MAP, format_duration, __version__,
 )
 
 
@@ -152,6 +156,27 @@ def test_solve_vowel_vortex():
     print("✓ test_solve_vowel_vortex")
 
 
+def test_solve_binary_blitz():
+    """Test solving the binary_blitz puzzle."""
+    puzzle = PUZZLES["binary_blitz"]
+    solution = solve_puzzle(puzzle)
+    assert solution is not None, "Should find a solution for binary_blitz puzzle"
+    
+    valid, errors = validate_solution(puzzle, solution)
+    assert valid, f"Solution should be valid, got errors: {errors}"
+    
+    print("✓ test_solve_binary_blitz")
+
+
+def test_alpha_chaos_validates():
+    """Test that the alpha_chaos puzzle's built-in solution is valid."""
+    puzzle = PUZZLES["alpha_chaos"]
+    valid, errors = validate_solution(puzzle, puzzle.solution)
+    assert valid, f"alpha_chaos solution should be valid: {errors}"
+    
+    print("✓ test_alpha_chaos_validates")
+
+
 def test_generate_puzzle():
     """Test generating random puzzles."""
     for seed in range(5):
@@ -200,7 +225,7 @@ def test_generate_different_difficulties():
 
 def test_generate_different_charsets():
     """Test generating puzzles with different charsets."""
-    for charset_name in ["hex", "alpha", "digit", "alnum"]:
+    for charset_name in ["hex", "alpha", "digit", "alnum", "binary"]:
         random.seed(hash(charset_name))
         puzzle = generate_smart_puzzle(rows=2, cols=2, difficulty=1, charset_name=charset_name)
         charset = CHARSET_MAP[charset_name]
@@ -223,12 +248,10 @@ def test_validate_solution():
     valid, errors = validate_solution(puzzle, grid)
     assert valid, f"Correct solution should validate: {errors}"
     
-    # Wrong solution - should still validate if it matches constraints
-    # (might match or not depending on the constraints)
+    # Wrong solution
     grid = [list(row) for row in puzzle.solution]
-    grid[0][0] = "Z"  # Probably wrong
+    grid[0][0] = "Z"
     valid, _ = validate_solution(puzzle, grid)
-    # This should be invalid for tutorial puzzle since row pattern is "A."
     assert not valid, "Invalid solution should not validate"
     
     print("✓ test_validate_solution")
@@ -272,9 +295,6 @@ def test_solver_handles_constrained():
 
 def test_print_puzzle_no_errors():
     """Test that print_puzzle_text doesn't crash."""
-    import io
-    import contextlib
-    
     for name, puzzle in PUZZLES.items():
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
@@ -288,9 +308,6 @@ def test_print_puzzle_no_errors():
 
 def test_print_solution_no_errors():
     """Test that print_solution doesn't crash."""
-    import io
-    import contextlib
-    
     for name, puzzle in PUZZLES.items():
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
@@ -335,8 +352,7 @@ def test_larger_puzzle():
 
 
 def test_solver_partial_pruning():
-    """Test that the solver uses partial row/column pruning correctly."""
-    # A puzzle where partial matching helps prune the search space
+    """Test that the solver uses row/column pruning correctly."""
     puzzle = RegexCrossword(
         rows=3, cols=3,
         row_patterns=["ABC", "DEF", "GHI"],
@@ -352,10 +368,328 @@ def test_solver_partial_pruning():
     print("✓ test_solver_partial_pruning")
 
 
+# ─── New tests for v1.1.0 features ────────────────────────────────────
+
+def test_version():
+    """Test that __version__ is defined and follows semver."""
+    assert __version__ is not None
+    parts = __version__.split(".")
+    assert len(parts) == 3, f"Version should be semver, got {__version__}"
+    for part in parts:
+        assert part.isdigit(), f"Version parts should be numeric, got {__version__}"
+    print("✓ test_version")
+
+
+def test_json_export():
+    """Test JSON export for all puzzles."""
+    for name, puzzle in PUZZLES.items():
+        json_str = puzzle.to_json()
+        data = json.loads(json_str)
+        assert data["rows"] == puzzle.rows
+        assert data["cols"] == puzzle.cols
+        assert data["row_patterns"] == puzzle.row_patterns
+        assert data["col_patterns"] == puzzle.col_patterns
+        assert data["solution"] == puzzle.solution
+        assert data["charset"] == puzzle.charset
+        assert "version" in data
+    print("✓ test_json_export")
+
+
+def test_json_import():
+    """Test JSON import roundtrip for all puzzles."""
+    for name, puzzle in PUZZLES.items():
+        json_str = puzzle.to_json()
+        p2 = RegexCrossword.from_json(json_str)
+        assert p2.rows == puzzle.rows
+        assert p2.cols == puzzle.cols
+        assert p2.row_patterns == puzzle.row_patterns
+        assert p2.col_patterns == puzzle.col_patterns
+        assert p2.solution == puzzle.solution
+        assert p2.charset == puzzle.charset
+    print("✓ test_json_import")
+
+
+def test_json_import_missing_fields():
+    """Test that JSON import raises ValueError for missing fields."""
+    incomplete_json = json.dumps({"rows": 2, "cols": 2})  # missing patterns, solution
+    try:
+        RegexCrossword.from_json(incomplete_json)
+        assert False, "Should have raised ValueError for missing fields"
+    except ValueError as e:
+        assert "Missing" in str(e)
+    print("✓ test_json_import_missing_fields")
+
+
+def test_json_import_invalid_json():
+    """Test that JSON import raises error for malformed JSON."""
+    try:
+        RegexCrossword.from_json("{invalid json}")
+        assert False, "Should have raised error for invalid JSON"
+    except json.JSONDecodeError:
+        pass  # Expected
+    print("✓ test_json_import_invalid_json")
+
+
+def test_to_dict():
+    """Test the to_dict serialization method."""
+    puzzle = PUZZLES["tutorial"]
+    d = puzzle.to_dict()
+    assert isinstance(d, dict)
+    assert d["rows"] == 2
+    assert d["cols"] == 2
+    assert d["name"] == "tutorial"
+    assert "version" in d
+    print("✓ test_to_dict")
+
+
+def test_from_dict():
+    """Test the from_dict deserialization method."""
+    puzzle = PUZZLES["easy"]
+    d = puzzle.to_dict()
+    p2 = RegexCrossword.from_dict(d)
+    assert p2.rows == puzzle.rows
+    assert p2.solution == puzzle.solution
+    print("✓ test_from_dict")
+
+
+def test_puzzle_name():
+    """Test that puzzles have names."""
+    for name, puzzle in PUZZLES.items():
+        assert puzzle.name == name, f"Puzzle key '{name}' should match puzzle.name '{puzzle.name}'"
+    print("✓ test_puzzle_name")
+
+
+def test_count_solutions():
+    """Test solution counting."""
+    # The easy puzzle with literal patterns should have exactly 1 solution
+    n = count_solutions(PUZZLES["easy"], limit=10)
+    assert n == 1, f"Easy puzzle should have exactly 1 solution, got {n}"
+    
+    # Tutorial has loose patterns so may have multiple solutions
+    n = count_solutions(PUZZLES["tutorial"], limit=100)
+    assert n >= 1, "Tutorial puzzle should have at least 1 solution"
+    
+    # Binary blitz has a small charset, good for testing
+    n = count_solutions(PUZZLES["binary_blitz"], limit=100)
+    assert n >= 1, "Binary blitz should have at least 1 solution"
+    print("✓ test_count_solutions")
+
+
+def test_format_duration():
+    """Test the format_duration utility function."""
+    assert format_duration(0) == "0.0s"
+    assert format_duration(1) == "1.0s"
+    assert format_duration(59.9) == "59.9s"
+    assert format_duration(60) == "1m 0s"
+    assert format_duration(90) == "1m 30s"
+    assert format_duration(3600) == "1h 0m 0s"
+    assert format_duration(3661) == "1h 1m 1s"
+    print("✓ test_format_duration")
+
+
+def test_generate_validation():
+    """Test that generate_smart_puzzle validates its arguments."""
+    # Invalid rows
+    try:
+        generate_smart_puzzle(rows=1, cols=3)
+        assert False, "Should raise ValueError for rows=1"
+    except ValueError:
+        pass
+    
+    # Invalid cols
+    try:
+        generate_smart_puzzle(rows=3, cols=1)
+        assert False, "Should raise ValueError for cols=1"
+    except ValueError:
+        pass
+    
+    # Invalid difficulty
+    try:
+        generate_smart_puzzle(rows=3, cols=3, difficulty=4)
+        assert False, "Should raise ValueError for difficulty=4"
+    except ValueError:
+        pass
+    
+    # Valid ranges
+    puzzle = generate_smart_puzzle(rows=2, cols=2, difficulty=1)
+    assert puzzle.rows == 2 and puzzle.cols == 2
+    
+    puzzle = generate_smart_puzzle(rows=8, cols=8, difficulty=3)
+    assert puzzle.rows == 8 and puzzle.cols == 8
+    
+    print("✓ test_generate_validation")
+
+
+def test_binary_charset():
+    """Test generating and solving with the binary charset."""
+    random.seed(42)
+    puzzle = generate_smart_puzzle(rows=2, cols=2, difficulty=1, charset_name="binary")
+    assert puzzle.charset == "01"
+    
+    solved = solve_puzzle(puzzle)
+    assert solved is not None, "Should solve binary puzzle"
+    
+    # Verify all chars are 0 or 1
+    for r in range(puzzle.rows):
+        for c in range(puzzle.cols):
+            assert solved[r][c] in "01", f"Binary puzzle char should be 0 or 1, got {solved[r][c]}"
+    
+    print("✓ test_binary_charset")
+
+
+def test_check_row_with_invalid_regex():
+    """Test that check_row handles invalid regex patterns gracefully."""
+    puzzle = RegexCrossword(
+        rows=1, cols=2,
+        row_patterns=["[invalid"],  # Unclosed bracket
+        col_patterns=["AB"],
+        solution=[["A", "B"]],
+        charset="AB",
+    )
+    grid = [["A", "B"]]
+    result = puzzle.check_row(0, grid)
+    assert result == False, "Invalid regex should return False, not crash"
+    
+    print("✓ test_check_row_with_invalid_regex")
+
+
+def test_check_col_with_invalid_regex():
+    """Test that check_col handles invalid regex patterns gracefully."""
+    puzzle = RegexCrossword(
+        rows=2, cols=1,
+        row_patterns=["A", "B"],
+        col_patterns=["[invalid"],  # Unclosed bracket
+        solution=[["A"], ["B"]],
+        charset="AB",
+    )
+    grid = [["A"], ["B"]]
+    result = puzzle.check_col(0, grid)
+    assert result == False, "Invalid regex should return False, not crash"
+    
+    print("✓ test_check_col_with_invalid_regex")
+
+
+def test_validate_solution_invalid_pattern():
+    """Test validate_solution with invalid regex patterns."""
+    puzzle = RegexCrossword(
+        rows=1, cols=1,
+        row_patterns=["[invalid"],
+        col_patterns=["A"],
+        solution=[["A"]],
+        charset="A",
+    )
+    valid, errors = validate_solution(puzzle, [["A"]])
+    assert not valid, "Should report invalid pattern"
+    assert any("invalid" in e.lower() or "Row" in e for e in errors)
+    print("✓ test_validate_solution_invalid_pattern")
+
+
+def test_cli_version():
+    """Test the --version CLI flag."""
+    import subprocess
+    r = subprocess.run(["python3", "regex_crossword.py", "--version"],
+                      capture_output=True, text=True,
+                      cwd=os.path.dirname(__file__))
+    assert "1.1.0" in (r.stdout + r.stderr), f"Version should be in output, got stdout={r.stdout} stderr={r.stderr}"
+    print("✓ test_cli_version")
+
+
+def test_cli_help():
+    """Test the --help flag includes new options."""
+    import subprocess
+    r = subprocess.run(["python3", "regex_crossword.py", "--help"],
+                      capture_output=True, text=True,
+                      cwd=os.path.dirname(__file__))
+    assert "--export" in r.stdout, "Help should mention --export"
+    assert "--import" in r.stdout, "Help should mention --import"
+    assert "--timer" in r.stdout, "Help should mention --timer"
+    assert "--unique" in r.stdout, "Help should mention --unique"
+    assert "--version" in r.stdout, "Help should mention --version"
+    assert "binary" in r.stdout, "Help should mention binary charset"
+    print("✓ test_cli_help")
+
+
+def test_cli_list():
+    """Test the --list flag includes new puzzles."""
+    import subprocess
+    r = subprocess.run(["python3", "regex_crossword.py", "--list"],
+                      capture_output=True, text=True,
+                      cwd=os.path.dirname(__file__))
+    assert "binary_blitz" in r.stdout, "List should include binary_blitz"
+    assert "alpha_chaos" in r.stdout, "List should include alpha_chaos"
+    print("✓ test_cli_list")
+
+
+def test_cli_export():
+    """Test the --export flag produces valid JSON."""
+    import subprocess
+    r = subprocess.run(["python3", "regex_crossword.py", "--export", "tutorial"],
+                      capture_output=True, text=True,
+                      cwd=os.path.dirname(__file__))
+    data = json.loads(r.stdout)
+    assert data["rows"] == 2
+    assert data["cols"] == 2
+    assert data["name"] == "tutorial"
+    print("✓ test_cli_export")
+
+
+def test_cli_print_new_puzzles():
+    """Test --print works for new puzzles."""
+    import subprocess
+    for name in ["binary_blitz", "alpha_chaos"]:
+        r = subprocess.run(["python3", "regex_crossword.py", "--print", name],
+                          capture_output=True, text=True,
+                          cwd=os.path.dirname(__file__))
+        assert r.returncode == 0, f"--print {name} should succeed"
+        assert len(r.stdout) > 0, f"--print {name} should produce output"
+    print("✓ test_cli_print_new_puzzles")
+
+
+def test_cli_unknown_puzzle():
+    """Test that unknown puzzle names produce an error message."""
+    import subprocess
+    r = subprocess.run(["python3", "regex_crossword.py", "--play", "nonexistent"],
+                      capture_output=True, text=True,
+                      cwd=os.path.dirname(__file__))
+    assert "Unknown" in r.stdout or "Available" in r.stdout
+    print("✓ test_cli_unknown_puzzle")
+
+
+def test_solver_with_error_patterns():
+    """Test that the solver handles invalid regex patterns without crashing."""
+    puzzle = RegexCrossword(
+        rows=2, cols=2,
+        row_patterns=["AB", "[invalid"],
+        col_patterns=["AC", "BD"],
+        solution=[["A", "B"], ["C", "D"]],
+        charset="ABCD",
+    )
+    # Should not crash, but may not find a solution
+    result = solve_puzzle(puzzle)
+    # We just verify it doesn't raise an exception
+    print("✓ test_solver_with_error_patterns")
+
+
+def test_new_predefined_puzzles_six_total():
+    """Test that we have at least 6 predefined puzzles now."""
+    assert len(PUZZLES) >= 6, f"Should have at least 6 puzzles, got {len(PUZZLES)}"
+    assert "binary_blitz" in PUZZLES, "binary_blitz should exist"
+    assert "alpha_chaos" in PUZZLES, "alpha_chaos should exist"
+    print("✓ test_new_predefined_puzzles_six_total")
+
+
+def test_binary_charset_in_charset_map():
+    """Test that the binary charset is available in CHARSET_MAP."""
+    assert "binary" in CHARSET_MAP, "binary should be in CHARSET_MAP"
+    assert CHARSET_MAP["binary"] == "01", "binary charset should be '01'"
+    print("✓ test_binary_charset_in_charset_map")
+
+
 def main():
     import random
     
     tests = [
+        # Original tests
         test_basic_puzzle_creation,
         test_check_row_col,
         test_is_solved,
@@ -375,6 +709,33 @@ def main():
         test_generate_and_solve,
         test_larger_puzzle,
         test_solver_partial_pruning,
+        # New v1.1.0 tests
+        test_version,
+        test_json_export,
+        test_json_import,
+        test_json_import_missing_fields,
+        test_json_import_invalid_json,
+        test_to_dict,
+        test_from_dict,
+        test_puzzle_name,
+        test_count_solutions,
+        test_format_duration,
+        test_generate_validation,
+        test_binary_charset,
+        test_check_row_with_invalid_regex,
+        test_check_col_with_invalid_regex,
+        test_validate_solution_invalid_pattern,
+        test_cli_version,
+        test_cli_help,
+        test_cli_list,
+        test_cli_export,
+        test_cli_print_new_puzzles,
+        test_cli_unknown_puzzle,
+        test_solver_with_error_patterns,
+        test_new_predefined_puzzles_six_total,
+        test_binary_charset_in_charset_map,
+        test_solve_binary_blitz,
+        test_alpha_chaos_validates,
     ]
     
     passed = 0

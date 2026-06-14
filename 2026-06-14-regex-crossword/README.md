@@ -1,6 +1,6 @@
 # Regex Crossword Generator & Solver
 
-A CLI tool for generating and solving **regex crossword puzzles** — a mind-bending puzzle type where each cell must satisfy both a row regex constraint and a column regex constraint simultaneously. Think of it as a cross between Sudoku and regular expressions!
+**v1.1.0** — A CLI tool for generating and solving **regex crossword puzzles** — a mind-bending puzzle type where each cell must satisfy both a row regex constraint and a column regex constraint simultaneously. Think of it as a cross between Sudoku and regular expressions!
 
 ## What is a Regex Crossword?
 
@@ -24,25 +24,49 @@ R2 │  C  │  1  │   ← matches /.1/
 ```
 
 - Row 1 `AB` matches `/A./` ✓
-- Row 2 `C1` matches `/.1/` ✓  
+- Row 2 `C1` matches `/.1/` ✓
 - Column 1 `AC` matches `/A./` ✓
 - Column 2 `B1` matches `/.1/` ✓
 
 ## Features
 
-- **4 built-in puzzles** of varying difficulty (tutorial, easy, medium, vowel vortex)
-- **Random puzzle generation** with configurable grid size (2×2 to 6×6)
+### Core Puzzles & Solving
+- **6 built-in puzzles** of varying difficulty (tutorial → alpha_chaos)
+- **Random puzzle generation** with configurable grid size (2×2 to 8×8)
 - **3 difficulty levels** controlling regex complexity (simple literals → alternations → quantifiers)
-- **5 character sets**: hex (0-9, A-F), alpha (A-Z), digits, vowels, alphanumeric
+- **6 character sets**: hex, alpha, digits, vowels, alphanumeric, binary
+- **Backtracking solver** with full-row/full-column constraint pruning
+- **Brute force solver** for verification on small puzzles
+- **Solution validator** that checks all regex constraints with detailed error reporting
+
+### Interactive Play
 - **Interactive terminal UI** with:
-  - Arrow key navigation
-  - Real-time constraint validation (green = both constraints met, yellow = row only, purple = column only, red = neither)
+  - Arrow key navigation and auto-advance after typing
+  - Real-time constraint validation with color-coded cells:
+    - 🟢 Green = both row and column constraints satisfied
+    - 🟡 Yellow = row constraint only
+    - 🟣 Purple = column constraint only
+    - 🔴 Red = neither constraint met
   - Row/column pattern status indicators (✓/✗)
-  - Auto-advance after typing a character
-  - Hint system (reveal a cell) and auto-solve
-- **Programmatic solver** using backtracking with constraint checking
-- **Brute force solver** for verification
-- **Solution validator** that checks all regex constraints
+  - **Hint system** — reveal a single cell
+  - **Auto-solve** — reveal the entire solution
+  - **Reset** — clear all cells and start over
+
+### New in v1.1.0
+- **Timer mode** (`--timer`) — tracks elapsed time while playing
+- **Move counter** — tracks how many cells you've filled
+- **Hint counter** — tracks how many hints/auto-solves you've used
+- **Game statistics** — on completion, shows moves, hints, and time
+- **JSON export** (`--export`) — export any puzzle as JSON for sharing
+- **JSON import** (`--import`) — import and play puzzles from JSON files
+- **Solution uniqueness checker** (`--unique`) — verify if a puzzle has a unique solution
+- **Solution counter** (`count_solutions()`) — count the number of valid solutions (up to a limit)
+- **`--version` flag** — display version number
+- **2 new built-in puzzles**: `binary_blitz` (3×3, binary charset) and `alpha_chaos` (4×4, letter ranges)
+- **Binary charset** — puzzles using only `0` and `1`
+- **Robust error handling** — graceful handling of invalid regex patterns, bad JSON, missing fields
+- **Extended grid size** — now supports up to 8×8
+- **Named puzzles** — each puzzle carries its name for display and serialization
 
 ## Installation
 
@@ -54,6 +78,7 @@ cd regex-crossword
 
 # Run directly
 python3 regex_crossword.py --help
+python3 regex_crossword.py --version
 ```
 
 ## Usage
@@ -65,6 +90,14 @@ python3 regex_crossword.py --play tutorial
 python3 regex_crossword.py --play easy
 python3 regex_crossword.py --play medium
 python3 regex_crossword.py --play vowel_vortex
+python3 regex_crossword.py --play binary_blitz
+python3 regex_crossword.py --play alpha_chaos
+```
+
+### Play with a timer
+
+```bash
+python3 regex_crossword.py --timer --play medium
 ```
 
 ### Generate a random puzzle
@@ -78,13 +111,16 @@ python3 regex_crossword.py --generate 4 4 --diff 2 --charset alpha
 
 # 5×5 grid, hard difficulty, digits only
 python3 regex_crossword.py --generate 5 5 --diff 3 --charset digit --verify
+
+# Generate and check solution uniqueness
+python3 regex_crossword.py --generate 3 3 --unique
 ```
 
 ### Print a puzzle in text mode
 
 ```bash
 python3 regex_crossword.py --print tutorial
-python3 regex_crossword.py --print easy
+python3 regex_crossword.py --print binary_blitz
 ```
 
 ### Solve a puzzle and show the answer
@@ -92,12 +128,38 @@ python3 regex_crossword.py --print easy
 ```bash
 python3 regex_crossword.py --solve tutorial
 python3 regex_crossword.py --solve medium
+python3 regex_crossword.py --solve medium --unique
+```
+
+### Export and import puzzles as JSON
+
+```bash
+# Export a puzzle to stdout
+python3 regex_crossword.py --export easy > my_puzzle.json
+
+# Import and play a JSON puzzle
+python3 regex_crossword.py --import my_puzzle.json
+
+# Import with verification
+python3 regex_crossword.py --import my_puzzle.json --verify --timer
 ```
 
 ### List available puzzles
 
 ```bash
 python3 regex_crossword.py --list
+```
+
+### Check all predefined puzzles for uniqueness
+
+```bash
+python3 regex_crossword.py --unique
+```
+
+### Display version
+
+```bash
+python3 regex_crossword.py --version
 ```
 
 ## Interactive Controls
@@ -110,7 +172,7 @@ python3 regex_crossword.py --list
 | Tab | Move to next cell |
 | H | Hint (reveal current cell) |
 | S | Solve (reveal entire solution) |
-| R | Reset (clear all cells) |
+| R | Reset (clear all cells + reset stats) |
 | Q | Quit |
 
 ## Built-in Puzzles
@@ -121,6 +183,8 @@ python3 regex_crossword.py --list
 | `easy` | 3×3 | Literal row/column strings |
 | `medium` | 3×3 | Character classes and quantifiers |
 | `vowel_vortex` | 3×3 | All vowels, `{3}` quantifiers |
+| `binary_blitz` | 3×3 | Binary (0/1) with character classes |
+| `alpha_chaos` | 4×4 | Letter ranges `[A-D]`, `[E-H]`, etc. |
 
 ## Difficulty Levels
 
@@ -137,6 +201,26 @@ python3 regex_crossword.py --list
 | `digit` | 0-9 | Decimal digits |
 | `vowel` | A E I O U | Vowels only |
 | `alnum` | A-Z 0-9 | Letters and digits |
+| `binary` | 0 1 | Binary digits |
+
+## JSON Format
+
+Puzzles exported as JSON follow this structure:
+
+```json
+{
+  "name": "tutorial",
+  "rows": 2,
+  "cols": 2,
+  "row_patterns": ["A.", ".1"],
+  "col_patterns": ["A.", ".1"],
+  "solution": [["A", "B"], ["C", "1"]],
+  "charset": "ABC123",
+  "version": "1.1.0"
+}
+```
+
+You can share puzzles by sending the JSON file, and anyone can import them with `--import`.
 
 ## How It Works
 
@@ -146,16 +230,22 @@ python3 regex_crossword.py --list
 2. Row and column regex patterns are derived from the solution characters
 3. Pattern complexity is controlled by the difficulty level — easy patterns use literal characters and simple classes, while hard patterns use alternations and quantifiers
 4. Every generated pattern is verified to match its corresponding solution row/column
+5. Input validation ensures grid sizes (2–8) and difficulty (1–3) are within bounds
 
 ### Solving Algorithm
 
-The solver uses **backtracking with constraint propagation**:
+The solver uses **backtracking with constraint checking**:
 
 1. Fill cells left-to-right, top-to-bottom
 2. When a row is completed, validate it against the row regex
 3. When a column is completed, validate it against the column regex
 4. Backtrack immediately on constraint violations
 5. This prunes the search space efficiently — invalid rows/columns are rejected as soon as they're completed
+6. Invalid regex patterns are caught gracefully — the solver returns `False` rather than crashing
+
+### Solution Uniqueness
+
+The `count_solutions()` function searches for multiple solutions (up to a configurable limit). This lets you verify that a puzzle has a unique solution, which makes it more interesting to solve.
 
 ### Interactive Solver
 
@@ -166,6 +256,10 @@ The terminal UI provides real-time feedback:
 - **Purple** cells satisfy their column regex only
 - **Red** cells satisfy neither constraint
 - Row/column patterns show ✓ (valid) or ✗ (invalid) status
+- **Timer** tracks elapsed time from the first move
+- **Move counter** increments each time you fill or clear a cell
+- **Hint counter** increments each time you use H (hint) or S (solve)
+- On completion, game statistics are displayed
 
 ## Running Tests
 
@@ -173,20 +267,25 @@ The terminal UI provides real-time feedback:
 python3 test_regex_crossword.py
 ```
 
-The test suite covers:
+The test suite (45 tests) covers:
 
 - Puzzle creation and validation
-- Row/column constraint checking
-- All predefined puzzles (valid solutions verified)
+- Row/column constraint checking (including invalid regex patterns)
+- All 6 predefined puzzles (valid solutions verified)
 - Solver (backtracking and brute force)
 - Random puzzle generation at all difficulty levels and charsets
 - Interactive rendering (no crashes)
-- Solution validation
+- Solution validation and error reporting
+- JSON export/import roundtrip and error handling
+- `count_solutions()` and `format_duration()`
+- CLI flags (`--version`, `--help`, `--list`, `--export`, `--print`)
+- Input validation for puzzle generation
+- Binary charset support
 
 ## Example Session
 
 ```
-$ python3 regex_crossword.py --play easy
+$ python3 regex_crossword.py --timer --play easy
 
 ╔════════════════════════════════╗
 ║      REGEX CROSSWORD           ║
@@ -204,11 +303,24 @@ $ python3 regex_crossword.py --play easy
  R3 │ ·  │ ·  │ ·  │  /DEF/
     └────┴────┴────┘
 
-Controls: ↑↓←→=move  Type=fill  Del=clear  H=hint  S=solve  Q=quit  R=reset  Tab=next
+  R1: /ABC/ (partial)
+  R2: /123/ (partial)
+  R3: /DEF/ (partial)
+  C1: /A1D/ (partial)
+  C2: /B2E/ (partial)
+  C3: /C3F/ (partial)
+
+  Moves: 0  Hints: 0  Time: 0.0s
+Controls: ↑↓←→=move  Type=fill  Del=clear  H=hint  S=solve  Q=quit  R=reset  Tab=next  T=timer
 Cursor: Row 1, Col 1  Charset: ABCDEF123
 ```
 
-Type `A`, `B`, `C` for row 1, `1`, `2`, `3` for row 2, `D`, `E`, `F` for row 3, and watch the cells turn green as both row and column constraints are satisfied!
+Fill in the cells and watch them turn green as both row and column constraints are satisfied. When you complete the puzzle, you'll see:
+
+```
+🎉 CONGRATULATIONS! Puzzle solved! 🎉
+  Moves: 9  Hints: 0  Time: 42.3s
+```
 
 ## License
 
