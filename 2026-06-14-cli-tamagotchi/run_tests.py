@@ -455,6 +455,83 @@ with mock.patch.object(tm, 'SAVE_FILE', save_file5), \
     test("Delete: primary removed", not save_file5.exists())
     test("Delete: backup removed", not backup_file5.exists())
 
+# ═══════════════════════════════════════════════════════════════════════
+# BUG FIX TESTS (v2.2)
+# ═══════════════════════════════════════════════════════════════════════
+
+print("\n  ─── Bug Fix Tests (v2.2) ───\n")
+
+# ─── stat_bar clamping ────────────────────────────────────────────────
+import re
+
+bar_over = tm.stat_bar(150, width=20)
+clean_over = re.sub(r'\x1b\[[0-9;]*m', '', bar_over)
+test("stat_bar clamps values above MAX_STAT", len(clean_over) == 20, f"len={len(clean_over)}")
+
+bar_under = tm.stat_bar(-10, width=20)
+clean_under = re.sub(r'\x1b\[[0-9;]*m', '', bar_under)
+test("stat_bar clamps negative values to 0", len(clean_under) == 20, f"len={len(clean_under)}")
+
+# ─── Explore energy threshold matches cost ─────────────────────────────
+pet = make_pet(energy=8)
+msg = tm.do_explore(pet)
+test("Explore with energy=8 succeeds", "too tired" not in msg.lower(), f"msg={msg}")
+test("Explore with energy=8 increments count", pet.explore_count == 1)
+
+pet = make_pet(energy=7)
+msg = tm.do_explore(pet)
+test("Explore with energy=7 rejected", "too tired" in msg.lower(), f"msg={msg}")
+test("Explore with energy=7 no count change", pet.explore_count == 0)
+
+# ─── Dead pet action rejection ────────────────────────────────────────
+dead_pet = make_pet(is_alive=False, hunger=0, health=0, energy=0, happiness=0, cleanliness=0,
+                    total_interactions=0, lifetime_interactions=0, achievements=[])
+
+msg = tm.do_feed(dead_pet)
+test("Dead pet feed rejected", "passed away" in msg.lower(), f"msg={msg}")
+test("Dead pet feed no hunger change", dead_pet.hunger == 0, f"hunger={dead_pet.hunger}")
+
+dead_pet2 = make_pet(is_alive=False, happiness=10, energy=80)
+msg = tm.do_play(dead_pet2)
+test("Dead pet play rejected", "passed away" in msg.lower(), f"msg={msg}")
+test("Dead pet play no happiness change", dead_pet2.happiness == 10)
+
+dead_pet3 = make_pet(is_alive=False, health=0)
+msg = tm.do_heal(dead_pet3)
+test("Dead pet heal rejected", "passed away" in msg.lower(), f"msg={msg}")
+test("Dead pet heal no health change", dead_pet3.health == 0)
+
+dead_pet4 = make_pet(is_alive=False, energy=0)
+msg = tm.do_sleep(dead_pet4)
+test("Dead pet sleep rejected", "passed away" in msg.lower(), f"msg={msg}")
+test("Dead pet sleep no energy change", dead_pet4.energy == 0)
+
+dead_pet5 = make_pet(is_alive=False, cleanliness=10)
+msg = tm.do_clean(dead_pet5)
+test("Dead pet clean rejected", "passed away" in msg.lower(), f"msg={msg}")
+test("Dead pet clean no cleanliness change", dead_pet5.cleanliness == 10)
+
+dead_pet6 = make_pet(is_alive=False, happiness=10)
+msg = tm.do_pet(dead_pet6)
+test("Dead pet pet rejected", "passed away" in msg.lower(), f"msg={msg}")
+test("Dead pet pet no happiness change", dead_pet6.happiness == 10)
+
+dead_pet7 = make_pet(is_alive=False, energy=50)
+msg = tm.do_teach(dead_pet7)
+test("Dead pet teach rejected", "passed away" in msg.lower(), f"msg={msg}")
+test("Dead pet teach no tricks", len(dead_pet7.tricks_learned) == 0)
+
+dead_pet8 = make_pet(is_alive=False, energy=50)
+msg = tm.do_explore(dead_pet8)
+test("Dead pet explore rejected", "passed away" in msg.lower(), f"msg={msg}")
+test("Dead pet explore no count", dead_pet8.explore_count == 0)
+
+# Dead pet feed should not award achievements or increment interactions
+dead_pet9 = make_pet(is_alive=False, hunger=0, achievements=[], total_interactions=0, lifetime_interactions=0)
+tm.do_feed(dead_pet9)
+test("Dead pet feed no achievement", "first_feed" not in dead_pet9.achievements)
+test("Dead pet feed no interaction increment", dead_pet9.total_interactions == 0)
+
 # ─── Results ─────────────────────────────────────────────────────────
 print(f"\n{'═' * 50}")
 print(f"  Results: {passed} passed, {failed} failed, {passed + failed} total")

@@ -677,6 +677,108 @@ def test_dying_threshold_constant():
     assert 0 < tm.DYING_THRESHOLD < tm.SICK_THRESHOLD
 
 
+# ─── Bug fix tests: v2.2 ──────────────────────────────────────────────────────
+
+def test_stat_bar_clamps_above_max():
+    """Bug fix: stat_bar should clamp values above MAX_STAT to prevent overflow."""
+    bar = tm.stat_bar(150, width=20)
+    import re
+    clean = re.sub(r'\x1b\[[0-9;]*m', '', bar)
+    assert len(clean) == 20, f"stat_bar(150) produced bar of length {len(clean)}"
+    assert "█" in bar
+
+def test_stat_bar_clamps_below_zero():
+    """Bug fix: stat_bar should clamp negative values to 0."""
+    bar = tm.stat_bar(-10, width=20)
+    import re
+    clean = re.sub(r'\x1b\[[0-9;]*m', '', bar)
+    assert len(clean) == 20, f"stat_bar(-10) produced bar of length {len(clean)}"
+    assert "░" in bar
+
+def test_explore_energy_threshold_matches_cost():
+    """Bug fix: explore energy threshold should match its stated cost of 8."""
+    pet = make_pet(energy=8)
+    msg = tm.do_explore(pet)
+    assert "too tired" not in msg.lower(), f"Energy=8 should be enough to explore, got: {msg}"
+    assert pet.explore_count == 1
+
+def test_explore_energy_7_rejected():
+    """Energy just below the cost (7) should be rejected."""
+    pet = make_pet(energy=7)
+    msg = tm.do_explore(pet)
+    assert "too tired" in msg.lower()
+    assert pet.explore_count == 0
+
+def test_dead_pet_feed_rejected():
+    """Bug fix: do_feed should reject dead pets."""
+    pet = make_pet(is_alive=False, hunger=0)
+    msg = tm.do_feed(pet)
+    assert "passed away" in msg.lower()
+    assert pet.hunger == 0, f"Dead pet's hunger should not change, got {pet.hunger}"
+
+def test_dead_pet_play_rejected():
+    """Bug fix: do_play should reject dead pets."""
+    pet = make_pet(is_alive=False, happiness=10, energy=80)
+    msg = tm.do_play(pet)
+    assert "passed away" in msg.lower()
+    assert pet.happiness == 10
+
+def test_dead_pet_heal_rejected():
+    """Bug fix: do_heal should reject dead pets."""
+    pet = make_pet(is_alive=False, health=0)
+    msg = tm.do_heal(pet)
+    assert "passed away" in msg.lower()
+    assert pet.health == 0
+
+def test_dead_pet_sleep_rejected():
+    """Bug fix: do_sleep should reject dead pets."""
+    pet = make_pet(is_alive=False, energy=0)
+    msg = tm.do_sleep(pet)
+    assert "passed away" in msg.lower()
+    assert pet.energy == 0
+
+def test_dead_pet_clean_rejected():
+    """Bug fix: do_clean should reject dead pets."""
+    pet = make_pet(is_alive=False, cleanliness=10)
+    msg = tm.do_clean(pet)
+    assert "passed away" in msg.lower()
+    assert pet.cleanliness == 10
+
+def test_dead_pet_pet_rejected():
+    """Bug fix: do_pet should reject dead pets."""
+    pet = make_pet(is_alive=False, happiness=10)
+    msg = tm.do_pet(pet)
+    assert "passed away" in msg.lower()
+    assert pet.happiness == 10
+
+def test_dead_pet_teach_rejected():
+    """Bug fix: do_teach should reject dead pets."""
+    pet = make_pet(is_alive=False, energy=50)
+    msg = tm.do_teach(pet)
+    assert "passed away" in msg.lower()
+    assert len(pet.tricks_learned) == 0
+
+def test_dead_pet_explore_rejected():
+    """Bug fix: do_explore should reject dead pets."""
+    pet = make_pet(is_alive=False, energy=50)
+    msg = tm.do_explore(pet)
+    assert "passed away" in msg.lower()
+    assert pet.explore_count == 0
+
+def test_dead_pet_feed_no_achievement():
+    """Bug fix: feeding a dead pet should not award achievements."""
+    pet = make_pet(is_alive=False, hunger=0, achievements=[])
+    tm.do_feed(pet)
+    assert "first_feed" not in pet.achievements
+
+def test_dead_pet_feed_no_interaction_increment():
+    """Bug fix: feeding a dead pet should not increment interactions."""
+    pet = make_pet(is_alive=False, hunger=0, total_interactions=0, lifetime_interactions=0)
+    tm.do_feed(pet)
+    assert pet.total_interactions == 0
+    assert pet.lifetime_interactions == 0
+
+
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__, "-v"])

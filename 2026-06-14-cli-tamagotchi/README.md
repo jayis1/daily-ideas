@@ -1,4 +1,4 @@
-# 🥚 CLI Tamagotchi v2.1
+# 🥚 CLI Tamagotchi v2.2
 
 A fully-featured virtual pet that lives in your terminal! Choose from 5 species (cat, dog, dragon, slime, robot), each with unique ASCII art, personality traits, and response text. Your pet's needs decay in real-time between sessions, so remember to come back and care for them!
 
@@ -24,6 +24,7 @@ A fully-featured virtual pet that lives in your terminal! Choose from 5 species 
 - 📔 **Event diary** — Every action is timestamped in your pet's diary. Review the last 15 entries with `diary` command.
 
 ### Persistence & Safety
+- 💀 **Dead pet protection** — All care actions (`feed`, `play`, `heal`, `sleep`, `clean`, `pet`, `teach`, `explore`) are rejected for deceased pets. No posthumous stat changes, achievements, or interaction increments.
 - 💾 **Automatic backup** — Save file is backed up to `pet.json.bak` on every save. If the primary save is corrupted, the game falls back to the backup automatically.
 - 🔄 **Save migration** — Old save files missing new fields are automatically populated with sensible defaults.
 - 🔄 **Forward compatibility** — Save files with unknown fields from future versions are loaded safely (extra fields are ignored).
@@ -58,6 +59,16 @@ python3 tamagotchi.py --version
 
 On first launch, you'll be prompted to name your pet and choose a species. After that, your pet loads automatically on each run.
 
+## Running Tests
+
+```bash
+# Run all 227 tests (no pytest needed)
+python3 run_tests.py
+
+# Or with pytest (if installed)
+python3 -m pytest test_tamagotchi.py -v
+```
+
 ## Usage Examples
 
 ### Starting a new pet
@@ -84,10 +95,10 @@ Choose a species:
   🥚 CLI Tamagotchi — Nibbles the cat 😊
 ══════════════════════════════════════════════════
 
-      /\_/\
+      /\\_/\\
      ( °ω° )
       > ω <
-     /|   |\
+     /|   |\\
     (_|   |_)
       "" ""
 
@@ -121,7 +132,7 @@ Choose a species:
 | `teach`  | 🎓 Learn a new trick        | ⚡ -10 energy, 💖 +8 happiness            |
 | `explore`| 🔍 Random adventure         | ⚡ -8 energy, stat effects vary           |
 
-> **Note**: `play` requires at least 15 energy. `teach` requires at least 10 energy. `explore` requires at least 8 energy. If your pet is too tired, these actions will be rejected with a helpful message.
+> **Note**: `play` requires at least 15 energy. `teach` requires at least 10 energy. `explore` requires at least 8 energy. If your pet is too tired, these actions will be rejected with a helpful message. Dead pets cannot perform any actions.
 
 ### Information commands
 
@@ -173,17 +184,17 @@ Exploring costs 8 energy. Health-reducing events cannot drop health below 1 (saf
 | Teacher       | 🎓  | Teach your pet a trick for the first time |
 | Adventurer   | 🧭  | Let your pet explore for the first time   |
 | Devoted       | ❤️  | Reach 10 lifetime interactions            |
-| Super Devoted| 💜  | Reach 50 lifetime interactions            |
-| Best Friend  | 🏆  | Reach 100 lifetime interactions           |
-| Soulmate     | ✨  | Reach 500 lifetime interactions           |
-| Perfect Care | 👑  | All stats above 80 at once                |
-| Survivor     | 🛡️ | Recover from being sick                    |
-| Trickster    | 🎪  | Teach 3 different tricks                  |
+| Super Devoted | 💜  | Reach 50 lifetime interactions            |
+| Best Friend   | 🏆  | Reach 100 lifetime interactions           |
+| Soulmate      | ✨  | Reach 500 lifetime interactions           |
+| Perfect Care  | 👑  | All stats above 80 at once                |
+| Survivor      | 🛡️ | Recover from being sick                    |
+| Trickster     | 🎪  | Teach 3 different tricks                  |
 | Grand Performer | 🎭 | Teach all 5 tricks                     |
-| Wanderer     | 🗺️ | Explore 5 times                           |
-| Explorer     | 🌍  | Explore 20 times                          |
-| All Grown Up | 🌟  | Reach the adult stage                     |
-| Wisdom       | 📖  | Reach the elder stage                     |
+| Wanderer      | 🗺️ | Explore 5 times                           |
+| Explorer      | 🌍  | Explore 20 times                          |
+| All Grown Up  | 🌟  | Reach the adult stage                     |
+| Wisdom        | 📖  | Reach the elder stage                     |
 
 ### Mood system
 
@@ -207,7 +218,7 @@ Your pet's mood depends on their stats:
   Use 'release' to let go and start fresh.
 ```
 
-Dead pets can still use `status`, `achievements`, `diary`, and `release` commands.
+Dead pets can still use `status`, `achievements`, `diary`, and `release` commands. All care actions are rejected — you cannot feed, play with, heal, clean, pet, teach, or explore with a deceased pet.
 
 ### Returning after absence
 
@@ -221,30 +232,12 @@ Stats decay over real time. If you leave for hours, your pet will be hungry, tir
 - Old saves missing new fields are automatically migrated with sensible defaults
 - Save files with unknown fields from future versions are loaded safely (extra fields are ignored)
 
-## Running Tests
-
-```bash
-# Run all 203 tests (no pytest needed)
-python3 run_tests.py
-
-# Or with pytest (if installed)
-python3 -m pytest test_tamagotchi.py -v
-```
-
 ## Changelog
 
-### v2.1 — Bug Fixes
-- **Fixed 'dying' mood unreachable** — The `dying` mood (😰) was unreachable because health was checked against `SICK_THRESHOLD` before `DEAD_THRESHOLD` (0). Added `DYING_THRESHOLD = 10` so health below 10 shows "dying" and below 20 shows "sick".
-- **Fixed egg → baby transition** — Level-up messages were suppressed for egg-to-baby transitions due to `old_stage != "egg"` check. Your pet's very first growth milestone now properly announces!
-- **Fixed `do_play()` missing energy check** — Unlike `teach` and `explore`, `play` had no internal energy check. Calling `do_play()` with energy below 15 now returns a "too tired" message instead of executing and driving energy negative.
-- **Fixed dead pet `status` command** — The `status` command was missing from the dead-pet command allowlist, causing dead pets to show "can't do that" instead of their status. Now dead pets can check `status`, `achievements`, `diary`, and `release`.
-- **Fixed missing `pet` achievement** — The `pet` command didn't award any achievement, unlike every other care action. Added `first_pet_stroke` ("Best Pal" 🤗) achievement.
-- **Fixed save file forward compatibility** — Loading a save file with unknown fields (from a future version) caused a `TypeError` crash. `load_pet()` now filters out unknown fields so saves are forward-compatible.
-- **Fixed explore health safety** — Robot's "overheated slightly" event reduced health by 5, which could drop health to 0 (potentially killing the pet from an adventure). Health-reducing explore events now floor at 1, preventing unfair death.
-- **Fixed unknown command decay** — Typos and unrecognized commands triggered stat decay (`apply_decay(0.5)`), punishing players for mistakes. Unknown and invalid commands now skip the decay phase.
-- **Fixed test `test_play_action`** — The test created a pet with default `hunger=80` but asserted `hunger < 50` after `do_play`. Fixed by explicitly setting `hunger=50`.
-- **Updated test `test_play_too_tired`** — Now properly tests that `do_play()` rejects low-energy play internally, verifying stats don't change.
-- **Added 11 new bug-fix tests** — Covering dying mood, egg transition, energy check, dead pet commands, pet achievement, forward compatibility, explore health safety, and more.
+### v2.2 — Bug Fixes
+- **Fixed dead pet action vulnerability** — All 8 care actions (`feed`, `play`, `heal`, `sleep`, `clean`, `pet`, `teach`, `explore`) could be called on dead pets via the API, modifying stats, awarding achievements, and incrementing interactions. Each action now checks `pet.is_alive` first and returns a descriptive rejection message. This was already guarded in the main interactive loop but not in the underlying functions, making the API unsafe for programmatic use.
+- **Fixed `stat_bar` overflow** — `stat_bar()` didn't clamp input values to `[0, MAX_STAT]`, so values above 100 produced bars longer than the display width (e.g., `stat_bar(150, width=20)` produced a 30-character bar). Now properly clamped.
+- **Fixed explore energy threshold mismatch** — `do_explore()` required `energy >= 10` but only deducted 8 energy, inconsistent with the README and in-game help which state "costs 8 energy". Changed the threshold from 10 to 8 so the requirement matches the cost.
 
 ## How It Works
 

@@ -29,7 +29,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 # ─── Version ─────────────────────────────────────────────────────────────────
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 
 # ─── Save file ───────────────────────────────────────────────────────────────
 SAVE_DIR = Path.home() / ".tamagotchi"
@@ -748,6 +748,8 @@ STAT_ICONS = {
 
 def stat_bar(value: float, width: int = 20, color: str = "") -> str:
     """Render a visual stat bar with optional color coding."""
+    # Clamp value to valid range to prevent overflow
+    value = max(0, min(MAX_STAT, value))
     filled = int(value / MAX_STAT * width)
     empty = width - filled
     bar = "█" * filled + "░" * empty
@@ -829,6 +831,8 @@ def render_pet(pet: Pet) -> str:
 # ─── Actions ──────────────────────────────────────────────────────────────────
 def do_feed(pet: Pet) -> str:
     """Feed the pet: increases hunger and energy, slightly decreases cleanliness."""
+    if not pet.is_alive:
+        return f"💀 {pet.name} has passed away and can't be fed..."
     responses = RESPONSES["feed"].get(pet.species, ["*eats happily*"])
     msg = random.choice(responses)
     pet.hunger = min(MAX_STAT, pet.hunger + 25)
@@ -845,6 +849,8 @@ def do_feed(pet: Pet) -> str:
 
 def do_play(pet: Pet) -> str:
     """Play with the pet: increases happiness, costs energy and hunger."""
+    if not pet.is_alive:
+        return f"💀 {pet.name} has passed away and can't play..."
     if pet.energy < 15:
         return f"😴 {pet.name} is too tired to play! Try letting them sleep."
     responses = RESPONSES["play"].get(pet.species, ["*plays happily*"])
@@ -863,6 +869,8 @@ def do_play(pet: Pet) -> str:
 
 def do_heal(pet: Pet) -> str:
     """Heal the pet: increases health, slightly decreases happiness (yucky medicine)."""
+    if not pet.is_alive:
+        return f"💀 {pet.name} has passed away and can't be healed..."
     responses = RESPONSES["heal"].get(pet.species, ["*feels better*"])
     msg = random.choice(responses)
     pet.health = min(MAX_STAT, pet.health + 30)
@@ -880,6 +888,8 @@ def do_heal(pet: Pet) -> str:
 
 def do_sleep(pet: Pet) -> str:
     """Put the pet to sleep: restores energy, slightly decreases hunger."""
+    if not pet.is_alive:
+        return f"💀 {pet.name} has passed away and can't sleep..."
     responses = RESPONSES["sleep"].get(pet.species, ["*falls asleep*"])
     msg = random.choice(responses)
     pet.energy = min(MAX_STAT, pet.energy + 35)
@@ -894,6 +904,8 @@ def do_sleep(pet: Pet) -> str:
 
 def do_clean(pet: Pet) -> str:
     """Clean the pet: increases cleanliness and slightly happiness."""
+    if not pet.is_alive:
+        return f"💀 {pet.name} has passed away and can't be cleaned..."
     responses = RESPONSES["clean"].get(pet.species, ["*sparkles*"])
     msg = random.choice(responses)
     pet.cleanliness = min(MAX_STAT, pet.cleanliness + 30)
@@ -908,6 +920,8 @@ def do_clean(pet: Pet) -> str:
 
 def do_pet(pet: Pet) -> str:
     """Pet the pet: increases happiness."""
+    if not pet.is_alive:
+        return f"💀 {pet.name} has passed away and can't be petted..."
     responses = RESPONSES["pet"].get(pet.species, ["*happy*"])
     msg = random.choice(responses)
     pet.happiness = min(MAX_STAT, pet.happiness + 10)
@@ -925,6 +939,8 @@ def do_teach(pet: Pet) -> str:
     If the pet already knows all available tricks, just performs a random one.
     Returns a descriptive message.
     """
+    if not pet.is_alive:
+        return f"💀 {pet.name} has passed away and can't learn tricks..."
     available_tricks = TRICKS.get(pet.species, [])
 
     if not available_tricks:
@@ -964,7 +980,9 @@ def do_explore(pet: Pet) -> str:
     Costs energy. May find items, trigger events, or encounter mishaps.
     Returns a descriptive message.
     """
-    if pet.energy < 10:
+    if not pet.is_alive:
+        return f"💀 {pet.name} has passed away and can't explore..."
+    if pet.energy < 8:
         return f"😴 {pet.name} is too tired to explore! Try letting them sleep first."
 
     events = EXPLORE_EVENTS.get(pet.species, [])
