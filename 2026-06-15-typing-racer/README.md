@@ -31,6 +31,7 @@ When a word reaches the danger zone, you lose a life (♥). Lose all 5 lives and
 ### Core Gameplay
 - **Progressive difficulty** — 4 word tiers unlock as you improve (easy, medium, hard, expert)
 - **Smart targeting** — automatically locks onto the most urgent word matching your first keystroke
+- **Case-insensitive input** — Caps Lock won't break your game; uppercase and lowercase both work
 - **Combo system** — chain completions for score multipliers (each combo adds 0.25x)
 - **Combo milestones** — visual 🔥 notification at every 5x combo streak
 - **Target arrow** — ▼ indicator points at your currently targeted word
@@ -56,6 +57,7 @@ Power-ups spawn every 6–12 words and fall slowly down the screen. They are aut
 - **Pause screen** — press ESC to pause; shows current stats and allows Q to quit
 - **Terminal resize handling** — adapts if you resize your terminal mid-game
 - **Minimum size check** — warns if your terminal is too small (needs 60×20 minimum)
+- **Non-letter key filtering** — pressing space, digits, or punctuation won't affect your combo or accuracy
 
 ## 🚀 Installation
 
@@ -76,18 +78,20 @@ python3 typing_racer.py
 
 | Key | Action |
 |-----|--------|
-| `A-Z`, `a-z` | Type letters to destroy falling words |
+| `A-Z`, `a-z` | Type letters to destroy falling words (case-insensitive) |
 | `ESC` | Pause / Resume |
 | `Q` | Quit (from pause screen or game over screen) |
 | `R` | Restart (on game over screen) |
 | `Ctrl+C` | Force quit anytime |
+
+**Note:** Non-letter keys (space, digits, punctuation) are silently ignored and won't affect your combo or accuracy.
 
 ## 📋 CLI Options
 
 ```bash
 python3 typing_racer.py              # Start the game
 python3 typing_racer.py --help       # Show help and usage info
-python3 typing_racer.py --version    # Show version (2.1.0)
+python3 typing_racer.py --version    # Show version (2.2.0)
 python3 typing_racer.py --scores     # Show high scores leaderboard
 python3 typing_racer.py --reset      # Reset all high scores
 ```
@@ -101,6 +105,7 @@ python3 typing_racer.py --reset      # Reset all high scores
 5. **Accuracy matters** — mistyped keys break your combo, so type carefully
 6. **Grab power-ups** — Freeze is great for catching up, Bomb clears a crowded screen. Power-ups are collected automatically when they fall near the bottom
 7. **Check key hints** — the "Keys:" line at the bottom shows which first letters are currently available
+8. **Caps Lock is fine** — the game converts all letter input to lowercase, so Caps Lock won't hurt you
 
 ## 📊 Scoring
 
@@ -127,15 +132,15 @@ python3 -m pytest test_typing_racer.py -v
 python3 test_typing_racer.py
 ```
 
-The test suite covers 52 tests including:
+The test suite covers 56 tests including:
 - `FallingWord` — initialization, typing, completion, freezing, edge cases
 - `Particle` — physics, lifetime
 - `PowerUp` — types, expiration, symbols, speed, unknown types
-- `HighScoreManager` — add, save, load, sort, clear, corrupt-file handling, rank return values, field validation
+- `HighScoreManager` — add, save, load, sort, clear, corrupt-file handling, entry validation, rank return values, field validation
 - Word pool validation — lowercase, no duplicates, appropriate lengths, all alpha
 - Scoring formula verification
 - Version format check
-- `TestBugFixes` — bomb words_completed, power-up collection, ESC during countdown, freeze effect, heart max lives, pause quit, spawn interval bounds
+- `TestBugFixes` — v2.1: bomb words_completed, power-up collection, ESC during countdown, freeze effect, heart max lives, pause quit, spawn interval bounds; v2.2: case-insensitive matching, non-alpha key filtering, score entry validation, unlocked tier weight guarantee
 
 ## 🏗️ Architecture
 
@@ -149,18 +154,16 @@ The test suite covers 52 tests including:
 
 All rendering uses `curses` — no external UI library needed. The game loop uses delta-time updates (capped at 100ms) for consistent physics across different frame rates.
 
-## 🐛 Bugs Fixed in v2.1
+## 🐛 Bugs Fixed
 
-1. **Power-ups were never collected** — The `collect_powerup()` method existed but was never called from the game loop. Power-ups would fall and disappear without any effect. Now power-ups are automatically collected when they reach near the bottom of the screen (2 rows above the danger zone).
-2. **Bomb power-up inflated difficulty progression** — Bombed words incorrectly incremented `words_completed`, causing premature level-ups and difficulty tier unlocks. Bombed words now only give a flat score bonus (+5 points each) and do NOT count toward difficulty progression.
-3. **ESC during countdown started the game** — Pressing ESC during the 3-second countdown would immediately start the game instead of being ignored. ESC is now explicitly ignored during the countdown phase.
-4. **No way to quit from pause** — Pressing Q during the pause screen had no effect. Now Q from the pause screen triggers game over (saves score) and allows clean exit.
+### v2.2
+1. **Case sensitivity broke gameplay** — Uppercase letters (e.g., from Caps Lock) didn't match lowercase words, causing the combo to reset. Input is now converted to lowercase before matching.
+2. **Non-letter keys reset combo** — Pressing space, digits, or punctuation while targeting a word would trigger the wrong-character path and reset the combo. Non-alphabetic keys are now silently ignored.
+3. **HighScoreManager crashed on corrupt entries** — Loading a score file containing non-dict entries (strings, numbers, dicts missing required keys) caused `add()` to crash with `string indices must be integers`. Entries are now validated on load.
+4. **Unlocked difficulty tiers had zero spawn weight** — When hard/expert tiers were unlocked (at 10/20 words), their spawn weight was 0 until higher levels, meaning they'd never appear despite being "unlocked". All unlocked tiers now have a minimum weight of 1.
 
-## 🆕 What's New in v2.1
-
-- **Fixed**: Power-ups are now actually collectible — they activate when they fall near the bottom of the screen
-- **Fixed**: Bomb power-up no longer inflates difficulty progression
-- **Fixed**: ESC key properly ignored during countdown (no longer accidentally starts the game)
-- **Fixed**: Q key now works from the pause screen to quit (with score saving)
-- **Added**: Pause screen now shows "Press Q to quit" hint
-- **Added**: 14 new unit tests covering bug fixes and edge cases
+### v2.1
+1. **Power-ups were never collected** — The `collect_powerup()` method existed but was never called from the game loop. Now collected automatically when near the bottom.
+2. **Bomb power-up inflated difficulty progression** — Bombed words incorrectly incremented `words_completed`. Now they only give a flat +5 score bonus.
+3. **ESC during countdown started the game** — ESC is now explicitly ignored during the countdown phase.
+4. **No way to quit from pause** — Q during pause now triggers game over with score saving.

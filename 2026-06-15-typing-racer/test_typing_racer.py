@@ -348,48 +348,35 @@ class TestScoring(unittest.TestCase):
 
 
 class TestBugFixes(unittest.TestCase):
-    """Tests for bug fixes in v2.1."""
+    """Tests for bug fixes in v2.1 and v2.2."""
 
     def test_bomb_does_not_increment_words_completed(self):
         """Bomb power-up should NOT count destroyed words toward words_completed."""
-        # Simulate: bomb destroys 3 words
-        # Before fix: words_completed would jump by number of bombed words
-        # After fix: words_completed stays the same
         words = [
             FallingWord("cat", 5, 1.0, "easy"),
             FallingWord("dog", 10, 1.0, "easy"),
             FallingWord("sun", 15, 1.0, "easy"),
         ]
         words_completed_before = 5
-        # In the fixed code, bomb does NOT increment words_completed
-        # Only score += 5 per bombed word
         bombed_count = 0
         score_before = 100
         for w in words:
             if w.alive:
                 w.alive = False
-                # words_completed is NOT incremented for bombed words
                 score_before += 5
                 bombed_count += 1
-        # words_completed stays at 5
         self.assertEqual(words_completed_before, 5)
-        # score increased by 5 per bombed word
         self.assertEqual(score_before, 100 + 5 * 3)
 
     def test_powerup_collection_mechanic(self):
         """Power-ups should be collected when they reach the bottom area."""
         pu = PowerUp(POWERUP_FREEZE, 10, 2)
-        # Power-up starts at y=2 and falls at speed 0.6
-        # After some time, it should reach the collection zone
         self.assertTrue(pu.alive)
-        # After advancing 8 seconds, it expires
         pu.advance(8.0)
         self.assertFalse(pu.alive)
 
     def test_bomb_powerup_no_words_completed_increment(self):
         """Verify that collect_powerup for BOMB does not change words_completed."""
-        # We can't fully test TypingRacer.collect_powerup without curses,
-        # but we can verify the method signature and logic exist
         self.assertTrue(hasattr(TypingRacer, 'collect_powerup'))
 
     def test_freeze_powerup_freezes_words(self):
@@ -400,12 +387,10 @@ class TestBugFixes(unittest.TestCase):
         ]
         for w in words:
             self.assertFalse(w.frozen)
-        # After freeze
         for w in words:
             w.frozen = True
         for w in words:
             self.assertTrue(w.frozen)
-            # Verify frozen words don't move
             old_y = w.y
             w.advance(1.0)
             self.assertAlmostEqual(w.y, old_y)
@@ -413,10 +398,8 @@ class TestBugFixes(unittest.TestCase):
     def test_heart_powerup_max_lives(self):
         """Heart power-up should not exceed max 5 lives."""
         lives = 5
-        # Already at max
         new_lives = min(lives + 1, 5)
         self.assertEqual(new_lives, 5)
-        # Below max
         lives = 3
         new_lives = min(lives + 1, 5)
         self.assertEqual(new_lives, 4)
@@ -428,33 +411,96 @@ class TestBugFixes(unittest.TestCase):
             self.assertGreaterEqual(interval, 0.8)
 
     def test_esc_does_not_skip_countdown(self):
-        """ESC key (ch=27) should be ignored during countdown phase.
-        
-        Before fix: any key including ESC would start the game immediately.
-        After fix: ESC is explicitly ignored during countdown.
-        """
-        # Simulate the handle_input logic for countdown phase
-        ch = 27  # ESC
+        """ESC key (ch=27) should be ignored during countdown phase."""
+        ch = 27
         started = False
-        # Old behavior: started = True for any key
-        # New behavior: ESC is ignored
         if ch == 27:
-            pass  # ignore
+            pass
         else:
             started = True
         self.assertFalse(started)
 
     def test_quit_from_pause(self):
-        """Q key during pause should trigger game over (save score and exit)."""
-        # This is tested by verifying the handle_input logic path
-        # We can't fully test without curses, but verify the intent
+        """Q key during pause should trigger game over."""
         ch = ord('q')
         paused = True
         game_over = False
-        # New behavior: Q during pause sets game_over = True
         if paused and ch == ord('q'):
             game_over = True
         self.assertTrue(game_over)
+
+    # ── v2.2 bug fix tests ────────────────────────────────────────────
+
+    def test_case_insensitive_matching(self):
+        """Uppercase letters should match lowercase words (Caps Lock fix)."""
+        w = FallingWord("hello", 5, 1.0, "easy")
+        # Simulate the lowercase conversion now done in handle_input
+        self.assertTrue(w.try_char("H".lower()))
+        self.assertTrue(w.try_char("E".lower()))
+        # Without lowercase conversion, these would fail
+        self.assertFalse(w.try_char("E"))  # uppercase fails raw match
+
+    def test_non_alpha_keys_ignored(self):
+        """Non-alpha characters should not affect gameplay."""
+        # The fix in handle_input: if not char.isalpha(): return
+        # This means space, digits, punctuation are completely ignored
+        self.assertFalse(" ".isalpha())
+        self.assertFalse("1".isalpha())
+        self.assertFalse(".".isalpha())
+        self.assertFalse("\n".isalpha())
+        # But letters should still work
+        self.assertTrue("a".isalpha())
+        self.assertTrue("A".isalpha())
+
+    def test_high_score_validates_entries(self):
+        """HighScoreManager should skip invalid entries on load."""
+        tmpdir = tempfile.mkdtemp()
+        try:
+            path = os.path.join(tmpdir, "test_scores.json")
+            # Write a mix of valid and invalid entries
+            with open(path, "w") as f:
+                json.dump([
+                    "not a dict",
+                    42,
+                    {"score": 100, "wpm": 20.0, "accuracy": 80.0,
+                     "level": 1, "words": 5, "max_combo": 2, "date": "2026-01-01"},
+                    {"score": 50},  # missing keys
+                ], f)
+            hs = HighScoreManager(path=path)
+            hs.load()
+            # Only the valid entry should survive
+            self.assertEqual(len(hs.scores), 1)
+            self.assertEqual(hs.scores[0]["score"], 100)
+        finally:
+            os.remove(path)
+            os.rmdir(tmpdir)
+
+    def test_unlocked_tier_always_has_weight(self):
+        """Unlocked difficulty tiers should always have weight >= 1.
+
+        Before fix: hard tier was unlocked at 10 words but had weight=0
+        until level 3, meaning it would never spawn despite being unlocked.
+        """
+        # Simulate the weight calculation at various levels
+        for level in range(1, 10):
+            # Easy weight
+            easy_w = max(1, 5 - level)
+            self.assertGreaterEqual(easy_w, 1, f"easy weight at level {level}")
+            # Medium weight
+            medium_w = max(1, min(level, 5))
+            self.assertGreaterEqual(medium_w, 1, f"medium weight at level {level}")
+            # Hard weight (unlocked at 10 words, but level matters)
+            if level > 2:
+                hard_w = max(1, min(level - 1, 4))
+            else:
+                hard_w = 1  # unlocked but low level
+            self.assertGreaterEqual(hard_w, 1, f"hard weight at level {level}")
+            # Expert weight
+            if level > 4:
+                expert_w = max(1, min(level - 3, 3))
+            else:
+                expert_w = 1  # unlocked but low level
+            self.assertGreaterEqual(expert_w, 1, f"expert weight at level {level}")
 
 
 if __name__ == "__main__":

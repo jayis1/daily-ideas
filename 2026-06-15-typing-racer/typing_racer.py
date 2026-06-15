@@ -20,7 +20,7 @@ import time
 import locale
 import sys
 
-__version__ = "2.1.0"
+__version__ = "2.2.0"
 
 # ── High score file ─────────────────────────────────────────────────────
 HIGHSCORE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".typing_racer_scores.json")
@@ -195,7 +195,12 @@ class HighScoreManager:
             with open(self.path, "r") as f:
                 data = json.load(f)
                 if isinstance(data, list):
-                    self.scores = data
+                    # Validate each entry is a dict with required keys
+                    required = {"score", "wpm", "accuracy", "level", "words", "max_combo", "date"}
+                    self.scores = [
+                        e for e in data
+                        if isinstance(e, dict) and required.issubset(e.keys())
+                    ]
         except (FileNotFoundError, json.JSONDecodeError, OSError):
             self.scores = []
 
@@ -335,16 +340,17 @@ class TypingRacer:
         """Pick a random word from available difficulty tiers."""
         tiers = list(self.unlocked)
         # Weight toward harder tiers as level increases
+        # Unlocked tiers always get a minimum weight of 1 so they actually appear
         weights = []
         for tier in tiers:
             if tier == "easy":
                 weights.append(max(1, 5 - self.level))
             elif tier == "medium":
-                weights.append(min(self.level, 5))
+                weights.append(max(1, min(self.level, 5)))
             elif tier == "hard":
-                weights.append(min(self.level - 1, 4) if self.level > 2 else 0)
+                weights.append(max(1, min(self.level - 1, 4)) if self.level > 2 else 1)
             elif tier == "expert":
-                weights.append(min(self.level - 3, 3) if self.level > 4 else 0)
+                weights.append(max(1, min(self.level - 3, 3)) if self.level > 4 else 1)
             else:
                 weights.append(1)
 
@@ -502,6 +508,14 @@ class TypingRacer:
             return
 
         char = chr(ch)
+
+        # Ignore non-alpha keys (space, digits, punctuation, etc.)
+        # These should not affect gameplay or reset the combo.
+        if not char.isalpha():
+            return
+
+        # Convert to lowercase so Caps Lock doesn't break gameplay
+        char = char.lower()
 
         self.total_chars_typed += 1
 
