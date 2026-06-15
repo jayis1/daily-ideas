@@ -6,9 +6,10 @@ Recursively subdivides a canvas into rectangles and fills them with
 primary colors in the style of Piet Mondrian's iconic compositions.
 Renders using Unicode box-drawing characters and ANSI true-color escapes.
 
-Supports multiple palettes, animation mode, and SVG/HTML export.
+Supports multiple palettes, animation mode, SVG/HTML/PNG export,
+custom palettes via JSON, and composition statistics.
 
-Version: 2.1.0
+Version: 3.0.0
 """
 
 import random
@@ -17,15 +18,19 @@ import os
 import argparse
 import math
 import time
+import json
+import struct
+import zlib
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 
-__version__ = "2.1.0"
+__version__ = "3.0.0"
 
 # ── ANSI helpers ──────────────────────────────────────────────────────────
 
 RESET = "\033[0m"
 BOLD = "\033[1m"
+DIM = "\033[2m"
 HIDE_CURSOR = "\033[?25l"
 SHOW_CURSOR = "\033[?25h"
 CLEAR_SCREEN = "\033[2J\033[H"
@@ -42,7 +47,7 @@ def bg_color(r: int, g: int, b: int) -> str:
 
 # ── Mondrian palettes ────────────────────────────────────────────────────
 
-PALETTES = {
+PALETTES: Dict[str, Dict[str, Tuple[int, int, int]]] = {
     "classic": {
         "red":     (206,  32,  41),
         "blue":    (  0,  54, 170),
@@ -78,6 +83,20 @@ PALETTES = {
         "white":   ( 40,  42,  54),
         "black":   (  0,   0,   0),
     },
+    "ocean": {
+        "red":     (255,  99,  71),
+        "blue":    (  0, 105, 148),
+        "yellow":  (255, 224, 130),
+        "white":   (224, 235, 245),
+        "black":   ( 15,  30,  45),
+    },
+    "autumn": {
+        "red":     (178,  34,  34),
+        "blue":    ( 70,  90, 130),
+        "yellow":  (218, 165,  32),
+        "white":   (245, 235, 220),
+        "black":   ( 45,  30,  20),
+    },
 }
 
 # Default palette name
@@ -95,6 +114,10 @@ class Rect:
     y: int
     w: int
     h: int
+
+    def area(self) -> int:
+        """Return the area of this rectangle."""
+        return self.w * self.h
 
 @dataclass
 class Cell:
@@ -281,6 +304,16 @@ def fix_intersections(canvas: MondrianCanvas, palette: dict):
             if not has_right and x < canvas.width - 2 and canvas.cells[y][x+2].char == "─":
                 has_right = True
 
+            # Also detect border cells (filled black bg) as connections
+            if not has_up and y > 0 and canvas.cells[y-1][x].fg == border_color:
+                has_up = True
+            if not has_down and y < canvas.height - 1 and canvas.cells[y+1][x].fg == border_color:
+                has_down = True
+            if not has_left and x > 0 and canvas.cells[y][x-1].fg == border_color:
+                has_left = True
+            if not has_right and x < canvas.width - 1 and canvas.cells[y][x+1].fg == border_color:
+                has_right = True
+
             if is_h and has_up and has_down:
                 cell.char = "┼"
             elif is_h and has_up:
@@ -293,6 +326,23 @@ def fix_intersections(canvas: MondrianCanvas, palette: dict):
                 cell.char = "┤"
             elif is_v and has_right:
                 cell.char = "├"
+
+            # Corner T-junctions: a border cell at the edge of the canvas
+            # where a line terminates at the outer border
+            if cell.fg == border_color and cell.bg == border_color and cell.char == " ":
+                # This is a filled border area — check if it's a junction
+                connections = 0
+                if has_up: connections += 1
+                if has_down: connections += 1
+                if has_left: connections += 1
+                if has_right: connections += 1
+                # If it's a junction of multiple lines, mark as cross
+                if connections >= 3:
+                    cell.char = "┼"
+                elif has_up and has_down and not has_left and not has_right:
+                    cell.char = "│"
+                elif has_left and has_right and not has_up and not has_down:
+                    cell.char = "─"
 
 
 def draw_outer_border(canvas: MondrianCanvas, palette: dict):
@@ -326,17 +376,38 @@ def draw_outer_border(canvas: MondrianCanvas, palette: dict):
 
 
 def render(canvas: MondrianCanvas) -> str:
-    """Render the canvas to a string with ANSI color escapes."""
+    """Render the canvas to a string with ANSI color escapes.
+
+    Optimized to batch same-background cells together to reduce
+    the number of ANSI escape sequences emitted.
+    """
     lines = []
     for row in canvas.cells:
         parts = []
+        prev_bg = None
+        prev_fg = None
         for cell in row:
             r, g, b = cell.bg
             fr, fg_, fb = cell.fg
-            bg_esc = bg_color(r, g, b)
-            fg_esc = fg_color(fr, fg_, fb)
-            parts.append(f"{fg_esc}{bg_esc}{cell.char}")
+            # Only emit color changes when the color actually changes
+            if (r, g, b) != prev_bg or (fr, fg_, fb) != prev_fg:
+                bg_esc = bg_color(r, g, b)
+                fg_esc = fg_color(fr, fg_, fb)
+                parts.append(f"{fg_esc}{bg_esc}{cell.char}")
+                prev_bg = (r, g, b)
+                prev_fg = (fr, fg_, fb)
+            else:
+                parts.append(cell.char)
         lines.append("".join(parts) + RESET)
+    return "\n".join(lines)
+
+
+def render_plain(canvas: MondrianCanvas) -> str:
+    """Render the canvas as plain text without ANSI escapes (for piping/export)."""
+    lines = []
+    for row in canvas.cells:
+        line = "".join(cell.char for cell in row)
+        lines.append(line)
     return "\n".join(lines)
 
 
@@ -357,22 +428,26 @@ def render_partial(canvas: MondrianCanvas, rows: int) -> str:
 
 # ── Signature watermark ───────────────────────────────────────────────────
 
-def add_signature(canvas: MondrianCanvas, palette: dict):
-    """Add a small 'MONDRIAN' signature in the bottom-right area."""
-    sig = "MONDRIAN"
+def add_signature(canvas: MondrianCanvas, palette: dict, text: str = "MONDRIAN"):
+    """Add a small signature text in the bottom-right area.
+
+    Args:
+        canvas: The canvas to add the signature to.
+        palette: The color palette dict.
+        text: Custom signature text (default: "MONDRIAN").
+    """
     border_color = palette["black"]
     y = canvas.height - BORDER_W - 2
     if y < 0:
         return
-    x_start = canvas.width - BORDER_W - len(sig) - 2
+    x_start = canvas.width - BORDER_W - len(text) - 2
     if x_start < BORDER_W:
         return
-    for i, ch in enumerate(sig):
+    for i, ch in enumerate(text):
         x = x_start + i
         if 0 <= y < canvas.height and 0 <= x < canvas.width:
             canvas.cells[y][x].char = ch
             canvas.cells[y][x].fg = border_color
-
 
 # ── Statistics ────────────────────────────────────────────────────────────
 
@@ -400,12 +475,47 @@ def count_regions(canvas: MondrianCanvas, palette: dict) -> dict:
     return {"total_cells": total_colored, "colors": result}
 
 
+def compute_coverage(canvas: MondrianCanvas, palette: dict) -> dict:
+    """Compute the percentage coverage of each color in the paintable area.
+
+    Returns a dict mapping color names to percentage of total non-border cells.
+    """
+    border_color = palette["black"]
+    total_non_border = 0
+    color_cells = {}
+
+    for row in canvas.cells:
+        for cell in row:
+            if cell.bg != border_color:
+                total_non_border += 1
+
+    # Reverse lookup from RGB to name
+    name_map = {v: k for k, v in palette.items()}
+
+    for row in canvas.cells:
+        for cell in row:
+            bg = cell.bg
+            if bg == border_color:
+                continue
+            name = name_map.get(bg, f"custom({bg[0]},{bg[1]},{bg[2]})")
+            color_cells[name] = color_cells.get(name, 0) + 1
+
+    if total_non_border == 0:
+        return {name: 0.0 for name in color_cells}
+
+    return {name: round(count / total_non_border * 100, 1)
+            for name, count in color_cells.items()}
+
+
 # ── SVG Export ────────────────────────────────────────────────────────────
 
 def export_svg(canvas: MondrianCanvas, palette: dict, filename: str):
-    """Export the canvas as an SVG file with proper Mondrian-style rectangles."""
+    """Export the canvas as an SVG file with proper Mondrian-style rectangles.
+
+    Uses a flood-fill-like approach to merge adjacent same-color cells into
+    larger rectangles, producing clean, compact SVG output.
+    """
     border_color = palette["black"]
-    white_color = palette["white"]
     cell_size = 10  # pixels per character cell
 
     svg_width = canvas.width * cell_size
@@ -418,7 +528,6 @@ def export_svg(canvas: MondrianCanvas, palette: dict, filename: str):
     ]
 
     # Find filled regions using flood-fill-like approach
-    # Simplified: render each cell as a small rectangle
     visited = [[False] * canvas.width for _ in range(canvas.height)]
 
     for y in range(canvas.height):
@@ -513,11 +622,128 @@ def export_html(canvas: MondrianCanvas, palette: dict, filename: str):
         f.write('\n'.join(html_parts))
 
 
+def export_png(canvas: MondrianCanvas, palette: dict, filename: str, cell_size: int = 10):
+    """Export the canvas as a PNG file using pure Python (no external dependencies).
+
+    Creates a pixel-by-pixel rendering of the Mondrian composition at the
+    specified cell size (each character cell becomes a cell_size×cell_size block).
+
+    Args:
+        canvas: The MondrianCanvas to export.
+        palette: The color palette dict.
+        filename: Output file path.
+        cell_size: Pixels per character cell (default: 10).
+    """
+    width_px = canvas.width * cell_size
+    height_px = canvas.height * cell_size
+
+    # Build raw pixel data row by row (RGB)
+    raw_rows = []
+    for row in canvas.cells:
+        # Each cell row expands to cell_size pixel rows
+        pixel_row_parts = []
+        for cell in row:
+            r, g, b = cell.bg
+            pixel_row_parts.extend([bytes([r, g, b])] * cell_size)
+        pixel_row = b"".join(pixel_row_parts)
+        # Repeat this row cell_size times
+        for _ in range(cell_size):
+            raw_rows.append(pixel_row)
+
+    raw_data = b"".join(raw_rows)
+
+    # Build PNG file
+    def _make_chunk(chunk_type: bytes, data: bytes) -> bytes:
+        """Create a PNG chunk with length, type, data, and CRC."""
+        chunk_data = chunk_type + data
+        crc = struct.pack(">I", zlib.crc32(chunk_data) & 0xFFFFFFFF)
+        length = struct.pack(">I", len(data))
+        return length + chunk_data + crc
+
+    # PNG signature
+    png_sig = b"\x89PNG\r\n\x1a\n"
+
+    # IHDR chunk: width, height, bit_depth=8, color_type=2 (RGB), compression=0, filter=0, interlace=0
+    ihdr_data = struct.pack(">IIBBBBB", width_px, height_px, 8, 2, 0, 0, 0)
+    ihdr = _make_chunk(b"IHDR", ihdr_data)
+
+    # IDAT chunk: filter byte (0=None) + raw data per row, then zlib compress
+    # Add filter byte 0 (None) at start of each row
+    filtered = b""
+    row_size = width_px * 3
+    for i in range(height_px):
+        start = i * row_size
+        end = start + row_size
+        filtered += b"\x00" + raw_data[start:end]
+
+    compressed = zlib.compress(filtered, 9)
+    idat = _make_chunk(b"IDAT", compressed)
+
+    # IEND chunk
+    iend = _make_chunk(b"IEND", b"")
+
+    with open(filename, "wb") as f:
+        f.write(png_sig + ihdr + idat + iend)
+
+
+# ── Palette listing ───────────────────────────────────────────────────────
+
+def list_palettes():
+    """Print a formatted list of available palettes with ANSI color swatches."""
+    print(f"\n{BOLD}Available Mondrian Palettes{RESET}\n")
+    for name, palette in PALETTES.items():
+        marker = " (default)" if name == DEFAULT_PALETTE else ""
+        print(f"  {BOLD}{name}{RESET}{marker}")
+        swatch_parts = []
+        for color_name, rgb in palette.items():
+            r, g, b = rgb
+            swatch = f"  {bg_color(r, g, b)}   {RESET} {color_name}: rgb({r},{g},{b})"
+            swatch_parts.append(swatch)
+        print("\n".join(swatch_parts))
+        print()
+
+
+def parse_custom_palette(json_str: str) -> dict:
+    """Parse a custom palette from a JSON string.
+
+    The JSON must be an object with keys 'red', 'blue', 'yellow', 'white', 'black',
+    each mapping to an array of 3 integers [R, G, B] (0-255).
+
+    Example: '{"red":[255,0,0],"blue":[0,0,255],"yellow":[255,255,0],"white":[255,255,255],"black":[0,0,0]}'
+    """
+    try:
+        data = json.loads(json_str)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON for custom palette: {e}")
+
+    required = {"red", "blue", "yellow", "white", "black"}
+    missing = required - set(data.keys())
+    if missing:
+        raise ValueError(f"Custom palette missing colors: {', '.join(sorted(missing))}. Required: {', '.join(sorted(required))}")
+
+    extra = set(data.keys()) - required
+    if extra:
+        raise ValueError(f"Custom palette has unknown colors: {', '.join(sorted(extra))}. Only {', '.join(sorted(required))} are allowed")
+
+    palette = {}
+    for key in required:
+        val = data[key]
+        if not isinstance(val, list) or len(val) != 3:
+            raise ValueError(f"Color '{key}' must be a list of 3 integers, got: {val}")
+        r, g, b = val
+        for component, name in zip([r, g, b], ["R", "G", "B"]):
+            if not isinstance(component, int) or component < 0 or component > 255:
+                raise ValueError(f"Color '{key}' {name} value must be an integer 0-255, got: {component}")
+        palette[key] = (r, g, b)
+
+    return palette
+
+
 # ── Main generation function ─────────────────────────────────────────────
 
 def generate_mondrian(width=80, height=34, seed=None, split_prob=0.85,
                       max_depth=6, min_size=6, palette_name=None,
-                      no_signature=False):
+                      no_signature=False, custom_palette=None):
     """Generate a Mondrian-style composition and return it as an ANSI string.
 
     Args:
@@ -529,6 +755,7 @@ def generate_mondrian(width=80, height=34, seed=None, split_prob=0.85,
         min_size: Minimum region size before splitting stops.
         palette_name: Name of the color palette to use.
         no_signature: If True, omit the MONDRIAN signature watermark.
+        custom_palette: Optional dict override for the palette colors.
 
     Returns:
         Tuple of (ansi_art_string, canvas_object, palette_dict).
@@ -536,7 +763,7 @@ def generate_mondrian(width=80, height=34, seed=None, split_prob=0.85,
     if seed is not None:
         random.seed(seed)
 
-    palette = PALETTES.get(palette_name or DEFAULT_PALETTE, PALETTES[DEFAULT_PALETTE])
+    palette = custom_palette or PALETTES.get(palette_name or DEFAULT_PALETTE, PALETTES[DEFAULT_PALETTE])
 
     canvas = MondrianCanvas(width=width, height=height)
 
@@ -567,15 +794,15 @@ def generate_mondrian(width=80, height=34, seed=None, split_prob=0.85,
 
 def animate_mondrian(width=80, height=34, seed=None, split_prob=0.85,
                      max_depth=6, min_size=6, palette_name=None,
-                     no_signature=False, delay=0.03):
+                     no_signature=False, delay=0.03, custom_palette=None):
     """Animate the Mondrian composition being drawn row by row."""
-    palette = PALETTES.get(palette_name or DEFAULT_PALETTE, PALETTES[DEFAULT_PALETTE])
+    palette = custom_palette or PALETTES.get(palette_name or DEFAULT_PALETTE, PALETTES[DEFAULT_PALETTE])
 
     ansi_art, canvas, palette = generate_mondrian(
         width=width, height=height, seed=seed,
         split_prob=split_prob, max_depth=max_depth,
         min_size=min_size, palette_name=palette_name,
-        no_signature=no_signature
+        no_signature=no_signature, custom_palette=custom_palette
     )
 
     # Draw progressively, row by row
@@ -618,8 +845,11 @@ examples:
   %(prog)s -p neon                  # Use the neon color palette
   %(prog)s -W 100 -H 40             # Custom canvas size
   %(prog)s --animate                 # Animate the drawing process
-  %(prog)s --export svg output.svg   # Export as SVG file
-  %(prog)s --export html output.html # Export as HTML file
+  %(prog)s --export svg -o art.svg   # Export as SVG file
+  %(prog)s --export png -o art.png   # Export as PNG file
+  %(prog)s --export html -o art.html # Export as HTML file
+  %(prog)s --list-palettes           # Show available color palettes
+  %(prog)s --custom-palette '{"red":[255,0,0],"blue":[0,0,255],"yellow":[255,255,0],"white":[255,255,255],"black":[0,0,0]}'
 """
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -633,6 +863,9 @@ examples:
     parser.add_argument("-p", "--palette", type=str, default=DEFAULT_PALETTE,
                         choices=list(PALETTES.keys()),
                         help=f"Color palette (default: {DEFAULT_PALETTE})")
+    parser.add_argument("--custom-palette", type=str, default=None,
+                        help="Custom palette as JSON (overrides --palette). "
+                             "Format: '{\"red\":[R,G,B],\"blue\":[R,G,B],\"yellow\":[R,G,B],\"white\":[R,G,B],\"black\":[R,G,B]}'")
     parser.add_argument("--split-prob", type=float, default=0.85,
                         help="Probability of splitting a region (0.0-1.0, default: 0.85)")
     parser.add_argument("-d", "--max-depth", type=int, default=6,
@@ -649,14 +882,33 @@ examples:
                         help="Animate the composition being drawn row by row")
     parser.add_argument("--delay", type=float, default=0.03,
                         help="Delay in seconds between animation frames (default: 0.03)")
-    parser.add_argument("--export", type=str, choices=["svg", "html"], default=None,
-                        help="Export format (svg or html) instead of terminal rendering")
+    parser.add_argument("--export", type=str, choices=["svg", "html", "png"], default=None,
+                        help="Export format (svg, html, or png) instead of terminal rendering")
     parser.add_argument("-o", "--output", type=str, default=None,
-                        help="Output file path for --export (default: mondrian.svg or mondrian.html)")
+                        help="Output file path for --export (default: mondrian.<format>)")
     parser.add_argument("--stats", action="store_true",
                         help="Print composition statistics after rendering")
+    parser.add_argument("--list-palettes", action="store_true",
+                        help="List available palettes with color swatches and exit")
+    parser.add_argument("--plain", action="store_true",
+                        help="Output plain text without ANSI escapes (for piping)")
+    parser.add_argument("--cell-size", type=int, default=10,
+                        help="Cell size in pixels for PNG export (default: 10)")
 
     args = parser.parse_args()
+
+    # Handle --list-palettes
+    if args.list_palettes:
+        list_palettes()
+        return
+
+    # Parse custom palette
+    custom_palette = None
+    if args.custom_palette:
+        try:
+            custom_palette = parse_custom_palette(args.custom_palette)
+        except ValueError as e:
+            parser.error(str(e))
 
     # Validate split probability
     if not 0.0 <= args.split_prob <= 1.0:
@@ -669,6 +921,10 @@ examples:
     # Validate delay
     if args.delay < 0:
         parser.error("--delay must be >= 0")
+
+    # Validate cell-size
+    if args.cell_size < 1:
+        parser.error("--cell-size must be >= 1")
 
     # Determine terminal size
     try:
@@ -687,6 +943,9 @@ examples:
     if height < min_height:
         parser.error(f"Height must be at least {min_height} (2×border + min_size)")
 
+    # Determine palette name (for display purposes)
+    palette_display = "custom" if custom_palette else args.palette
+
     # Handle export mode
     if args.export:
         seed = args.seed if args.seed is not None else random.randint(0, 2**31)
@@ -694,7 +953,7 @@ examples:
             width=width, height=height, seed=seed,
             split_prob=args.split_prob, max_depth=args.max_depth,
             min_size=args.min_size, palette_name=args.palette,
-            no_signature=args.no_signature
+            no_signature=args.no_signature, custom_palette=custom_palette
         )
         if args.output:
             outfile = args.output
@@ -702,17 +961,28 @@ examples:
             outfile = f"mondrian.{args.export}"
         if args.export == "svg":
             export_svg(canvas, palette, outfile)
-        else:
+        elif args.export == "html":
             export_html(canvas, palette, outfile)
+        elif args.export == "png":
+            export_png(canvas, palette, outfile, cell_size=args.cell_size)
         print(f"Exported Mondrian composition to {outfile} (seed={seed})")
         if args.stats:
             stats = count_regions(canvas, palette)
+            coverage = compute_coverage(canvas, palette)
             print(f"\n{BOLD}Composition statistics:{RESET}")
             print(f"  Seed: {seed}")
             print(f"  Canvas: {width}×{height}")
-            print(f"  Palette: {args.palette}")
+            print(f"  Palette: {palette_display}")
             for color_name, cell_count in stats["colors"].items():
-                print(f"  {color_name}: {cell_count} cells")
+                pct = coverage.get(color_name, 0.0)
+                print(f"  {color_name}: {cell_count} cells ({pct}%)")
+            total_colored = stats["total_cells"]
+            total_cells = width * height
+            border_cells = sum(
+                1 for row in canvas.cells for cell in row
+                if cell.fg == palette["black"]
+            )
+            print(f"  Border cells: {border_cells} ({round(border_cells / total_cells * 100, 1)}%)")
             print()
         return
 
@@ -724,14 +994,15 @@ examples:
                 width=width, height=height, seed=seed,
                 split_prob=args.split_prob, max_depth=args.max_depth,
                 min_size=args.min_size, palette_name=args.palette,
-                no_signature=args.no_signature, delay=args.delay
+                no_signature=args.no_signature, delay=args.delay,
+                custom_palette=custom_palette
             )
             if i < args.count - 1:
                 input("Press Enter for next composition...")
         return
 
     # Normal terminal rendering
-    if not args.no_clear:
+    if not args.no_clear and not args.plain:
         sys.stdout.write(CLEAR_SCREEN)
 
     for i in range(args.count):
@@ -740,17 +1011,31 @@ examples:
             width=width, height=height, seed=seed,
             split_prob=args.split_prob, max_depth=args.max_depth,
             min_size=args.min_size, palette_name=args.palette,
-            no_signature=args.no_signature
+            no_signature=args.no_signature, custom_palette=custom_palette
         )
-        print(ansi_art)
+
+        if args.plain:
+            print(render_plain(canvas))
+        else:
+            print(ansi_art)
+
         if args.stats:
             stats = count_regions(canvas, palette)
+            coverage = compute_coverage(canvas, palette)
             print(f"\n{BOLD}Composition statistics:{RESET}")
             print(f"  Seed: {seed}")
             print(f"  Canvas: {width}×{height}")
-            print(f"  Palette: {args.palette}")
+            print(f"  Palette: {palette_display}")
             for color_name, cell_count in stats["colors"].items():
-                print(f"  {color_name}: {cell_count} cells")
+                pct = coverage.get(color_name, 0.0)
+                print(f"  {color_name}: {cell_count} cells ({pct}%)")
+            total_colored = stats["total_cells"]
+            total_cells = width * height
+            border_cells = sum(
+                1 for row in canvas.cells for cell in row
+                if cell.fg == palette["black"]
+            )
+            print(f"  Border cells: {border_cells} ({round(border_cells / total_cells * 100, 1)}%)")
             print()
         if i < args.count - 1:
             print()

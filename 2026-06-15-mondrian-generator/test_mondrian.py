@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
-"""Tests for the Terminal Mondrian Art Generator."""
+"""Tests for the Terminal Mondrian Art Generator v3.0."""
 
 import random
 import sys
 import os
 import tempfile
+import json
 import pytest
 
 # Add the project directory to the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from mondrian import (
-    generate_mondrian, MondrianCanvas, Rect, Cell, Cell,
-    PALETTES, BORDER_W, export_svg, export_html, count_regions,
+    generate_mondrian, MondrianCanvas, Rect, Cell,
+    PALETTES, BORDER_W, export_svg, export_html, export_png,
+    count_regions, compute_coverage, render_plain,
     __version__, fix_intersections, draw_outer_border, add_signature,
+    parse_custom_palette, list_palettes,
 )
 
 
@@ -28,6 +31,9 @@ class TestVersion:
         assert len(parts) == 3
         for part in parts:
             assert part.isdigit()
+
+    def test_version_is_3_0_0(self):
+        assert __version__ == "3.0.0"
 
 
 class TestMondrianCanvas:
@@ -67,6 +73,15 @@ class TestMondrianCanvas:
         canvas.fill_rect(rect, "blue", palette)
         # Verify no crash and some valid cells were filled
         assert canvas.cells[0][0].bg == (0, 54, 170)  # blue
+
+    def test_rect_area(self):
+        """Rect.area() should return width * height."""
+        r = Rect(x=1, y=2, w=10, h=5)
+        assert r.area() == 50
+
+    def test_rect_area_zero(self):
+        r = Rect(x=0, y=0, w=0, h=0)
+        assert r.area() == 0
 
 
 class TestGenerateMondrian:
@@ -117,6 +132,18 @@ class TestGenerateMondrian:
                     break
         assert sig_found
 
+    def test_custom_signature_text(self):
+        """add_signature should support custom text."""
+        _, canvas, palette = generate_mondrian(width=40, height=20, seed=42, no_signature=True)
+        add_signature(canvas, palette, text="TEST")
+        # Check that "TEST" characters appear in the canvas
+        chars_found = set()
+        for row in canvas.cells[-4:]:
+            for cell in row:
+                chars_found.add(cell.char)
+        for ch in "TEST":
+            assert ch in chars_found, f"Expected '{ch}' in canvas, found: {chars_found}"
+
     def test_all_palettes(self):
         """Each palette should produce valid output without errors."""
         for palette_name in PALETTES:
@@ -124,6 +151,21 @@ class TestGenerateMondrian:
                 width=30, height=15, seed=42, palette_name=palette_name
             )
             assert len(ansi_art) > 0
+
+    def test_custom_palette(self):
+        """Custom palette should produce valid output."""
+        custom = {
+            "red": (255, 0, 0),
+            "blue": (0, 0, 255),
+            "yellow": (255, 255, 0),
+            "white": (255, 255, 255),
+            "black": (0, 0, 0),
+        }
+        ansi_art, canvas, palette = generate_mondrian(
+            width=30, height=15, seed=42, custom_palette=custom
+        )
+        assert len(ansi_art) > 0
+        assert palette == custom
 
     def test_small_canvas(self):
         """Minimum viable canvas size should work."""
@@ -174,8 +216,61 @@ class TestGenerateMondrian:
         assert high_borders >= low_borders
 
 
+class TestRenderPlain:
+    """Test the plain text rendering function."""
+
+    def test_plain_render_has_no_ansi(self):
+        """Plain render should not contain ANSI escape sequences."""
+        _, canvas, _ = generate_mondrian(width=40, height=20, seed=42)
+        plain = render_plain(canvas)
+        assert "\033[" not in plain
+
+    def test_plain_render_has_box_chars(self):
+        """Plain render should contain box-drawing characters."""
+        _, canvas, _ = generate_mondrian(width=40, height=20, seed=42)
+        plain = render_plain(canvas)
+        box_chars = set("─│┼┬┴├┤")
+        found = any(c in plain for c in box_chars)
+        assert found
+
+    def test_plain_render_dimensions(self):
+        """Plain render should have correct line count and widths."""
+        _, canvas, _ = generate_mondrian(width=40, height=20, seed=42)
+        plain = render_plain(canvas)
+        lines = plain.split("\n")
+        assert len(lines) == 20
+        for line in lines:
+            assert len(line) == 40
+
+
+class TestComputeCoverage:
+    """Test the coverage computation function."""
+
+    def test_coverage_returns_dict(self):
+        """compute_coverage should return a dictionary with color names."""
+        _, canvas, palette = generate_mondrian(width=40, height=20, seed=42)
+        coverage = compute_coverage(canvas, palette)
+        assert isinstance(coverage, dict)
+        assert len(coverage) > 0
+
+    def test_coverage_percentages_sum_near_100(self):
+        """Coverage percentages should sum to approximately 100%."""
+        _, canvas, palette = generate_mondrian(width=60, height=30, seed=42)
+        coverage = compute_coverage(canvas, palette)
+        total = sum(coverage.values())
+        assert abs(total - 100.0) < 5.0, f"Coverage sum {total} should be near 100%"
+
+    def test_coverage_has_white(self):
+        """Coverage should include white as the dominant color."""
+        _, canvas, palette = generate_mondrian(width=60, height=30, seed=42)
+        coverage = compute_coverage(canvas, palette)
+        assert "white" in coverage
+        # White should be dominant (typically >40%)
+        assert coverage["white"] > 30.0
+
+
 class TestExport:
-    """Test SVG and HTML export functions."""
+    """Test SVG, HTML, and PNG export functions."""
 
     def test_svg_export(self):
         """SVG export should create a valid SVG file."""
@@ -206,6 +301,39 @@ class TestExport:
             assert "mondrian" in content
         finally:
             os.unlink(tmpfile)
+
+    def test_png_export(self):
+        """PNG export should create a valid PNG file."""
+        _, canvas, palette = generate_mondrian(width=20, height=10, seed=42)
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            tmpfile = f.name
+        try:
+            export_png(canvas, palette, tmpfile)
+            # Check file exists and has content
+            assert os.path.exists(tmpfile)
+            with open(tmpfile, "rb") as f:
+                data = f.read()
+            # PNG magic bytes
+            assert data[:8] == b"\x89PNG\r\n\x1a\n"
+            assert len(data) > 100  # Should be a reasonable-sized file
+        finally:
+            os.unlink(tmpfile)
+
+    def test_png_export_custom_cell_size(self):
+        """PNG export with custom cell_size should produce different file size."""
+        _, canvas, palette = generate_mondrian(width=20, height=10, seed=42)
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            tmp_small = f.name
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            tmp_large = f.name
+        try:
+            export_png(canvas, palette, tmp_small, cell_size=5)
+            export_png(canvas, palette, tmp_large, cell_size=20)
+            # Larger cell size should produce larger file
+            assert os.path.getsize(tmp_large) > os.path.getsize(tmp_small)
+        finally:
+            os.unlink(tmp_small)
+            os.unlink(tmp_large)
 
 
 class TestCountRegions:
@@ -255,6 +383,51 @@ class TestPalettes:
                 assert len(rgb) == 3, f"Palette '{name}', color '{color_name}' is not a 3-tuple"
                 for val in rgb:
                     assert 0 <= val <= 255, f"Palette '{name}', color '{color_name}' has out-of-range value"
+
+    def test_new_palettes_exist(self):
+        """Ocean and autumn palettes should exist."""
+        assert "ocean" in PALETTES
+        assert "autumn" in PALETTES
+
+
+class TestParseCustomPalette:
+    """Test custom palette JSON parsing."""
+
+    def test_valid_custom_palette(self):
+        """Should parse a valid custom palette."""
+        json_str = '{"red":[255,0,0],"blue":[0,0,255],"yellow":[255,255,0],"white":[255,255,255],"black":[0,0,0]}'
+        palette = parse_custom_palette(json_str)
+        assert palette["red"] == (255, 0, 0)
+        assert palette["blue"] == (0, 0, 255)
+
+    def test_missing_color_raises(self):
+        """Missing required color should raise ValueError."""
+        json_str = '{"red":[255,0,0],"blue":[0,0,255],"yellow":[255,255,0],"white":[255,255,255]}'
+        with pytest.raises(ValueError, match="missing"):
+            parse_custom_palette(json_str)
+
+    def test_extra_color_raises(self):
+        """Extra colors should raise ValueError."""
+        json_str = '{"red":[255,0,0],"blue":[0,0,255],"yellow":[255,255,0],"white":[255,255,255],"black":[0,0,0],"purple":[128,0,128]}'
+        with pytest.raises(ValueError, match="unknown"):
+            parse_custom_palette(json_str)
+
+    def test_invalid_rgb_raises(self):
+        """Out-of-range RGB values should raise ValueError."""
+        json_str = '{"red":[256,0,0],"blue":[0,0,255],"yellow":[255,255,0],"white":[255,255,255],"black":[0,0,0]}'
+        with pytest.raises(ValueError, match="0-255"):
+            parse_custom_palette(json_str)
+
+    def test_invalid_json_raises(self):
+        """Invalid JSON should raise ValueError."""
+        with pytest.raises(ValueError, match="Invalid JSON"):
+            parse_custom_palette("not json at all")
+
+    def test_non_list_rgb_raises(self):
+        """Non-list RGB values should raise ValueError."""
+        json_str = '{"red":"bad","blue":[0,0,255],"yellow":[255,255,0],"white":[255,255,255],"black":[0,0,0]}'
+        with pytest.raises(ValueError, match="list of 3"):
+            parse_custom_palette(json_str)
 
 
 class TestBugFixes:
@@ -336,6 +509,111 @@ class TestBugFixes:
         svg_path = os.path.join(tempfile.gettempdir(), "test_stats_fmt.svg")
         if os.path.exists(svg_path):
             os.unlink(svg_path)
+
+
+class TestCLI:
+    """Test CLI flags and behavior."""
+
+    def test_version_flag(self):
+        """--version should print version and exit."""
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, os.path.join(os.path.dirname(__file__), "mondrian.py"),
+             "--version"],
+            capture_output=True, text=True
+        )
+        assert result.returncode == 0
+        assert "3.0.0" in result.stdout
+
+    def test_help_flag(self):
+        """--help should print usage and exit."""
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, os.path.join(os.path.dirname(__file__), "mondrian.py"),
+             "--help"],
+            capture_output=True, text=True
+        )
+        assert result.returncode == 0
+        assert "Mondrian" in result.stdout
+        assert "--export" in result.stdout
+        assert "--list-palettes" in result.stdout
+        assert "--custom-palette" in result.stdout
+
+    def test_list_palettes_flag(self):
+        """--list-palettes should list all palettes."""
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, os.path.join(os.path.dirname(__file__), "mondrian.py"),
+             "--list-palettes"],
+            capture_output=True, text=True
+        )
+        assert result.returncode == 0
+        assert "classic" in result.stdout
+        assert "neon" in result.stdout
+        assert "ocean" in result.stdout
+        assert "autumn" in result.stdout
+        assert "(default)" in result.stdout
+
+    def test_png_export_via_cli(self):
+        """--export png should create a PNG file."""
+        import subprocess
+        outpath = os.path.join(tempfile.gettempdir(), "test_cli_export.png")
+        result = subprocess.run(
+            [sys.executable, os.path.join(os.path.dirname(__file__), "mondrian.py"),
+             "--export", "png", "-W", "20", "-H", "10", "-s", "42", "-o", outpath],
+            capture_output=True, text=True
+        )
+        assert result.returncode == 0
+        assert os.path.exists(outpath)
+        with open(outpath, "rb") as f:
+            data = f.read()
+        assert data[:8] == b"\x89PNG\r\n\x1a\n"
+        os.unlink(outpath)
+
+    def test_plain_flag_via_cli(self):
+        """--plain should output text without ANSI escapes."""
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, os.path.join(os.path.dirname(__file__), "mondrian.py"),
+             "-W", "20", "-H", "10", "-s", "42", "--no-clear", "--plain"],
+            capture_output=True, text=True
+        )
+        assert result.returncode == 0
+        assert "\033[" not in result.stdout or result.stdout.count("\033[") < 5
+
+    def test_stats_with_coverage(self):
+        """--stats should show percentage coverage."""
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, os.path.join(os.path.dirname(__file__), "mondrian.py"),
+             "-W", "40", "-H", "20", "-s", "42", "--no-clear", "--stats"],
+            capture_output=True, text=True
+        )
+        assert result.returncode == 0
+        assert "%" in result.stdout, "Stats should show percentage coverage"
+
+    def test_custom_palette_via_cli(self):
+        """--custom-palette should work with valid JSON."""
+        import subprocess
+        json_palette = '{"red":[255,0,0],"blue":[0,100,200],"yellow":[255,200,0],"white":[240,240,240],"black":[30,30,30]}'
+        result = subprocess.run(
+            [sys.executable, os.path.join(os.path.dirname(__file__), "mondrian.py"),
+             "-W", "20", "-H", "10", "-s", "42", "--no-clear",
+             "--custom-palette", json_palette],
+            capture_output=True, text=True
+        )
+        assert result.returncode == 0
+
+    def test_invalid_custom_palette_via_cli(self):
+        """--custom-palette with invalid JSON should fail."""
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, os.path.join(os.path.dirname(__file__), "mondrian.py"),
+             "-W", "20", "-H", "10", "-s", "42", "--no-clear",
+             "--custom-palette", "not json"],
+            capture_output=True, text=True
+        )
+        assert result.returncode != 0
 
 
 if __name__ == "__main__":
