@@ -230,16 +230,64 @@ def shell_sort(arr: List[int], stats: SortStats):
 
 
 def quick_sort(arr: List[int], stats: SortStats):
-    """Quick Sort — O(n log n) average, O(n²) worst case. Lomuto partition."""
-    def _qs(a, lo, hi):
-        if lo < hi:
-            p = _partition(a, lo, hi)
-            _qs(a, lo, p - 1)
-            _qs(a, p + 1, hi)
+    """Quick Sort — O(n log n) average, O(n²) worst case.
+
+    Uses median-of-three pivot selection and an iterative approach with an
+    explicit stack to avoid RecursionError on adversarial inputs (sorted or
+    reverse-sorted arrays) that would cause O(n) recursion depth with naive
+    Lomuto partitioning.
+    """
+    n = len(arr)
+    if n <= 1:
+        stats.done = True
+        return
+
+    # Iterative quicksort using an explicit stack to avoid recursion depth issues
+    stack = [(0, n - 1)]
+
+    def _median3(a, lo, mid, hi):
+        """Choose the median of three elements as the pivot index."""
+        # Sort the three elements and return the index of the median
+        if a[lo] > a[mid]:
+            a[lo], a[mid] = a[mid], a[lo]
+            stats.swaps += 1
+            stats.array_accesses += 2
+        if a[lo] > a[hi]:
+            a[lo], a[hi] = a[hi], a[lo]
+            stats.swaps += 1
+            stats.array_accesses += 2
+        if a[mid] > a[hi]:
+            a[mid], a[hi] = a[hi], a[mid]
+            stats.swaps += 1
+            stats.array_accesses += 2
+        stats.comparisons += 3
+        # The median is at index mid; swap it to hi-1 position for partitioning
+        a[mid], a[hi] = a[hi], a[mid]
+        stats.swaps += 1
+        stats.array_accesses += 2
+        return a[hi]
 
     def _partition(a, lo, hi):
-        pivot = a[hi]
-        stats.array_accesses += 1
+        """Partition using median-of-three pivot, placed at a[hi]."""
+        # For small subarrays, just use the rightmost element as pivot
+        if hi - lo < 2:
+            # 0 or 1 or 2 elements — handle directly
+            if hi > lo:
+                stats.comparisons += 1
+                stats.array_accesses += 2
+                if a[lo] > a[hi]:
+                    a[lo], a[hi] = a[hi], a[lo]
+                    stats.swaps += 1
+                    stats.array_accesses += 2
+                stats.steps += 1
+                if stats.steps % 50 == 0:
+                    stats.snapshot = list(arr)
+            return hi
+
+        # Choose median of three and place it at a[hi]
+        mid = (lo + hi) // 2
+        pivot = _median3(a, lo, mid, hi)
+
         i = lo - 1
         for j in range(lo, hi):
             stats.comparisons += 1
@@ -258,7 +306,21 @@ def quick_sort(arr: List[int], stats: SortStats):
         stats.snapshot = list(arr)
         return i + 1
 
-    _qs(arr, 0, len(arr) - 1)
+    while stack:
+        lo, hi = stack.pop()
+        if lo >= hi:
+            continue
+        p = _partition(arr, lo, hi)
+        # Push smaller partition first to limit stack depth to O(log n)
+        left_size = p - 1 - lo
+        right_size = hi - (p + 1)
+        if left_size < right_size:
+            stack.append((p + 1, hi))
+            stack.append((lo, p - 1))
+        else:
+            stack.append((lo, p - 1))
+            stack.append((p + 1, hi))
+
     stats.done = True
 
 
@@ -409,10 +471,19 @@ def gnome_sort(arr: List[int], stats: SortStats):
 
 
 def radix_sort(arr: List[int], stats: SortStats):
-    """Radix Sort (LSD) — O(nk). Non-comparative, requires non-negative integers."""
+    """Radix Sort (LSD) — O(nk). Non-comparative, requires non-negative integers.
+
+    Raises ValueError if the array contains negative numbers, since LSD radix
+    sort operates on digit positions and cannot handle negative values correctly.
+    """
     if not arr:
         stats.done = True
         return
+    if any(x < 0 for x in arr):
+        raise ValueError(
+            "Radix Sort requires non-negative integers. "
+            "Found negative value(s) in input array."
+        )
     max_val = max(arr)
     exp = 1
     n = len(arr)
@@ -612,11 +683,19 @@ def run_race(algo_keys: List[str], size: int = 200, seed: Optional[int] = None,
 
     def sort_wrapper(algo: Algorithm, arr: List[int]):
         algo.stats.start_time = time.monotonic()
-        algo.func(arr, algo.stats)
-        algo.stats.end_time = time.monotonic()
-        with lock:
-            finish_counter[0] += 1
-            algo.stats.finish_order = finish_counter[0]
+        try:
+            algo.func(arr, algo.stats)
+        except Exception as e:
+            # If a sort algorithm crashes (e.g., RecursionError), mark it as
+            # done so the race doesn't hang, and print a warning to stderr.
+            print(f"{RED}⚠ {algo.name} crashed: {type(e).__name__}: {e}{RESET}",
+                  file=sys.stderr)
+        finally:
+            algo.stats.end_time = time.monotonic()
+            algo.stats.done = True  # Ensure done is always set, even on error
+            with lock:
+                finish_counter[0] += 1
+                algo.stats.finish_order = finish_counter[0]
 
     for algo, arr in algorithms:
         t = threading.Thread(target=sort_wrapper, args=(algo, arr))

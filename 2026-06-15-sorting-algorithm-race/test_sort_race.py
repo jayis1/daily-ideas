@@ -10,7 +10,7 @@ from sort_race import (
     bubble_sort, selection_sort, insertion_sort, shell_sort,
     quick_sort, merge_sort, heap_sort, cocktail_sort, gnome_sort,
     radix_sort, tim_sort, SortStats, Algorithm, ALL_ALGORITHMS,
-    ALGO_COMPLEXITY, run_benchmark, bar, mini_histogram,
+    ALGO_COMPLEXITY, run_race, run_benchmark, bar, mini_histogram,
     sortedness, list_algorithms, __version__,
 )
 
@@ -550,3 +550,87 @@ def test_cli_detailed_without_benchmark():
         capture_output=True, text=True
     )
     assert result.returncode != 0
+
+
+# ─── Bug fix regression tests ──────────────────────────────────────────────────
+
+def test_radix_sort_rejects_negatives():
+    """Radix sort should raise ValueError on arrays with negative numbers."""
+    s = SortStats()
+    with pytest.raises(ValueError, match="non-negative"):
+        radix_sort([-5, 3, -1, 10, 7], s)
+
+
+def test_radix_sort_accepts_zero():
+    """Radix sort should handle zero correctly."""
+    s = SortStats()
+    arr = [0, 5, 3, 10, 1]
+    radix_sort(arr, s)
+    assert arr == [0, 1, 3, 5, 10]
+    assert s.done is True
+
+
+def test_quick_sort_sorted_large():
+    """Quick sort should handle sorted arrays without RecursionError.
+
+    Previously used recursive Lomuto partition which hit Python's recursion
+    limit on sorted arrays. Now uses iterative approach with median-of-three.
+    """
+    s = SortStats()
+    arr = list(range(2000))
+    quick_sort(arr, s)
+    assert arr == list(range(2000))
+    assert s.done is True
+
+
+def test_quick_sort_reverse_sorted_large():
+    """Quick sort should handle reverse-sorted arrays without RecursionError."""
+    s = SortStats()
+    arr = list(range(2000, 0, -1))
+    quick_sort(arr, s)
+    assert arr == list(range(1, 2001))
+    assert s.done is True
+
+
+def test_quick_sort_deduplicates():
+    """Quick sort with median-of-three should correctly sort arrays with duplicates."""
+    s = SortStats()
+    arr = [3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5]
+    quick_sort(arr, s)
+    assert arr == sorted([3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5])
+    assert s.done is True
+
+
+def test_quick_sort_small_arrays():
+    """Quick sort with median-of-three should handle edge cases: empty, single, two elements."""
+    s1 = SortStats()
+    arr1 = []
+    quick_sort(arr1, s1)
+    assert arr1 == []
+    assert s1.done is True
+
+    s2 = SortStats()
+    arr2 = [42]
+    quick_sort(arr2, s2)
+    assert arr2 == [42]
+    assert s2.done is True
+
+    s3 = SortStats()
+    arr3 = [5, 2]
+    quick_sort(arr3, s3)
+    assert arr3 == [2, 5]
+    assert s3.done is True
+
+    s4 = SortStats()
+    arr4 = [2, 5]
+    quick_sort(arr4, s4)
+    assert arr4 == [2, 5]
+    assert s4.done is True
+
+
+def test_race_no_animation_all_correct():
+    """Race mode with --no-animation should produce correct results for all algorithms."""
+    results = run_race(list(ALL_ALGORITHMS.keys()), size=100, seed=42, no_animation=True)
+    sorted_ref = sorted(list(range(1, 101)))
+    for algo, arr in results:
+        assert arr == sorted_ref, f"{algo.name} produced incorrect output in race mode"

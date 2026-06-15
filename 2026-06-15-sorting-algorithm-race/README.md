@@ -1,21 +1,13 @@
-# 🏁 Sorting Algorithm Race v2.0
+# 🏁 Sorting Algorithm Race v2.1
 
 A real-time terminal visualization that pits multiple sorting algorithms against each other in a head-to-head race. Watch Bubble Sort struggle, Quick Sort fly, and Tim Sort hold steady — all competing simultaneously on the same shuffled dataset with live progress bars, comparison/swap counters, and mini histograms.
 
-## What's New in v2.0
+## What's New in v2.1
 
-- **Tim Sort added** — the hybrid merge+insertion algorithm that powers Python's built-in `sorted()` and Java's `Arrays.sort()`
-- **`--version` flag** — standard CLI version reporting
-- **`--list` flag** — display all 11 algorithms with their complexity info (best/average/worst case, space, stability) in a formatted table
-- **`--no-animation` flag** — skip the live animation and just print final results (great for scripts and CI)
-- **`--detailed` flag** — show array accesses column in benchmark output
-- **`--export csv|json`** — export benchmark results as machine-readable CSV or JSON to stdout
-- **Better progress estimation** — uses a sortedness metric instead of crude step-counting for more accurate progress bars during the race
-- **Early termination in Bubble Sort** — already-sorted arrays now finish in O(n) instead of O(n²)
-- **Correctness verification** — after every race or benchmark, results are checked against Python's `sorted()` to catch bugs
-- **Input validation** — `--size` must be ≥ 1, `--repeat` must be ≥ 1, `--export` requires `--benchmark`
-- **More tests** — 55 tests covering new features, edge cases, CLI validation, and export formats
-- **Better comments and docstrings** throughout
+### Bug Fixes
+- **Quick Sort no longer crashes on sorted/reverse-sorted arrays** — Replaced the recursive Lomuto partition with an iterative quicksort using median-of-three pivot selection and an explicit stack. This eliminates `RecursionError` on adversarial inputs (sorted or reverse-sorted arrays of ~1000+ elements) that would cause the old implementation to exceed Python's default recursion limit.
+- **Radix Sort now validates input** — Previously, passing negative numbers to Radix Sort would silently produce incorrect results. It now raises a `ValueError` with a clear message, matching its documented requirement for non-negative integers.
+- **Race mode no longer hangs if an algorithm crashes** — The `sort_wrapper` thread function now catches all exceptions and marks the algorithm as done (with a warning to stderr), so a crashing algorithm won't cause the animated race to hang indefinitely waiting for a thread that will never finish.
 
 ## Features
 
@@ -32,6 +24,7 @@ A real-time terminal visualization that pits multiple sorting algorithms against
 - **Correctness check**: Verifies all sorted results against Python's reference `sorted()`
 - **Reproducible**: Use `--seed` for consistent shuffles across runs
 - **Configurable array size**: Test with small or large datasets
+- **Robust error handling**: Crashing algorithms are caught gracefully; invalid inputs are rejected early
 
 ## Installation
 
@@ -124,28 +117,6 @@ View all available algorithms with their complexity info:
 python3 sort_race.py --list
 ```
 
-Output:
-
-```
-════════════════════════════════════════════════════════════════════════════════
-  📋  Available Sorting Algorithms  📋
-════════════════════════════════════════════════════════════════════════════════
-
-  Key          Name               Best           Average        Worst          Space      Stable
-  ──────────────────────────────────────────────────────────────────────────────────
-  bubble       Bubble Sort        O(n)           O(n²)          O(n²)          O(1)       ✓
-  selection    Selection Sort     O(n²)          O(n²)          O(n²)          O(1)       ✗
-  insertion    Insertion Sort     O(n)           O(n²)          O(n²)          O(1)       ✓
-  shell        Shell Sort        O(n log n)     O(n^1.25)     O(n²)          O(1)       ✗
-  quick        Quick Sort        O(n log n)     O(n log n)     O(n²)          O(log n)   ✗
-  merge        Merge Sort        O(n log n)     O(n log n)     O(n log n)     O(n)       ✓
-  heap         Heap Sort         O(n log n)     O(n log n)     O(n log n)     O(1)       ✗
-  cocktail     Cocktail Sort     O(n)           O(n²)          O(n²)          O(1)       ✓
-  gnome        Gnome Sort        O(n)           O(n²)          O(n²)          O(1)       ✓
-  radix        Radix Sort        O(nk)          O(nk)          O(nk)          O(n+k)     ✓
-  tim          Tim Sort          O(n)           O(n log n)     O(n log n)     O(n)       ✓
-```
-
 ### Version
 
 ```bash
@@ -170,7 +141,7 @@ This launches an animated terminal display showing:
 ### Example: Benchmark output
 
 ```bash
-$ python3 sort_race.py --benchmark --all -s 5000
+python3 sort_race.py --benchmark --all -s 5000
 ```
 
 ```
@@ -179,18 +150,11 @@ $ python3 sort_race.py --benchmark --all -s 5000
 ════════════════════════════════════════════════════════════════════════════
 
   Rank  Algorithm          Time        Comps        Swaps
-  ────────────────────────────────────────────────────────────────────────────
+  ────────────────────────────────────────────────────────────────────────
   🥇1   Radix Sort         0.0145s       0            50000
   🥈2   Quick Sort         0.0231s     62034           14228
   🥉3   Tim Sort           0.0312s     55000           12000
-     4   Shell Sort         0.0372s     87043           42217
-     5   Merge Sort         0.0418s     57047           12689
-     6   Heap Sort          0.0523s    115630           26750
-     7   Insertion Sort     0.8941s   6266758        3133378
-     8   Cocktail Sort      1.1023s   6266758        3133378
-     9   Selection Sort     1.2345s   12497500         4990
-    10   Bubble Sort        1.4567s   6266758        3133378
-    11   Gnome Sort         2.0134s   6266758        3133378
+     ...
 
   Times are averages over 1 run(s).
   Use --detailed to show array accesses column.
@@ -199,7 +163,7 @@ $ python3 sort_race.py --benchmark --all -s 5000
 ### Example: JSON export
 
 ```bash
-$ python3 sort_race.py --benchmark -a bubble quick --export json -s 100
+python3 sort_race.py --benchmark -a bubble quick --export json -s 100
 ```
 
 ```json
@@ -222,26 +186,28 @@ Each sorting algorithm runs in its own thread on an identical copy of the shuffl
 
 1. **Status indicators**: Progress bars (based on a sortedness metric) for running algorithms, medals (🥇🥈🥉) for finished ones
 2. **Statistics**: Live counters for comparisons, swaps, and array accesses — updated by each algorithm during execution
-3. **Mini histograms**: ASCII block histograms showing the current state of each array, so you can *see* the sort progressing (bubble sort's "bubble" moving right, quick sort's partitions forming, etc.)
+3. **Mini histograms**: ASCII block histograms showing the current state of each array, so you can *see* the sort progressing
 4. **Correctness verification**: After all algorithms finish, each result is compared against Python's `sorted()` to ensure correctness
 
 The sortedness metric measures what fraction of adjacent pairs are in order (0.0 = fully reversed, 1.0 = fully sorted), providing a more accurate progress bar than crude step counting.
 
 ## Algorithm Details
 
-| Algorithm | Best Case | Average Case | Worst Case | Space | Stable |
-|-----------|-----------|-------------|------------|-------|--------|
-| Bubble Sort | O(n) | O(n²) | O(n²) | O(1) | Yes |
-| Selection Sort | O(n²) | O(n²) | O(n²) | O(1) | No |
-| Insertion Sort | O(n) | O(n²) | O(n²) | O(1) | Yes |
-| Shell Sort | O(n log n) | O(n^1.25) | O(n²) | O(1) | No |
-| Quick Sort | O(n log n) | O(n log n) | O(n²) | O(log n) | No |
-| Merge Sort | O(n log n) | O(n log n) | O(n log n) | O(n) | Yes |
-| Heap Sort | O(n log n) | O(n log n) | O(n log n) | O(1) | No |
-| Cocktail Sort | O(n) | O(n²) | O(n²) | O(1) | Yes |
-| Gnome Sort | O(n) | O(n²) | O(n²) | O(1) | Yes |
-| Radix Sort | O(nk) | O(nk) | O(nk) | O(n+k) | Yes |
-| Tim Sort | O(n) | O(n log n) | O(n log n) | O(n) | Yes |
+| Algorithm | Best Case | Average Case | Worst Case | Space | Stable | Notes |
+|-----------|-----------|-------------|------------|-------|--------|-------|
+| Bubble Sort | O(n) | O(n²) | O(n²) | O(1) | Yes | Early termination on sorted data |
+| Selection Sort | O(n²) | O(n²) | O(n²) | O(1) | No | |
+| Insertion Sort | O(n) | O(n²) | O(n²) | O(1) | Yes | Fast on nearly-sorted data |
+| Shell Sort | O(n log n) | O(n^1.25) | O(n²) | O(1) | No | Diminishing-gap insertion sort |
+| Quick Sort | O(n log n) | O(n log n) | O(n²) | O(log n) | No | Iterative with median-of-three pivot |
+| Merge Sort | O(n log n) | O(n log n) | O(n log n) | O(n) | Yes | Stable, guaranteed performance |
+| Heap Sort | O(n log n) | O(n log n) | O(n log n) | O(1) | No | In-place, not stable |
+| Cocktail Sort | O(n) | O(n²) | O(n²) | O(1) | Yes | Bidirectional bubble sort |
+| Gnome Sort | O(n) | O(n²) | O(n²) | O(1) | Yes | Insertion sort with swaps |
+| Radix Sort | O(nk) | O(nk) | O(nk) | O(n+k) | Yes | **Non-negative integers only** |
+| Tim Sort | O(n) | O(n log n) | O(n log n) | O(n) | Yes | Hybrid merge+insertion |
+
+> ⚠️ **Radix Sort** requires non-negative integers. Passing negative values will raise a `ValueError`.
 
 ## All CLI Options
 
@@ -266,17 +232,19 @@ The sortedness metric measures what fraction of adjacent pairs are in order (0.0
 python3 -m pytest test_sort_race.py -v
 ```
 
-The test suite includes 55 tests covering:
+The test suite includes **62 tests** covering:
 - All 11 sorting algorithms on random, sorted, reversed, empty, and single-element arrays
-- Duplicate element handling
-- Two-element edge cases
+- Duplicate element handling and two-element edge cases
 - Stats tracking (comparisons, swaps, accesses)
 - Early termination optimization in Bubble Sort
+- Quick Sort on large sorted/reverse-sorted arrays (no RecursionError)
+- Radix Sort rejecting negative numbers
 - Utility functions (bar, mini_histogram, sortedness)
 - Benchmark mode with JSON and CSV export
 - Algorithm registry and complexity metadata
 - CLI flags: `--version`, `--help`, `--list`, `--no-animation`, `--detailed`, `--export`
 - Input validation (invalid size, invalid repeat, export without benchmark)
+- Race mode correctness for all algorithms
 
 ## As a Python Library
 
@@ -306,6 +274,23 @@ for key, (name, func) in ALL_ALGORITHMS.items():
     best, avg, worst, space, stable = ALGO_COMPLEXITY[key]
     print(f"{name}: {avg} avg, stable={stable}")
 ```
+
+## Changelog
+
+### v2.1 — Bug Fixes
+- **Fixed**: Quick Sort crashes with `RecursionError` on sorted or reverse-sorted arrays of ~1000+ elements. Replaced recursive Lomuto partition with iterative quicksort using median-of-three pivot selection and explicit stack to guarantee O(log n) stack depth.
+- **Fixed**: Radix Sort silently produced incorrect results when given negative numbers. Now raises `ValueError` with a clear error message instead of producing garbage output.
+- **Fixed**: Race mode could hang indefinitely if a sorting algorithm crashed (e.g., due to RecursionError). The `sort_wrapper` thread function now catches all exceptions, prints a warning to stderr, and marks the algorithm as done so the race continues.
+- Added 7 new regression tests covering the above fixes.
+
+### v2.0 — Feature Release
+- Added Tim Sort algorithm
+- Added `--version`, `--list`, `--no-animation`, `--detailed`, `--export` flags
+- Sortedness-based progress estimation
+- Early termination in Bubble Sort
+- Correctness verification after every race/benchmark
+- Input validation for `--size`, `--repeat`, `--export`
+- 55 tests
 
 ## License
 
