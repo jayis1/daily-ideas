@@ -41,7 +41,7 @@ from enum import IntEnum
 
 # ─── Version ──────────────────────────────────────────────────────────
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 
 
 # ─── Direction helpers ───────────────────────────────────────────────
@@ -81,7 +81,7 @@ class PipeType:
     def rotated(self, times=1):
         """Return a new PipeType rotated clockwise `times` times."""
         new_conns = tuple(Dir((c + times) % 4) for c in self.connections)
-        new_chars = tuple(self.chars[(i - times) % 4] for i in range(4))
+        new_chars = tuple(self.chars[(i + times) % 4] for i in range(4))
         return PipeType(new_conns, new_chars)
 
 
@@ -411,7 +411,7 @@ class PipesPuzzle:
         self.filled = set()
         self.show_flow = False
         self.message = ""
-        self.message_timer = 0
+        self.message_expiry = 0  # Timestamp when message expires
         self.undo_stack = []  # Stack of (r, c, old_rotation) for undo
         self.start_time = time.time()  # Timer for tracking elapsed time
         self.solve_time = None  # Time when puzzle was solved
@@ -458,7 +458,7 @@ class PipesPuzzle:
         self.start_time = time.time()
         self.solve_time = None
         self.message = "Rotate pipes to connect source ▶ to drain ▶!"
-        self.message_timer = 150
+        self.message_expiry = time.time() + 5  # Show for 5 seconds
 
     def rotate_cw(self):
         """Rotate the pipe under the cursor clockwise by 90 degrees."""
@@ -492,10 +492,13 @@ class PipesPuzzle:
 
     def undo(self):
         """Undo the last rotation."""
-        if self.solved or not self.undo_stack:
-            if not self.undo_stack:
-                self.message = "Nothing to undo!"
-                self.message_timer = 60
+        if self.solved:
+            self.message = "Already solved! Press 'n' for new puzzle."
+            self.message_expiry = time.time() + 3
+            return
+        if not self.undo_stack:
+            self.message = "Nothing to undo!"
+            self.message_expiry = time.time() + 2
             return
         r, c, old_rotation = self.undo_stack.pop()
         ptype, _, correct = self.grid[(r, c)]
@@ -505,7 +508,7 @@ class PipesPuzzle:
         if self.auto_flow:
             self._update_flow()
         self.message = f"Undo! (stack: {len(self.undo_stack)} left)"
-        self.message_timer = 60
+        self.message_expiry = time.time() + 2
 
     def _update_flow(self):
         """Update flow state without checking for solve (for auto-flow display)."""
@@ -519,7 +522,7 @@ class PipesPuzzle:
             elapsed = self.solve_time - self.start_time
             self.message = (f"🎉 SOLVED in {self.moves} moves, "
                             f"{elapsed:.1f}s! Press 'n' for new puzzle.")
-            self.message_timer = 9999
+            self.message_expiry = float('inf')  # Never expires while solved
 
     def check_solution(self):
         """Manually check if the puzzle is solved and show flow."""
@@ -535,10 +538,10 @@ class PipesPuzzle:
             elapsed = self.solve_time - self.start_time
             self.message = (f"🎉 SOLVED in {self.moves} moves, "
                             f"{elapsed:.1f}s! Press 'n' for new puzzle.")
-            self.message_timer = 9999
+            self.message_expiry = float('inf')  # Never expires while solved
         else:
             self.message = f"Not connected yet. {len(filled)}/{self.rows * self.cols} cells filled."
-            self.message_timer = 120
+            self.message_expiry = time.time() + 4
 
     def get_elapsed_time(self):
         """Get elapsed time string."""
@@ -577,13 +580,19 @@ class PipesPuzzle:
         if key == ord('a') or key == ord('A'):
             self.auto_flow = not self.auto_flow
             self.message = f"Auto-flow: {'ON' if self.auto_flow else 'OFF'}"
-            self.message_timer = 90
+            self.message_expiry = time.time() + 3
             if self.auto_flow:
                 self._update_flow()
             return True
 
-        # After solving, only allow new game or quit
-        if self.solved and key not in (ord('n'), ord('N'), ord('q'), ord('Q')):
+        # After solving, only allow new game, quit, movement, or undo
+        if self.solved and key not in (
+            ord('n'), ord('N'), ord('q'), ord('Q'),
+            curses.KEY_UP, curses.KEY_DOWN, curses.KEY_LEFT, curses.KEY_RIGHT,
+            ord('h'), ord('H'), ord('j'), ord('J'),
+            ord('k'), ord('K'), ord('l'), ord('L'),
+            ord('u'), ord('U'), ord('a'), ord('A'),
+        ):
             return True
 
         # Movement
@@ -603,7 +612,7 @@ class PipesPuzzle:
             self.rotate_ccw()
 
         # Flow check
-        if key in (ord('f'), ord('F'), 10):  # 10 = Enter
+        if key in (ord('f'), ord('F'), 10, 13, curses.KEY_ENTER):
             self.check_solution()
 
         return True
@@ -741,7 +750,7 @@ class PipesPuzzle:
                 pass
 
         # Message
-        if self.message and self.message_timer > 0:
+        if self.message and time.time() < self.message_expiry:
             msg_y = status_y + 1
             msg_color = (curses.color_pair(6) | curses.A_BOLD
                          if self.solved else curses.color_pair(7))
@@ -749,7 +758,6 @@ class PipesPuzzle:
                 stdscr.addstr(msg_y, start_x, self.message, msg_color)
             except curses.error:
                 pass
-            self.message_timer -= 1
 
         # Controls help
         ctrl_y = status_y + 3
