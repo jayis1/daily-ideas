@@ -14,13 +14,14 @@ Usage:
 import argparse
 import curses
 import json
+import math
 import os
 import random
 import time
 import locale
 import sys
 
-__version__ = "2.2.0"
+__version__ = "2.3.0"
 
 # ── High score file ─────────────────────────────────────────────────────
 HIGHSCORE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".typing_racer_scores.json")
@@ -317,6 +318,7 @@ class TypingRacer:
 
         # Power-up spawn tracking
         self.powerup_spawn_counter = 0  # words completed since last power-up
+        self.powerup_spawn_target = random.randint(6, 12)  # target interval for next spawn
 
         # Track what difficulty tiers are unlocked
         self.unlocked = {"easy"}
@@ -330,6 +332,7 @@ class TypingRacer:
         self.high_scores = HighScoreManager()
         self.high_scores.load()
         self.rank = 0  # rank of the last game
+        self.score_saved = False  # whether the current game's score has been saved
 
         # Resize handling
         self._last_size = (self.height, self.width)
@@ -390,10 +393,10 @@ class TypingRacer:
     def maybe_spawn_powerup(self):
         """Possibly spawn a power-up after completing a word."""
         self.powerup_spawn_counter += 1
-        # Spawn a power-up roughly every 6-12 words completed
-        interval = random.randint(6, 12)
-        if self.powerup_spawn_counter >= interval:
+        # Spawn a power-up when counter reaches the target interval
+        if self.powerup_spawn_counter >= self.powerup_spawn_target:
             self.powerup_spawn_counter = 0
+            self.powerup_spawn_target = random.randint(6, 12)  # pick next interval
             ptype = random.choice([POWERUP_FREEZE, POWERUP_BOMB, POWERUP_HEART])
             max_x = max(0, self.width - 10)
             x = random.randint(2, max(2, max_x))
@@ -442,6 +445,7 @@ class TypingRacer:
                     self.current_target = None
                 if self.lives <= 0:
                     self.game_over = True
+                    self._save_score()
 
         # Move power-ups down and check collection
         for pu in self.powerups:
@@ -502,12 +506,18 @@ class TypingRacer:
             # Allow Q to quit from pause screen
             if ch == ord("q") or ch == ord("Q"):
                 self.game_over = True  # trigger game over to save score
+                self._save_score()
             return
 
         if ch < 0 or ch > 255:
             return
 
         char = chr(ch)
+
+        # Q is a special key (quit from pause/game-over), not a gameplay letter.
+        # During active play, ignore Q so it doesn't accidentally reset the combo.
+        if char.lower() == "q":
+            return
 
         # Ignore non-alpha keys (space, digits, punctuation, etc.)
         # These should not affect gameplay or reset the combo.
@@ -600,6 +610,28 @@ class TypingRacer:
 
         pu.alive = False
 
+    def _save_score(self):
+        """Save the current game's score to the high score table.
+
+        This is called once when game_over first becomes True,
+        so the score is preserved even if the player restarts.
+        """
+        if self.score_saved:
+            return
+        self.score_saved = True
+        if self.words_completed > 0:
+            if self.elapsed_time > 0:
+                wpm = (self.correct_chars / 5) / (self.elapsed_time / 60)
+            else:
+                wpm = 0
+            if self.total_chars_typed > 0:
+                acc = (self.correct_chars / self.total_chars_typed) * 100
+            else:
+                acc = 100.0
+            self.rank = self.high_scores.add(
+                self.score, wpm, acc, self.level, self.words_completed, self.max_combo
+            )
+
     def reset(self):
         self.words.clear()
         self.particles.clear()
@@ -628,7 +660,9 @@ class TypingRacer:
         self.combo_milestone = 0.0
         self.combo_milestone_text = ""
         self.powerup_spawn_counter = 0
+        self.powerup_spawn_target = random.randint(6, 12)
         self.rank = 0
+        self.score_saved = False
 
     # ── Rendering ────────────────────────────────────────────────────────
 
@@ -905,9 +939,7 @@ class TypingRacer:
                 pass
 
         # Countdown number
-        count_num = max(1, int(self.countdown) + 1)
-        if count_num > 3:
-            count_num = 3
+        count_num = max(1, min(3, math.ceil(self.countdown)))
         count_str = f"[ {count_num} ]"
         cx = max(0, w // 2 - len(count_str) // 2)
         cy = start_y + len(title_lines) + 1
@@ -1138,20 +1170,9 @@ def main(stdscr):
     # If we have previous high scores, show a brief title screen
     game.run()
 
-    # On game over, save score
-    if game.game_over and game.words_completed > 0:
-        if game.elapsed_time > 0:
-            wpm = (game.correct_chars / 5) / (game.elapsed_time / 60)
-        else:
-            wpm = 0
-        if game.total_chars_typed > 0:
-            acc = (game.correct_chars / game.total_chars_typed) * 100
-        else:
-            acc = 100.0
-
-        game.rank = game.high_scores.add(
-            game.score, wpm, acc, game.level, game.words_completed, game.max_combo
-        )
+    # Note: Score saving is now handled by _save_score() inside the game,
+    # which is called when game_over first becomes True. This ensures the
+    # score is saved even if the player presses R to restart.
 
 
 def cli_main():

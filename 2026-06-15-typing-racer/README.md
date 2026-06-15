@@ -53,15 +53,17 @@ Power-ups spawn every 6–12 words and fall slowly down the screen. They are aut
 
 ### Meta Features
 - **Persistent high scores** — top 10 scores saved to `.typing_racer_scores.json`
+- **Score saved immediately on game over** — your score is recorded as soon as the game ends, so it's preserved even if you restart or quit
 - **3-second countdown** — gives you time to get ready before words start falling
 - **Pause screen** — press ESC to pause; shows current stats and allows Q to quit
 - **Terminal resize handling** — adapts if you resize your terminal mid-game
 - **Minimum size check** — warns if your terminal is too small (needs 60×20 minimum)
 - **Non-letter key filtering** — pressing space, digits, or punctuation won't affect your combo or accuracy
+- **Q key safety** — pressing Q during active gameplay is ignored (it's only active during pause and game-over screens)
 
 ## 🚀 Installation
 
-No external dependencies — uses only Python's standard library (`curses`, `json`, `argparse`).
+No external dependencies — uses only Python's standard library (`curses`, `json`, `argparse`, `math`).
 
 ```bash
 # Clone and run
@@ -78,20 +80,20 @@ python3 typing_racer.py
 
 | Key | Action |
 |-----|--------|
-| `A-Z`, `a-z` | Type letters to destroy falling words (case-insensitive) |
+| `A-Z`, `a-z` | Type letters to destroy falling words (case-insensitive; Q is excluded during active play) |
 | `ESC` | Pause / Resume |
-| `Q` | Quit (from pause screen or game over screen) |
+| `Q` | Quit (from pause screen or game over screen only — ignored during active gameplay) |
 | `R` | Restart (on game over screen) |
 | `Ctrl+C` | Force quit anytime |
 
-**Note:** Non-letter keys (space, digits, punctuation) are silently ignored and won't affect your combo or accuracy.
+**Note:** Non-letter keys (space, digits, punctuation) and the Q key are silently ignored during active gameplay and won't affect your combo or accuracy.
 
 ## 📋 CLI Options
 
 ```bash
 python3 typing_racer.py              # Start the game
 python3 typing_racer.py --help       # Show help and usage info
-python3 typing_racer.py --version    # Show version (2.2.0)
+python3 typing_racer.py --version    # Show version (2.3.0)
 python3 typing_racer.py --scores     # Show high scores leaderboard
 python3 typing_racer.py --reset      # Reset all high scores
 ```
@@ -106,6 +108,7 @@ python3 typing_racer.py --reset      # Reset all high scores
 6. **Grab power-ups** — Freeze is great for catching up, Bomb clears a crowded screen. Power-ups are collected automatically when they fall near the bottom
 7. **Check key hints** — the "Keys:" line at the bottom shows which first letters are currently available
 8. **Caps Lock is fine** — the game converts all letter input to lowercase, so Caps Lock won't hurt you
+9. **Don't worry about Q** — pressing Q during gameplay is ignored, it only works as a quit key from the pause or game-over screens
 
 ## 📊 Scoring
 
@@ -132,7 +135,7 @@ python3 -m pytest test_typing_racer.py -v
 python3 test_typing_racer.py
 ```
 
-The test suite covers 56 tests including:
+The test suite covers 63 tests including:
 - `FallingWord` — initialization, typing, completion, freezing, edge cases
 - `Particle` — physics, lifetime
 - `PowerUp` — types, expiration, symbols, speed, unknown types
@@ -140,7 +143,7 @@ The test suite covers 56 tests including:
 - Word pool validation — lowercase, no duplicates, appropriate lengths, all alpha
 - Scoring formula verification
 - Version format check
-- `TestBugFixes` — v2.1: bomb words_completed, power-up collection, ESC during countdown, freeze effect, heart max lives, pause quit, spawn interval bounds; v2.2: case-insensitive matching, non-alpha key filtering, score entry validation, unlocked tier weight guarantee
+- `TestBugFixes` — v2.1: bomb words_completed, power-up collection, ESC during countdown, freeze effect, heart max lives, pause quit, spawn interval bounds; v2.2: case-insensitive matching, non-alpha key filtering, score entry validation, unlocked tier weight guarantee; v2.3: Q key ignored during gameplay, countdown display fix, power-up spawn interval fix, score saved on game-over, score save idempotency
 
 ## 🏗️ Architecture
 
@@ -156,11 +159,17 @@ All rendering uses `curses` — no external UI library needed. The game loop use
 
 ## 🐛 Bugs Fixed
 
+### v2.3
+1. **Score lost on restart** — Pressing R to restart after game over would clear all game state (including `words_completed`) before the score could be saved. The score is now saved immediately when game over first occurs via `_save_score()`, which uses an idempotent `score_saved` flag to prevent double-saving. The `reset()` method properly resets this flag for the next game.
+2. **Q key resets combo during active gameplay** — Pressing Q during active (non-paused, non-game-over) gameplay was treated as a regular letter input. Since words like "quest" and "quintessence" start with Q, this could accidentally target them, and if no Q-word existed, it would reset your combo. Q is now silently ignored during active gameplay and only functions as a quit key from pause/game-over screens.
+3. **Countdown timer off-by-one** — The 3-second countdown displayed the wrong number at integer boundaries. At `countdown=2.0`, it showed "3" instead of "2"; at `countdown=1.0`, it showed "2" instead of "1". Fixed by replacing `int(countdown)+1` with `math.ceil(countdown)`.
+4. **Power-up spawn interval re-rolled every word** — `maybe_spawn_powerup()` generated a new random interval (6–12) on every call, meaning the counter could hit a freshly rolled low number on any word. This made power-ups spawn much more frequently than intended. The target interval is now stored in `powerup_spawn_target` and only re-rolled after a power-up actually spawns.
+
 ### v2.2
 1. **Case sensitivity broke gameplay** — Uppercase letters (e.g., from Caps Lock) didn't match lowercase words, causing the combo to reset. Input is now converted to lowercase before matching.
 2. **Non-letter keys reset combo** — Pressing space, digits, or punctuation while targeting a word would trigger the wrong-character path and reset the combo. Non-alphabetic keys are now silently ignored.
-3. **HighScoreManager crashed on corrupt entries** — Loading a score file containing non-dict entries (strings, numbers, dicts missing required keys) caused `add()` to crash with `string indices must be integers`. Entries are now validated on load.
-4. **Unlocked difficulty tiers had zero spawn weight** — When hard/expert tiers were unlocked (at 10/20 words), their spawn weight was 0 until higher levels, meaning they'd never appear despite being "unlocked". All unlocked tiers now have a minimum weight of 1.
+3. **HighScoreManager crashed on corrupt entries** — Loading a score file containing non-dict entries caused crashes. Entries are now validated on load.
+4. **Unlocked difficulty tiers had zero spawn weight** — When hard/expert tiers were unlocked, their spawn weight was 0 until higher levels. All unlocked tiers now have a minimum weight of 1.
 
 ### v2.1
 1. **Power-ups were never collected** — The `collect_powerup()` method existed but was never called from the game loop. Now collected automatically when near the bottom.
