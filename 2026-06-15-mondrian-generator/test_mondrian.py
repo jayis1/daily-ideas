@@ -32,8 +32,8 @@ class TestVersion:
         for part in parts:
             assert part.isdigit()
 
-    def test_version_is_3_0_0(self):
-        assert __version__ == "3.0.0"
+    def test_version_is_3_0_1(self):
+        assert __version__ == "3.0.1"
 
 
 class TestMondrianCanvas:
@@ -51,7 +51,7 @@ class TestMondrianCanvas:
         for row in canvas.cells:
             for cell in row:
                 assert cell.char == " "
-                assert cell.bg == (242, 242, 242)  # white
+                assert cell.bg == (0, 0, 0)  # default (black); filled by generate_mondrian
 
     def test_fill_rect(self):
         canvas = MondrianCanvas(width=20, height=10)
@@ -510,6 +510,91 @@ class TestBugFixes:
         if os.path.exists(svg_path):
             os.unlink(svg_path)
 
+    def test_generate_mondrian_rejects_too_small_dimensions(self):
+        """generate_mondrian should raise ValueError for too-small dimensions."""
+        # Canvas must be at least 2*BORDER_W + 1 = 5
+        with pytest.raises(ValueError, match="at least"):
+            generate_mondrian(width=4, height=10, seed=42)
+        with pytest.raises(ValueError, match="at least"):
+            generate_mondrian(width=10, height=4, seed=42)
+        with pytest.raises(ValueError, match="at least"):
+            generate_mondrian(width=1, height=1, seed=42)
+
+    def test_draw_outer_border_small_canvas(self):
+        """draw_outer_border should not crash on small canvases."""
+        # Even a 1x1 canvas should not crash (though it's not useful)
+        canvas = MondrianCanvas(width=1, height=1)
+        palette = PALETTES["classic"]
+        draw_outer_border(canvas, palette)  # Should not raise
+        assert canvas.cells[0][0].fg == palette["black"]
+
+    def test_min_size_1_accepted_by_api(self):
+        """API should accept min_size=1 (it was incorrectly rejected by CLI)."""
+        art, canvas, palette = generate_mondrian(width=14, height=14, seed=42, min_size=1)
+        assert len(art) > 0
+
+    def test_count_regions_non_classic_palette(self):
+        """count_regions should work correctly with non-classic palettes."""
+        _, canvas, palette = generate_mondrian(width=40, height=20, seed=42, palette_name="neon")
+        stats = count_regions(canvas, palette)
+        # After proper generation, all cells should have palette colors
+        # and count_regions should correctly identify them
+        assert stats["total_cells"] >= 0
+        # No 'custom(...)' entries — all colors should be in the palette
+        for color_name in stats["colors"]:
+            assert "custom" not in color_name, \
+                f"Found unrecognized color: {color_name}"
+
+    def test_cli_rejects_count_zero(self):
+        """CLI should reject --count 0."""
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, os.path.join(os.path.dirname(__file__), "mondrian.py"),
+             "-W", "20", "-H", "10", "-s", "42", "--no-clear", "--plain", "-n", "0"],
+            capture_output=True, text=True
+        )
+        assert result.returncode != 0, "--count 0 should be rejected"
+
+    def test_cli_rejects_negative_count(self):
+        """CLI should reject --count with negative value."""
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, os.path.join(os.path.dirname(__file__), "mondrian.py"),
+             "-W", "20", "-H", "10", "-s", "42", "--no-clear", "--plain", "-n", "-1"],
+            capture_output=True, text=True
+        )
+        assert result.returncode != 0, "--count -1 should be rejected"
+
+    def test_cli_rejects_negative_max_depth(self):
+        """CLI should reject --max-depth with negative value."""
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, os.path.join(os.path.dirname(__file__), "mondrian.py"),
+             "-W", "20", "-H", "10", "-s", "42", "--no-clear", "--plain", "-d", "-1"],
+            capture_output=True, text=True
+        )
+        assert result.returncode != 0, "--max-depth -1 should be rejected"
+
+    def test_cli_rejects_zero_width(self):
+        """CLI should reject --width 0."""
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, os.path.join(os.path.dirname(__file__), "mondrian.py"),
+             "-W", "0", "-H", "10", "-s", "42", "--no-clear", "--plain"],
+            capture_output=True, text=True
+        )
+        assert result.returncode != 0, "--width 0 should be rejected"
+
+    def test_cli_accepts_min_size_1(self):
+        """CLI should accept --min-size 1."""
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, os.path.join(os.path.dirname(__file__), "mondrian.py"),
+             "-W", "14", "-H", "10", "-s", "42", "--no-clear", "--plain", "--min-size", "1"],
+            capture_output=True, text=True
+        )
+        assert result.returncode == 0, "--min-size 1 should be accepted"
+
 
 class TestCLI:
     """Test CLI flags and behavior."""
@@ -523,7 +608,7 @@ class TestCLI:
             capture_output=True, text=True
         )
         assert result.returncode == 0
-        assert "3.0.0" in result.stdout
+        assert "3.0.1" in result.stdout
 
     def test_help_flag(self):
         """--help should print usage and exit."""

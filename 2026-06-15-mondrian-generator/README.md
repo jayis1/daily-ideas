@@ -1,19 +1,19 @@
-# 🎨 Terminal Mondrian Art Generator v3.0
+# 🎨 Terminal Mondrian Art Generator v3.0.1
 
 Generate Piet Mondrian-style **De Stijl** compositions directly in your terminal using Unicode box-drawing characters and ANSI 24-bit true colors.
 
 Every run produces a unique composition. Use a seed for reproducible results.
 
-## What's New in v3.0
+## What's New in v3.0.1 (Bug Fix Release)
 
-- **PNG export** — save compositions as PNG images with pure Python (no dependencies!)
-- **2 new palettes** — `ocean` and `autumn` join the existing 5
-- **Custom palettes via JSON** — define your own colors from the command line
-- **`--list-palettes`** — see all palettes with color swatches
-- **`--plain` mode** — pipe-friendly output without ANSI escape codes
-- **Coverage statistics** — `--stats` now shows percentage coverage per color
-- **Optimized rendering** — reduced ANSI escape sequences by batching same-color cells
-- **Improved intersection detection** — better corner/junction character detection
+- **Fixed: `draw_outer_border` crash on tiny canvases** — canvases smaller than `BORDER_W` (2) cells in either dimension caused an `IndexError`. The function now safely skips out-of-bounds cells.
+- **Fixed: `generate_mondrian` API accepts invalid dimensions** — calling `generate_mondrian(width=1, height=1)` or any canvas smaller than `2×BORDER_W + 1` (5×5) now raises a clear `ValueError` instead of crashing with an `IndexError`.
+- **Fixed: `--min-size 1` rejected by CLI** — the `--min-size` validator required `≥ 2` but `1` is a valid value. Now accepts `≥ 1`.
+- **Fixed: `--count 0` and `--count -1` accepted** — the CLI now validates that `--count` must be `≥ 1`.
+- **Fixed: Negative `--max-depth` accepted** — the CLI now validates that `--max-depth` must be `≥ 0`.
+- **Fixed: `--width 0` accepted without error** — the CLI now validates that `--width` and `--height` must be `≥ 1` when explicitly provided.
+- **Fixed: `Cell` default bg color bias** — the `Cell` dataclass defaulted to `(242, 242, 242)` (the classic palette's white), causing `count_regions()` and `compute_coverage()` to misidentify cells on canvases using non-classic palettes. Default is now `(0, 0, 0)` (neutral), since `generate_mondrian` always fills the canvas with the palette's white before subdivision.
+- **Added: 9 regression tests** for all the above fixes.
 
 ## Features
 
@@ -32,7 +32,7 @@ Every run produces a unique composition. Use a seed for reproducible results.
 - **Gallery mode** — generate multiple compositions sequentially with `-n`
 - **Signature watermark** — each composition is signed "MONDRIAN" (opt-out with `--no-signature`)
 - **`--version` and `--help`** — standard CLI flags
-- **Input validation** — rejects invalid dimensions, negative delays, and out-of-range parameters
+- **Input validation** — rejects invalid dimensions, negative delays, out-of-range parameters, and zero/negative counts
 
 ## Requirements
 
@@ -177,7 +177,7 @@ python3 mondrian.py --split-prob 0.5
 python3 mondrian.py -n 5
 
 # Fine control over minimum region size and depth
-python3 mondrian.py -m 4 -d 8
+python3 mondrian.py -m 1 -d 8
 
 # No signature watermark
 python3 mondrian.py --no-signature
@@ -198,7 +198,7 @@ art, canvas, palette = generate_mondrian(
     seed=1337,
     split_prob=0.9,
     max_depth=7,
-    min_size=4,
+    min_size=1,
     palette_name="neon",
     no_signature=True
 )
@@ -232,19 +232,21 @@ from mondrian import render_plain
 print(render_plain(canvas))
 ```
 
+**Note:** `generate_mondrian()` raises `ValueError` if the canvas dimensions are too small (minimum 5×5, since the 2-cell border requires 4 cells plus at least 1 cell for content).
+
 ## All Options
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `-W` / `--width` | auto-detect | Canvas width in characters |
-| `-H` / `--height` | auto-detect | Canvas height in rows |
+| `-W` / `--width` | auto-detect | Canvas width in characters (must be ≥ 1) |
+| `-H` / `--height` | auto-detect | Canvas height in rows (must be ≥ 1) |
 | `-s` / `--seed` | random | Random seed for reproducible art |
 | `-p` / `--palette` | classic | Color palette (classic, neon, pastel, seventies, dark, ocean, autumn) |
 | `--custom-palette` | — | Custom palette as JSON (overrides `--palette`) |
 | `--split-prob` | 0.85 | Probability of splitting a region (0.0–1.0) |
-| `-d` / `--max-depth` | 6 | Maximum subdivision depth |
-| `-m` / `--min-size` | 6 | Minimum region size before splitting stops |
-| `-n` / `--count` | 1 | Number of compositions to generate |
+| `-d` / `--max-depth` | 6 | Maximum subdivision depth (must be ≥ 0) |
+| `-m` / `--min-size` | 6 | Minimum region size before splitting stops (must be ≥ 1) |
+| `-n` / `--count` | 1 | Number of compositions to generate (must be ≥ 1) |
 | `--no-clear` | off | Don't clear the screen before drawing |
 | `--no-signature` | off | Omit the MONDRIAN signature watermark |
 | `--animate` | off | Animate the composition being drawn row by row |
@@ -254,7 +256,7 @@ print(render_plain(canvas))
 | `--stats` | off | Print composition statistics after rendering |
 | `--list-palettes` | off | List available palettes with color swatches and exit |
 | `--plain` | off | Output plain text without ANSI escapes |
-| `--cell-size` | 10 | Cell size in pixels for PNG export |
+| `--cell-size` | 10 | Cell size in pixels for PNG export (must be ≥ 1) |
 | `--version` | — | Show version number |
 
 ## Palettes
@@ -271,7 +273,7 @@ print(render_plain(canvas))
 
 ## How It Works
 
-1. **Canvas initialization** — Creates a 2D grid of cells, each with a character, foreground color, and background color. The entire canvas starts as off-white (or the palette's white).
+1. **Canvas initialization** — Creates a 2D grid of cells, each with a character, foreground color, and background color. The entire canvas is filled with the palette's white color.
 
 2. **Recursive subdivision** — Starting from the full canvas (minus outer border), the algorithm decides whether to split (based on `split_prob`, size constraints, and depth), chooses horizontal or vertical direction (preferring the longer axis), picks a random split position, draws thick black borders at the split, and recursively processes each sub-region.
 
@@ -291,10 +293,11 @@ The PNG exporter is implemented in pure Python using `struct` and `zlib` — no 
 python3 -m pytest test_mondrian.py -v
 ```
 
-The test suite includes 59 tests covering:
+The test suite includes 68 tests covering:
 - Version format validation
 - Canvas creation, fill, and boundary checks
 - Rect.area() utility
+- Dimension validation (too-small canvases raise ValueError)
 - Deterministic and varied generation
 - All 7 palettes and custom palettes
 - Small canvas edge cases
@@ -306,12 +309,25 @@ The test suite includes 59 tests covering:
 - Composition statistics with percentage coverage
 - Custom palette JSON parsing (valid, missing, extra, invalid)
 - CLI flags: `--version`, `--help`, `--list-palettes`, `--plain`, `--custom-palette`
-- Regression tests for input validation (zero/negative dimensions, negative delay)
+- Regression tests for input validation (zero/negative dimensions, negative delay, count ≥ 1, max-depth ≥ 0, min-size ≥ 1, width/height ≥ 1)
+- draw_outer_border safety on tiny canvases
+- count_regions correctness with non-classic palettes
 - SVG explicit coordinate attributes
 - HTML border-cell class distinction
 - Stats formatting in export mode
 
 ## Changelog
+
+### v3.0.1 (Bug Fix Release)
+
+- **Fixed: `draw_outer_border` crash on tiny canvases** — canvases smaller than 5×5 caused an `IndexError` when drawing the outer border. Now safely handles any canvas size.
+- **Fixed: `generate_mondrian` API crash on small dimensions** — calling with `width < 5` or `height < 5` now raises a clear `ValueError` instead of an opaque `IndexError`.
+- **Fixed: `--min-size 1` rejected by CLI** — the minimum was incorrectly set to 2; now correctly accepts values ≥ 1.
+- **Fixed: `--count 0` and `--count -1` accepted** — the CLI now validates that count must be ≥ 1.
+- **Fixed: Negative `--max-depth` accepted** — the CLI now validates that max-depth must be ≥ 0.
+- **Fixed: `--width 0` and `--height 0` accepted** — the CLI now validates that explicitly provided dimensions must be ≥ 1.
+- **Fixed: `Cell` default bg color biased toward classic palette** — changed from `(242, 242, 242)` to `(0, 0, 0)`. The `generate_mondrian` function already fills the entire canvas with the palette's white before subdivision, so this change only affects manually created canvases and ensures `count_regions`/`compute_coverage` work correctly with all palettes.
+- **Added: 9 regression tests** for all the above fixes.
 
 ### v3.0 (Feature Release)
 

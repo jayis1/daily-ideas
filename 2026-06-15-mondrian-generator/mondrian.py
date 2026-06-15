@@ -24,7 +24,7 @@ import zlib
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Dict
 
-__version__ = "3.0.0"
+__version__ = "3.0.1"
 
 # ── ANSI helpers ──────────────────────────────────────────────────────────
 
@@ -123,7 +123,7 @@ class Rect:
 class Cell:
     """A single character cell in the canvas with foreground/background colors."""
     char: str = " "
-    bg: Tuple[int, int, int] = (242, 242, 242)
+    bg: Tuple[int, int, int] = (0, 0, 0)
     fg: Tuple[int, int, int] = (0, 0, 0)
 
 @dataclass
@@ -346,33 +346,52 @@ def fix_intersections(canvas: MondrianCanvas, palette: dict):
 
 
 def draw_outer_border(canvas: MondrianCanvas, palette: dict):
-    """Draw a thick border around the entire canvas."""
+    """Draw a thick border around the entire canvas.
+
+    Safe for canvases of any size — skips cells that would be out of bounds.
+    """
     border_color = palette["black"]
 
     for x in range(canvas.width):
         for bw in range(BORDER_W):
-            canvas.cells[bw][x].char = "─"
-            canvas.cells[bw][x].fg = border_color
-            canvas.cells[bw][x].bg = border_color
-            canvas.cells[canvas.height - 1 - bw][x].char = "─"
-            canvas.cells[canvas.height - 1 - bw][x].fg = border_color
-            canvas.cells[canvas.height - 1 - bw][x].bg = border_color
+            # Top border rows
+            top_row = bw
+            if top_row < canvas.height:
+                canvas.cells[top_row][x].char = "─"
+                canvas.cells[top_row][x].fg = border_color
+                canvas.cells[top_row][x].bg = border_color
+            # Bottom border rows
+            bot_row = canvas.height - 1 - bw
+            if 0 <= bot_row < canvas.height:
+                canvas.cells[bot_row][x].char = "─"
+                canvas.cells[bot_row][x].fg = border_color
+                canvas.cells[bot_row][x].bg = border_color
     for y in range(canvas.height):
         for bw in range(BORDER_W):
-            canvas.cells[y][bw].char = "│"
-            canvas.cells[y][bw].fg = border_color
-            canvas.cells[y][bw].bg = border_color
-            canvas.cells[y][canvas.width - 1 - bw].char = "│"
-            canvas.cells[y][canvas.width - 1 - bw].fg = border_color
-            canvas.cells[y][canvas.width - 1 - bw].bg = border_color
+            # Left border columns
+            left_col = bw
+            if left_col < canvas.width:
+                canvas.cells[y][left_col].char = "│"
+                canvas.cells[y][left_col].fg = border_color
+                canvas.cells[y][left_col].bg = border_color
+            # Right border columns
+            right_col = canvas.width - 1 - bw
+            if 0 <= right_col < canvas.width:
+                canvas.cells[y][right_col].char = "│"
+                canvas.cells[y][right_col].fg = border_color
+                canvas.cells[y][right_col].bg = border_color
 
     # Corner intersections
     for by in range(BORDER_W):
         for bx in range(BORDER_W):
-            canvas.cells[by][bx].char = "┼"
-            canvas.cells[by][canvas.width - 1 - bx].char = "┼"
-            canvas.cells[canvas.height - 1 - by][bx].char = "┼"
-            canvas.cells[canvas.height - 1 - by][canvas.width - 1 - bx].char = "┼"
+            if by < canvas.height and bx < canvas.width:
+                canvas.cells[by][bx].char = "┼"
+            if by < canvas.height and (canvas.width - 1 - bx) >= 0:
+                canvas.cells[by][canvas.width - 1 - bx].char = "┼"
+            if (canvas.height - 1 - by) >= 0 and bx < canvas.width:
+                canvas.cells[canvas.height - 1 - by][bx].char = "┼"
+            if (canvas.height - 1 - by) >= 0 and (canvas.width - 1 - bx) >= 0:
+                canvas.cells[canvas.height - 1 - by][canvas.width - 1 - bx].char = "┼"
 
 
 def render(canvas: MondrianCanvas) -> str:
@@ -763,6 +782,15 @@ def generate_mondrian(width=80, height=34, seed=None, split_prob=0.85,
     if seed is not None:
         random.seed(seed)
 
+    # Validate dimensions — canvas must be large enough for the outer border
+    min_dim = 2 * BORDER_W + 1  # At least border + 1 cell inner
+    if width < min_dim or height < min_dim:
+        raise ValueError(
+            f"Canvas dimensions must be at least {min_dim}×{min_dim} "
+            f"(got {width}×{height}). The outer border requires {BORDER_W} "
+            f"cells on each side."
+        )
+
     palette = custom_palette or PALETTES.get(palette_name or DEFAULT_PALETTE, PALETTES[DEFAULT_PALETTE])
 
     canvas = MondrianCanvas(width=width, height=height)
@@ -915,8 +943,8 @@ examples:
         parser.error("--split-prob must be between 0.0 and 1.0")
 
     # Validate min-size
-    if args.min_size < 2:
-        parser.error("--min-size must be >= 2")
+    if args.min_size < 1:
+        parser.error("--min-size must be >= 1")
 
     # Validate delay
     if args.delay < 0:
@@ -925,6 +953,20 @@ examples:
     # Validate cell-size
     if args.cell_size < 1:
         parser.error("--cell-size must be >= 1")
+
+    # Validate count
+    if args.count < 1:
+        parser.error("--count must be >= 1")
+
+    # Validate max-depth
+    if args.max_depth < 0:
+        parser.error("--max-depth must be >= 0")
+
+    # Validate width and height (when explicitly provided)
+    if args.width is not None and args.width < 1:
+        parser.error("--width must be >= 1")
+    if args.height is not None and args.height < 1:
+        parser.error("--height must be >= 1")
 
     # Determine terminal size
     try:
