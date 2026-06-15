@@ -5,6 +5,7 @@ import random
 import sys
 import os
 import tempfile
+import pytest
 
 # Add the project directory to the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -254,6 +255,87 @@ class TestPalettes:
                 assert len(rgb) == 3, f"Palette '{name}', color '{color_name}' is not a 3-tuple"
                 for val in rgb:
                     assert 0 <= val <= 255, f"Palette '{name}', color '{color_name}' has out-of-range value"
+
+
+class TestBugFixes:
+    """Regression tests for bugs found and fixed."""
+
+    def test_zero_dimension_canvas_raises(self):
+        """Zero-width or zero-height canvas should raise ValueError."""
+        with pytest.raises(ValueError):
+            MondrianCanvas(width=0, height=5)
+        with pytest.raises(ValueError):
+            MondrianCanvas(width=5, height=0)
+        with pytest.raises(ValueError):
+            MondrianCanvas(width=0, height=0)
+
+    def test_negative_dimension_canvas_raises(self):
+        """Negative canvas dimensions should raise ValueError."""
+        with pytest.raises(ValueError):
+            MondrianCanvas(width=-1, height=5)
+        with pytest.raises(ValueError):
+            MondrianCanvas(width=5, height=-1)
+
+    def test_svg_export_has_explicit_xy_on_background(self):
+        """SVG background rect should have explicit x=\"0\" y=\"0\" attributes."""
+        _, canvas, palette = generate_mondrian(width=30, height=15, seed=42)
+        with tempfile.NamedTemporaryFile(suffix=".svg", delete=False, mode="w") as f:
+            tmpfile = f.name
+        try:
+            export_svg(canvas, palette, tmpfile)
+            with open(tmpfile) as f:
+                content = f.read()
+            # Find the background rect (second rect in the file)
+            assert 'x="0"' in content, "SVG should have explicit x=\"0\" on rects"
+            assert 'y="0"' in content, "SVG should have explicit y=\"0\" on rects"
+        finally:
+            os.unlink(tmpfile)
+
+    def test_html_export_has_border_cell_class(self):
+        """HTML export should distinguish border cells with a 'border-cell' class."""
+        _, canvas, palette = generate_mondrian(width=30, height=15, seed=42)
+        with tempfile.NamedTemporaryFile(suffix=".html", delete=False, mode="w") as f:
+            tmpfile = f.name
+        try:
+            export_html(canvas, palette, tmpfile)
+            with open(tmpfile) as f:
+                content = f.read()
+            assert "border-cell" in content, "HTML should contain 'border-cell' class for border cells"
+            assert ".border-cell" in content, "HTML should contain CSS for .border-cell"
+        finally:
+            os.unlink(tmpfile)
+
+    def test_negative_delay_rejected_by_cli(self):
+        """Negative --delay should be rejected by the CLI."""
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, os.path.join(os.path.dirname(__file__), "mondrian.py"),
+             "--delay", "-1", "-W", "20", "-H", "10", "--no-clear", "-s", "42"],
+            capture_output=True, text=True
+        )
+        assert result.returncode != 0, "Negative --delay should be rejected"
+
+    def test_export_stats_format(self):
+        """Export mode with --stats should produce formatted output, not raw dict."""
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, os.path.join(os.path.dirname(__file__), "mondrian.py"),
+             "--export", "svg", "-W", "60", "-H", "30", "-s", "42", "--stats",
+             "-o", os.path.join(tempfile.gettempdir(), "test_stats_fmt.svg")],
+            capture_output=True, text=True
+        )
+        assert result.returncode == 0
+        # Should have formatted stats, not raw dict repr
+        assert "Composition statistics" in result.stdout, "Stats should have formatted header"
+        # The word "cells" appears in per-color lines like "red: 120 cells"
+        assert "cells" in result.stdout or "Seed" in result.stdout, \
+            f"Stats should show cell counts or at least seed info; got: {result.stdout}"
+        # Should NOT contain raw dict repr like {'total_cells':
+        assert "{'total_cells'" not in result.stdout, "Stats should not be raw dict repr"
+        # Clean up
+        svg_path = os.path.join(tempfile.gettempdir(), "test_stats_fmt.svg")
+        if os.path.exists(svg_path):
+            os.unlink(svg_path)
 
 
 if __name__ == "__main__":

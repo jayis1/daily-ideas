@@ -8,7 +8,7 @@ Renders using Unicode box-drawing characters and ANSI true-color escapes.
 
 Supports multiple palettes, animation mode, and SVG/HTML export.
 
-Version: 2.0.0
+Version: 2.1.0
 """
 
 import random
@@ -20,7 +20,7 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 
 # ── ANSI helpers ──────────────────────────────────────────────────────────
 
@@ -111,6 +111,8 @@ class MondrianCanvas:
     cells: List[List[Cell]] = field(default_factory=list)
 
     def __post_init__(self):
+        if self.width < 1 or self.height < 1:
+            raise ValueError(f"Canvas dimensions must be >= 1, got {self.width}x{self.height}")
         self.cells = [
             [Cell() for _ in range(self.width)]
             for _ in range(self.height)
@@ -412,7 +414,7 @@ def export_svg(canvas: MondrianCanvas, palette: dict, filename: str):
     lines = [
         f'<?xml version="1.0" encoding="UTF-8"?>',
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{svg_width}" height="{svg_height}" viewBox="0 0 {svg_width} {svg_height}">',
-        f'<rect width="{svg_width}" height="{svg_height}" fill="rgb({border_color[0]},{border_color[1]},{border_color[2]})"/>',
+        f'<rect x="0" y="0" width="{svg_width}" height="{svg_height}" fill="rgb({border_color[0]},{border_color[1]},{border_color[2]})"/>',
     ]
 
     # Find filled regions using flood-fill-like approach
@@ -485,6 +487,7 @@ def export_html(canvas: MondrianCanvas, palette: dict, filename: str):
         f'.mondrian {{ display: grid; grid-template-columns: repeat({canvas.width}, {cell_size}px);',
         f'              grid-template-rows: repeat({canvas.height}, {cell_size}px); }}',
         f'.cell {{ width: {cell_size}px; height: {cell_size}px; font-size: 1px; }}',
+        '.border-cell { line-height: 1; }',
         '</style>',
         '</head>',
         '<body>',
@@ -494,9 +497,9 @@ def export_html(canvas: MondrianCanvas, palette: dict, filename: str):
     for row in canvas.cells:
         for cell in row:
             r, g, b = cell.bg
-            # Use background color; for border cells, show black
+            # Border cells get a distinct class for styling
             if cell.fg == border_color and cell.bg == border_color:
-                html_parts.append(f'<div class="cell" style="background:rgb({r},{g},{b})"></div>')
+                html_parts.append(f'<div class="cell border-cell" style="background:rgb({r},{g},{b})"></div>')
             else:
                 html_parts.append(f'<div class="cell" style="background:rgb({r},{g},{b})"></div>')
 
@@ -663,6 +666,10 @@ examples:
     if args.min_size < 2:
         parser.error("--min-size must be >= 2")
 
+    # Validate delay
+    if args.delay < 0:
+        parser.error("--delay must be >= 0")
+
     # Determine terminal size
     try:
         cols, rows = os.get_terminal_size()
@@ -700,7 +707,13 @@ examples:
         print(f"Exported Mondrian composition to {outfile} (seed={seed})")
         if args.stats:
             stats = count_regions(canvas, palette)
-            print(f"Statistics: {stats}")
+            print(f"\n{BOLD}Composition statistics:{RESET}")
+            print(f"  Seed: {seed}")
+            print(f"  Canvas: {width}×{height}")
+            print(f"  Palette: {args.palette}")
+            for color_name, cell_count in stats["colors"].items():
+                print(f"  {color_name}: {cell_count} cells")
+            print()
         return
 
     # Handle animation mode

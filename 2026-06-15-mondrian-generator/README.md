@@ -1,4 +1,4 @@
-# 🎨 Terminal Mondrian Art Generator v2.0
+# 🎨 Terminal Mondrian Art Generator v2.1
 
 Generate Piet Mondrian-style **De Stijl** compositions directly in your terminal using Unicode box-drawing characters and ANSI 24-bit true colors.
 
@@ -12,12 +12,13 @@ Every run produces a unique composition. Use a seed for reproducible results.
 - **Thick black borders** — 2-character-wide borders rendered with Unicode box-drawing characters (┼, │, ─, ┬, ┴, ├, ┤)
 - **Animation mode** — watch the composition being drawn row by row
 - **SVG export** — save compositions as scalable vector graphics
-- **HTML export** — save compositions as standalone web pages
+- **HTML export** — save compositions as standalone web pages with CSS grid
 - **Composition statistics** — see color distribution and region counts
 - **Configurable** — control canvas size, split probability, recursion depth, minimum region size, and random seed
 - **Gallery mode** — generate multiple compositions sequentially with `-n`
 - **Signature watermark** — each composition is signed "MONDRIAN" (opt-out with `--no-signature`)
 - **`--version` and `--help`** — standard CLI flags
+- **Input validation** — rejects invalid dimensions, negative delays, and out-of-range parameters
 
 ## Requirements
 
@@ -104,10 +105,10 @@ python3 mondrian.py -s 42 --stats --no-clear
 python3 mondrian.py -W 100 -H 40
 
 # More subdivisions (higher split probability)
-python3 mondrian.py -p 0.95
+python3 mondrian.py --split-prob 0.95
 
 # Fewer subdivisions (calmer composition)
-python3 mondrian.py -p 0.5
+python3 mondrian.py --split-prob 0.5
 
 # Gallery mode: generate 5 compositions
 python3 mondrian.py -n 5
@@ -167,7 +168,7 @@ print(stats)
 | `--no-clear` | off | Don't clear the screen before drawing |
 | `--no-signature` | off | Omit the MONDRIAN signature watermark |
 | `--animate` | off | Animate the composition being drawn row by row |
-| `--delay` | 0.03 | Delay in seconds between animation frames |
+| `--delay` | 0.03 | Delay in seconds between animation frames (must be ≥ 0) |
 | `--export` | — | Export format: `svg` or `html` |
 | `-o` / `--output` | mondrian.svg/html | Output file path for exports |
 | `--stats` | off | Print composition statistics after rendering |
@@ -200,6 +201,29 @@ print(stats)
 ```bash
 python3 -m pytest test_mondrian.py -v
 ```
+
+The test suite includes 31 tests covering:
+- Version format validation
+- Canvas creation, fill, and boundary checks
+- Deterministic and varied generation
+- All palettes, small canvas, ANSI output, box characters
+- SVG and HTML export validity
+- Composition statistics
+- Regression tests for input validation (zero/negative dimensions, negative delay)
+- SVG explicit coordinate attributes
+- HTML border-cell class distinction
+- Stats formatting in export mode
+
+## Changelog
+
+### v2.1 (Bug Fix Release)
+
+- **Fixed: Negative delay accepted without error** — `--delay -1` would cause `time.sleep()` to raise `ValueError`; now properly validated at CLI level
+- **Fixed: Export mode stats used raw dict repr** — `--export` with `--stats` now prints nicely formatted statistics matching the normal mode output, instead of `{'total_cells': ..., 'colors': {...}}`
+- **Fixed: SVG background rect missing explicit x/y** — The background `<rect>` in SVG export now has explicit `x="0" y="0"` attributes for better compatibility
+- **Fixed: HTML export dead code** — The `if`/`else` branches for border vs. non-border cells produced identical HTML; border cells now get a `border-cell` CSS class for proper distinction
+- **Fixed: Zero-size canvas accepted without error** — `MondrianCanvas(width=0, height=0)` would silently create a broken canvas; now raises `ValueError`
+- **Added: 6 new regression tests** covering all above fixes
 
 ## License
 
