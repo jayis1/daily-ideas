@@ -22,7 +22,7 @@ Words appear at the top of the screen and fall downward. Type the words to destr
 - **Speed increases** with each level (every 8 words completed)
 - **Spawn rate accelerates** the longer you survive
 - **Combo system** rewards consecutive correct completions with score multipliers
-- **Power-ups** appear periodically — collect them for Freeze, Bomb, or extra Life
+- **Power-ups** appear periodically — they fall down and are collected when they reach near the bottom of the screen
 
 When a word reaches the danger zone, you lose a life (♥). Lose all 5 lives and it's game over. Your score is saved to a persistent leaderboard.
 
@@ -32,15 +32,15 @@ When a word reaches the danger zone, you lose a life (♥). Lose all 5 lives and
 - **Progressive difficulty** — 4 word tiers unlock as you improve (easy, medium, hard, expert)
 - **Smart targeting** — automatically locks onto the most urgent word matching your first keystroke
 - **Combo system** — chain completions for score multipliers (each combo adds 0.25x)
-- **Combo milestones** — visual notification at every 5x combo streak
-- **Target arrow** — a ▼ indicator points at your current target word
+- **Combo milestones** — visual 🔥 notification at every 5x combo streak
+- **Target arrow** — ▼ indicator points at your currently targeted word
 
-### Power-Ups (new!)
+### Power-Ups
 - **❄ Freeze** — freezes all falling words for 3 seconds, giving you time to catch up
-- **💥 Bomb** — destroys all words currently on screen (resets your combo)
+- **💥 Bomb** — destroys all words on screen (resets your combo, does NOT count toward difficulty progression)
 - **♥ +1 Life** — restores one life (up to a max of 5)
 
-Power-ups spawn every 6–12 words and fall slowly down the screen. They're shown as `[FREEZE]`, `[BOMB]`, or `[+1 LIFE]` — walk into them (they fall toward you naturally).
+Power-ups spawn every 6–12 words and fall slowly down the screen. They are automatically collected when they reach near the bottom of the play area.
 
 ### Visual & Stats
 - **Particle explosions** — completed words burst into character particles with gravity physics
@@ -53,7 +53,7 @@ Power-ups spawn every 6–12 words and fall slowly down the screen. They're show
 ### Meta Features
 - **Persistent high scores** — top 10 scores saved to `.typing_racer_scores.json`
 - **3-second countdown** — gives you time to get ready before words start falling
-- **Pause screen** — press ESC to pause; shows current stats
+- **Pause screen** — press ESC to pause; shows current stats and allows Q to quit
 - **Terminal resize handling** — adapts if you resize your terminal mid-game
 - **Minimum size check** — warns if your terminal is too small (needs 60×20 minimum)
 
@@ -70,7 +70,7 @@ python3 typing_racer.py
 ### Requirements
 - Python 3.10+
 - A terminal with color support (most modern terminals: iTerm2, Windows Terminal, gnome-terminal, etc.)
-- Terminal size at least 60×24 recommended (minimum 60×20)
+- Terminal size at least 60×20 minimum (60×24 recommended)
 
 ## 🕹️ Controls
 
@@ -78,8 +78,8 @@ python3 typing_racer.py
 |-----|--------|
 | `A-Z`, `a-z` | Type letters to destroy falling words |
 | `ESC` | Pause / Resume |
+| `Q` | Quit (from pause screen or game over screen) |
 | `R` | Restart (on game over screen) |
-| `Q` | Quit (on game over screen) |
 | `Ctrl+C` | Force quit anytime |
 
 ## 📋 CLI Options
@@ -87,9 +87,9 @@ python3 typing_racer.py
 ```bash
 python3 typing_racer.py              # Start the game
 python3 typing_racer.py --help       # Show help and usage info
-python3 typing_racer.py --version    # Show version (2.0.0)
+python3 typing_racer.py --version    # Show version (2.1.0)
 python3 typing_racer.py --scores     # Show high scores leaderboard
-python3 typing_racer.py --reset       # Reset all high scores
+python3 typing_racer.py --reset      # Reset all high scores
 ```
 
 ## 📖 Gameplay Tips
@@ -99,7 +99,7 @@ python3 typing_racer.py --reset       # Reset all high scores
 3. **Watch for red words** — words in the danger zone glow red; focus on those first
 4. **Expert words are worth 5x** — harder words give much more score, but are longer and faster
 5. **Accuracy matters** — mistyped keys break your combo, so type carefully
-6. **Grab power-ups** — Freeze is great for catching up, Bomb clears a crowded screen
+6. **Grab power-ups** — Freeze is great for catching up, Bomb clears a crowded screen. Power-ups are collected automatically when they fall near the bottom
 7. **Check key hints** — the "Keys:" line at the bottom shows which first letters are currently available
 
 ## 📊 Scoring
@@ -115,6 +115,8 @@ Points = (10 + word_length) × combo_multiplier × difficulty_bonus
 | Hard      | 3x    | phoenix, cascade, phantom |
 | Expert    | 5x    | magnificent, constellation, serendipity |
 
+**Note:** Bomb power-up destroyed words give a flat +5 points each but do NOT count toward `words_completed`, so they won't artificially inflate your difficulty progression.
+
 ## 🧪 Testing
 
 ```bash
@@ -125,14 +127,15 @@ python3 -m pytest test_typing_racer.py -v
 python3 test_typing_racer.py
 ```
 
-The test suite covers 38 tests including:
-- `FallingWord` — initialization, typing, completion, freezing
+The test suite covers 52 tests including:
+- `FallingWord` — initialization, typing, completion, freezing, edge cases
 - `Particle` — physics, lifetime
-- `PowerUp` — types, expiration, symbols
-- `HighScoreManager` — add, save, load, sort, clear, corrupt-file handling
-- Word pool validation — lowercase, no duplicates, appropriate lengths
+- `PowerUp` — types, expiration, symbols, speed, unknown types
+- `HighScoreManager` — add, save, load, sort, clear, corrupt-file handling, rank return values, field validation
+- Word pool validation — lowercase, no duplicates, appropriate lengths, all alpha
 - Scoring formula verification
 - Version format check
+- `TestBugFixes` — bomb words_completed, power-up collection, ESC during countdown, freeze effect, heart max lives, pause quit, spawn interval bounds
 
 ## 🏗️ Architecture
 
@@ -146,19 +149,18 @@ The test suite covers 38 tests including:
 
 All rendering uses `curses` — no external UI library needed. The game loop uses delta-time updates (capped at 100ms) for consistent physics across different frame rates.
 
-## 🆕 What's New in v2.0
+## 🐛 Bugs Fixed in v2.1
 
-- **Power-ups**: Freeze (❄), Bomb (💥), and Heart (♥) collectibles spawn during gameplay
-- **Persistent high scores**: Top 10 scores saved to `.typing_racer_scores.json`
-- **Countdown start**: 3-second countdown before the game begins, with title screen showing high scores
-- **Pause screen**: Shows current stats (score, WPM, accuracy, combo, lives)
-- **Key hints**: Available first letters displayed at the bottom of the screen
-- **Combo milestones**: Visual notification at every 5x combo streak
-- **Target arrow**: ▼ indicator above your currently targeted word
-- **Freeze visual effect**: Blue tint overlay when freeze power-up is active
-- **Terminal resize handling**: Adapts to size changes mid-game
-- **Minimum terminal size check**: Warns if window is too small
-- **CLI flags**: `--help`, `--version`, `--scores`, `--reset`
-- **Level display**: Added to HUD
-- **Bug fix**: Abandoned target word no longer persists when it falls off screen
-- **38 unit tests** covering all game logic classes
+1. **Power-ups were never collected** — The `collect_powerup()` method existed but was never called from the game loop. Power-ups would fall and disappear without any effect. Now power-ups are automatically collected when they reach near the bottom of the screen (2 rows above the danger zone).
+2. **Bomb power-up inflated difficulty progression** — Bombed words incorrectly incremented `words_completed`, causing premature level-ups and difficulty tier unlocks. Bombed words now only give a flat score bonus (+5 points each) and do NOT count toward difficulty progression.
+3. **ESC during countdown started the game** — Pressing ESC during the 3-second countdown would immediately start the game instead of being ignored. ESC is now explicitly ignored during the countdown phase.
+4. **No way to quit from pause** — Pressing Q during the pause screen had no effect. Now Q from the pause screen triggers game over (saves score) and allows clean exit.
+
+## 🆕 What's New in v2.1
+
+- **Fixed**: Power-ups are now actually collectible — they activate when they fall near the bottom of the screen
+- **Fixed**: Bomb power-up no longer inflates difficulty progression
+- **Fixed**: ESC key properly ignored during countdown (no longer accidentally starts the game)
+- **Fixed**: Q key now works from the pause screen to quit (with score saving)
+- **Added**: Pause screen now shows "Press Q to quit" hint
+- **Added**: 14 new unit tests covering bug fixes and edge cases

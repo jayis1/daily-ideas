@@ -20,7 +20,7 @@ import time
 import locale
 import sys
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 
 # ── High score file ─────────────────────────────────────────────────────
 HIGHSCORE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".typing_racer_scores.json")
@@ -440,8 +440,12 @@ class TypingRacer:
         # Move power-ups down and check collection
         for pu in self.powerups:
             pu.advance(dt)
-            # Check if power-up hit bottom — it disappears
-            if pu.y >= self.height - 3:
+            # Collect power-up when it reaches the bottom area
+            # (simulates the player catching it as it falls)
+            if pu.y >= self.height - 5 and pu.alive:
+                self.collect_powerup(pu)
+            # Check if power-up fell past bottom — it disappears
+            elif pu.y >= self.height - 3:
                 pu.alive = False
 
         # Move particles
@@ -470,9 +474,12 @@ class TypingRacer:
             self.spawn_interval = max(0.8, 2.5 - (self.level - 1) * 0.15)
 
     def handle_input(self, ch: int):
-        # Countdown phase — any key starts skip (or we let the countdown run)
+        # Countdown phase — skip countdown on any key EXCEPT ESC and Q
         if not self.started:
-            # During countdown, any key press just skips to game start
+            if ch == ord("\x1b") or ch == 27:
+                return  # ignore ESC during countdown
+            if ch == ord("q") or ch == ord("Q"):
+                return  # ignore Q during countdown
             self.started = True
             return
 
@@ -486,6 +493,9 @@ class TypingRacer:
             return
 
         if self.paused:
+            # Allow Q to quit from pause screen
+            if ch == ord("q") or ch == ord("Q"):
+                self.game_over = True  # trigger game over to save score
             return
 
         if ch < 0 or ch > 255:
@@ -561,10 +571,11 @@ class TypingRacer:
                 w.frozen = True
         elif pu.ptype == POWERUP_BOMB:
             # Destroy all words on screen with particles
+            # Note: bombed words do NOT count toward words_completed —
+            # only manually typed words advance difficulty progression
             for w in self.words:
                 if w.alive:
                     w.alive = False
-                    self.words_completed += 1
                     self.score += 5  # small bonus for bombed words
                     self.spawn_particles(w)
             if self.current_target:
@@ -1003,6 +1014,7 @@ class TypingRacer:
             "╔══════════════════════════════╗",
             "║        PAUSED                ║",
             "║  Press ESC to resume        ║",
+            "║  Press Q to quit             ║",
             "╠══════════════════════════════╣",
             f"║  Score:    {self.score:>6}            ║",
             f"║  WPM:      {wpm:>6.1f}            ║",
