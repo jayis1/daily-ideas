@@ -10,20 +10,20 @@ Procedural Music Box generates unique melodies using music theory — scales, mo
 - **4 composition styles** — Melodic (stepwise motion), Arpeggiated (chord patterns), Counterpoint (two voices), and Drone (ambient)
 - **7 waveforms** — Sine, Square, Sawtooth, Triangle, Piano, Organ, and Bell
 - **Waveform-specific ADSR envelopes** — Each waveform type uses a tailored attack/decay/sustain/release profile (e.g., bells have long release, pianos have fast attack)
-- **Note density control** — Adjust how many rests vs. notes the melodic generator produces (0.0–1.0)
+- **Note density control** — Adjust how many rests vs. notes the melodic generator produces (0.1–1.0)
 - **Volume control** — Scale output audio volume from 0.1 to 2.0
 - **MIDI export** — Save compositions as `.mid` files for use in any DAW or MIDI player
 - **Multi-voice support** — Notes carry a `channel` field; counterpoint mode uses two voices; MIDI export preserves channels
 - **Melody transpose** — Programmatically transpose any melody by semitones
 - **ASCII piano roll** — Visualize the melody directly in your terminal with note positions, durations, and measure markers
 - **Melody statistics** — Note range, average interval, velocity, most-used notes, duration breakdown, voice breakdown
-- **Text notation** — Readable shorthand notation showing measure-by-measure note events with duration labels (w/h/q/e/s)
+- **Text notation** — Readable shorthand notation showing measure-by-measure note events with duration labels (w/h/q/e/s/dh/dq/de plus staccato variants)
 - **WAV export** — Save synthesized audio as a standard 16-bit mono WAV file
 - **Deterministic seeds** — Reproduce any generated melody exactly
 - **Interactive mode** — Guided parameter selection with a terminal UI
 - **`--version` and `--help`** — Standard CLI flags
-- **Flat/sharp note parsing** — Accepts `Bb`, `Eb`, `C#`, etc. as root notes, plus octave notation (`A3`, `C5`)
-- **34 unit tests** — Comprehensive test coverage for theory, generation, synthesis, MIDI export, and visualization
+- **Flat/sharp note parsing** — Accepts `Bb`, `Eb`, `C#`, etc. as root notes, plus octave notation (`A3`, `C5`). Case-insensitive (e.g., `BB`, `bb`, `Bb` all work for B-flat).
+- **40 unit tests** — Comprehensive test coverage for theory, generation, synthesis, MIDI export, visualization, and bug regression
 
 ## Installation
 
@@ -59,6 +59,9 @@ python3 music_box.py --seed 42
 
 # Choose root, scale, and tempo
 python3 music_box.py --root E --scale dorian --bpm 130
+
+# Use a flat note as root
+python3 music_box.py --root Bb --scale blues --bpm 100
 
 # Pick a composition style
 python3 music_box.py --style arpeggiated
@@ -98,11 +101,11 @@ python3 music_box.py --version
 |------|---------|-------------|
 | `--version` | — | Show version number and exit |
 | `--seed` | Random | Random seed for reproducibility |
-| `--root` | `C` | Root note (C, C#, D, D#, E, F, F#, G, G#, A, A#, B, flats like Bb/Eb, or with octave e.g. A3) |
+| `--root` | `C` | Root note (C, C#, D, D#, E, F, F#, G, G#, A, A#, B, flats like Bb/Eb/Ab, or with octave e.g. A3) |
 | `--scale` | `ionian` | Scale/mode (see list below) |
 | `--bpm` | `120` | Tempo in BPM (60–240) |
 | `--bars` | `8` | Number of bars (4–32) |
-| `--density` | `0.7` | Note density for melodic style (0.0–1.0) |
+| `--density` | `0.7` | Note density for melodic style (0.1–1.0) |
 | `--style` | `auto` | Composition style: melodic, arpeggiated, counterpoint, drone, auto |
 | `--waveform` | `piano` | Sound: sine, square, sawtooth, triangle, piano, organ, bell |
 | `--volume` | `1.0` | Output volume (0.1–2.0) |
@@ -116,16 +119,40 @@ python3 music_box.py --version
 
 `ionian` `dorian` `phrygian` `lydian` `mixolydian` `aeolian` `locrian` `pentatonic_major` `pentatonic_minor` `blues` `harmonic_minor` `melodic_minor` `whole_tone` `chromatic`
 
+### Notation Duration Labels
+
+| Label | Meaning |
+|-------|---------|
+| `w` | Whole note (4 beats) |
+| `h` | Half note (2 beats) |
+| `q` | Quarter note (1 beat) |
+| `e` | Eighth note (0.5 beats) |
+| `s` | 16th note (0.25 beats) |
+| `dh` | Dotted half (3 beats) |
+| `dq` | Dotted quarter (1.5 beats) |
+| `de` | Dotted eighth (0.75 beats) |
+| `dh·` | Dotted half staccato (1.8 beats, arpeggiated) |
+| `qt·` | Quarter triplet staccato (1.2 beats, arpeggiated) |
+| `q·` | Quarter staccato (0.9 beats, arpeggiated) |
+| `e·` | Eighth staccato (0.45 beats, arpeggiated) |
+| `4w` | 4 whole notes (drone, 16 beats) |
+| `r` prefix | Rest (e.g., `rq` = quarter rest) |
+
 ## Examples
+
+### B-flat Blues at 100 BPM
+```bash
+python3 music_box.py --root Bb --scale blues --bpm 100 --bars 8 --seed 42
+```
 
 ### E Dorian at 130 BPM
 ```bash
 python3 music_box.py --root E --scale dorian --bpm 130 --bars 12 --seed 42
 ```
 
-### A Harmonic Minor Arpeggios with Bell Sound
+### A-flat Harmonic Minor Arpeggios with Bell Sound
 ```bash
-python3 music_box.py --root A --scale harmonic_minor --bpm 160 --style arpeggiated --waveform bell --seed 99
+python3 music_box.py --root Ab --scale harmonic_minor --bpm 160 --style arpeggiated --waveform bell --seed 99
 ```
 
 ### Ambient Drone in C Blues
@@ -149,9 +176,9 @@ python3 music_box.py --density 0.95 --volume 1.5 --waveform organ --bars 16
 
 Each style uses a different algorithmic approach:
 
-- **Melodic** — Stepwise motion with weighted interval choices: 50% scale steps, 25% small leaps, 15% large leaps, 10% dramatic jumps. Downbeats get accent velocities. Rest probability is controlled by a density parameter (0.0 = sparse, 1.0 = dense).
+- **Melodic** — Stepwise motion with weighted interval choices: 50% scale steps, 25% small leaps, 15% large leaps, 10% dramatic jumps. Downbeats get accent velocities. Rest probability is controlled by a density parameter (0.1 = sparse, 1.0 = dense).
 
-- **Arpeggiated** — Selects from common chord progressions (pop I-V-vi-iii, classic I-IV-V-V, jazzy I-iii-V-I, etc.) and arpeggiates through chord tones. Supports up, down, up-down, and random arpeggio patterns.
+- **Arpeggiated** — Selects from common chord progressions (pop I-V-vi-iii, classic I-IV-V-V, jazzy I-iii-V-I, etc.) and arpeggiates through chord tones. Supports up, down, up-down, and random arpeggio patterns. Chord tones are correctly built from scale degrees with proper octave wrapping.
 
 - **Counterpoint** — Generates a bass line using whole notes on chord tones, then creates a faster melodic voice above it with stepwise motion. The two voices are tagged with separate MIDI channels for independent control.
 
@@ -191,11 +218,20 @@ The ASCII piano roll maps MIDI note numbers to rows and time to columns. Sharps 
 ```
 2026-06-16-procedural-music-box/
 ├── music_box.py          # Complete implementation (single file)
-├── test_music_box.py      # 34 unit tests
+├── test_music_box.py      # 40 unit tests
 └── README.md              # This file
 ```
 
 ## Changelog
+
+### v1.1.1
+- **Fixed** `--root` with flat notes (e.g., `--root Bb`, `--root Eb`) — previously failed with "Unknown root note" due to `.upper()` converting `Bb` to `BB` which wasn't handled. `name_to_midi` now handles flats case-insensitively.
+- **Fixed** `get_scale_degrees` producing wrong chords for non-root scale degrees — the IV chord in C major was returning `[60,65,69]` (C4-F4-A4) instead of `[65,69,72]` (F4-A4-C5). Chord tones now correctly use scale-degree-relative intervals with proper octave wrapping.
+- **Fixed** arpeggiated and drone durations displaying as raw numbers in notation and statistics (e.g., `1.8` instead of `dh·`, `16` instead of `4w`). Added staccato duration labels and multi-whole-note support.
+- **Fixed** `--volume` help text inconsistency — now correctly states range 0.1–2.0 (matching CLI validation).
+- **Added** 6 new regression tests: uppercase flats, mixed case notes, Ionian chord correctness, pentatonic chord wrapping, drone notation durations, arpeggiated notation durations.
+- **Updated** `--root` help text to document flat note support (Bb, Eb, Ab, etc.).
+- **Improved** rest duration display in notation — uses same smart duration lookup as note durations.
 
 ### v1.1.0
 - Added `--version` flag

@@ -71,9 +71,9 @@ def test_get_scale_degrees():
     """Scale degrees should produce proper triads for Ionian."""
     degrees = music_box.get_scale_degrees(60, music_box.ScaleType.IONIAN)
     # I chord in C major = C-E-G
-    assert 60 in degrees[0]
-    assert 64 in degrees[0]
-    assert 67 in degrees[0]
+    assert degrees[0] == [60, 64, 67]
+    # IV chord in C major = F-A-C5 (was buggy: used to return [60,65,69])
+    assert degrees[3] == [65, 69, 72]
 
 
 # ─── Note / Melody Tests ────────────────────────────────────────────────────
@@ -398,6 +398,69 @@ def test_note_name_with_accidentals():
     assert music_box.name_to_midi("Bb") == 70   # A#4
     assert music_box.name_to_midi("Eb") == 63   # D#4
     assert music_box.name_to_midi("C#5") == 73
+
+
+def test_note_name_uppercase_flats():
+    """name_to_midi should handle uppercase flats (as produced by CLI .upper())."""
+    assert music_box.name_to_midi("BB") == 70   # A#4 (same as Bb)
+    assert music_box.name_to_midi("EB") == 63   # D#4 (same as Eb)
+    assert music_box.name_to_midi("AB") == 68   # G#4 (same as Ab)
+    assert music_box.name_to_midi("GB") == 66   # F#4 (same as Gb)
+    assert music_box.name_to_midi("DB") == 61   # C#4 (same as Db)
+
+
+def test_note_name_mixed_case():
+    """name_to_midi should handle mixed case note names."""
+    assert music_box.name_to_midi("c#") == 61   # C#4
+    assert music_box.name_to_midi("bb") == 70   # A#4
+    assert music_box.name_to_midi("eb3") == 51  # D#3
+
+
+def test_scale_degrees_ionian_correct():
+    """Scale degrees should produce correct chords for Ionian."""
+    degrees = music_box.get_scale_degrees(60, music_box.ScaleType.IONIAN)
+    # I chord: C-E-G = [60,64,67]
+    assert degrees[0] == [60, 64, 67], f"I chord wrong: {degrees[0]}"
+    # IV chord: F-A-C5 = [65,69,72]
+    assert degrees[3] == [65, 69, 72], f"IV chord wrong: {degrees[3]}"
+    # V chord: G-B-D5 = [67,71,74]
+    assert degrees[4] == [67, 71, 74], f"V chord wrong: {degrees[4]}"
+    # vi chord: A-C5-E5 = [69,72,76]
+    assert degrees[5] == [69, 72, 76], f"vi chord wrong: {degrees[5]}"
+
+
+def test_scale_degrees_pentatonic():
+    """Scale degrees should produce correct chords for pentatonic (wrapping)."""
+    degrees = music_box.get_scale_degrees(60, music_box.ScaleType.PENTATONIC_MAJOR)
+    # I chord: C-E-A = [60,64,69]
+    assert degrees[0] == [60, 64, 69], f"Pent I chord wrong: {degrees[0]}"
+    # II chord: D-G-C5 = [62,67,72] (wraps to next octave)
+    assert degrees[1] == [62, 67, 72], f"Pent II chord wrong: {degrees[1]}"
+
+
+def test_drone_notation_has_readable_durations():
+    """Drone melody notation should show readable duration labels, not raw numbers."""
+    gen = music_box.MelodyGenerator(root=60, scale_type=music_box.ScaleType.IONIAN,
+                                      bpm=120, seed=42)
+    melody = gen.generate_drone(bars=4)
+    notation = music_box.render_ascii_notation(melody)
+    # Should not contain raw "16" as a duration label (was a bug)
+    assert "16" not in notation or "m" in notation.split("16")[0], \
+        f"Raw '16' duration found in notation:\n{notation}"
+
+
+def test_arpeggiated_notation_has_readable_durations():
+    """Arpeggiated notation should show readable duration labels, not raw '1.8'."""
+    gen = music_box.MelodyGenerator(root=60, scale_type=music_box.ScaleType.IONIAN,
+                                      bpm=120, seed=42)
+    melody = gen.generate_arpeggiated(bars=4)
+    notation = music_box.render_ascii_notation(melody)
+    stats = music_box.render_melody_stats(melody)
+    # Should not contain raw "1.8" as a duration in notation
+    # (Note: the number 1.8 could appear in measure numbers like "m  1:8" so check carefully)
+    for line in notation.split('\n'):
+        if '1.8' in line and not line.strip().startswith('m'):
+            assert False, f"Raw '1.8' duration in notation: {line}"
 
 
 if __name__ == '__main__':

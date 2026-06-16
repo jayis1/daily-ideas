@@ -94,16 +94,25 @@ def name_to_midi(name: str) -> int:
 
     If no octave is given, defaults to octave 4 (MIDI 60 for C).
     Supports both '#' and 'b' for accidentals (e.g., 'Bb' -> A#).
+    Case-insensitive for flat names (e.g., 'BB', 'bb', 'Bb' all work).
     """
     name = name.strip()
 
-    # Handle flats by converting to sharps
+    # Handle flats by converting to sharps (case-insensitive)
+    # The 'b' suffix on note names A-G indicates a flat, not the note B.
+    # We normalize to title-case for flat_map lookup: first char upper, second lower.
     flat_map = {'Db': 'C#', 'Eb': 'D#', 'Fb': 'E', 'Gb': 'F#',
                 'Ab': 'G#', 'Bb': 'A#', 'Cb': 'B'}
+
+    # Check for flat patterns in various case forms
+    # First try exact match, then try normalizing first two chars
     if name in flat_map:
         name = flat_map[name]
-    elif len(name) >= 2 and name[:2] in flat_map:
-        name = flat_map[name[:2]] + name[2:]
+    elif len(name) >= 2:
+        # Normalize first two characters: first upper, second lower
+        key = name[0].upper() + name[1].lower()
+        if key in flat_map:
+            name = flat_map[key] + name[2:]
 
     # Parse octave
     if name and name[-1].isdigit():
@@ -112,6 +121,9 @@ def name_to_midi(name: str) -> int:
     else:
         octave = 4
         note_part = name
+
+    # Ensure note_part matches NOTE_NAMES format (e.g., 'c#' -> 'C#')
+    note_part = note_part[0].upper() + note_part[1:].lower() if len(note_part) > 1 else note_part.upper()
 
     if note_part in NOTE_NAMES:
         return (octave + 1) * 12 + NOTE_NAMES.index(note_part)
@@ -131,16 +143,23 @@ def build_scale_notes(root: int, scale_type: ScaleType) -> List[int]:
 
 
 def get_scale_degrees(root: int, scale_type: ScaleType) -> List[List[int]]:
-    """Return chords for each scale degree (triads built on 3rds)."""
+    """Return chords for each scale degree (triads built on 3rds).
+
+    Each chord consists of the root, third (2 scale degrees up), and
+    fifth (4 scale degrees up) of that degree, with proper octave wrapping.
+    """
     intervals = SCALE_INTERVALS[scale_type]
     n = len(intervals)
     chords = []
     for deg in range(n):
-        third = intervals[(deg + 2) % n]
-        fifth = intervals[(deg + 4) % n]
-        root_note = root + intervals[deg]
-        chord = sorted([root_note, root + third, root + fifth])
-        chords.append(chord)
+        chord_midis = []
+        for offset in [0, 2, 4]:
+            idx = deg + offset
+            octave_shift = idx // n
+            note_idx = idx % n
+            midi = root + intervals[note_idx] + octave_shift * 12
+            chord_midis.append(midi)
+        chords.append(sorted(chord_midis))
     return chords
 
 
@@ -831,10 +850,27 @@ def render_melody_stats(melody: Melody) -> str:
 
     most_common = sorted(degree_counts.items(), key=lambda x: -x[1])[:5]
 
-    # Duration names
-    dur_names = {4.0: "whole", 2.0: "half", 1.0: "quarter",
-                 0.5: "eighth", 0.25: "16th", 0.75: "dotted-eighth",
-                 1.5: "dotted-quarter", 3.0: "dotted-half"}
+    # Duration names (includes arpeggiated staccato and drone long-note durations)
+    def _dur_name(d: float) -> str:
+        """Return a human-readable name for a beat duration."""
+        mapping = {
+            4.0: "whole", 2.0: "half", 1.0: "quarter",
+            0.5: "eighth", 0.25: "16th",
+            0.75: "dotted-eighth", 1.5: "dotted-quarter", 3.0: "dotted-half",
+            # Arpeggiated staccato durations (note_dur * 0.9)
+            1.8: "dotted-half-stac", 1.2: "triplet-stac", 0.9: "quarter-stac",
+            0.45: "eighth-stac",
+        }
+        if d in mapping:
+            return mapping[d]
+        # Handle drone long notes (multiples of whole notes)
+        if d >= 4.0 and d == int(d):
+            bars = int(d) // 4
+            if bars == 1:
+                return "whole"
+            return f"{bars}xwhole"
+        # Fallback: round to 2 decimal places
+        return f"{d:.2g}"
 
     lines = []
     lines.append("─── Melody Statistics ───")
@@ -844,7 +880,7 @@ def render_melody_stats(melody: Melody) -> str:
     lines.append(f"  Average interval: {sum(intervals)/len(intervals):.1f} semitones" if intervals else "  Average interval: N/A")
     lines.append(f"  Avg velocity:     {sum(velocities)/len(velocities):.0f}")
     lines.append(f"  Most used notes:  {', '.join(f'{midi_to_name(n)}×{c}' for n, c in most_common)}")
-    lines.append(f"  Duration types:   {', '.join(f'{dur_names.get(d, str(d))}×{durations.count(d)}' for d in sorted(set(durations))[:6])}")
+    lines.append(f"  Duration types:   {', '.join(f'{_dur_name(d)}×{durations.count(d)}' for d in sorted(set(durations))[:6])}")
 
     # Voice breakdown
     voices = melody.voices()
@@ -865,23 +901,36 @@ def render_ascii_notation(melody: Melody) -> str:
     measure_num = 0
     measure_str = ""
 
-    # Duration name mapping
-    dur_map = {4.0: "w", 2.0: "h", 1.0: "q", 0.5: "e", 0.25: "s"}
+    # Duration name mapping (includes staccato and long-note durations)
+    dur_map = {4.0: "w", 2.0: "h", 1.0: "q", 0.5: "e", 0.25: "s",
+               3.0: "dh", 1.5: "dq", 0.75: "de",
+               # Arpeggiated staccato durations
+               1.8: "dh·", 1.2: "qt·", 0.9: "q·", 0.45: "e·"}
+
+    def _get_dur_name(dur: float) -> str:
+        """Get notation abbreviation for a duration, handling long drone notes."""
+        if dur in dur_map:
+            return dur_map[dur]
+        # Handle drone long notes (multiples of 4 beats = whole notes)
+        if dur >= 4.0 and dur == int(dur):
+            wholes = int(dur) // 4
+            return f"{wholes}w" if wholes > 1 else "w"
+        # Closest standard duration
+        closest = min(dur_map.keys(), key=lambda d: abs(d - dur))
+        if abs(closest - dur) < 0.05:
+            return dur_map[closest]
+        return f"{dur:.2g}"
 
     for note in sorted(melody.notes, key=lambda n: (n.start, n.midi)):
         # Add rests
         if note.start > current_beat + 0.001:
             rest_beats = note.start - current_beat
-            # Find closest duration name
-            closest = min(dur_map.keys(), key=lambda d: abs(d - rest_beats))
-            if abs(closest - rest_beats) < 0.01:
-                measure_str += f" r{dur_map[closest]}"
-            else:
-                measure_str += f" r{rest_beats:.2g}"
+            rest_name = _get_dur_name(rest_beats)
+            measure_str += f" r{rest_name}"
             current_beat = note.start
 
         # Determine duration name
-        dur_name = dur_map.get(note.duration, f"{note.duration:.2g}")
+        dur_name = _get_dur_name(note.duration)
 
         measure_str += f" {note.name}{dur_name}"
         current_beat = note.start + note.duration
@@ -1026,7 +1075,7 @@ Examples:
     parser.add_argument('--seed', type=int, default=None,
                        help='Random seed for reproducibility')
     parser.add_argument('--root', type=str, default='C',
-                       help='Root note (C, C#, D, D#, E, F, F#, G, G#, A, A#, B) or with octave (e.g. A3)')
+                       help='Root note (C, C#, D, D#, E, F, F#, G, G#, A, A#, B, or flats like Bb/Eb) with optional octave (e.g. A3)')
     parser.add_argument('--scale', type=str, default='ionian',
                        choices=ScaleType.names(),
                        help='Scale/mode type')
@@ -1043,7 +1092,7 @@ Examples:
                        choices=['sine', 'square', 'sawtooth', 'triangle', 'piano', 'organ', 'bell'],
                        help='Synthesis waveform')
     parser.add_argument('--volume', type=float, default=1.0,
-                       help='Output volume (0.0-2.0, default 1.0)')
+                       help='Output volume (0.1-2.0, default 1.0)')
     parser.add_argument('--output', '-o', type=str, default=None,
                        help='Output WAV filename')
     parser.add_argument('--midi-out', type=str, default=None,
@@ -1065,14 +1114,15 @@ Examples:
         interactive_mode()
         return
 
-    # Parse root note
-    root_str = args.root.upper().strip()
+    # Parse root note (name_to_midi handles case-insensitivity internally)
+    root_str = args.root.strip()
     try:
         root_midi = name_to_midi(root_str)
     except ValueError:
         # Fall back to simple lookup
-        if root_str in NOTE_NAMES:
-            root_midi = 60 + NOTE_NAMES.index(root_str)
+        upper = root_str.upper()
+        if upper in NOTE_NAMES:
+            root_midi = 60 + NOTE_NAMES.index(upper)
         else:
             print(f"Unknown root note: {args.root}. Using C.")
             root_midi = 60
