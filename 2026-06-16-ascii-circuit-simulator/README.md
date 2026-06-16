@@ -13,14 +13,14 @@ A digital logic circuit simulator with ASCII art rendering, truth table generati
 - **Circuit validation**: Detect dangling inputs, disconnected outputs, cycles, and gate input count mismatches
 - **DSL export**: Save any circuit (including built-in examples) back to a DSL file for later editing
 - **Circuit statistics**: Gate count, input/output count, circuit depth at a glance
-- **Signal map visualization**: See every intermediate signal with ON/OFF indicators
+- **Signal map visualization**: See every intermediate signal with ON/OFF indicators in a properly aligned box
 - **ASCII art rendering**: Visual circuit diagram with signal state overlays
 - **`--version` and `--help`** flags with comprehensive usage documentation
 - **Custom circuits**: Load your own circuit definitions from files
 - **Topological sort**: Correct gate evaluation order computed automatically with cycle protection
 - **Auto-layout**: Gates positioned based on signal depth
 - **Smart truth table formatting**: Column widths adapt to label names; large tables (>8 inputs) show a warning instead of flooding your terminal
-- **76 unit tests** covering all gate types, simulation, parsing, validation, export, stats, and all example circuits
+- **86 unit tests** covering all gate types, simulation, parsing, validation, export, stats, and all example circuits
 
 ## Installation
 
@@ -165,14 +165,14 @@ python3 circuit_sim.py --example half_adder --validate
 
 python3 circuit_sim.py --example sr_latch --validate
 # ⚠ Circuit validation found issues:
-#   • Gate 'NOR_Q' input 'qbar' is not connected...
+#   • Cycle detected in combinational logic (feedback loop).
 ```
 
 Validation checks for:
 - **Dangling inputs**: Gate inputs that aren't connected to any circuit input or gate output
 - **Disconnected outputs**: Declared outputs not produced by any gate
 - **Cycles**: Feedback loops in combinational logic
-- **Gate input count**: NOT with ≠1 input, XOR/XNOR with ≠2 inputs
+- **Gate input count**: NOT with ≠1 input, XOR/XNOR with ≠2 inputs, BUF with ≠1 input
 - **Duplicate gate outputs**: Two gates driving the same signal
 - **Empty circuits**: No gates or inputs defined
 
@@ -200,40 +200,52 @@ Note: Truth tables for the 4-bit adder are suppressed (2^9 = 512 rows) — use `
 6. **Interactive mode**: A terminal loop reads user commands, toggles inputs, and re-simulates
 7. **Step-by-step**: Gates evaluate one at a time with visual delay, showing intermediate values
 
+## Known Limitations
+
+- **SR latch HOLD state**: The SR latch simulation correctly produces SET (Q=1) and RESET (Q=0) states, but single-pass simulation cannot maintain the previous state when both S=0 and R=0 (HOLD). The feedback loop will default to Q=0 in this case. This is a fundamental limitation of single-pass combinational simulation.
+- **ASCII rendering**: Complex circuits with many overlapping wires may produce cluttered ASCII art. The renderer positions gates by depth but does not route wires around obstacles.
+
 ## File Structure
 
 ```
 2026-06-16-ascii-circuit-simulator/
-├── circuit_sim.py        # Complete implementation (single file, ~730 lines)
-├── test_circuit_sim.py   # 76 unit tests (pytest)
+├── circuit_sim.py        # Complete implementation (single file, ~1200 lines)
+├── test_circuit_sim.py   # 86 unit tests (pytest)
 ├── run_tests.py           # Standalone test runner (no dependencies)
 └── README.md             # This file
 ```
 
 ## Changelog
 
+### v1.2.0 — Bug Fix Release
+
+**Fixed:**
+- **SR latch wrong results**: The `sr_latch` example had S and R inputs swapped (S was connected to the Q gate instead of Qbar gate), producing inverted behavior. Now S=1 correctly sets Q=1. The circuit definition now uses the standard NOR SR latch convention: `Q = NOR(R, Qbar)` and `Qbar = NOR(S, Q)`.
+- **`depth()` RecursionError on feedback loops**: Circuits with feedback loops (e.g., cross-coupled NOT gates) caused `RecursionError` in `depth()`. Added cycle detection using the same in-progress tracking pattern used in `auto_layout()`.
+- **`depth()` returned 0 for simple circuits**: The half adder (2 gates, both connected directly to inputs) returned depth 0 instead of 1. Fixed by counting circuit inputs as depth level 1 and ensuring gates with only input dependencies get depth ≥ 1.
+- **Signal map box misalignment**: The `render_signal_map()` box had inconsistent line widths — borders were different lengths from content. Fixed by dynamically computing box width from content lines and padding all lines uniformly.
+- **`NotGate.evaluate()` and `BufferGate.evaluate()` crash with empty inputs**: These gates accessed `self.inputs[0]` without checking if the list was empty, causing `IndexError`. Now they return `False` gracefully.
+- **`simulate()` leaked unknown input names into results**: Passing `{'Z': True}` as an input value would include `Z` in the output signals dictionary even though it wasn't a circuit input. Unknown inputs are now silently ignored.
+
+**Added:**
+- 10 new regression tests covering all fixed bugs
+- 11 new test cases in standalone test runner
+- SR latch now tested for correct SET and RESET behavior (not just crash safety)
+- Docstring for `sr_latch()` explaining single-pass simulation limitation for HOLD state
+- `depth()` now has proper docstring documenting its behavior
+
 ### v1.1.0
+
 - **Added** `--version` flag
-- **Added** `--validate` flag for circuit validation (dangling inputs, disconnected outputs, cycles, gate input count)
+- **Added** `--validate` flag for circuit validation
 - **Added** `--export` flag to save circuits back to DSL files
-- **Added** 4-bit ripple carry adder example (`4bit_adder`)
-- **Added** `Circuit.validate()` method for programmatic validation
-- **Added** `Circuit.to_dsl()` method for exporting circuits to DSL format
-- **Added** `Circuit.render_signal_map()` for structured signal display
-- **Added** `Circuit.gate_count()`, `Circuit.input_count()`, `Circuit.output_count()`, `Circuit.depth()` stats methods
-- **Added** Interactive mode now shows circuit stats and supports truth table (`t`) and step-through (`s`) sub-commands
-- **Added** Smart truth table formatting with column widths based on label names
-- **Added** Truth table safety limit for circuits with >8 inputs (shows warning instead of 256+ rows)
-- **Added** Cycle protection in `auto_layout()` to prevent infinite recursion on feedback circuits
-- **Added** Better parser error messages for missing INPUT/OUTPUT names and insufficient GATE arguments
-- **Added** Better error handling for `--file` (file not found) and `--inputs` (invalid values)
-- **Improved** Truth table header now uses display labels instead of raw signal names
-- **Improved** Default simulation output now shows circuit info (gates, depth, inputs, outputs)
-- **Improved** Interactive mode shows signal map alongside inputs/outputs
-- **Improved** Code documentation (docstrings on all classes and public methods)
-- **Improved** 76 unit tests covering all features including validation, export, stats, 4-bit adder, and cycle detection
-- **Improved** Standalone test runner (`run_tests.py`) updated with new test cases
-- **Fixed** `auto_layout()` recursion error on circuits with feedback loops (SR latch, etc.)
+- **Added** 4-bit ripple carry adder example
+- **Added** `Circuit.validate()`, `Circuit.to_dsl()`, `Circuit.render_signal_map()`, `Circuit.gate_count()`, `Circuit.input_count()`, `Circuit.output_count()`, `Circuit.depth()`
+- **Added** Interactive mode enhancements (truth table, step-through, circuit info)
+- **Added** Smart truth table formatting and safety limit for >8 inputs
+- **Added** Cycle protection in `auto_layout()`
+- **Added** Better parser error messages and error handling
+- **Improved** Code documentation with docstrings
 
 ## License
 

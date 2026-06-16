@@ -23,7 +23,7 @@ from typing import Optional
 from collections import deque
 
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # ─── Gate Definitions ───────────────────────────────────────────────────────
 
@@ -72,6 +72,8 @@ class OrGate(Gate):
 class NotGate(Gate):
     """NOT gate: inverts a single input."""
     def evaluate(self, signals):
+        if not self.inputs:
+            return False  # No input — default to False (consistent with other gates)
         val = signals.get(self.inputs[0], False)
         return not val
     def symbol(self): return "NOT"
@@ -112,6 +114,8 @@ class XnorGate(Gate):
 class BufferGate(Gate):
     """Pass-through buffer, useful for visualization and signal routing."""
     def evaluate(self, signals):
+        if not self.inputs:
+            return False  # No input — default to False (consistent with other gates)
         return signals.get(self.inputs[0], False)
     def symbol(self): return "BUF"
 
@@ -263,7 +267,8 @@ class Circuit:
 
         Args:
             input_values: Override specific input signals. Any inputs not
-                specified will use their default values.
+                specified will use their default values. Unrecognized input
+                names are silently ignored.
 
         Returns:
             A dictionary mapping every signal name to its computed Boolean value.
@@ -272,9 +277,11 @@ class Circuit:
         # Set inputs to defaults first
         for name, default in self.inputs.items():
             signals[name] = default
-        # Then override with provided values
+        # Then override with provided values (only recognized inputs)
         if input_values:
-            signals.update(input_values)
+            for name, val in input_values.items():
+                if name in self.inputs:
+                    signals[name] = val
 
         # Topological sort of gates ensures correct evaluation order
         order = self._topological_sort()
@@ -470,17 +477,15 @@ class Circuit:
         Returns:
             A formatted string showing every signal name and its value.
         """
-        lines = []
-        lines.append("  ┌─────────────────────────────────────────┐")
-        lines.append("  │ Signal Map                               │")
-        lines.append("  ├───────────────────────────────────────────┤")
+        # Build content lines first, then compute box width to fit them
+        content_lines = []
 
         # Show inputs first
         for name in self.inputs:
             val = signals.get(name, False)
             label = self.labels.get(name, name)
             indicator = "█ ON " if val else "  OFF"
-            lines.append(f"  │  IN  {name:>8} ({label:>10}) = {indicator} │")
+            content_lines.append(f"  IN  {name:>8} ({label:>10}) = {indicator}")
 
         # Show intermediate signals
         gate_outputs = {g.output for g in self.gates}
@@ -489,16 +494,29 @@ class Circuit:
         for name in sorted(intermediates):
             val = signals.get(name, False)
             indicator = "1" if val else "0"
-            lines.append(f"  │  INT {name:>8}               = {indicator}     │")
+            content_lines.append(f"  INT {name:>8}               = {indicator}    ")
 
         # Show outputs
         for name in self.outputs:
             val = signals.get(name, False)
             label = self.labels.get(name, name)
             indicator = "█HIGH" if val else " LOW"
-            lines.append(f"  │  OUT {name:>8} ({label:>10}) = {indicator} │")
+            content_lines.append(f"  OUT {name:>8} ({label:>10}) = {indicator}")
 
-        lines.append("  └─────────────────────────────────────────┘")
+        # Calculate box width from the widest content line
+        max_content_width = max((len(line) for line in content_lines), default=0)
+        # "Signal Map" header is padded like a content line
+        header_text = "Signal Map"
+        box_inner_width = max(max_content_width, len(header_text))
+
+        lines = []
+        lines.append("  ┌" + "─" * (box_inner_width + 2) + "┐")
+        # Header line: "│ " + header + padding + " │"
+        lines.append("  │ " + header_text + " " * (box_inner_width - len(header_text) + 1) + "│")
+        lines.append("  ├" + "─" * (box_inner_width + 2) + "┤")
+        for cl in content_lines:
+            lines.append("  │ " + cl + " " * (box_inner_width - len(cl) + 1) + "│")
+        lines.append("  └" + "─" * (box_inner_width + 2) + "┘")
         return '\n'.join(lines)
 
     def to_dsl(self) -> str:
@@ -533,20 +551,39 @@ class Circuit:
         return len(self.gates)
 
     def depth(self) -> int:
-        """Return the maximum depth (longest path from input to output)."""
+        """Return the maximum depth (longest path from input to output).
+
+        Gates that depend directly on circuit inputs have depth 1.
+        Handles cycles gracefully by assigning a depth of 1 to
+        break infinite recursion.
+        """
         if not self.gates:
             return 0
         output_to_gate = {g.output: g for g in self.gates}
         depth_cache = {}
+        in_progress = set()  # Cycle detection (same pattern as auto_layout)
 
         def get_depth(gate):
             if id(gate) in depth_cache:
                 return depth_cache[id(gate)]
+            if id(gate) in in_progress:
+                # Cycle detected — assign depth 1 to break the loop
+                depth_cache[id(gate)] = 1
+                return 1
+            in_progress.add(id(gate))
             max_input_depth = 0
             for inp in gate.inputs:
                 dep = output_to_gate.get(inp)
                 if dep:
                     max_input_depth = max(max_input_depth, get_depth(dep) + 1)
+                elif inp in self.inputs:
+                    # Gate input is a circuit input — depth contribution is 1
+                    max_input_depth = max(max_input_depth, 1)
+            # If no inputs come from other gates or circuit inputs, depth is 1
+            # (gate sits at the first level of logic)
+            if max_input_depth == 0:
+                max_input_depth = 1
+            in_progress.discard(id(gate))
             depth_cache[id(gate)] = max_input_depth
             return max_input_depth
 
@@ -662,12 +699,19 @@ def full_adder() -> Circuit:
 
 
 def sr_latch() -> Circuit:
-    """An SR latch (using NOR gates) — demonstrates feedback."""
+    """An SR latch (using NOR gates) — demonstrates feedback.
+
+    Note: SR latches are sequential circuits with cross-coupled feedback.
+    Single-pass simulation evaluates each gate once, so the first gate
+    in a feedback loop sees its unknown input as False. This means the
+    latch works correctly for SET (S=1) and RESET (R=1) but HOLD state
+    (S=0, R=0) always defaults to the RESET state (Q=0).
+    """
     text = """
     INPUT S Set
     INPUT R Reset
-    GATE NOR Q S qbar
-    GATE NOR Qbar R Q
+    GATE NOR Q R Qbar
+    GATE NOR Qbar S Q
     OUTPUT Q Q
     OUTPUT Qbar Q_bar
     """

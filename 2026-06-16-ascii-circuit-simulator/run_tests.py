@@ -12,7 +12,7 @@ from circuit_sim import (
     Circuit, AndGate, OrGate, NotGate, NandGate, NorGate, XorGate, XnorGate,
     BufferGate, GATE_MAP, parse_circuit, generate_truth_table,
     half_adder, full_adder, mux_2to1, decoder_2to4, majority_gate,
-    ripple_carry_adder_4bit, EXAMPLE_CIRCUITS,
+    ripple_carry_adder_4bit, sr_latch, EXAMPLE_CIRCUITS,
 )
 
 passed = 0
@@ -248,6 +248,62 @@ print("\nExample Circuits:")
 for name, func in EXAMPLE_CIRCUITS.items():
     c = func()
     test(f"{name} loads", len(c.gates) > 0 and len(c.inputs) > 0)
+
+# ─── Bug Fix Regressions ───
+print("\nBug Fix Regressions:")
+
+# depth() should not crash on feedback loops
+try:
+    text_fb = """
+    INPUT A
+    GATE NOT out1 out2
+    GATE NOT out2 out1
+    OUTPUT out1
+    """
+    c_fb = parse_circuit(text_fb)
+    d = c_fb.depth()
+    test("depth() no RecursionError on feedback", isinstance(d, int) and d >= 1)
+except RecursionError:
+    test("depth() no RecursionError on feedback", False)
+
+# Half adder depth should be 1, not 0
+c = half_adder()
+test("half_adder depth == 1", c.depth() == 1)
+
+# Full adder depth should be 3
+c = full_adder()
+test("full_adder depth == 3", c.depth() == 3)
+
+# NOT gate with empty inputs should not crash
+test("NOT gate empty inputs", NotGate("t", [], "o").evaluate({}) is False)
+
+# Buffer gate with empty inputs should not crash
+test("BUF gate empty inputs", BufferGate("t", [], "o").evaluate({}) is False)
+
+# simulate() should ignore unknown inputs
+c = half_adder()
+s = c.simulate({"Z": True, "A": True, "B": True})
+test("simulate ignores unknown input", "Z" not in s)
+
+# Signal map box alignment
+c = half_adder()
+s = c.simulate({"A": True, "B": False})
+smap = c.render_signal_map(s)
+lines = smap.split('\n')
+widths = {len(line) for line in lines if line.strip()}
+test("signal map box aligned", len(widths) == 1)
+
+# SR latch: S=1, R=0 should give Q=True
+c = sr_latch()
+s = c.simulate({"S": True, "R": False})
+test("SR latch S=1,R=0 → Q=True", s["Q"] is True)
+test("SR latch S=1,R=0 → Qbar=False", s["Qbar"] is False)
+
+# SR latch: S=0, R=1 should give Q=False
+c = sr_latch()
+s = c.simulate({"S": False, "R": True})
+test("SR latch S=0,R=1 → Q=False", s["Q"] is False)
+test("SR latch S=0,R=1 → Qbar=True", s["Qbar"] is True)
 
 # ─── Summary ───
 print(f"\n{'='*50}")

@@ -1,4 +1,4 @@
-"""Tests for the ASCII Circuit Simulator — v1.1.0.
+"""Tests for the ASCII Circuit Simulator — v1.2.0.
 
 Covers gate logic, circuit simulation, truth table generation, DSL parsing,
 auto-layout, rendering, validation, DSL export, circuit stats, and all
@@ -693,12 +693,18 @@ class TestSRLatch:
     """Test SR latch (feedback circuit)."""
 
     def test_sr_latch_set(self):
-        """Setting S=1, R=0 should set Q=1."""
+        """Setting S=1, R=0 should set Q=1 and Qbar=0."""
         circuit = sr_latch()
         signals = circuit.simulate({"S": True, "R": False})
-        # Note: SR latch behavior depends on evaluation order for feedback
-        # This just verifies it doesn't crash
-        assert "Q" in signals
+        assert signals["Q"] is True, f"Expected Q=True when S=1,R=0, got {signals['Q']}"
+        assert signals["Qbar"] is False, f"Expected Qbar=False when S=1,R=0, got {signals['Qbar']}"
+
+    def test_sr_latch_reset(self):
+        """Setting S=0, R=1 should set Q=0 and Qbar=1."""
+        circuit = sr_latch()
+        signals = circuit.simulate({"S": False, "R": True})
+        assert signals["Q"] is False, f"Expected Q=False when S=0,R=1, got {signals['Q']}"
+        assert signals["Qbar"] is True, f"Expected Qbar=True when S=0,R=1, got {signals['Qbar']}"
 
     def test_sr_latch_loads(self):
         """SR latch example should load successfully."""
@@ -719,7 +725,7 @@ class TestMainFunction:
             capture_output=True, text=True, cwd=os.path.dirname(__file__) or "."
         )
         assert result.returncode == 0
-        assert "1.1.0" in result.stdout
+        assert "1.2.0" in result.stdout
 
     def test_list_flag(self):
         """--list should show example circuits."""
@@ -731,6 +737,78 @@ class TestMainFunction:
         assert result.returncode == 0
         assert "half_adder" in result.stdout
         assert "4bit_adder" in result.stdout
+
+
+# ─── Bug Fix Regression Tests ─────────────────────────────────────────────
+
+class TestBugFixes:
+    """Regression tests for bugs that were found and fixed."""
+
+    def test_depth_no_recursion_on_cycle(self):
+        """depth() should not crash with RecursionError on feedback loops."""
+        text = """
+        INPUT A
+        GATE NOT out1 out2
+        GATE NOT out2 out1
+        OUTPUT out1
+        """
+        circuit = parse_circuit(text)
+        # Should not raise RecursionError
+        d = circuit.depth()
+        assert isinstance(d, int)
+        assert d >= 1
+
+    def test_depth_returns_1_for_half_adder(self):
+        """Half adder depth should be 1 (one level of logic), not 0."""
+        circuit = half_adder()
+        assert circuit.depth() == 1, f"Expected depth 1, got {circuit.depth()}"
+
+    def test_depth_returns_3_for_full_adder(self):
+        """Full adder depth should be 3 (XOR→XOR→OR chain)."""
+        circuit = full_adder()
+        assert circuit.depth() == 3, f"Expected depth 3, got {circuit.depth()}"
+
+    def test_not_gate_empty_inputs_no_crash(self):
+        """NOT gate with no inputs should return False, not crash."""
+        gate = NotGate("test", [], "out")
+        assert gate.evaluate({}) is False
+
+    def test_buffer_gate_empty_inputs_no_crash(self):
+        """Buffer gate with no inputs should return False, not crash."""
+        gate = BufferGate("test", [], "out")
+        assert gate.evaluate({}) is False
+
+    def test_simulate_ignores_unknown_inputs(self):
+        """simulate() should ignore input names that don't belong to the circuit."""
+        circuit = half_adder()
+        signals = circuit.simulate({"Z": True, "A": True, "B": True})
+        assert "Z" not in signals, "Unknown input Z should not appear in signals"
+        assert signals["sum"] is False
+        assert signals["carry"] is True
+
+    def test_signal_map_box_alignment(self):
+        """Signal map box borders should align with content."""
+        circuit = half_adder()
+        signals = circuit.simulate({"A": True, "B": False})
+        smap = circuit.render_signal_map(signals)
+        lines = smap.split('\n')
+        # All lines should have the same length (box is aligned)
+        widths = {len(line) for line in lines if line.strip()}
+        assert len(widths) == 1, f"Box lines have inconsistent widths: {widths}"
+
+    def test_sr_latch_set_correct(self):
+        """SR latch S=1, R=0 should produce Q=1 (Set state)."""
+        circuit = sr_latch()
+        signals = circuit.simulate({"S": True, "R": False})
+        assert signals["Q"] is True, f"SR latch Set: expected Q=True, got {signals['Q']}"
+        assert signals["Qbar"] is False, f"SR latch Set: expected Qbar=False, got {signals['Qbar']}"
+
+    def test_sr_latch_reset_correct(self):
+        """SR latch S=0, R=1 should produce Q=0 (Reset state)."""
+        circuit = sr_latch()
+        signals = circuit.simulate({"S": False, "R": True})
+        assert signals["Q"] is False, f"SR latch Reset: expected Q=False, got {signals['Q']}"
+        assert signals["Qbar"] is True, f"SR latch Reset: expected Qbar=True, got {signals['Qbar']}"
 
 
 import sys
