@@ -1,227 +1,221 @@
-# Barchart Race v2.0 — Animated ASCII Bar Chart Race Visualizer
+# Barchart Race — Animated ASCII Bar Chart Race Visualizer
 
-Watch values compete and rankings shift over time with smooth terminal-based animated bar chart races. Like those viral YouTube videos, but right in your terminal — and now with percentage mode, growth charts, side-by-side comparisons, sparklines, ticker mode, and animated HTML export.
+Watch values compete and rankings shift over time with smooth ASCII animations. Supports multiple data sources, transformation modes, HTML export, and more.
 
 ## Features
 
-### Core
-- **Animated bar chart races** — smooth ASCII animation with ease-in-out interpolation between time periods
-- **5 built-in datasets** — tech company revenue, Olympic medals, programming language popularity, world population, cryptocurrency market cap
-- **Random race generator** — generate unpredictable races with `--random` (use `--seed` for reproducibility)
-- **Custom data** — load your own CSV or JSON files
-- **Smart ranking** — bars reorder as values cross; medals (🥇🥈🥉) for top 3
-- **Consistent series colors** — each series keeps its color across all frames (not recolored by rank)
-- **Export** — save frames as individual text files or as a single flipbook-style movie file
-
-### New in v2.0
-- **Percentage mode** (`--percent`) — view values as share-of-total percentages, perfect for market share analysis
-- **Growth mode** (`--growth`) — show percentage growth from the first period instead of absolute values
-- **Side-by-side comparison** (`--compare`) — compare any two time periods with change indicators (↑↓) and percentage diffs
-- **Compact ticker** (`--ticker`) — single-line scrolling summary for embedding in status bars or piped output
-- **Animated HTML export** (`--html`) — generate a self-contained HTML file with CSS-animated bars and play/pause controls
-- **Sparklines in stats** — the `--stats` view now shows unicode sparkline trends (▁▂▃▄▅▆▇█) per series and a growth ranking
-- **Version flag** — `--version` now prints `2.0.0`
+- **Animated ASCII bar chart races** in your terminal with smooth interpolation
+- **5 built-in datasets**: tech revenue, Olympic medals, programming languages, world population, crypto market cap
+- **Custom data**: load CSV or JSON files
+- **Random data generation**: quick demos with `--random`
+- **Percentage mode** (`--percent`): show each series as share of total (market share)
+- **Growth mode** (`--growth`): show percentage change from first period
+- **Side-by-side comparison** (`--compare`): compare any two time periods with change arrows and stats table
+- **Compact ticker** (`--ticker`): one-line scrolling summary per period
+- **Animated HTML export** (`--html`): self-contained HTML file with CSS transitions and play/pause controls
+- **Frame export** (`--export`): export individual frames as text files
+- **ASCII movie export** (`--export-movie`): single text file with form-feed separators
+- **Statistics** (`--stats`): per-series stats with Unicode sparklines, growth ranking, and correlation analysis
+- **Final ranking** (`--solve`): show end-state ranking without animation
+- **Consistent colors**: each series keeps its color across all frames
+- **Configurable**: speed, top-N filtering, color/no-color, loop control
 
 ## Installation
 
-No dependencies required — pure Python 3.6+:
+No dependencies beyond Python 3.6+ standard library. Just clone and run:
 
 ```bash
-# Just download and run
 git clone <repo-url>
 cd barchart-race
-python3 barchart_race.py
+python3 barchart_race.py --help
 ```
 
 ## Usage
 
-### Run the default demo (tech company revenue):
-```bash
-python3 barchart_race.py
-```
+### Basic
 
-### Choose a built-in dataset:
 ```bash
-python3 barchart_race.py --sample tech-revenue
+# Default: tech company revenue demo
+python3 barchart_race.py
+
+# Choose a built-in dataset
 python3 barchart_race.py --sample olympic-medals
 python3 barchart_race.py --sample programming-languages
 python3 barchart_race.py --sample world-population
 python3 barchart_race.py --sample crypto-marketcap
-```
 
-### List available datasets:
-```bash
-python3 barchart_race.py --list
-```
-
-### Generate a random race:
-```bash
-python3 barchart_race.py --random
-python3 barchart_race.py --random --seed 42       # reproducible
-```
-
-### Load custom data:
-```bash
+# Load custom data
 python3 barchart_race.py --data my_data.csv
 python3 barchart_race.py --data my_data.json
+
+# Generate random race
+python3 barchart_race.py --random
+python3 barchart_race.py --random --seed 42
 ```
 
-### Control the display:
+### Display Options
+
 ```bash
-python3 barchart_race.py --top 5          # show only top 5 bars
-python3 barchart_race.py --speed 4         # faster animation (frames/sec)
-python3 barchart_race.py --speed 0.5       # slower animation
-python3 barchart_race.py --no-loop         # play once and stop
-python3 barchart_race.py --no-color        # disable ANSI colors
-python3 barchart_race.py --minimal          # compact display mode
+# Show only top 5 bars
+python3 barchart_race.py --top 5
+
+# Faster or slower animation (frames/sec)
+python3 barchart_race.py --speed 4
+python3 barchart_race.py --speed 0.5
+
+# Don't loop the animation
+python3 barchart_race.py --no-loop
+
+# Disable colors
+python3 barchart_race.py --no-color
+
+# Compact display mode
+python3 barchart_race.py --minimal
 ```
 
-### Percentage mode (market share):
+### Transformation Modes
+
 ```bash
-python3 barchart_race.py --percent                  # share of total
-python3 barchart_race.py --percent --sample crypto-marketcap
-python3 barchart_race.py --percent --solve --top 5   # final share ranking
+# Percentage mode — each series as share of total (market share)
+python3 barchart_race.py --percent
+
+# Growth mode — percentage change from first period
+python3 barchart_race.py --growth
 ```
 
-### Growth mode (change from start):
-```bash
-python3 barchart_race.py --growth                    # % growth from period 1
-python3 barchart_race.py --growth --sample programming-languages
-python3 barchart_race.py --growth --solve             # final growth ranking
-```
+### Analysis
 
-### Side-by-side comparison:
 ```bash
-python3 barchart_race.py --compare 0 -1              # first vs last period
-python3 barchart_race.py --compare 0 5 --top 5        # period 0 vs 5, top 5
-python3 barchart_race.py --compare 0 -1 --sample tech-revenue
-```
+# Side-by-side comparison of two periods
+python3 barchart_race.py --compare 0 -1      # first vs last
+python3 barchart_race.py --compare 0 5       # first vs period 5
 
-### Compact ticker mode:
-```bash
-python3 barchart_race.py --ticker                     # scrolling one-line summary
-python3 barchart_race.py --ticker --top 3              # top 3 only
-```
+# Statistics with sparklines
+python3 barchart_race.py --stats
 
-### View final ranking (no animation):
-```bash
+# Final ranking (no animation)
 python3 barchart_race.py --solve
-python3 barchart_race.py --solve --sample olympic-medals --top 5
-python3 barchart_race.py --solve --percent --sample crypto-marketcap
 ```
 
-### View statistics with sparklines:
-```bash
-python3 barchart_race.py --stats --sample programming-languages
-python3 barchart_race.py --stats --growth --sample tech-revenue
-```
+### Export
 
-### Export as animated HTML:
 ```bash
+# Animated HTML file (open in browser)
 python3 barchart_race.py --html output.html
-python3 barchart_race.py --html output.html --speed 1 --top 10
+
+# HTML with custom speed
+python3 barchart_race.py --html output.html --speed 3
+
+# Export frames as text files
+python3 barchart_race.py --export frames/
+
+# Export as single text file
+python3 barchart_race.py --export-movie movie.txt
 ```
 
-### Export frames:
+### Other
+
 ```bash
-python3 barchart_race.py --export frames/              # individual text files
-python3 barchart_race.py --export-movie movie.txt       # single file with form feeds
+# List available datasets
+python3 barchart_race.py --list
+
+# Version
+python3 barchart_race.py --version
+
+# Help
+python3 barchart_race.py --help
 ```
 
-## Data Format
+## Data Formats
 
-### CSV Format
+### CSV
+
 ```csv
-label,Company A,Company B,Company C
-Jan,10,20,15
-Feb,12,18,17
-Mar,15,22,20
+label,Apple,Microsoft,Google
+Q1,65,45,40
+Q2,68,48,43
+Q3,72,52,46
 ```
 
-### JSON Format
+### JSON
+
 ```json
 {
-  "title": "My Chart Race",
+  "title": "My Chart",
   "unit": "$",
   "data": {
-    "Company A": [10, 12, 15],
-    "Company B": [20, 18, 22],
-    "Company C": [15, 17, 20]
+    "Apple": [65, 68, 72],
+    "Microsoft": [45, 48, 52],
+    "Google": [40, 43, 46]
   },
-  "labels": ["Jan", "Feb", "Mar"]
+  "labels": ["Q1", "Q2", "Q3"]
 }
 ```
 
 ## Example Output
 
-### Final Ranking (`--solve`)
+### Final Ranking
 ```
 === Final Ranking: Tech Company Revenue ($B) ===
 
  🥇  1. Apple  ██████████████████████████████ 150.0$B
  🥈  2. Amazon  ████████████████████████ 120.0$B
  🥉  3. NVIDIA  ████████████████████████ 120.0$B
-     4. Microsoft  ███████████████████████ 115.0$B
-     5. Google  ████████████████████ 103.0$B
+    4. Microsoft  ███████████████████████ 115.0$B
 
  Biggest gainer: NVIDIA (112.0$B change)
  Biggest loser:  Intel (6.0$B change)
-
- Rank changes:
-   NVIDIA: ↑6 (#9 → #3)
-   Samsung: ↓5 (#2 → #7)
-   Tesla: ↑4 (#10 → #6)
 ```
 
-### Statistics with Sparklines (`--stats`)
+### Statistics with Sparklines
 ```
-=== Statistics: Programming Language Popularity (TIOBE Index) ===
-
-  Series count:    10
-  Time periods:    14
-
-  Series               Min      Max     Mean   Growth        Trend
-  ─────────────── ──────── ──────── ──────── ──────── ────────────
-  Python               5.0     30.0     15.9    +25.0 ▁▁▁▁▂▂▃▄▄▅▆▆
-  C                    9.0     16.0     12.4     -7.0 █▇▆▅▄▄▄▄▅▅▄▃
-  Java                 7.0     20.0     13.5    -13.0 █▇▆▆▅▅▄▄▃▃▂▂
-  ...
-
-  Growth Ranking:
-    🥇 Python: 25.0% (+500.0%)
-    🥈 Rust: 6.0%
-    🥉 TypeScript: 5.0%
+  Series          Min      Max     Mean   Growth        Trend
+  ─────────── ──────── ──────── ──────── ──────── ────────────
+  Apple         65.0    150.0    101.2    +85.0 ▁▁▁▂▂▂▃▃▄▅▅▆
+  NVIDIA         8.0    120.0     45.4   +112.0 ▁▁▁▁▁▁▂▃▃▄▅▅
 ```
 
-### Comparison (`--compare 0 -1`)
+### Comparison
 ```
-=== Tech Company Revenue ($B) ===
   Comparing: Q1'21 vs Q2'24
 
- 🥇 Apple           ████████ → ████████████████████  ↑+85.0$B
- 🥈 Amazon          ████ → ████████████████  ↑+85.0$B
- 🥉 NVIDIA          █ → ████████████████  ↑+112.0$B
+ #1 Apple    ████████ → ████████████████████  ↑+85.0$B
+ #2 Amazon   ████ → ████████████████  ↑+85.0$B
+ #3 NVIDIA   █ → ████████████████  ↑+112.0$B
 
-  Series                From         To     Change        %
-  ─────────────── ────────── ────────── ────────── ────────
-  NVIDIA               8.0$B    120.0$B    112.0$B +1400.0%
-  Amazon              35.0$B    120.0$B     85.0$B  +242.9%
-  Apple               65.0$B    150.0$B     85.0$B  +130.8%
+  Series         From        To      Change        %
+  ─────────── ────────── ────────── ────────── ────────
+  Apple        65.0$B    150.0$B     85.0$B  +130.8%
+  NVIDIA        8.0$B    120.0$B    112.0$B +1400.0%
 ```
 
-## How It Works
-
-- **Interpolation**: For each pair of consecutive data points, intermediate frames are generated using an ease-in-out curve (`3t² - 2t³`), creating natural-looking transitions.
-- **Rendering**: Bars are drawn with Unicode block characters and ANSI color codes, with ranking recalculated at every frame.
-- **Series coloring**: Each series gets a consistent color based on its position in the dataset, so you can track the same entity across all frames.
-- **Percentage mode**: Values are normalized to 100% of the total for each period, ideal for market share visualization.
-- **Growth mode**: Values are shown as percentage change from the first period (absolute change used when starting value is 0).
-- **HTML export**: Generates a self-contained HTML file with CSS transitions for smooth bar animations and JavaScript controls for play/pause/frame-stepping.
-
-## Running Tests
+## Tests
 
 ```bash
 python3 test_barchart_race.py
 ```
 
-39 tests covering data validation, interpolation, rendering, CSV/JSON loading, export, statistics, sparklines, percentage/growth transforms, comparisons, ticker mode, HTML export, edge cases, and more.
+47 tests covering all features, edge cases, and bug fixes.
+
+## Changelog
+
+### v2.1.0 — Bug Fixes
+- **[SECURITY]** Fixed XSS vulnerability in HTML export: series names and labels containing HTML tags are now properly escaped
+- **[BUG]** Fixed ticker truncation breaking ANSI escape codes when terminal width is narrow — now truncates by visible characters only and appends RESET code
+- **[BUG]** Fixed `ZeroDivisionError` when `--speed 0` is passed — CLI now rejects zero/negative speed with a clear error message
+- **[BUG]** Fixed `ZeroDivisionError` in `export_frames()` when `num_steps=1` — now correctly handles single-step export
+- **[BUG]** Fixed `load_json()` accepting empty data dict `{}` without error — now raises `ValueError`
+- **[BUG]** Fixed `load_csv()` creating empty data dict when CSV has no data columns — now raises `ValueError`
+- **[BUG]** Fixed `generate_random_data()` with `num_periods=0` producing 1 value instead of 0 (off-by-one)
+- **[BUG]** Fixed `format_value()` showing `-0.00` for very small negative values — now displays `0.00`
+
+### v2.0.0 — Feature Update
+- Added percentage mode, growth mode, comparison view, ticker, HTML export, sparklines in stats
+- Color-by-name consistency across frames
+- 16 new tests
+
+### v1.0.0 — Initial Release
+- Animated ASCII bar chart race
+- CSV/JSON data loading
+- 5 built-in datasets
+- Frame export, final ranking, statistics

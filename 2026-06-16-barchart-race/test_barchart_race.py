@@ -79,6 +79,9 @@ def test_format_value():
     assert bcr.format_value(1500, "$") == "1,500$"
     assert bcr.format_value(10.5, "pts") == "10.5pts"
     assert bcr.format_value(0.03, "") == "0.03"
+    # Very small negative values should show as 0.00 (avoid -0.00)
+    assert bcr.format_value(-0.001, "") == "0.00"
+    assert bcr.format_value(0, "$") == "0.00$"
     
     print("test_format_value: PASS")
 
@@ -929,7 +932,7 @@ def test_growth_then_render():
 def test_version():
     """Test that VERSION is defined and accessible."""
     assert hasattr(bcr, 'VERSION')
-    assert bcr.VERSION == "2.0.0"
+    assert bcr.VERSION == "2.1.0"
     
     print("test_version: PASS")
 
@@ -953,6 +956,163 @@ def test_comparison_period_bounds():
     assert "Bounds Test" in output_neg
     
     print("test_comparison_period_bounds: PASS")
+
+
+# ─── Bug Fix Tests ────────────────────────────────────────────────────
+
+
+def test_ticker_ansi_safe_truncation():
+    """Test that ticker truncation preserves ANSI escape codes."""
+    ds = bcr.validate_data({
+        "data": {"A": [10], "B": [5], "C": [3]},
+        "labels": ["T1"],
+        "title": "Test",
+        "unit": "",
+    })
+    # With very narrow width, ANSI codes should not be broken
+    ticker = bcr.render_ticker(ds, 0, width=5)
+    # Should not contain broken ANSI (partial escape sequences)
+    # A broken ANSI would look like \x1b[1 without the 'm' terminator
+    broken = False
+    i = 0
+    while i < len(ticker):
+        if ticker[i] == '\x1b' and i + 1 < len(ticker) and ticker[i + 1] == '[':
+            # Find the end of this escape sequence (should end with 'm')
+            end = i + 2
+            found_m = False
+            while end < len(ticker):
+                if ticker[end] == 'm':
+                    found_m = True
+                    break
+                end += 1
+            if not found_m:
+                broken = True
+                break
+            i = end + 1
+        else:
+            i += 1
+    assert not broken, f"Ticker has broken ANSI escape: {repr(ticker)}"
+    
+    # Ticker should end with RESET sequence
+    assert ticker.endswith("\033[0m") or "\033[" not in ticker
+    
+    print("test_ticker_ansi_safe_truncation: PASS")
+
+
+def test_html_xss_prevention():
+    """Test that HTML export escapes series names containing HTML tags."""
+    ds = bcr.validate_data({
+        "data": {"<img onerror=alert(1)>": [10], "B": [5]},
+        "labels": ["T1"],
+        "title": "<script>alert('XSS')</script>",
+        "unit": "",
+    })
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        outfile = os.path.join(tmpdir, "xss.html")
+        bcr.export_html(ds, outfile)
+        with open(outfile) as f:
+            content = f.read()
+        
+        # Title should be escaped
+        assert "<script>alert" not in content, "Unescaped script tag in title"
+        assert "&lt;script&gt;" in content, "Title should be HTML-escaped"
+        
+        # Series names should be HTML-escaped in the JSON data —
+        # <img becomes &lt;img in the HTML output (inside JSON string values)
+        assert "<img onerror" not in content, "Unescaped HTML in series names"
+        assert "&lt;img" in content, "Series name should be HTML-escaped"
+    
+    print("test_html_xss_prevention: PASS")
+
+
+def test_speed_zero_cli_error():
+    """Test that speed=0 is rejected at CLI level."""
+    import subprocess
+    result = subprocess.run(
+        [sys.executable, os.path.join(os.path.dirname(__file__), "barchart_race.py"),
+         "--speed", "0", "--solve"],
+        capture_output=True, text=True
+    )
+    assert result.returncode != 0, "Should exit with error for speed=0"
+    assert "speed must be a positive number" in result.stderr, \
+        f"Expected error message about speed, got: {result.stderr}"
+    
+    print("test_speed_zero_cli_error: PASS")
+
+
+def test_export_frames_num_steps_one():
+    """Test that export_frames doesn't crash with num_steps=1."""
+    ds = bcr.validate_data({
+        "data": {"A": [10, 20, 30], "B": [5, 15, 25]},
+        "labels": ["T1", "T2", "T3"],
+        "title": "Steps Test",
+        "unit": "",
+    })
+    ds = bcr.interpolate_data(ds, steps_per_period=3)
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        count = bcr.export_frames(ds, os.path.join(tmpdir, "frames"), num_steps=1)
+        assert count >= 1, "Should export at least 1 frame"
+    
+    print("test_export_frames_num_steps_one: PASS")
+
+
+def test_load_json_empty_data():
+    """Test that load_json rejects empty data dict."""
+    json_content = {"data": {}}
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(json_content, f)
+        filepath = f.name
+    
+    try:
+        try:
+            bcr.load_json(filepath)
+            assert False, "Should have raised ValueError for empty data"
+        except ValueError as e:
+            assert "at least one series" in str(e).lower()
+    finally:
+        os.unlink(filepath)
+    
+    print("test_load_json_empty_data: PASS")
+
+
+def test_csv_no_data_columns():
+    """Test that load_csv rejects CSV with no data columns."""
+    csv_content = "label\nJan,10\nFeb,20\n"
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
+        f.write(csv_content)
+        filepath = f.name
+    
+    try:
+        try:
+            bcr.load_csv(filepath)
+            assert False, "Should have raised ValueError for CSV with no data columns"
+        except ValueError as e:
+            assert "data column" in str(e).lower()
+    finally:
+        os.unlink(filepath)
+    
+    print("test_csv_no_data_columns: PASS")
+
+
+def test_generate_random_data_zero_periods():
+    """Test generate_random_data with num_periods=0 produces empty lists."""
+    ds = bcr.generate_random_data(num_series=3, num_periods=0, seed=42)
+    for name, values in ds["data"].items():
+        assert len(values) == 0, f"{name} should have 0 values, got {len(values)}"
+    assert len(ds["labels"]) == 0
+    
+    print("test_generate_random_data_zero_periods: PASS")
+
+
+def test_format_value_negative_tiny():
+    """Test that format_value doesn't show -0.00 for tiny negatives."""
+    assert bcr.format_value(-0.001, "") == "0.00"
+    assert bcr.format_value(-0.004, "%") == "0.00%"
+    assert bcr.format_value(-0.01, "") == "-0.01"  # Not tiny enough to round
+    
+    print("test_format_value_negative_tiny: PASS")
 
 
 if __name__ == "__main__":
@@ -999,6 +1159,15 @@ if __name__ == "__main__":
         test_growth_then_render,
         test_version,
         test_comparison_period_bounds,
+        # Bug fix tests
+        test_ticker_ansi_safe_truncation,
+        test_html_xss_prevention,
+        test_speed_zero_cli_error,
+        test_export_frames_num_steps_one,
+        test_load_json_empty_data,
+        test_csv_no_data_columns,
+        test_generate_random_data_zero_periods,
+        test_format_value_negative_tiny,
     ]
     
     passed = 0

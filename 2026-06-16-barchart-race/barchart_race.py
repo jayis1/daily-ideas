@@ -33,7 +33,7 @@ import time
 from collections import defaultdict
 from copy import deepcopy
 
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 
 # ─── Built-in Datasets ────────────────────────────────────────────────
 
@@ -189,6 +189,9 @@ def load_csv(filepath):
         raise ValueError("CSV must have a header row and at least one data row")
     
     header = rows[0]
+    if len(header) < 2:
+        raise ValueError("CSV must have at least one data column (header + series)")
+    
     labels = []
     series = {name.strip(): [] for name in header[1:]}
     
@@ -231,6 +234,9 @@ def load_json(filepath):
     
     if "data" not in data:
         raise ValueError("JSON must contain a 'data' key with series")
+    
+    if not data["data"]:
+        raise ValueError("JSON 'data' must contain at least one series")
     
     # Validate all series have same length
     lengths = {len(v) for v in data["data"].values()}
@@ -426,6 +432,9 @@ def format_value(val, unit=""):
     elif abs(val) >= 1:
         return f"{val:.1f}{unit}"
     else:
+        # Avoid displaying -0.00 for very small negative values
+        if abs(val) < 0.005:
+            return f"0.00{unit}"
         return f"{val:.2f}{unit}"
 
 
@@ -719,11 +728,31 @@ def render_ticker(dataset, frame_idx, width=None):
 
     line = " │ ".join(parts)
 
-    # Truncate if too wide
-    # Strip ANSI for width calculation
+    # Truncate if too wide — must account for ANSI escape codes
+    # Strip ANSI for width calculation, then truncate visible characters only
     visible_len = len(re.sub(r'\033\[[0-9;]*m', '', line))
     if visible_len > width:
-        line = line[:width]  # rough truncation
+        # Truncate by iterating through the string, only counting visible chars
+        result = []
+        visible_count = 0
+        i = 0
+        while i < len(line) and visible_count < width:
+            if line[i] == '\033' and i + 1 < len(line) and line[i + 1] == '[':
+                # ANSI escape sequence — include it in full without counting
+                end = i + 2
+                while end < len(line) and line[end] not in 'm':
+                    end += 1
+                if end < len(line):
+                    end += 1  # include the 'm'
+                result.append(line[i:end])
+                i = end
+            else:
+                result.append(line[i])
+                visible_count += 1
+                i += 1
+        # Append RESET if we truncated mid-color to avoid bleeding
+        result.append(RESET)
+        line = "".join(result)
 
     return line
 
@@ -760,6 +789,9 @@ def export_html(dataset, output_file, top_n=None, speed=1.0):
         max_val = 1
 
     interval_ms = int(1000 / speed) if speed > 0 else 2000
+    
+    if speed <= 0:
+        speed = 1.0  # Default for HTML if caller passes 0
 
     # Generate HTML
     html_parts = []
@@ -813,15 +845,18 @@ def export_html(dataset, output_file, top_n=None, speed=1.0):
 <script>
 const data = """)
 
-    # Build JS data
+    # Build JS data — escape series names for safe HTML embedding
+    # Series names may contain HTML special chars; we store a name→escapedName map
+    escaped_names = {name: html.escape(name) for name in series_names}
     js_series = {}
     for name in series_names:
-        js_series[name] = data[name]
+        js_series[escaped_names[name]] = data[name]
+    # Use escaped names as keys in colors too
     js_data = {
         "series": js_series,
-        "labels": labels,
-        "colors": {name: HTML_COLORS[i % len(HTML_COLORS)] for i, name in enumerate(series_names)},
-        "unit": unit,
+        "labels": [html.escape(l) for l in labels],
+        "colors": {escaped_names[name]: HTML_COLORS[i % len(HTML_COLORS)] for i, name in enumerate(series_names)},
+        "unit": html.escape(unit),
         "maxVal": max_val,
         "topN": top_n,
     }
@@ -933,6 +968,9 @@ def animate(dataset, speed=2.0, top_n=None, loop=True, color=True, minimal=False
     if top_n is None:
         top_n = len(series_names)
     
+    # Guard against zero/negative speed
+    if speed <= 0:
+        speed = 0.5  # Default to a slow but safe speed
     frame_delay = 1.0 / speed
     
     try:
@@ -973,9 +1011,14 @@ def export_frames(dataset, output_dir, top_n=None, num_steps=100):
     
     os.makedirs(output_dir, exist_ok=True)
     
+    # Guard against invalid num_steps
+    num_steps = max(num_steps, 1)
+    
     # Sample frames for export
     if num_frames <= num_steps:
         frame_indices = list(range(num_frames))
+    elif num_steps == 1:
+        frame_indices = [num_frames - 1]  # Just the last frame
     else:
         frame_indices = [int(i * (num_frames - 1) / (num_steps - 1)) for i in range(num_steps)]
     
@@ -1093,6 +1136,10 @@ def generate_random_data(num_series=8, num_periods=15, seed=None):
     if seed is not None:
         random.seed(seed)
     
+    # Guard against invalid parameters
+    num_series = max(0, num_series)
+    num_periods = max(0, num_periods)
+    
     names = [
         "Alpha", "Beta", "Gamma", "Delta", "Epsilon",
         "Zeta", "Eta", "Theta", "Iota", "Kappa",
@@ -1102,13 +1149,15 @@ def generate_random_data(num_series=8, num_periods=15, seed=None):
     data = {}
     for i in range(min(num_series, len(names))):
         name = names[i]
-        values = [random.uniform(10, 100)]
-        for j in range(1, num_periods):
-            # Random walk with drift
-            drift = random.uniform(-5, 8)  # slight positive bias
-            noise = random.gauss(0, 10)
-            new_val = max(1, values[-1] + drift + noise)
-            values.append(round(new_val, 1))
+        values = []
+        if num_periods > 0:
+            values = [random.uniform(10, 100)]
+            for j in range(1, num_periods):
+                # Random walk with drift
+                drift = random.uniform(-5, 8)  # slight positive bias
+                noise = random.gauss(0, 10)
+                new_val = max(1, values[-1] + drift + noise)
+                values.append(round(new_val, 1))
         data[name] = values
     
     labels = [f"Period {i+1}" for i in range(num_periods)]
@@ -1254,6 +1303,10 @@ Examples:
     args = parser.parse_args()
     
     color = not args.no_color
+    
+    # Guard against zero/negative speed
+    if args.speed <= 0:
+        parser.error("speed must be a positive number (got {})".format(args.speed))
     
     # List datasets
     if args.list:
