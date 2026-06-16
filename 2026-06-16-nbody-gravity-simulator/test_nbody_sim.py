@@ -332,3 +332,87 @@ class TestEdgeCases:
             sim.step()
         # Should still have bodies (some may have merged)
         assert len(sim.bodies) >= 1
+
+    def test_color_idx_in_range_default_scene(self):
+        """All bodies in default scene should have valid color_idx."""
+        from nbody_sim import BODY_COLORS
+        sim = Simulation(80, 24)
+        sim.add_default_scene()
+        for b in sim.bodies:
+            assert 0 <= b.color_idx < len(BODY_COLORS), \
+                f"color_idx {b.color_idx} out of range [0, {len(BODY_COLORS)-1}]"
+
+    def test_color_idx_in_range_binary_scene(self):
+        """All bodies in binary star scene should have valid color_idx."""
+        from nbody_sim import BODY_COLORS
+        sim = Simulation(80, 24)
+        sim.add_binary_star_scene()
+        for b in sim.bodies:
+            assert 0 <= b.color_idx < len(BODY_COLORS), \
+                f"color_idx {b.color_idx} out of range [0, {len(BODY_COLORS)-1}]"
+
+    def test_color_idx_in_range_figure8_scene(self):
+        """All bodies in figure-8 scene should have valid color_idx."""
+        from nbody_sim import BODY_COLORS
+        sim = Simulation(80, 24)
+        sim.add_figure_eight_scene()
+        for b in sim.bodies:
+            assert 0 <= b.color_idx < len(BODY_COLORS), \
+                f"color_idx {b.color_idx} out of range [0, {len(BODY_COLORS)-1}]"
+
+    def test_screen_to_world_no_offset(self):
+        """screen_to_world with no offset returns same coords."""
+        sim = Simulation(80, 24)
+        wx, wy = sim.screen_to_world(40, 12)
+        assert wx == pytest.approx(40.0)
+        assert wy == pytest.approx(12.0)
+
+    def test_screen_to_world_with_offset(self):
+        """screen_to_world with camera offset converts correctly."""
+        sim = Simulation(80, 24)
+        sim.cam_offset_x = 50.0
+        sim.cam_offset_y = 10.0
+        wx, wy = sim.screen_to_world(40, 12)
+        assert wx == pytest.approx(90.0)
+        assert wy == pytest.approx(22.0)
+
+    def test_delete_nearest_with_camera_offset(self):
+        """delete_nearest should work with camera offset active."""
+        sim = Simulation(80, 24)
+        # Body at world (140, 12)
+        sim.bodies.append(Body(140, 12, mass=5.0))
+        # Camera offset makes world(140,12) appear at screen(40,12)
+        sim.cam_offset_x = 100.0
+        result = sim.delete_nearest(40, 12)
+        assert result is True
+        assert len(sim.bodies) == 0
+
+    def test_substep_frame_increment(self):
+        """Sub-stepping should only increment frame once per logical frame."""
+        sim = Simulation(80, 24)
+        sim.add_default_scene()
+        sim.speed_mult = 4.0
+        initial_frame = sim.frame
+        sub_steps = max(1, int(sim.speed_mult))
+        dt_per_step = DT_BASE * sim.speed_mult / sub_steps
+        for s in range(sub_steps):
+            is_last = (s == sub_steps - 1)
+            sim.step(dt=dt_per_step, increment_frame=is_last)
+        assert sim.frame == initial_frame + 1
+
+    def test_figure8_zero_momentum(self):
+        """Figure-8 scene should have zero total momentum."""
+        sim = Simulation(80, 24)
+        sim.add_figure_eight_scene()
+        px = sum(b.vx * b.mass for b in sim.bodies)
+        py = sum(b.vy * b.mass for b in sim.bodies)
+        assert abs(px) < 0.01, f"x-momentum should be ~0, got {px}"
+        assert abs(py) < 0.01, f"y-momentum should be ~0, got {py}"
+
+    def test_figure8_center_of_mass_at_center(self):
+        """Figure-8 scene COM should be at camera center."""
+        sim = Simulation(80, 24)
+        sim.add_figure_eight_scene()
+        cx, cy = sim.center_of_mass()
+        assert cx == pytest.approx(sim.cam_x, abs=0.01)
+        assert cy == pytest.approx(sim.cam_y, abs=0.01)

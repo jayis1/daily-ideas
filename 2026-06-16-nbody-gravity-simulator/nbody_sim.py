@@ -8,12 +8,13 @@ and chaotic dynamics unfold in your terminal with colored trails.
 Controls:
   Left Click   — Spawn a body (drag to set velocity)
   Right Click  — Spawn a massive "star" body
-  1/2/3        — Load preset scenes (solar system / binary star / figure-8)
+  1/2/3/4      — Load preset scenes (solar system / binary star / figure-8 / cluster)
   SPACE        — Pause / Resume
   T            — Toggle trails
   G            — Toggle grid
   F            — Toggle center-of-mass tracking
   D            — Delete nearest body to last mouse position
+  E            — Toggle energy display
   +/-          — Speed up / Slow down simulation
   R            — Reset to default scene
   C            — Clear all bodies
@@ -36,7 +37,7 @@ except ImportError:
 
 # ─── Version ─────────────────────────────────────────────────────────────────
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -140,6 +141,12 @@ class Simulation:
         self.last_mouse_x = 0
         self.last_mouse_y = 0
 
+    def screen_to_world(self, sx: int, sy: int) -> tuple[float, float]:
+        """Convert screen coordinates to world coordinates using camera offset."""
+        wx = sx + self.cam_offset_x
+        wy = sy + self.cam_offset_y
+        return wx, wy
+
     def add_default_scene(self) -> None:
         """Create a simple solar-system-like scene."""
         cx, cy = self.cam_x, self.cam_y
@@ -148,11 +155,11 @@ class Simulation:
         self.bodies.append(star)
         # Planets at various distances
         planets = [
-            (12, 0.8, 46),   # (distance, mass, color_idx)
-            (20, 1.5, 33),
-            (30, 2.0, 201),
-            (42, 0.6, 51),
-            (55, 3.0, 196),
+            (12, 0.8, 3),    # (distance, mass, color_idx) — blue
+            (20, 1.5, 4),    # cyan
+            (30, 2.0, 6),    # magenta
+            (42, 0.6, 5),    # cyan-blue
+            (55, 3.0, 0),    # red
         ]
         for dist, mass, cidx in planets:
             angle = random.uniform(0, 2 * math.pi)
@@ -176,8 +183,8 @@ class Simulation:
         # Two stars orbiting each other
         mass_star = 100.0
         v_orb = math.sqrt(G * mass_star / (2 * sep)) * 0.7
-        star1 = Body(cx - sep / 2, cy, 0, -v_orb, mass=mass_star, color_idx=196)
-        star2 = Body(cx + sep / 2, cy, 0, v_orb, mass=mass_star, color_idx=226)
+        star1 = Body(cx - sep / 2, cy, 0, -v_orb, mass=mass_star, color_idx=0)  # red
+        star2 = Body(cx + sep / 2, cy, 0, v_orb, mass=mass_star, color_idx=2)   # yellow
         self.bodies.extend([star1, star2])
         # A few small planets
         for _ in range(6):
@@ -197,6 +204,12 @@ class Simulation:
 
         Uses the initial conditions discovered by Chenciner & Montgomery (2000).
         Positions and velocities are scaled for our simulation units.
+
+        The standard ICs (G=1, m=1) use positions ~1, velocities ~0.5.
+        With mass=30 and spatial scale=15, the velocity scaling factor is
+        sqrt(G * m / scale) = sqrt(30/15) = sqrt(2) ≈ 1.414, since the
+        gravitational parameter G*m grows linearly with mass while positions
+        grow with the spatial scale.
         """
         cx, cy = self.cam_x, self.cam_y
         scale = 15.0  # Spatial scale
@@ -206,13 +219,15 @@ class Simulation:
         # Body 1 at top-right, Body 2 at top-left, Body 3 at bottom
         x1 = 0.97000436 * scale + cx
         y1 = -0.24308753 * scale + cy
-        x2 = -x1 + 2 * cx  # Mirror of body 1
-        y2 = -y1 + 2 * cy
+        x2 = -0.97000436 * scale + cx  # Mirror of body 1
+        y2 = 0.24308753 * scale + cy
         x3 = cx
         y3 = cy
 
-        # Velocities (body 3 gets double velocity, others have negative of half)
-        v_scale = 2.5
+        # Velocity scaling: for the standard figure-8 with G=1, m=1,
+        # the characteristic velocity is sqrt(G*m/r) = 1.
+        # With m=30 and r scaled by 15: v_scale = sqrt(30/15) = sqrt(2)
+        v_scale = math.sqrt(G * mass / scale)
         vx3 = -0.93240737 * v_scale
         vy3 = -0.86473146 * v_scale
         vx1 = -vx3 / 2
@@ -220,9 +235,9 @@ class Simulation:
         vx2 = -vx3 / 2
         vy2 = -vy3 / 2
 
-        b1 = Body(x1, y1, vx1, vy1, mass=mass, color_idx=46)
-        b2 = Body(x2, y2, vx2, vy2, mass=mass, color_idx=51)
-        b3 = Body(x3, y3, vx3, vy3, mass=mass, color_idx=196)
+        b1 = Body(x1, y1, vx1, vy1, mass=mass, color_idx=3)   # blue
+        b2 = Body(x2, y2, vx2, vy2, mass=mass, color_idx=4)   # cyan
+        b3 = Body(x3, y3, vx3, vy3, mass=mass, color_idx=0)   # red
         self.bodies.extend([b1, b2, b3])
         self.total_mass_initial = sum(b.mass for b in self.bodies)
 
@@ -270,15 +285,21 @@ class Simulation:
     def delete_nearest(self, sx: int, sy: int) -> bool:
         """Delete the body nearest to screen coordinates (sx, sy).
 
+        Converts screen coordinates to world coordinates using the current
+        camera offset before comparing against body positions.
+
         Returns True if a body was deleted, False otherwise.
         """
         if not self.bodies:
             return False
+        # Convert screen coords to world coords
+        wx = sx + self.cam_offset_x
+        wy = sy + self.cam_offset_y
         best_body = None
         best_dist = float("inf")
         for b in self.bodies:
-            dx = b.x - sx
-            dy = b.y - sy
+            dx = b.x - wx
+            dy = b.y - wy
             d = dx * dx + dy * dy
             if d < best_dist:
                 best_dist = d
@@ -289,11 +310,14 @@ class Simulation:
             return True
         return False
 
-    def step(self, dt: float | None = None) -> None:
+    def step(self, dt: float | None = None, increment_frame: bool = True) -> None:
         """Advance simulation by one timestep.
 
         Args:
             dt: Timestep to use. If None, uses DT_BASE * speed_mult.
+            increment_frame: Whether to increment the frame counter.
+                Set to False for sub-steps so the frame counter only
+                increments once per logical frame.
         """
         if self.paused:
             return
@@ -388,7 +412,8 @@ class Simulation:
             self.cam_offset_x = 0.0
             self.cam_offset_y = 0.0
 
-        self.frame += 1
+        if increment_frame:
+            self.frame += 1
 
 
 # ─── Renderer ────────────────────────────────────────────────────────────────
@@ -611,7 +636,7 @@ class Renderer:
             f"Collisions:{sim.collision_count} Speed:{sim.speed_mult:.1f}x "
             f"Frame:{sim.frame}{com_str}",
             f" {status} | SPACE=pause T=trails G=grid F=follow "
-            f"D=delete H=help Click=spawn R=reset 1/2/3=presets Q=quit",
+            f"D=delete H=help Click=spawn R=reset 1/2/3/4=presets Q=quit",
         ]
         for i, line in enumerate(lines):
             if i < h - 1:
@@ -626,13 +651,14 @@ class Renderer:
         h, w = stdscr.getmaxyx()
         help_text = [
             "╔══════════════════════════════════════════╗",
-            "║      N-BODY GRAVITY SIMULATOR  v1.1      ║",
+            "║      N-BODY GRAVITY SIMULATOR  v1.2      ║",
             "╠══════════════════════════════════════════╣",
             "║  Left Click   Spawn body (drag→vel)      ║",
             "║  Right Click  Spawn massive star          ║",
             "║  1            Solar system scene          ║",
             "║  2            Binary star scene           ║",
             "║  3            Figure-8 three-body         ║",
+            "║  4            Random cluster scene        ║",
             "║  SPACE        Pause / Resume             ║",
             "║  T            Toggle trails               ║",
             "║  G            Toggle grid                 ║",
@@ -663,19 +689,16 @@ class Renderer:
 # ─── Main loop ────────────────────────────────────────────────────────────────
 
 
-def main(stdscr) -> None:
-    """Main application entry point wrapped by curses."""
+def _run_main_loop(stdscr, sim: Simulation, renderer: Renderer) -> None:
+    """Core main loop — handles input, updates simulation, renders frames.
+
+    This is the single canonical loop implementation. Called by run().
+    """
     curses.curs_set(0)       # Hide cursor
     stdscr.nodelay(True)     # Non-blocking input
     stdscr.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)
     curses.noecho()
 
-    h, w = stdscr.getmaxyx()
-    sim = Simulation(w, h)
-    sim.add_default_scene()
-    renderer = Renderer(stdscr, sim)
-
-    # Enable mouse wheel if terminal supports it
     try:
         curses.mouseinterval(0)
     except Exception:
@@ -766,6 +789,14 @@ def main(stdscr) -> None:
             sim.cam_offset_y = 0.0
             sim.add_figure_eight_scene()
 
+        elif key == ord("4"):
+            sim.bodies.clear()
+            sim.collision_count = 0
+            sim.follow_com = False
+            sim.cam_offset_x = 0.0
+            sim.cam_offset_y = 0.0
+            sim.add_cluster_scene()
+
         elif key == curses.KEY_MOUSE:
             try:
                 _, mx, my, _, bstate = curses.getmouse()
@@ -788,9 +819,11 @@ def main(stdscr) -> None:
                     sx0, sy0 = drag_start_screen
                     dx = (mx - sx0) * 0.15
                     dy = (my - sy0) * 0.15
+                    # Convert spawn screen coords to world coords
+                    wx, wy = sim.screen_to_world(sx0, sy0)
                     mass = 200.0 if drag_is_star else random.uniform(0.5, 5.0)
                     cidx = 2 if drag_is_star else random.randint(0, len(BODY_COLORS) - 1)
-                    body = Body(sx0, sy0, dx, dy, mass=mass, color_idx=cidx)
+                    body = Body(wx, wy, dx, dy, mass=mass, color_idx=cidx)
                     sim.bodies.append(body)
                 drag_start_screen = None
                 drag_is_star = False
@@ -809,8 +842,10 @@ def main(stdscr) -> None:
         # Split into sub_steps for numerical stability
         sub_steps = max(1, int(sim.speed_mult))
         dt_per_step = DT_BASE * sim.speed_mult / sub_steps
-        for _ in range(sub_steps):
-            sim.step(dt=dt_per_step)
+        for s in range(sub_steps):
+            # Only increment frame counter on the last sub-step
+            is_last = (s == sub_steps - 1)
+            sim.step(dt=dt_per_step, increment_frame=is_last)
 
         # ── Render ────────────────────────────────────────────────────────
         renderer.draw(drag_info=drag_info)
@@ -827,7 +862,7 @@ def parse_args() -> argparse.Namespace:
         prog="nbody_sim",
         description="N-Body Gravity Simulator — Terminal-based gravitational N-body simulation",
         epilog="Controls: SPACE=pause, T=trails, G=grid, F=follow COM, "
-               "D=delete, 1/2/3=presets, R=reset, C=clear, H=help, Q=quit"
+               "D=delete, 1/2/3/4=presets, R=reset, C=clear, H=help, Q=quit"
     )
     parser.add_argument(
         "--version", action="version", version=f"%(prog)s {__version__}"
@@ -842,173 +877,24 @@ def parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = parse_args()
-    # Select starting scene
-    scene_map = {
-        "solar": "default",
-        "binary": "binary",
-        "figure8": "figure8",
-        "cluster": "cluster",
-    }
 
-    def main_with_args(stdscr):
-        curses.curs_set(0)
-        stdscr.nodelay(True)
-        stdscr.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)
-        curses.noecho()
-
+    def run(stdscr) -> None:
         h, w = stdscr.getmaxyx()
         sim = Simulation(w, h)
 
         # Load selected scene
-        scene_name = scene_map.get(args.scene, "default")
-        if scene_name == "binary":
-            sim.add_binary_star_scene()
-        elif scene_name == "figure8":
-            sim.add_figure_eight_scene()
-        elif scene_name == "cluster":
-            sim.add_cluster_scene()
-        else:
-            sim.add_default_scene()
+        scene_map = {
+            "solar": sim.add_default_scene,
+            "binary": sim.add_binary_star_scene,
+            "figure8": sim.add_figure_eight_scene,
+            "cluster": sim.add_cluster_scene,
+        }
+        scene_map.get(args.scene, sim.add_default_scene)()
 
         renderer = Renderer(stdscr, sim)
-
-        try:
-            curses.mouseinterval(0)
-        except Exception:
-            pass
-
-        drag_start_screen = None
-        drag_is_star = False
-        running = True
-
-        while running:
-            try:
-                key = stdscr.getch()
-            except Exception:
-                key = -1
-
-            drag_info = None
-
-            if key == ord("q") or key == 27:
-                running = False
-                continue
-
-            elif key == ord(" "):
-                sim.paused = not sim.paused
-
-            elif key == ord("t"):
-                sim.show_trails = not sim.show_trails
-
-            elif key == ord("g"):
-                sim.show_grid = not sim.show_grid
-
-            elif key == ord("h"):
-                sim.show_help = not sim.show_help
-
-            elif key == ord("e"):
-                sim.show_energy = not sim.show_energy
-
-            elif key == ord("f"):
-                sim.follow_com = not sim.follow_com
-                if not sim.follow_com:
-                    sim.cam_offset_x = 0.0
-                    sim.cam_offset_y = 0.0
-
-            elif key == ord("d"):
-                sim.delete_nearest(sim.last_mouse_x, sim.last_mouse_y)
-
-            elif key == ord("r"):
-                sim.bodies.clear()
-                sim.collision_count = 0
-                sim.frame = 0
-                sim.follow_com = False
-                sim.cam_offset_x = 0.0
-                sim.cam_offset_y = 0.0
-                sim.add_default_scene()
-
-            elif key == ord("c"):
-                sim.bodies.clear()
-                sim.collision_count = 0
-
-            elif key == ord("+") or key == ord("="):
-                sim.speed_mult = min(sim.speed_mult * 1.5, 20.0)
-
-            elif key == ord("-") or key == ord("_"):
-                sim.speed_mult = max(sim.speed_mult / 1.5, 0.1)
-
-            elif key == ord("1"):
-                sim.bodies.clear()
-                sim.collision_count = 0
-                sim.follow_com = False
-                sim.cam_offset_x = 0.0
-                sim.cam_offset_y = 0.0
-                sim.add_default_scene()
-
-            elif key == ord("2"):
-                sim.bodies.clear()
-                sim.collision_count = 0
-                sim.follow_com = False
-                sim.cam_offset_x = 0.0
-                sim.cam_offset_y = 0.0
-                sim.add_binary_star_scene()
-
-            elif key == ord("3"):
-                sim.bodies.clear()
-                sim.collision_count = 0
-                sim.follow_com = False
-                sim.cam_offset_x = 0.0
-                sim.cam_offset_y = 0.0
-                sim.add_figure_eight_scene()
-
-            elif key == curses.KEY_MOUSE:
-                try:
-                    _, mx, my, _, bstate = curses.getmouse()
-                except Exception:
-                    mx, my, bstate = 0, 0, 0
-
-                sim.last_mouse_x = mx
-                sim.last_mouse_y = my
-
-                if bstate & curses.BUTTON1_PRESSED:
-                    drag_start_screen = (mx, my)
-                    drag_is_star = False
-
-                elif bstate & curses.BUTTON3_PRESSED:
-                    drag_start_screen = (mx, my)
-                    drag_is_star = True
-
-                elif bstate & curses.BUTTON1_RELEASED or bstate & curses.BUTTON3_RELEASED:
-                    if drag_start_screen is not None and len(sim.bodies) < MAX_BODIES:
-                        sx0, sy0 = drag_start_screen
-                        dx = (mx - sx0) * 0.15
-                        dy = (my - sy0) * 0.15
-                        mass = 200.0 if drag_is_star else random.uniform(0.5, 5.0)
-                        cidx = 2 if drag_is_star else random.randint(0, len(BODY_COLORS) - 1)
-                        body = Body(sx0, sy0, dx, dy, mass=mass, color_idx=cidx)
-                        sim.bodies.append(body)
-                    drag_start_screen = None
-                    drag_is_star = False
-
-            # Draw drag preview
-            if drag_start_screen is not None:
-                try:
-                    _, mx, my, _, _ = curses.getmouse()
-                except Exception:
-                    mx, my = drag_start_screen
-                drag_info = (*drag_start_screen, mx, my, drag_is_star)
-
-            # Update with sub-stepping for stability
-            sub_steps = max(1, int(sim.speed_mult))
-            dt_per_step = DT_BASE * sim.speed_mult / sub_steps
-            for _ in range(sub_steps):
-                sim.step(dt=dt_per_step)
-
-            renderer.draw(drag_info=drag_info)
-            time.sleep(0.033)
-
-        curses.endwin()
+        _run_main_loop(stdscr, sim, renderer)
 
     try:
-        curses.wrapper(main_with_args)
+        curses.wrapper(run)
     except KeyboardInterrupt:
         pass
