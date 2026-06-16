@@ -4,13 +4,24 @@ An interactive CLI tool for building, consulting, and visualizing binary decisio
 
 ## Features
 
+### Core
 - **🌱 Build** — Interactively grow decision trees by defining yes/no questions and leaf outcomes
 - **🔮 Consult** — Walk through a tree with the Oracle to get a decision based on your answers
 - **🌳 Visualize** — Render any tree as ASCII art directly in the terminal
-- **📋 List** — See all saved trees with node counts and descriptions
+- **📋 List** — See all saved trees with node counts, depths, and descriptions
 - **📊 Export** — Generate Mermaid diagrams for rendering in Markdown or documentation
-- **💾 Persistent** — Trees are saved as JSON files, so they persist between sessions
-- **🎭 Personality** — The Oracle speaks with flavor, dispensing wisdom and mysterious sayings
+- **💾 Persistent** — Trees are saved as JSON files, persisting between sessions
+
+### New in v2.0
+- **🎲 Random Decision** — Skip the questions and let the Oracle pick a random outcome from any tree
+- **📊 Statistics** — View detailed tree stats: node counts, depth, balance ratio, all possible decisions
+- **✅ Validate** — Check a tree for structural issues (missing branches, empty text, excessive depth)
+- **🗑️ Delete** — Remove saved trees with a confirmation prompt
+- **`--version` and `--help` flags** — Standard CLI flags now supported
+- **Improved ASCII tree rendering** — Fixed prefix alignment for nested branches
+- **Better error handling** — Graceful handling of empty names, corrupted files, and malformed trees
+- **Input sanitization** — Tree names are safely sanitized for filenames
+- **Long text wrapping** — Decision text is now wrapped for readability
 
 ## How to Install
 
@@ -33,6 +44,14 @@ python3 decision_oracle.py consult     # Consult the Oracle
 python3 decision_oracle.py visualize   # Show tree as ASCII art
 python3 decision_oracle.py list        # List all saved trees
 python3 decision_oracle.py export      # Export as Mermaid diagram
+python3 decision_oracle.py random      # Get a random decision (skip questions!)
+python3 decision_oracle.py stats        # Show tree statistics
+python3 decision_oracle.py validate    # Validate a tree's structure
+python3 decision_oracle.py delete       # Delete a saved tree
+
+# CLI flags:
+python3 decision_oracle.py --version   # Show version (2.0.0)
+python3 decision_oracle.py --help      # Show help and available commands
 ```
 
 ## Usage Examples
@@ -79,11 +98,50 @@ Run `python3 decision_oracle.py consult`, pick a tree, and answer questions:
 ══════════════════════════════════════════════
 🔮 The Oracle decrees:
 
-   "Grab spicy ramen — quick, hot, and packs a punch."
+     "Grab spicy ramen — quick, hot, and packs a punch."
 
 Path taken: YES: Do you want something hot? → YES: Are you craving something spicy? → NO: Do you have more than 30 minutes?
 ══════════════════════════════════════════════
 ```
+
+### Random Decision
+
+Can't decide even with guidance? Let fate decide:
+
+```bash
+python3 decision_oracle.py random
+```
+
+The Oracle picks a random leaf from the tree — no questions asked!
+
+```
+🎲 The Oracle of 'weekend_planner' speaks without hesitation...
+"The Oracle closes its eyes and points — there!"
+
+══════════════════════════════════════════════
+🔮 The Oracle randomly decrees:
+
+     "Start that side project! Pick a repo, open your editor, and ship something."
+
+Hypothetical path: YES: Is the weather nice? → NO: Are you feeling creative? → NO: Do you prefer making art or making code?
+══════════════════════════════════════════════
+```
+
+### Viewing Statistics
+
+```bash
+python3 decision_oracle.py stats
+```
+
+Shows node counts, depth, balance ratio, and lists every possible decision with its path.
+
+### Validating a Tree
+
+```bash
+python3 decision_oracle.py validate
+```
+
+Checks for missing branches, empty text, excessive depth, and other structural issues.
 
 ### Visualizing a Tree
 
@@ -95,27 +153,36 @@ Run `python3 decision_oracle.py visualize` to see the tree structure:
   ──────────────────────────────────────────────────────
   🌳 Do you want something hot?
   ├── YES
-    │ ❓ Are you craving something spicy?
-    │ ├── YES
-    │ │ ❓ Do you have more than 30 minutes?
-    │ │ ├── YES
-    │ │ │ 🔵 Make a big pot of chili — you've got time, make it count!
-    │ │ └── NO
-          🔵 Grab spicy ramen — quick, hot, and packs a punch.
-    │ └── NO
-        ❓ Are you in the mood for soup?
-        ├── YES
-        │ 🔵 Tomato soup with grilled cheese — comfort in a bowl.
-        └── NO
-          🔵 Warm panini or toasted sandwich — hot, crispy, satisfying.
+  │ ❓ Are you craving something spicy?
+  │ ├── YES
+  │ │ ❓ Do you have more than 30 minutes?
+  │ │ ├── YES
+  │ │ │ 🔵 Make a big pot of chili — you've got time, make it count!
+  │ │ └── NO
+  │     🔵 Grab spicy ramen — quick, hot, and packs a punch.
+  │ └── NO
+  │   ❓ Are you in the mood for soup?
+  │   ├── YES
+  │   │ 🔵 Tomato soup with grilled cheese — comfort in a bowl.
+  │   └── NO
+  │     🔵 Warm panini or toasted sandwich — hot, crispy, satisfying.
   └── NO
     ❓ Are you looking for something healthy?
-    ...
+    ├── YES
+    │ 🔵 Big hearty salad with lots of toppings — kale, nuts, avocado.
+    └── NO
+      ❓ Are you in a rush?
+      ├── YES
+      │ 🔵 Quick sandwich or wrap — fuel up and get going.
+      └── NO
+        🔵 Charcuterie board — assemble meats, cheeses, crackers, and graze.
+  ──────────────────────────────────────────────────────
+  Nodes: 15 | Leaves: 8 | Depth: 3
 ```
 
 ### Exporting a Mermaid Diagram
 
-Run `python3 decision_oracle.py export` to generate a Mermaid flowchart that you can embed in Markdown or render online:
+Run `python3 decision_oracle.py export` to generate a Mermaid flowchart:
 
 ```mermaid
 graph TD
@@ -130,10 +197,10 @@ graph TD
 
 The `trees/` directory includes two sample trees to get you started:
 
-| Tree | Description | Nodes | Leaves |
-|------|-------------|-------|--------|
-| `lunch_decider` | Can't decide what to eat? Let the Oracle guide your lunch decisions. | 15 | 8 |
-| `weekend_planner` | Not sure what to do this weekend? The Oracle knows. | 15 | 8 |
+| Tree | Description | Nodes | Decisions | Depth |
+|------|-------------|-------|-----------|-------|
+| `lunch_decider` | Can't decide what to eat? Let the Oracle guide your lunch decisions. | 15 | 8 | 3 |
+| `weekend_planner` | Not sure what to do this weekend? The Oracle knows. | 15 | 8 | 3 |
 
 ## How It Works
 
@@ -156,3 +223,15 @@ Decision Oracle uses a binary tree structure where each internal node contains a
 ```
 
 Trees of any depth are supported — keep branching until you've captured all the nuances of a decision.
+
+## Running Tests
+
+```bash
+python3 -m pytest test_decision_oracle.py -v
+```
+
+The test suite covers node counting, leaf collection, tree depth calculation, validation, Mermaid export, path sanitization, JSON persistence, and CLI flags.
+
+## License
+
+Public domain — use it however you like!
