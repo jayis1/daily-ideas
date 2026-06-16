@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
 """
-🎰 Terminal Slot Machine
+🎰 Terminal Slot Machine — ASCII Edition
 A fully-featured animated slot machine in your terminal with spinning reels,
 paylines, betting, credit management, win celebrations, and ANSI graphics.
 
 This version uses ASCII art symbols as fallback for terminals without emoji support.
+
+Usage:
+    python3 slots_ascii.py                  # Interactive mode (default)
+    python3 slots_ascii.py --credits 500   # Start with 500 credits
+    python3 slots_ascii.py --auto 20       # Auto-spin 20 times
+    python3 slots_ascii.py --version       # Show version info
+    python3 slots_ascii.py --help          # Show help message
 """
 
 import curses
@@ -12,6 +19,9 @@ import random
 import time
 import sys
 import os
+import argparse
+
+__version__ = "1.1.0"
 
 # ─── Symbol Definitions ─────────────────────────────────────────────────────
 
@@ -94,6 +104,8 @@ CLR_REEL_BG  = 18
 # ─── Reel Class ──────────────────────────────────────────────────────────────
 
 class Reel:
+    """A single slot machine reel that spins and stops with animation."""
+
     def __init__(self, reel_id: int):
         self.reel_id = reel_id
         self.strip = list(WEIGHTED_REEL)
@@ -106,6 +118,7 @@ class Reel:
         self.spin_speed = 1
 
     def get_visible(self) -> list:
+        """Return the 3 visible symbols (top, middle, bottom)."""
         result = []
         for offset in range(-1, 2):
             idx = (self.position + offset) % len(self.strip)
@@ -113,15 +126,18 @@ class Reel:
         return result
 
     def get_payline(self) -> str:
+        """Return the symbol on the payline (middle row)."""
         return self.strip[self.position % len(self.strip)]
 
     def spin(self, target_symbol: str, delay_ms: int):
+        """Start spinning; will stop after delay_ms milliseconds showing target_symbol."""
         self.spinning = True
         self.target_symbol = target_symbol
         self.stop_time = time.time() + delay_ms / 1000.0
         self.bounce_phase = 0
 
     def update(self) -> bool:
+        """Advance reel by one step. Returns True if reel just stopped."""
         if not self.spinning:
             return False
         self.position = (self.position + 1) % len(self.strip)
@@ -136,6 +152,7 @@ class Reel:
         return False
 
     def update_bounce(self) -> bool:
+        """Update bounce animation after stopping. Returns True when bounce is done."""
         if self.bounce_phase > 0:
             self.bounce_phase -= 1
             return self.bounce_phase == 0
@@ -145,9 +162,13 @@ class Reel:
 # ─── Slot Machine Game ──────────────────────────────────────────────────────
 
 class SlotMachine:
-    def __init__(self, stdscr):
+    """Main slot machine game logic and rendering state (ASCII edition)."""
+
+    DEFAULT_CREDITS = 100
+
+    def __init__(self, stdscr, starting_credits=None):
         self.stdscr = stdscr
-        self.credits = 100
+        self.credits = starting_credits if starting_credits is not None else self.DEFAULT_CREDITS
         self.bet = 1
         self.max_bet = 10
         self.reels = [Reel(i) for i in range(NUM_REELS)]
@@ -161,12 +182,22 @@ class SlotMachine:
         self.total_bet = 0
         self.history = []
         self.jackpot = False
+        self.game_over = False
         self.last_spin_frame = 0
+
+        # Extended statistics
+        self.biggest_win = 0
+        self.current_win_streak = 0
+        self.current_loss_streak = 0
+        self.best_win_streak = 0
+        self.worst_loss_streak = 0
+        self.peak_credits = self.credits
 
         self._setup_colors()
         self._calc_layout()
 
     def _setup_colors(self):
+        """Initialize curses color pairs for the game display."""
         curses.start_color()
         curses.use_default_colors()
 
@@ -191,6 +222,7 @@ class SlotMachine:
         curses.init_pair(11, curses.COLOR_CYAN,   236)     # DIAMOND
 
     def _calc_layout(self):
+        """Calculate screen layout positions based on terminal size."""
         self.h, self.w = self.stdscr.getmaxyx()
         self.reel_w = 9
         self.reel_art_h = 3   # 3 lines per symbol
@@ -201,14 +233,25 @@ class SlotMachine:
         self.reel_y_start = max(2, (self.h - 30) // 2)
 
     def _determine_result(self) -> list:
+        """Determine the final symbols for each reel based on weighted probabilities."""
         return [random.choice(WEIGHTED_REEL) for _ in range(NUM_REELS)]
 
     def spin(self):
+        """Start a spin, deducting the current bet from credits."""
         if self.spinning:
             return
-        if self.credits < self.bet:
-            self.message = "Not enough credits! Lower your bet."
+        if self.game_over:
+            self.message = "Game over! Press R to rebuy (100 credits)."
             return
+        if self.credits < self.bet:
+            if self.credits <= 0:
+                self.game_over = True
+                self.message = "BANKRUPT! Press R to rebuy (100 credits)."
+            else:
+                self.message = "Not enough credits! Lower your bet or press R to rebuy."
+            return
+
+        # Deduct bet
         self.credits -= self.bet
         self.total_bet += self.bet
         self.total_spins += 1
@@ -216,13 +259,26 @@ class SlotMachine:
         self.win_lines = []
         self.win_flash_counter = 0
         self.jackpot = False
+        self.game_over = False
         self.message = "Spinning..."
+
+        # Determine outcomes
         results = self._determine_result()
         for i, reel in enumerate(self.reels):
             reel.spin(results[i], delay_ms=600 + i * 450)
+
         self.spinning = True
 
+    def rebuy(self):
+        """Give the player more credits when they're bankrupt."""
+        if self.credits <= 0:
+            self.credits = self.DEFAULT_CREDITS
+            self.game_over = False
+            self.bet = 1
+            self.message = f"Rebuy! {self.credits} credits added. Good luck!"
+
     def check_wins(self):
+        """Check for winning combinations on all paylines."""
         grid = []
         for reel in self.reels:
             grid.append(reel.get_visible())
@@ -264,6 +320,14 @@ class SlotMachine:
             self.win_lines = wins
             self.win_flash_counter = 24
 
+            # Track extended statistics
+            if total_win > self.biggest_win:
+                self.biggest_win = total_win
+            self.current_win_streak += 1
+            self.current_loss_streak = 0
+            if self.current_win_streak > self.best_win_streak:
+                self.best_win_streak = self.current_win_streak
+
             payline = [reel.get_payline() for reel in self.reels]
             if payline[0] == payline[1] == payline[2] == "DIAMOND":
                 self.jackpot = True
@@ -272,6 +336,19 @@ class SlotMachine:
                 self.message = f"WIN! +{total_win} credits!"
         else:
             self.message = "No win. Spin again!"
+            self.current_win_streak = 0
+            self.current_loss_streak += 1
+            if self.current_loss_streak > self.worst_loss_streak:
+                self.worst_loss_streak = self.current_loss_streak
+
+        # Track peak credits
+        if self.credits > self.peak_credits:
+            self.peak_credits = self.credits
+
+        # Check for bankruptcy
+        if self.credits <= 0:
+            self.game_over = True
+            self.message = "BANKRUPT! Press R to rebuy (100 credits)."
 
         payline_syms = [reel.get_payline() for reel in self.reels]
         self.history.append((payline_syms[:], total_win))
@@ -279,14 +356,20 @@ class SlotMachine:
             self.history.pop(0)
 
     def change_bet(self, delta: int):
+        """Increase or decrease the current bet by delta."""
         if self.spinning:
             return
         new_bet = self.bet + delta
         if 1 <= new_bet <= self.max_bet:
             self.bet = new_bet
             self.message = f"Bet: {self.bet}"
+        elif new_bet > self.max_bet:
+            self.message = f"Maximum bet is {self.max_bet}"
+        elif new_bet < 1:
+            self.message = "Minimum bet is 1"
 
     def draw(self):
+        """Render the entire game screen using ASCII art symbols."""
         stdscr = self.stdscr
         stdscr.clear()
         h, w = self.h, self.w
@@ -441,6 +524,9 @@ class SlotMachine:
             elif self.win_amount > 0 and self.win_flash_counter > 0:
                 stdscr.addstr(msg_y, self.reel_x_start, self.message,
                               curses.color_pair(CLR_WIN) | curses.A_BOLD)
+            elif self.game_over:
+                stdscr.addstr(msg_y, self.reel_x_start, self.message,
+                              curses.color_pair(CLR_JACKPOT) | curses.A_BOLD)
             else:
                 stdscr.addstr(msg_y, self.reel_x_start, self.message,
                               curses.color_pair(CLR_BORDER))
@@ -449,7 +535,10 @@ class SlotMachine:
 
         # ─── Controls ───
         ctrl_y = msg_y + 1
-        controls = "[SPACE] Spin  [Up/Down] Bet  [q] Quit"
+        if self.game_over:
+            controls = "[R] Rebuy  [q] Quit"
+        else:
+            controls = "[SPACE] Spin  [Up/Down] Bet  [q] Quit"
         try:
             stdscr.addstr(ctrl_y, self.reel_x_start, controls, curses.color_pair(CLR_DIM))
         except curses.error:
@@ -481,6 +570,15 @@ class SlotMachine:
             except curses.error:
                 pass
 
+        # ─── Extended stats line ───
+        ext_y = stats_y + 1
+        if self.total_spins > 0:
+            ext = f"Best win:{self.biggest_win} Peak:{self.peak_credits} Streak:W{self.best_win_streak}/L{self.worst_loss_streak}"
+            try:
+                stdscr.addstr(ext_y, self.reel_x_start, ext, curses.color_pair(CLR_DIM))
+            except curses.error:
+                pass
+
         # ─── Jackpot Flash ───
         if self.jackpot and self.win_flash_counter > 0 and self.win_flash_counter % 3 == 0:
             for y in range(0, h, 3):
@@ -492,12 +590,14 @@ class SlotMachine:
         stdscr.refresh()
 
     def update(self):
+        """Update game state (reel animation, flash counters, etc.)."""
         if self.spinning:
             for reel in self.reels:
                 reel.update()
                 if not reel.spinning and reel.bounce_phase > 0:
                     reel.update_bounce()
 
+            # Check if all reels have stopped
             if all(not reel.spinning for reel in self.reels):
                 if all(reel.bounce_phase == 0 for reel in self.reels):
                     self.spinning = False
@@ -507,12 +607,67 @@ class SlotMachine:
             self.win_flash_counter -= 1
 
 
+# ─── Auto-Spin Mode ────────────────────────────────────────────────────────
+
+def auto_spin_ascii(stdscr, num_spins, starting_credits):
+    """Run an auto-spin session that plays automatically without user input."""
+    game = SlotMachine(stdscr, starting_credits=starting_credits)
+
+    spin_counter = 0
+
+    while spin_counter < num_spins:
+        # Handle quit key
+        try:
+            key = stdscr.getch()
+            if key == ord('q') or key == ord('Q'):
+                break
+        except Exception:
+            pass
+
+        # If not spinning and not bankrupt, spin
+        if not game.spinning and not game.game_over and game.credits >= game.bet:
+            game.spin()
+            spin_counter += 1
+        elif game.game_over or game.credits < game.bet:
+            game.message = f"Auto-spin done! {spin_counter}/{num_spins} spins. Press Q to exit."
+            game.draw()
+            break
+
+        game.update()
+        game.draw()
+        time.sleep(0.06)
+
+    # Show final screen
+    game.message = f"Auto-spin complete! {spin_counter}/{num_spins} spins. Press Q to exit."
+    game.draw()
+
+    # Wait for user to quit
+    while True:
+        try:
+            key = stdscr.getch()
+            if key == ord('q') or key == ord('Q'):
+                break
+        except Exception:
+            pass
+        time.sleep(0.05)
+
+
+# ─── Main Loop ───────────────────────────────────────────────────────────────
+
 def main(stdscr):
+    """Main interactive game loop."""
+    starting_credits = int(os.environ.get("SLOT_CREDITS", "100"))
+    auto_spins = int(os.environ.get("SLOT_AUTO", "0"))
+
     curses.curs_set(0)
     stdscr.nodelay(True)
     stdscr.timeout(60)
 
-    game = SlotMachine(stdscr)
+    if auto_spins > 0:
+        auto_spin_ascii(stdscr, auto_spins, starting_credits)
+        return
+
+    game = SlotMachine(stdscr, starting_credits=starting_credits)
 
     while True:
         try:
@@ -526,15 +681,19 @@ def main(stdscr):
             game.change_bet(1)
         elif key == curses.KEY_DOWN or key == ord('-'):
             game.change_bet(-1)
+        elif key == ord('r') or key == ord('R'):
+            game.rebuy()
         elif key == ord('q') or key == ord('Q'):
             break
 
         game.update()
         game.draw()
 
-    # Game Over
+    # Game Over Screen
     stdscr.clear()
     h, w = stdscr.getmaxyx()
+
+    payback_pct = (game.total_won / game.total_bet * 100) if game.total_bet > 0 else 0.0
     lines = [
         "Thanks for playing!",
         "",
@@ -542,6 +701,11 @@ def main(stdscr):
         f"Total Spins:   {game.total_spins}",
         f"Total Won:     {game.total_won}",
         f"Total Bet:     {game.total_bet}",
+        f"Payback Rate:  {payback_pct:.1f}%",
+        f"Biggest Win:    {game.biggest_win}",
+        f"Peak Credits:   {game.peak_credits}",
+        f"Best Win Streak: {game.best_win_streak}",
+        f"Worst Loss Streak: {game.worst_loss_streak}",
         "",
         "Press any key to exit..."
     ]
@@ -559,4 +723,20 @@ def main(stdscr):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Terminal Slot Machine (ASCII Edition) — Spin the reels in your terminal!",
+        epilog="Try 'python3 slots_ascii.py --credits 500' for a high-roller session!"
+    )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    parser.add_argument("--credits", type=int, default=100,
+                        help="Starting credits (default: 100)")
+    parser.add_argument("--auto", type=int, default=0,
+                        help="Auto-spin N times instead of interactive play (default: 0 = interactive)")
+
+    args = parser.parse_args()
+
+    # Pass settings through environment variables to the curses main function
+    os.environ["SLOT_CREDITS"] = str(args.credits)
+    os.environ["SLOT_AUTO"] = str(args.auto)
+
     curses.wrapper(main)
