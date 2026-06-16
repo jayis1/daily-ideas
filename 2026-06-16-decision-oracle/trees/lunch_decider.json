@@ -1,0 +1,49 @@
+{
+  "name": "lunch_decider",
+  "description": "Can't decide what to eat? Let the Oracle guide your lunch decisions.",
+  "root": {
+    "question": "Do you want something hot?",
+    "yes": {
+      "question": "Are you craving something spicy?",
+      "yes": {
+        "question": "Do you have more than 30 minutes?",
+        "yes": {
+          "decision": "Make a big pot of chili — you've got time, make it count!"
+        },
+        "no": {
+          "decision": "Grab spicy ramen — quick, hot, and packs a punch."
+        }
+      },
+      "no": {
+        "question": "Are you in the mood for soup?",
+        "yes": {
+          "decision": "Tomato soup with grilled cheese — comfort in a bowl."
+        },
+        "no": {
+          "decision": "Warm panini or toasted sandwich — hot, crispy, satisfying."
+        }
+      }
+    },
+    "no": {
+      "question": "Are you looking for something healthy?",
+      "yes": {
+        "question": "Do you like leafy greens?",
+        "yes": {
+          "decision": "Big hearty salad with lots of toppings — kale, nuts, avocado."
+        },
+        "no": {
+          "decision": "Grain bowl with quinoa, roasted veggies, and tahini dressing."
+        }
+      },
+      "no": {
+        "question": "Are you in a rush?",
+        "yes": {
+          "decision": "Quick sandwich or wrap — fuel up and get going."
+        },
+        "no": {
+          "decision": "Charcuterie board — assemble meats, cheeses, crackers, and graze."
+        }
+      }
+    }
+  }
+}

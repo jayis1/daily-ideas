@@ -1,0 +1,49 @@
+{
+  "name": "weekend_planner",
+  "description": "Not sure what to do this weekend? The Oracle knows.",
+  "root": {
+    "question": "Is the weather nice?",
+    "yes": {
+      "question": "Do you want to be active?",
+      "yes": {
+        "question": "Are you near mountains or trails?",
+        "yes": {
+          "decision": "Go hiking! Pick a trail, pack water, and conquer that peak."
+        },
+        "no": {
+          "decision": "Go for a long bike ride or run through the city parks."
+        }
+      },
+      "no": {
+        "question": "Do you enjoy people watching?",
+        "yes": {
+          "decision": "Find a sunny café patio, order an iced drink, and watch the world go by."
+        },
+        "no": {
+          "decision": "Pack a picnic and find a quiet spot by the water."
+        }
+      }
+    },
+    "no": {
+      "question": "Are you feeling creative?",
+      "yes": {
+        "question": "Do you prefer making art or making code?",
+        "yes": {
+          "decision": "Break out the paints, sketchbook, or craft supplies. Make something beautiful."
+        },
+        "no": {
+          "decision": "Start that side project! Pick a repo, open your editor, and ship something."
+        }
+      },
+      "no": {
+        "question": "Do you want to leave the house?",
+        "yes": {
+          "decision": "Catch a movie at the cinema, or visit a museum — culture awaits."
+        },
+        "no": {
+          "decision": "Blanket, tea, and a book or binge-worthy series. Perfect cozy day."
+        }
+      }
+    }
+  }
+}
