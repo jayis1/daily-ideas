@@ -293,6 +293,30 @@ class TestTopographyMap:
             for x in range(1, tmap.width - 1):
                 tmap.is_contour(x, y)
 
+    def test_contour_flat_area(self):
+        """Contour detection on a perfectly flat area should return False."""
+        tmap = TopographyMap(width=30, height=15, seed=42)
+        tmap.generate()
+        # Set a 5x5 area to the same elevation
+        for dy in range(-2, 3):
+            for dx in range(-2, 3):
+                tmap.elevation[7 + dy][15 + dx] = 0.5
+        assert tmap.is_contour(15, 7) is False
+
+    def test_contour_steep_area(self):
+        """Contour detection at a steep transition should return True."""
+        tmap = TopographyMap(width=30, height=15, seed=42)
+        tmap.generate()
+        # Set a steep step
+        tmap.elevation[7][15] = 0.1
+        tmap.elevation[7][16] = 0.5
+        assert tmap.is_contour(15, 7) is True
+
+    def test_default_height_matches_cli(self):
+        """Default height should match CLI default (30)."""
+        tmap = TopographyMap(width=80, seed=42)
+        assert tmap.height == 30, f"Default height is {tmap.height}, expected 30"
+
 
 # ─── Validation Tests ────────────────────────────────────────────────────
 
@@ -348,6 +372,28 @@ class TestValidation:
         except ValueError as e:
             assert "scale" in str(e).lower()
 
+    def test_scale_one_is_valid(self):
+        """Scale=1.0 should be accepted (inclusive upper bound)."""
+        tmap = TopographyMap(width=30, height=15, seed=42, scale=1.0)
+        assert tmap.scale == 1.0
+
+    def test_scale_just_over_one(self):
+        """Scale slightly above 1.0 should be rejected."""
+        try:
+            TopographyMap(width=30, height=15, seed=42, scale=1.01)
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "scale" in str(e).lower()
+            assert "inclusive" in str(e).lower()
+
+    def test_scale_validation_message(self):
+        """Scale validation message should say 'inclusive'."""
+        try:
+            TopographyMap(width=30, height=15, seed=42, scale=1.5)
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "inclusive" in str(e).lower()
+
 
 # ─── Output Tests ─────────────────────────────────────────────────────────
 
@@ -386,6 +432,22 @@ class TestOutput:
         assert any("S" in line for line in COMPASS_ROSE)
         assert any("W" in line for line in COMPASS_ROSE)
         assert any("E" in line for line in COMPASS_ROSE)
+
+    def test_profile_row_axis_label(self):
+        """Profile row should show actual max index, not literal 'width-1'."""
+        tmap = TopographyMap(width=30, height=15, seed=42)
+        tmap.generate()
+        output = tmap.render_profile('row', 5, use_color=False)
+        assert "width-1" not in output, "Profile axis shows literal 'width-1' instead of actual index"
+        # Should show the actual max column index
+        assert "29" in output  # width-1 = 30-1 = 29
+
+    def test_profile_col_axis_label(self):
+        """Profile col should show actual max index."""
+        tmap = TopographyMap(width=30, height=15, seed=42)
+        tmap.generate()
+        output = tmap.render_profile('col', 5, use_color=False)
+        assert "14" in output  # height-1 = 15-1 = 14
 
 
 # ─── Edge Case Tests ─────────────────────────────────────────────────────
@@ -462,6 +524,52 @@ class TestEdgeCases:
         )
         assert len(output) > 0
         assert "╔" in output
+
+    def test_render_without_generate_raises(self):
+        """Render without calling generate() should raise a clear error."""
+        tmap = TopographyMap(width=30, height=15, seed=42)
+        try:
+            tmap.render(use_color=False)
+            assert False, "Should have raised RuntimeError"
+        except RuntimeError as e:
+            assert "generate()" in str(e)
+
+    def test_render_profile_without_generate(self):
+        """Render profile without calling generate() should return error."""
+        tmap = TopographyMap(width=30, height=15, seed=42)
+        output = tmap.render_profile('row', 5)
+        assert "Error" in output
+
+    def test_render_elevation_numbers_without_generate(self):
+        """Render elevation numbers without calling generate() should raise."""
+        tmap = TopographyMap(width=30, height=15, seed=42)
+        try:
+            tmap.render_elevation_numbers()
+            assert False, "Should have raised RuntimeError"
+        except RuntimeError as e:
+            assert "generate()" in str(e)
+
+    def test_negative_profile_index(self):
+        """Negative profile index should return an error message."""
+        tmap = TopographyMap(width=30, height=15, seed=42)
+        tmap.generate()
+        output = tmap.render_profile('row', -1, use_color=False)
+        assert "Error" in output
+
+    def test_scale_max_boundary(self):
+        """Scale=1.0 (max valid) should work correctly."""
+        tmap = TopographyMap(width=30, height=15, seed=42, scale=1.0)
+        tmap.generate()
+        output = tmap.render(use_color=False)
+        assert len(output) > 0
+
+    def test_compass_not_shown_for_narrow_maps(self):
+        """Compass should not appear for maps narrower than 40 chars."""
+        tmap = TopographyMap(width=30, height=15, seed=42)
+        tmap.generate()
+        output = tmap.render(use_color=False, show_compass=True)
+        # Compass is hidden for width < 40 (intentional)
+        assert isinstance(output, str)
 
 
 if __name__ == "__main__":

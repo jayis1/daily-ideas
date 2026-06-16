@@ -17,6 +17,7 @@ Usage:
 """
 
 import argparse
+import collections
 import hashlib
 import math
 import os
@@ -24,7 +25,7 @@ import random
 import sys
 import time
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 
 # ─── Perlin-like Noise ───────────────────────────────────────────────────────
@@ -171,7 +172,7 @@ def get_terrain_index(elevation):
 class TopographyMap:
     """Generates and renders an ASCII topographic map."""
 
-    def __init__(self, width=80, height=35, seed=None, scale=0.04,
+    def __init__(self, width=80, height=30, seed=None, scale=0.04,
                  octaves=6, contour_interval=CONTOUR_INTERVAL):
         if seed is None:
             seed = int(time.time() * 1000) % (2**31)
@@ -182,7 +183,7 @@ class TopographyMap:
         if octaves < 1 or octaves > 12:
             raise ValueError(f"Octaves must be between 1 and 12, got {octaves}.")
         if scale <= 0 or scale > 1:
-            raise ValueError(f"Scale must be between 0 and 1, got {scale}.")
+            raise ValueError(f"Scale must be between 0 (exclusive) and 1 (inclusive), got {scale}.")
         self.seed = seed
         self.width = width
         self.height = height
@@ -300,11 +301,10 @@ class TopographyMap:
         self.lake_cells = set()
         # Find basins: low-elevation areas (< 0.18) that aren't connected
         # to the map edge via shallow water paths
-        visited = set()
 
         # BFS from all edge cells that are water — these are ocean-connected
         edge_water = set()
-        queue = []
+        queue = collections.deque()
         for x in range(self.width):
             for y in [0, self.height - 1]:
                 if self.elevation[y][x] < 0.18:
@@ -320,7 +320,7 @@ class TopographyMap:
         # BFS to find all ocean-connected water
         connected = set(queue)
         while queue:
-            cx, cy = queue.pop(0)
+            cx, cy = queue.popleft()
             for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                 nx, ny = cx + dx, cy + dy
                 if (0 <= nx < self.width and 0 <= ny < self.height
@@ -400,17 +400,21 @@ class TopographyMap:
             self.peak_labels.append((px, py, name, elev_m))
 
     def is_contour(self, x, y):
-        """Check if this cell is on a contour line (elevation crosses contour interval)."""
+        """Check if this cell is on a contour line (elevation crosses contour interval).
+
+        Uses integer comparison of contour level indices to avoid floating-point
+        rounding issues.
+        """
         e = self.elevation[y][x]
-        contour_level = round(e / self.contour_interval) * self.contour_interval
+        contour_idx = round(e / self.contour_interval)
 
         # Check if any neighbor crosses a different contour level
         for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
             nx, ny = x + dx, y + dy
             if 0 <= nx < self.width and 0 <= ny < self.height:
                 ne = self.elevation[ny][nx]
-                n_contour = round(ne / self.contour_interval) * self.contour_interval
-                if n_contour != contour_level:
+                n_idx = round(ne / self.contour_interval)
+                if n_idx != contour_idx:
                     return True
         return False
 
@@ -435,10 +439,10 @@ class TopographyMap:
                 continue
             count += 1
             # BFS to mark entire lake
-            queue = [cell]
+            queue = collections.deque([cell])
             visited.add(cell)
             while queue:
-                cx, cy = queue.pop(0)
+                cx, cy = queue.popleft()
                 for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                     nx, ny = cx + dx, cy + dy
                     if (nx, ny) in self.lake_cells and (nx, ny) not in visited:
@@ -457,6 +461,8 @@ class TopographyMap:
         Returns:
             String representation of the elevation profile
         """
+        if not self.elevation:
+            return "  Error: map has not been generated. Call generate() first."
         if direction == 'row':
             if index < 0 or index >= self.height:
                 return f"  Error: row index {index} out of range (0-{self.height-1})"
@@ -504,7 +510,17 @@ class TopographyMap:
         # Bottom axis
         lines.append(f"  {'':>6} └{'─' * len(elevations)}")
         if direction == 'row':
-            lines.append(f"  {'':>6}  {'0':^10}{'width-1':^10}"[:len(elevations) + 10])
+            max_idx = len(elevations) - 1
+            # Build axis label with 0 on left and max index on right
+            label_inner = str(max_idx)
+            total_len = len(elevations)
+            left = '0'
+            right = label_inner
+            spacing = total_len - len(left) - len(right)
+            if spacing < 1:
+                spacing = 1
+            axis_label = left + ' ' * spacing + right
+            lines.append(f"  {'':>6}  {axis_label}")
         else:
             lines.append(f"  {'':>6}  col index 0 → {len(elevations)-1}")
 
@@ -514,6 +530,8 @@ class TopographyMap:
                show_labels=True, show_legend=True, show_grid=False,
                show_compass=True, show_stats=True):
         """Render the map as a string."""
+        if not self.elevation:
+            raise RuntimeError("Cannot render: map has not been generated. Call generate() first.")
         lines = []
 
         # Header
@@ -694,6 +712,8 @@ class TopographyMap:
 
     def render_elevation_numbers(self):
         """Render a compact view showing elevation numbers (for debugging/detail)."""
+        if not self.elevation:
+            raise RuntimeError("Cannot render: map has not been generated. Call generate() first.")
         lines = []
         for y in range(self.height):
             row = ""
@@ -707,8 +727,13 @@ class TopographyMap:
 
 # ─── Interactive Mode ───────────────────────────────────────────────────────
 
-def interactive_mode():
-    """Interactive mode with zoom/pan controls."""
+def interactive_mode(seed=None, octaves=6):
+    """Interactive mode with zoom/pan controls.
+
+    Args:
+        seed: Random seed (None for random)
+        octaves: Number of noise octaves (default: 6)
+    """
     import tty
     import termios
 
@@ -716,16 +741,24 @@ def interactive_mode():
     print("Controls: +/- zoom | WASD/arrows pan | r regenerate | g grid | q quit")
     print()
 
-    seed = int(time.time() * 1000) % (2**31)
+    if seed is None:
+        seed = int(time.time() * 1000) % (2**31)
     offset_x = 0.0
     offset_y = 0.0
     zoom = 1.0
     show_grid = False
-    width = min(80, os.get_terminal_size().columns - 4)
-    height = min(30, os.get_terminal_size().lines - 6)
+    try:
+        term_w = os.get_terminal_size().columns - 4
+        term_h = os.get_terminal_size().lines - 6
+    except OSError:
+        term_w = 80
+        term_h = 30
+    width = min(80, term_w)
+    height = min(30, term_h)
 
     def render_frame():
-        tmap = TopographyMap(width, height, seed=seed, scale=0.04 / zoom)
+        tmap = TopographyMap(width, height, seed=seed, scale=0.04 / zoom,
+                             octaves=octaves)
         # Apply offset by shifting the noise sampling
         base_noise = PerlinNoise(seed)
         tmap.noise = base_noise
@@ -737,7 +770,7 @@ def interactive_mode():
             for x in range(width):
                 nx = (x * tmap.scale) + offset_x
                 ny = (y * tmap.scale) + offset_y
-                e = (base_noise.octave_noise(nx, ny, 6) + 1) / 2.0
+                e = (base_noise.octave_noise(nx, ny, octaves) + 1) / 2.0
 
                 cx = ((x + offset_x / tmap.scale) / width - 0.5) * 2
                 cy = ((y + offset_y / tmap.scale) / height - 0.5) * 2
@@ -884,7 +917,7 @@ examples:
             parser.error(f"Profile index must be an integer, got '{args.profile[1]}'")
 
     if args.interactive:
-        interactive_mode()
+        interactive_mode(seed=args.seed, octaves=args.octaves)
         return
 
     tmap = TopographyMap(
@@ -917,6 +950,9 @@ examples:
         )
 
     if args.output:
+        # Warn if file already exists
+        if os.path.exists(args.output):
+            print(f"Warning: file '{args.output}' already exists and will be overwritten.", file=sys.stderr)
         # Strip ANSI codes for file output
         import re
         clean_output = re.sub(r'\033\[[0-9;]*m', '', output)

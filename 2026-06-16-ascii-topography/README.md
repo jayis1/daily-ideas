@@ -7,35 +7,37 @@ Generate beautiful, detailed topographic maps in your terminal using Perlin nois
 ### Terrain Generation
 - **Procedural terrain** using multi-octave Perlin noise with an island mask for natural coastlines
 - **9 terrain types**: deep water, shallow water, beach, plains, forest, highland, mountain, peak, and snow — each with a distinct ASCII character and color
-- **Contour lines**: automatically drawn at configurable elevation intervals (default: 5%)
+- **Contour lines**: automatically drawn at configurable elevation intervals (default: 5%); uses integer comparison for robust floating-point handling
 - **Rivers**: traced downhill from high-elevation sources to the sea with adaptive source count based on map size
-- **Lakes**: enclosed water basins not connected to the ocean are detected and displayed as distinct inland lakes (◊)
+- **Lakes**: enclosed water basins not connected to the ocean are detected via BFS flood-fill and displayed as distinct inland lakes (◊)
 - **Named peaks**: local maxima are detected and labeled with procedurally generated names (e.g. "Mt. Eagle", "Pico Storm") and elevation in meters
-- **Peak name pool**: expanded to 12 prefixes and 35 suffixes for more variety
+- **Peak name pool**: 12 prefixes and 35 suffixes for variety
 
 ### Visualization
 - **ANSI 256-color support**: rich color output for supported terminals; monochrome fallback available
-- **Compass rose**: decorative directional indicator (N/S/E/W) rendered below the map
+- **Compass rose**: decorative directional indicator (N/S/E/W) rendered below the map (for maps ≥ 40 chars wide)
 - **Coordinate grid overlay**: toggle a grid of ┼/│/─ characters to help locate positions
 - **Terrain statistics**: automatic breakdown of terrain composition (e.g. "forest 14%, mountain 20%")
-- **Area stats**: map dimensions, elevation range, average elevation, water/land percentage
+- **Area stats**: map dimensions, elevation range, average elevation, water/land percentage, lake count
 
 ### Elevation Profiles
 - **Row profiles**: `--profile row N` renders a vertical bar-chart elevation cross-section along any row
 - **Column profiles**: `--profile col N` renders a profile along any column
 - Profiles use terrain-colored blocks for visual clarity
+- Axis labels show actual column/row indices
 
 ### Interactive Mode
 - **Zoom in/out** (+/-), **pan** (WASD), **regenerate** (r), **toggle grid** (g), and **quit** (q) — all in real-time
-- Auto-sized to fit your terminal
+- Auto-sized to fit your terminal (with fallback if no terminal detected)
+- Honors `--seed` and `--octaves` CLI arguments
 
 ### CLI
-- **`--version`** flag to print version (v1.1.0)
+- **`--version`** flag to print version (v1.1.1)
 - **`--help`** flag with examples and usage info
-- **`--output FILE`** saves map to a file (ANSI codes stripped automatically)
+- **`--output FILE`** saves map to a file (ANSI codes stripped automatically); warns if file already exists
 - Deterministic seeding: same seed produces the same map every time
 - Fully configurable: width, height, scale, octaves, contour interval, and more
-- Input validation with clear error messages
+- Input validation with clear, accurate error messages
 
 ## Installation
 
@@ -98,6 +100,10 @@ python3 topography.py --seed 42 --profile row 7
 ```bash
 # Save map as plain text (ANSI codes stripped)
 python3 topography.py --seed 42 --output my_map.txt
+
+# If the file already exists, a warning is printed to stderr
+python3 topography.py --seed 42 --output my_map.txt
+# Warning: file 'my_map.txt' already exists and will be overwritten.
 ```
 
 ### Coordinate Grid
@@ -113,6 +119,12 @@ python3 topography.py --grid
 python3 topography.py --interactive
 # or
 python3 topography.py -i
+
+# With a specific seed
+python3 topography.py --seed 42 -i
+
+# With custom octaves
+python3 topography.py --octaves 8 -i
 ```
 
 Controls:
@@ -161,24 +173,26 @@ python3 topography.py --elevation-numbers
 
 3. **Power Curve & Boost**: Elevation values are shaped with a power curve (`e^0.8`) to enhance peaks and valleys, then boosted to fill the full elevation range.
 
-4. **Contour Lines**: For each cell, the algorithm checks if any neighbor crosses a different contour level. If so, a contour character (`░`) is drawn.
+4. **Contour Lines**: For each cell, the algorithm computes the integer contour level index and checks if any neighbor has a different index. This avoids floating-point rounding issues from comparing computed contour values.
 
 5. **Rivers**: Starting from random high-elevation points, rivers trace the steepest downhill path until they reach water. The number of river sources scales with map size.
 
-6. **Lakes**: A flood-fill BFS from the map edges identifies all ocean-connected water cells. Any water cell not reachable from the edge is classified as an inland lake (◊).
+6. **Lakes**: An efficient BFS flood-fill (using `collections.deque` for O(1) operations) from the map edges identifies all ocean-connected water cells. Any water cell not reachable from the edge is classified as an inland lake (◊).
 
 7. **Peak Detection**: Local maxima in a 5×5 neighborhood above a threshold are identified, filtered for minimum spacing (adaptive to map size), and labeled with procedurally generated names.
 
 8. **Terrain Classification**: Elevation values are mapped to 9 terrain types, each with a distinct ASCII character and ANSI color.
 
-9. **Elevation Profiles**: A row or column's elevation values are rendered as a vertical bar chart using Unicode block characters, color-coded by terrain type.
+9. **Elevation Profiles**: A row or column's elevation values are rendered as a vertical bar chart using Unicode block characters, color-coded by terrain type. Axis labels show actual numeric indices.
+
+10. **Error Handling**: Calling `render()`, `render_profile()`, or `render_elevation_numbers()` before `generate()` raises a clear `RuntimeError` instead of an obscure `IndexError`.
 
 ## Output Example
 
 ```
   Topographic Map — Seed 42
   ╔──────────────────────────────────────────────────────────────────────────────────╗
-  ║≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈~~~~~~~~~~~~~~~░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░║
+  ║≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈~~~~~~~~~~~~~~~░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░║
   ║≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈~~~~~~~~.....░░░░░░░░░░░░░░░░░░░░░░░░░..~~~≈≈≈≈≈≈≈≈≈≈≈≈≈≈║
   ║≈≈≈≈≈≈≈≈~~.░░░░░░░░░░░░░░░░░░░░░░░░░░▲░░░░░░░░░░░░░░░░░░░░░░░░..~~≈≈≈≈≈≈≈≈≈≈≈║
   ╚──────────────────────────────────────────────────────────────────────────────────╝
@@ -214,7 +228,18 @@ python3 topography.py --elevation-numbers
 python3 -m pytest test_topography.py -v
 ```
 
-The test suite (52 tests) covers Perlin noise determinism and range, terrain classification, map generation, rendering (color/no-color/grid/compass/stats/profiles), input validation (dimensions, octaves, scale), output features (file save, version), and edge cases (small maps, extreme scales, custom contour intervals, all features hidden).
+The test suite (66 tests) covers:
+- Perlin noise determinism and range
+- Terrain classification at boundaries
+- Map generation, elevation ranges, deterministic seeds
+- All render modes (color/no-color/grid/compass/stats/profiles/elevation numbers)
+- Contour detection (flat areas, steep transitions, steep areas)
+- Default height consistency between CLI and class
+- Input validation (dimensions, octaves, scale including boundary values)
+- Scale validation message accuracy (inclusive upper bound)
+- Output features (file save, version, compass rose structure)
+- Profile axis labels (actual numeric indices, not literal strings)
+- Edge cases (small maps, extreme scales, custom contour intervals, all features hidden, render without generate, negative profile index, scale boundary)
 
 ## All Options
 
@@ -224,7 +249,7 @@ The test suite (52 tests) covers Perlin noise determinism and range, terrain cla
 | `--seed` | random | Random seed for reproducible maps |
 | `--width` | 80 | Map width in characters |
 | `--height` | 30 | Map height in characters |
-| `--scale` | 0.04 | Noise scale factor (lower = bigger features) |
+| `--scale` | 0.04 | Noise scale factor — lower = bigger features (0 < scale ≤ 1) |
 | `--octaves` | 6 | Number of noise octaves (1–12) |
 | `--no-color` | off | Disable ANSI colors |
 | `--no-contours` | off | Hide contour lines |
@@ -236,8 +261,21 @@ The test suite (52 tests) covers Perlin noise determinism and range, terrain cla
 | `--elevation-numbers` | off | Show raw elevation as 0-9 digits |
 | `--grid` | off | Show coordinate grid overlay |
 | `--profile DIR IDX` | off | Render elevation profile (row/col N) |
-| `--output FILE` | off | Save output to file (no ANSI codes) |
+| `--output FILE` | off | Save output to file (no ANSI codes); warns on overwrite |
 | `--interactive` / `-i` | off | Interactive zoom/pan mode |
+
+## Changelog
+
+### v1.1.1 — Bug fixes
+- **Fixed**: Profile row bottom axis showed literal string "width-1" instead of the actual maximum column index (e.g. "79" for width=80)
+- **Fixed**: Default height mismatch — CLI used 30 but `TopographyMap` class used 35; now both default to 30
+- **Fixed**: `render()`, `render_profile()`, and `render_elevation_numbers()` now raise clear `RuntimeError` if called before `generate()` instead of obscure `IndexError`
+- **Fixed**: BFS in `_detect_lakes()` and `get_lake_count()` used `list.pop(0)` which is O(n) per pop — replaced with `collections.deque.popleft()` for O(1) operations, improving performance on large maps
+- **Fixed**: Scale validation error message now correctly states "between 0 (exclusive) and 1 (inclusive)" instead of misleading "between 0 and 1"
+- **Fixed**: `--output FILE` now warns on stderr if the target file already exists
+- **Fixed**: `is_contour()` now uses integer comparison of contour level indices instead of floating-point value comparison, preventing potential rounding-induced spurious contour lines
+- **Fixed**: Interactive mode now accepts `--seed` and `--octaves` CLI arguments instead of ignoring them
+- **Fixed**: Interactive mode handles `OSError` when terminal size cannot be detected (e.g. piped output) by falling back to 80×30
 
 ## License
 
