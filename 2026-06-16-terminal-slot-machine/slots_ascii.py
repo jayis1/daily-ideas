@@ -21,7 +21,7 @@ import sys
 import os
 import argparse
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # ─── Symbol Definitions ─────────────────────────────────────────────────────
 
@@ -270,8 +270,8 @@ class SlotMachine:
         self.spinning = True
 
     def rebuy(self):
-        """Give the player more credits when they're bankrupt."""
-        if self.credits <= 0:
+        """Give the player more credits when they're bankrupt or can't afford the current bet."""
+        if self.credits <= 0 or self.credits < self.bet:
             self.credits = self.DEFAULT_CREDITS
             self.game_over = False
             self.bet = 1
@@ -656,8 +656,12 @@ def auto_spin_ascii(stdscr, num_spins, starting_credits):
 
 def main(stdscr):
     """Main interactive game loop."""
-    starting_credits = int(os.environ.get("SLOT_CREDITS", "100"))
-    auto_spins = int(os.environ.get("SLOT_AUTO", "0"))
+    try:
+        starting_credits = int(os.environ.get("SLOT_CREDITS", "100"))
+        auto_spins = int(os.environ.get("SLOT_AUTO", "0"))
+    except ValueError:
+        starting_credits = 100
+        auto_spins = 0
 
     curses.curs_set(0)
     stdscr.nodelay(True)
@@ -734,6 +738,12 @@ if __name__ == "__main__":
                         help="Auto-spin N times instead of interactive play (default: 0 = interactive)")
 
     args = parser.parse_args()
+
+    # Validate inputs
+    if args.credits < 1:
+        parser.error("--credits must be at least 1")
+    if args.auto < 0:
+        parser.error("--auto must be 0 or greater")
 
     # Pass settings through environment variables to the curses main function
     os.environ["SLOT_CREDITS"] = str(args.credits)

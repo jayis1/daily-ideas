@@ -19,7 +19,7 @@ import sys
 import os
 import argparse
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # ─── Symbol Definitions ─────────────────────────────────────────────────────
 
@@ -260,8 +260,8 @@ class SlotMachine:
         self.spinning = True
 
     def rebuy(self):
-        """Give the player more credits when they're bankrupt."""
-        if self.credits <= 0:
+        """Give the player more credits when they're bankrupt or can't afford the current bet."""
+        if self.credits <= 0 or self.credits < self.bet:
             self.credits = self.DEFAULT_CREDITS
             self.game_over = False
             self.bet = 1
@@ -611,10 +611,8 @@ class SlotMachine:
     def update(self):
         """Update game state (reel animation, flash counters, etc.)."""
         if self.spinning:
-            any_stopped = False
             for reel in self.reels:
-                if reel.update():
-                    any_stopped = True
+                reel.update()
                 if not reel.spinning and reel.bounce_phase > 0:
                     reel.update_bounce()
 
@@ -636,7 +634,6 @@ def auto_spin(stdscr, num_spins, starting_credits):
     game = SlotMachine(stdscr, starting_credits=starting_credits)
 
     spin_counter = 0
-    auto_delay_frames = 8  # frames to wait between spins
 
     while spin_counter < num_spins:
         # Handle quit key
@@ -681,8 +678,12 @@ def auto_spin(stdscr, num_spins, starting_credits):
 def main(stdscr):
     """Main interactive game loop."""
     # Read starting credits from environment variable (set by argparse)
-    starting_credits = int(os.environ.get("SLOT_CREDITS", "100"))
-    auto_spins = int(os.environ.get("SLOT_AUTO", "0"))
+    try:
+        starting_credits = int(os.environ.get("SLOT_CREDITS", "100"))
+        auto_spins = int(os.environ.get("SLOT_AUTO", "0"))
+    except ValueError:
+        starting_credits = 100
+        auto_spins = 0
 
     curses.curs_set(0)       # hide cursor
     stdscr.nodelay(True)     # non-blocking input
@@ -765,6 +766,12 @@ if __name__ == "__main__":
                         help="Auto-spin N times instead of interactive play (default: 0 = interactive)")
 
     args = parser.parse_args()
+
+    # Validate inputs
+    if args.credits < 1:
+        parser.error("--credits must be at least 1")
+    if args.auto < 0:
+        parser.error("--auto must be 0 or greater")
 
     # Pass settings through environment variables to the curses main function
     os.environ["SLOT_CREDITS"] = str(args.credits)

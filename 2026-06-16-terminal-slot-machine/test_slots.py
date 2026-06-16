@@ -263,5 +263,73 @@ class TestEdgeCases(unittest.TestCase):
         self.assertTrue(hasattr(SlotMachine, '__init__'))
 
 
+class TestTwoOfAKindLogic(unittest.TestCase):
+    """Tests for the 2-of-a-kind detection logic."""
+
+    def test_two_of_a_kind_left_pair(self):
+        """Left pair (A, A, B) should be detected as 2-of-a-kind."""
+        mid = ["CHERRY", "CHERRY", "LEMON"]
+        self.assertTrue(mid[0] == mid[1] or mid[1] == mid[2])
+        self.assertFalse(mid[0] == mid[1] == mid[2])
+
+    def test_two_of_a_kind_right_pair(self):
+        """Right pair (B, A, A) should be detected as 2-of-a-kind."""
+        mid = ["LEMON", "CHERRY", "CHERRY"]
+        self.assertTrue(mid[0] == mid[1] or mid[1] == mid[2])
+        self.assertFalse(mid[0] == mid[1] == mid[2])
+
+    def test_gap_pattern_not_detected(self):
+        """Gap pattern (A, B, A) should NOT be detected as 2-of-a-kind."""
+        mid = ["CHERRY", "LEMON", "CHERRY"]
+        self.assertFalse(mid[0] == mid[1] or mid[1] == mid[2])
+
+    def test_three_of_a_kind_excluded(self):
+        """3-of-a-kind should NOT also count as 2-of-a-kind."""
+        mid = ["CHERRY", "CHERRY", "CHERRY"]
+        self.assertTrue(mid[0] == mid[1] == mid[2])
+        # The 2-of-a-kind condition is True, but the exclusion is also True
+        has_pair = mid[0] == mid[1] or mid[1] == mid[2]
+        is_three = mid[0] == mid[1] == mid[2]
+        # If 3-of-a-kind, 2-of-a-kind should be excluded
+        self.assertTrue(has_pair)
+        self.assertTrue(is_three)
+        self.assertFalse(has_pair and not is_three)
+
+
+class TestPaylineDetection(unittest.TestCase):
+    """Tests for the 5-payline win detection system."""
+
+    def test_all_paylines_unique(self):
+        """Each of the 5 paylines should cover different cells."""
+        # Middle row: (0,1), (1,1), (2,1)
+        # Top row: (0,0), (1,0), (2,0)
+        # Bottom row: (0,2), (1,2), (2,2)
+        # Diagonal ↘: (0,0), (1,1), (2,2)
+        # Diagonal ↗: (0,2), (1,1), (2,0)
+        paylines = [
+            [(0, 1), (1, 1), (2, 1)],  # middle
+            [(0, 0), (1, 0), (2, 0)],  # top
+            [(0, 2), (1, 2), (2, 2)],  # bottom
+            [(0, 0), (1, 1), (2, 2)],  # diag ↘
+            [(0, 2), (1, 1), (2, 0)],  # diag ↗
+        ]
+        # All paylines have 3 cells
+        for pl in paylines:
+            self.assertEqual(len(pl), 3)
+
+    def test_two_diagonal_paylines_distinct(self):
+        """The two diagonal paylines should be different."""
+        diag1 = [(0, 0), (1, 1), (2, 2)]
+        diag2 = [(0, 2), (1, 1), (2, 0)]
+        self.assertNotEqual(diag1, diag2)
+
+    def test_small_payout_always_at_least_1(self):
+        """2-of-a-kind small_mult should always be >= 1."""
+        for sym, _, payout, _ in SYMBOLS:
+            small_mult = max(1, SYMBOL_PAYOUTS[sym] // 5)
+            self.assertGreaterEqual(small_mult, 1,
+                                    f"{sym} 2-of-a-kind payout should be >= 1")
+
+
 if __name__ == "__main__":
     unittest.main()

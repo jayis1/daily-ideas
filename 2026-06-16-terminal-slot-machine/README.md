@@ -16,8 +16,8 @@ A fully-featured animated casino slot machine right in your terminal! Spin the r
 - **Win celebrations** — flashing animations, jackpot screen flash for 💎💎💎
 - **Two versions**: emoji mode (`slots.py`) for modern terminals, ASCII art mode (`slots_ascii.py`) for any terminal
 - **Non-interactive demo** (`demo.py`) with configurable spins, credits, bet, and seed
-- **CLI flags** — `--help`, `--version`, `--credits`, `--auto` on all scripts
-- **Unit tests** — 23 tests covering game logic, payouts, and statistics
+- **CLI flags** — `--help`, `--version`, `--credits`, `--auto` on all scripts; input validation on all flags
+- **Unit tests** — 30 tests covering game logic, payouts, paylines, and edge cases
 
 ## Symbol Pay Table
 
@@ -33,6 +33,18 @@ A fully-featured animated casino slot machine right in your terminal! Spin the r
 | 💎 Diamond | ×100 | 1 |
 
 All payouts are multiplied by your current bet. 2-of-a-kind on the payline pays 1/5 of the 3-of-a-kind rate (minimum ×1).
+
+## Paylines
+
+The game evaluates **5 paylines** each spin:
+
+1. **Middle row** (main payline, marked with arrows)
+2. **Top row**
+3. **Bottom row**
+4. **Diagonal ↘** (top-left to bottom-right)
+5. **Diagonal ↗** (bottom-left to top-right)
+
+Each payline pays independently — you can win on multiple lines in a single spin!
 
 ## How to Install
 
@@ -70,6 +82,8 @@ python3 demo.py --credits 200 --bet 3  # Custom credits and bet
 python3 demo.py --seed 12345         # Reproducible results
 ```
 
+The demo now simulates the same **5-payline win system** as the interactive game, producing accurate win rates and statistics.
+
 ### Run the tests
 ```bash
 python3 -m pytest test_slots.py -v
@@ -82,7 +96,7 @@ python3 -m pytest test_slots.py -v
 | `SPACE` / `S` | Spin the reels |
 | `↑` / `+` | Increase bet (max 10) |
 | `↓` / `-` | Decrease bet (min 1) |
-| `R` | Rebuy (add 100 credits when bankrupt) |
+| `R` | Rebuy (add 100 credits when bankrupt or can't afford bet) |
 | `Q` | Cash out and quit |
 
 ## CLI Flags
@@ -92,18 +106,18 @@ All scripts support the following flags:
 | Flag | Description |
 |------|-------------|
 | `--help` | Show help message |
-| `--version` | Show version number (v1.1.0) |
-| `--credits N` | Set starting credits (default: 100) |
-| `--auto N` | Auto-spin N times (TUI scripts only, default: 0 = interactive) |
-| `--spins N` | Number of demo spins (demo.py only, default: 20) |
-| `--bet N` | Bet per spin (demo.py only, default: 1) |
+| `--version` | Show version number (v1.2.0) |
+| `--credits N` | Set starting credits (default: 100, must be ≥ 1) |
+| `--auto N` | Auto-spin N times (TUI scripts only, default: 0 = interactive, must be ≥ 0) |
+| `--spins N` | Number of demo spins (demo.py only, default: 20, must be ≥ 1) |
+| `--bet N` | Bet per spin (demo.py only, default: 1, must be ≥ 1) |
 | `--seed N` | Random seed for reproducibility (demo.py only, default: 42) |
 
 ## How It Works
 
 1. **Reel spinning**: Each reel is a weighted strip of symbols. When you press SPACE, the game pre-determines the outcome using weighted random selection, then animates each reel stopping in sequence (left → right) with a bounce effect.
 
-2. **Win checking**: After all reels stop, the game evaluates 5 paylines (3 horizontal + 2 diagonal) for 3-of-a-kind matches, plus 2-of-a-kind on the middle row. Each match pays the symbol's multiplier × your bet.
+2. **Win checking**: After all reels stop, the game evaluates 5 paylines (3 rows + 2 diagonals) for 3-of-a-kind matches, plus the middle row for 2-of-a-kind. Each match pays the symbol's multiplier × your bet.
 
 3. **Animations**: Winning cells flash green, jackpots flash the entire screen red/yellow, and reels bounce when they stop.
 
@@ -117,34 +131,32 @@ All scripts support the following flags:
 
   Starting credits: 100
   Bet per spin:     1
-  Number of spins:  20
+  Number of spins:  50
   Random seed:      42
 
   Spin    Reel 1    Reel 2    Reel 3  Result                           Credits
   ---------------------------------------------------------------------------
-     1         🍒         🍒         🍊  ✨ WIN 2× 🍒 → ×1 (1)                  100
-     2         🍊         🍋         🍋  ✨ WIN 2× 🍋 → ×1 (1)                  100
-     3         🍒       7️⃣         🍒  —                                     99
-  ...
+     1         🍒         🍋       7️⃣  —                                     99
+     7         🍒         🔔         🍇  ✨ WIN 3× 🍇 (bottom) → ×8 (8)         102
+     8         🍊       7️⃣         🔔  ✨ WIN 3× 🍋 (top) → ×4 (4)            105
+    15         🍊         📊         📊  ✨ WIN 3× 📊 (payline) → ×5 (5)        103
+    26         🔔         🍒         🍒  ✨ WIN Multiple wins! Total ×4 (4)       104
+    31         🍊         🍊         🔔  ✨ WIN Multiple wins! Total ×4 (4)       104
+    50         🍇         🍊         🔔  ✨ WIN 3× 🍊 (diag↘) → ×5 (5)          100
 
 =======================================================
   SESSION SUMMARY
 =======================================================
-  Final credits:     86
-  Total spins:       20
-  Total bet:         20
-  Total won:         6
-  Payback rate:      30.0%
-  Net profit/loss:   -14
-  Wins:              6  |  Losses: 14
-  Biggest win:       1
-  Best win streak:   2
-  Worst loss streak: 7
-
-  Symbol frequency:
-    🍒 CHERRY     19 ( 31.7%) ███████████████
-    🍋 LEMON      12 ( 20.0%) ██████████
-    ...
+  Final credits:     100
+  Total spins:       50
+  Total bet:         50
+  Total won:         50
+  Payback rate:      100.0%
+  Net profit/loss:   +0
+  Wins:              17  |  Losses: 33
+  Biggest win:       8
+  Best win streak:   3
+  Worst loss streak: 10
 ```
 
 ## File Structure
@@ -153,12 +165,24 @@ All scripts support the following flags:
 terminal-slot-machine/
 ├── slots.py          # Main game (emoji symbols, requires Unicode terminal)
 ├── slots_ascii.py    # Alternative game (ASCII art symbols, works anywhere)
-├── demo.py           # Non-interactive demo with rich stats output
-├── test_slots.py     # Unit tests for core game logic (23 tests)
+├── demo.py           # Non-interactive demo with 5-payline simulation and stats
+├── test_slots.py     # Unit tests for core game logic (30 tests)
 └── README.md         # This file
 ```
 
 ## Changelog
+
+### v1.2.0
+- **Fixed**: `rebuy()` now works when credits are positive but less than the current bet (previously only worked when credits ≤ 0, despite the UI message suggesting otherwise)
+- **Fixed**: `demo.py` now evaluates all 5 paylines for 3-of-a-kind wins, matching the interactive game (previously only checked the payline, significantly under-reporting wins)
+- **Fixed**: `demo.py` symbol frequency percentage now correctly divides by 9 symbols per spin (3 rows × 3 reels) instead of 3
+- **Fixed**: TUI scripts (`slots.py`, `slots_ascii.py`) now validate `--credits` (≥ 1) and `--auto` (≥ 0) flags to prevent crashes from invalid input
+- **Fixed**: Environment variable parsing (`SLOT_CREDITS`, `SLOT_AUTO`) now has `try/except` fallback instead of crashing on non-integer values
+- **Fixed**: Removed unused `any_stopped` variable from `slots.py` update loop
+- **Fixed**: Removed unused `auto_delay_frames` variable from `slots.py` auto-spin
+- **Improved**: Demo output now shows which payline triggered each win (payline, top, bottom, diag↘, diag↗) and handles multiple wins per spin
+- **Added**: 7 new unit tests covering 2-of-a-kind detection logic and payline structure
+- **Bumped**: Version to 1.2.0
 
 ### v1.1.0
 - Added `--help`, `--version`, `--credits`, and `--auto` CLI flags to TUI scripts
