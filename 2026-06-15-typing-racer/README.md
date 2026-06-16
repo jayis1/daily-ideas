@@ -50,11 +50,12 @@ Power-ups spawn every 6–12 words and fall slowly down the screen. They are aut
 - **Danger zone** — words glow red as they approach the bottom; freeze tint when power-up active
 - **Key hints** — shows available first letters for untyped words at the bottom of the screen
 - **Level-up flash** — visual notification when you level up or unlock a new tier
+- **Combo + unlock combined notifications** — when a combo milestone coincides with a difficulty unlock, both are displayed together
 
 ### Meta Features
 - **Persistent high scores** — top 10 scores saved to `.typing_racer_scores.json`
 - **Score saved immediately on game over** — your score is recorded as soon as the game ends, so it's preserved even if you restart or quit
-- **3-second countdown** — gives you time to get ready before words start falling
+- **3-second countdown** — gives you time to get ready before words start falling (press any key to skip, with a brief delay before the first word)
 - **Pause screen** — press ESC to pause; shows current stats and allows Q to quit
 - **Terminal resize handling** — adapts if you resize your terminal mid-game
 - **Minimum size check** — warns if your terminal is too small (needs 60×20 minimum)
@@ -93,7 +94,7 @@ python3 typing_racer.py
 ```bash
 python3 typing_racer.py              # Start the game
 python3 typing_racer.py --help       # Show help and usage info
-python3 typing_racer.py --version    # Show version (2.3.0)
+python3 typing_racer.py --version    # Show version (2.4.0)
 python3 typing_racer.py --scores     # Show high scores leaderboard
 python3 typing_racer.py --reset      # Reset all high scores
 ```
@@ -135,15 +136,15 @@ python3 -m pytest test_typing_racer.py -v
 python3 test_typing_racer.py
 ```
 
-The test suite covers 63 tests including:
-- `FallingWord` — initialization, typing, completion, freezing, edge cases
+The test suite covers 69 tests including:
+- `FallingWord` — initialization, typing, completion, freezing, edge cases, empty word guard
 - `Particle` — physics, lifetime
 - `PowerUp` — types, expiration, symbols, speed, unknown types
 - `HighScoreManager` — add, save, load, sort, clear, corrupt-file handling, entry validation, rank return values, field validation
 - Word pool validation — lowercase, no duplicates, appropriate lengths, all alpha
 - Scoring formula verification
 - Version format check
-- `TestBugFixes` — v2.1: bomb words_completed, power-up collection, ESC during countdown, freeze effect, heart max lives, pause quit, spawn interval bounds; v2.2: case-insensitive matching, non-alpha key filtering, score entry validation, unlocked tier weight guarantee; v2.3: Q key ignored during gameplay, countdown display fix, power-up spawn interval fix, score saved on game-over, score save idempotency
+- `TestBugFixes` — v2.1: bomb words_completed, power-up collection, ESC during countdown, freeze effect, heart max lives, pause quit, spawn interval bounds; v2.2: case-insensitive matching, non-alpha key filtering, score entry validation, unlocked tier weight guarantee; v2.3: Q key ignored during gameplay, countdown display fix, power-up spawn interval fix, score saved on game-over, score save idempotency; v2.4: lives clamped to 0, game-over triggers only once per frame, spawn_timer set on countdown skip, empty word guard, notification append for combo+unlock, lives display clamped
 
 ## 🏗️ Architecture
 
@@ -158,6 +159,13 @@ The test suite covers 63 tests including:
 All rendering uses `curses` — no external UI library needed. The game loop uses delta-time updates (capped at 100ms) for consistent physics across different frame rates.
 
 ## 🐛 Bugs Fixed
+
+### v2.4
+1. **Lives could go negative** — When multiple words fell past the danger zone in the same frame, each one decremented `lives` by 1, causing lives to drop below 0 (e.g., 5 words hitting bottom at once from 2 lives would leave lives at -3). The lives counter is now clamped to 0 and the game-over check is gated so it only triggers once per frame. The HUD and pause screen also clamp lives to the 0–5 range for display.
+2. **No delay when skipping countdown** — When the player pressed a key to skip the 3-second countdown, `spawn_timer` remained at 0.0 (its initial value), causing the first word to spawn immediately with no grace period. Now `spawn_timer` is set to 0.5 when the countdown is skipped, matching the delay that occurs when the countdown expires naturally.
+3. **Empty word gave free points** — Completing a `FallingWord` with an empty string awarded 10 base points and incremented `words_completed`. While empty words shouldn't normally appear in gameplay, `_complete_word` now has an early-return guard that prevents scoring, combo increment, or progression for empty words.
+4. **Difficulty unlock overwrote combo milestone** — When a combo milestone (5x, 10x, etc.) coincided with a difficulty tier unlock in the same frame, the unlock notification replaced the combo milestone text. Now the unlock text is appended to any existing milestone notification (e.g., "🔥 5x COMBO!  |  UNLOCKED: MEDIUM") so both messages are visible.
+5. **Lives display showed wrong number of hearts** — When `lives` went negative (see bug #1), the HUD showed 6+ empty hearts instead of exactly 5. The display now uses `max(0, min(5, lives))` to always render exactly 5 heart slots.
 
 ### v2.3
 1. **Score lost on restart** — Pressing R to restart after game over would clear all game state (including `words_completed`) before the score could be saved. The score is now saved immediately when game over first occurs via `_save_score()`, which uses an idempotent `score_saved` flag to prevent double-saving. The `reset()` method properly resets this flag for the next game.

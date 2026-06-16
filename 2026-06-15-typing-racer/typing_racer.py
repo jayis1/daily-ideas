@@ -21,7 +21,7 @@ import time
 import locale
 import sys
 
-__version__ = "2.3.0"
+__version__ = "2.4.0"
 
 # ── High score file ─────────────────────────────────────────────────────
 HIGHSCORE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".typing_racer_scores.json")
@@ -430,7 +430,13 @@ class TypingRacer:
             if self.words_completed >= threshold and tier not in self.unlocked:
                 self.unlocked.add(tier)
                 self.level_flash = 1.0
-                self.combo_milestone_text = f"UNLOCKED: {tier.upper()}"
+                # Only overwrite combo milestone if there isn't an active one,
+                # or append the unlock text to an existing milestone
+                unlock_msg = f"UNLOCKED: {tier.upper()}"
+                if self.combo_milestone > 0 and self.combo_milestone_text:
+                    self.combo_milestone_text = f"{self.combo_milestone_text}  |  {unlock_msg}"
+                else:
+                    self.combo_milestone_text = unlock_msg
                 self.combo_milestone = 2.0
 
         # Move words down
@@ -439,13 +445,16 @@ class TypingRacer:
             # Check if word hit bottom
             if word.y >= self.height - 3 and word.alive:
                 word.alive = False
-                self.lives -= 1
                 self.combo = 0
                 if self.current_target is word:
                     self.current_target = None
-                if self.lives <= 0:
-                    self.game_over = True
-                    self._save_score()
+                if not self.game_over:
+                    # Only decrement lives and check game_over if not already over
+                    self.lives -= 1
+                    if self.lives <= 0:
+                        self.lives = 0  # Clamp to 0
+                        self.game_over = True
+                        self._save_score()
 
         # Move power-ups down and check collection
         for pu in self.powerups:
@@ -491,6 +500,7 @@ class TypingRacer:
             if ch == ord("q") or ch == ord("Q"):
                 return  # ignore Q during countdown
             self.started = True
+            self.spawn_timer = 0.5  # brief delay before first word
             return
 
         if self.game_over:
@@ -563,6 +573,10 @@ class TypingRacer:
             self.combo = 0
 
     def _complete_word(self, word: FallingWord):
+        # Guard against empty words (shouldn't happen, but prevent free points)
+        if not word.word:
+            return
+
         word.alive = False
         word.flash_timer = 0.5
         self.words_completed += 1
@@ -875,7 +889,8 @@ class TypingRacer:
     def _draw_hud(self):
         h, w = self.height, self.width
         # Top bar
-        lives_str = "♥ " * self.lives + "♡ " * (5 - self.lives)
+        display_lives = max(0, min(5, self.lives))  # Clamp lives for display
+        lives_str = "♥ " * display_lives + "♡ " * (5 - display_lives)
         combo_str = f"Combo: {self.combo}x" if self.combo > 0 else ""
         unlocked_str = " ".join(f"[{t}]" for t in sorted(self.unlocked))
         score_str = f"Score: {self.score}"
@@ -1045,6 +1060,9 @@ class TypingRacer:
     def _draw_pause(self):
         h, w = self.height, self.width
 
+        # Clamp lives for display
+        display_lives = max(0, min(5, self.lives))
+
         # Show stats during pause
         if self.elapsed_time > 0:
             wpm = (self.correct_chars / 5) / (self.elapsed_time / 60)
@@ -1067,7 +1085,7 @@ class TypingRacer:
             f"║  Accuracy: {acc:>5.1f}%           ║",
             f"║  Level:    {self.level:>6}            ║",
             f"║  Combo:    {self.combo:>6}x           ║",
-            f"║  Lives:    {'♥ ' * self.lives + '♡ ' * (5 - self.lives):>12}  ║",
+            f"║  Lives:    {'♥ ' * display_lives + '♡ ' * (5 - display_lives):>12}  ║",
             "╚══════════════════════════════╝",
         ]
 
