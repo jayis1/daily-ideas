@@ -13,21 +13,27 @@ Usage:
     python3 barchart_race.py --top 5       # show only top N bars
     python3 barchart_race.py --export      # export frames as text
     python3 barchart_race.py --solve       # just output final ranking
+    python3 barchart_race.py --percent     # percentage mode (share of total)
+    python3 barchart_race.py --growth      # growth rate mode (change from first)
+    python3 barchart_race.py --html        # export as animated HTML
+    python3 barchart_race.py --compare 0 -1 # compare two periods side by side
 """
 
 import argparse
 import csv
+import html
 import io
 import json
 import math
 import os
 import random
+import re
 import sys
 import time
 from collections import defaultdict
 from copy import deepcopy
 
-VERSION = "1.0.0"
+VERSION = "2.0.0"
 
 # ─── Built-in Datasets ────────────────────────────────────────────────
 
@@ -151,7 +157,18 @@ RESET = "\033[0m"
 BOLD = "\033[1m"
 DIM = "\033[2m"
 
+# HTML color palette (hex) — same color philosophy as ANSI but web-friendly
+HTML_COLORS = [
+    "#e74c3c", "#2ecc71", "#f1c40f", "#3498db", "#9b59b6",
+    "#1abc9c", "#e67e22", "#e84393", "#00cec9", "#6c5ce7",
+    "#fd79a8", "#00b894", "#fdcb6e", "#74b9ff",
+]
+
 BAR_CHARS = ["█", "▓", "▒", "░"]  # full, dark, medium, light fill
+
+# ─── Sparkline Characters ─────────────────────────────────────────────
+# Low to high: minimum → maximum
+SPARKLINE_CHARS = "▁▂▃▄▅▆▇█"
 
 
 # ─── Data Loading ──────────────────────────────────────────────────────
@@ -284,7 +301,7 @@ def interpolate_data(dataset, steps_per_period=5):
                 t_smooth = t * t * (3 - 2 * t)
                 interp_val = start_val + (end_val - start_val) * t_smooth
                 interp_data[name].append(interp_val)
-            interp_labels.append(labels[i])
+        interp_labels.append(labels[i])
     
     # Add final frame
     for name in series_names:
@@ -295,6 +312,93 @@ def interpolate_data(dataset, steps_per_period=5):
     result["data"] = interp_data
     result["labels"] = interp_labels
     return result
+
+
+# ─── Data Transformations ─────────────────────────────────────────────
+
+def transform_percentage(dataset):
+    """Transform data to show each series as a percentage of total per period.
+    
+    This is useful for market share, vote share, etc. where you want to
+    see relative proportions rather than absolute values.
+    """
+    data = dataset["data"]
+    series_names = list(data.keys())
+    num_periods = len(data[series_names[0]])
+    
+    pct_data = {}
+    for name in series_names:
+        pct_data[name] = []
+    
+    for i in range(num_periods):
+        total = sum(abs(data[n][i]) for n in series_names)
+        total = max(total, 1e-10)  # Avoid division by zero
+        for name in series_names:
+            pct_data[name].append(round((data[name][i] / total) * 100, 2))
+    
+    result = deepcopy(dataset)
+    result["data"] = pct_data
+    result["unit"] = "%"
+    result["title"] = dataset.get("title", "") + " — Share %"
+    return result
+
+
+def transform_growth(dataset):
+    """Transform data to show growth from first period (index = 0).
+    
+    Each value becomes (current - first) / |first| * 100, giving the
+    percentage change from the starting point. If the first value is 0,
+    shows absolute change instead.
+    """
+    data = dataset["data"]
+    series_names = list(data.keys())
+    
+    growth_data = {}
+    for name in series_names:
+        first_val = data[name][0]
+        growth_vals = []
+        for v in data[name]:
+            if abs(first_val) > 1e-10:
+                growth_vals.append(round(((v - first_val) / abs(first_val)) * 100, 2))
+            else:
+                # If starting value is 0, just show absolute change
+                growth_vals.append(round(v - first_val, 2))
+        growth_data[name] = growth_vals
+    
+    result = deepcopy(dataset)
+    result["data"] = growth_data
+    result["unit"] = "%"
+    result["title"] = dataset.get("title", "") + " — Growth %"
+    return result
+
+
+# ─── Sparkline ─────────────────────────────────────────────────────────
+
+def sparkline(values, width=12):
+    """Render a unicode sparkline from a list of numeric values.
+    
+    Returns a string of box-drawing characters representing the values.
+    Characters range from ▁ (minimum) to █ (maximum).
+    """
+    if not values:
+        return ""
+    
+    vmin = min(values)
+    vmax = max(values)
+    vrange = vmax - vmin
+    
+    # If all values are the same, show a mid-height line
+    if vrange < 1e-10:
+        return SPARKLINE_CHARS[len(SPARKLINE_CHARS) // 2] * min(len(values), width)
+    
+    chars = []
+    for v in values[:width]:
+        normalized = (v - vmin) / vrange
+        idx = int(normalized * (len(SPARKLINE_CHARS) - 1))
+        idx = max(0, min(idx, len(SPARKLINE_CHARS) - 1))
+        chars.append(SPARKLINE_CHARS[idx])
+    
+    return "".join(chars)
 
 
 # ─── Rendering ─────────────────────────────────────────────────────────
@@ -381,8 +485,9 @@ def render_frame(dataset, frame_idx, top_n=None, bar_width=None, color=True):
         bar_len = int((abs(val) / max_val) * bar_width)
         bar_len = max(0, min(bar_len, bar_width))
         
-        # Choose color
-        color_idx = (rank - 1) % len(COLORS)
+        # Choose color — color by name (consistent per series across frames)
+        name_idx = list(dataset["data"].keys()).index(name) if name in dataset["data"] else rank - 1
+        color_idx = name_idx % len(COLORS)
         c = COLORS[color_idx] if color else ""
         r = RESET if color else ""
         
@@ -457,7 +562,9 @@ def render_minimal_frame(dataset, frame_idx, top_n=5, width=50, color=True):
     for rank, (name, val) in enumerate(ranked, 1):
         bar_len = int((abs(val) / max_val) * width)
         bar_len = max(0, min(bar_len, width))
-        color_idx = (rank - 1) % len(COLORS)
+        # Color by name for consistency
+        name_idx = list(dataset["data"].keys()).index(name) if name in dataset["data"] else rank - 1
+        color_idx = name_idx % len(COLORS)
         c = COLORS[color_idx] if color else ""
         r = RESET if color else ""
         bar = c + "█" * bar_len + r
@@ -466,6 +573,345 @@ def render_minimal_frame(dataset, frame_idx, top_n=5, width=50, color=True):
         lines.append(line)
     
     return "\n".join(lines)
+
+
+# ─── Comparison View ──────────────────────────────────────────────────
+
+def render_comparison(dataset, period_a, period_b, top_n=None, color=True):
+    """Render a side-by-side comparison of two time periods.
+    
+    Args:
+        dataset: The dataset to compare.
+        period_a: Index of the first period (or -1 for last).
+        period_b: Index of the second period (or -1 for last).
+        top_n: Number of top entries to show.
+        color: Whether to use ANSI colors.
+    
+    Returns:
+        String with the comparison output.
+    """
+    data = dataset["data"]
+    title = dataset.get("title", "Bar Chart Race")
+    unit = dataset.get("unit", "")
+    labels = dataset.get("labels", [])
+    series_names = list(data.keys())
+    num_periods = len(data[series_names[0]])
+
+    # Normalize negative indices
+    if period_a < 0:
+        period_a = num_periods + period_a
+    if period_b < 0:
+        period_b = num_periods + period_b
+
+    period_a = max(0, min(period_a, num_periods - 1))
+    period_b = max(0, min(period_b, num_periods - 1))
+
+    label_a = labels[period_a] if period_a < len(labels) else str(period_a + 1)
+    label_b = labels[period_b] if period_b < len(labels) else str(period_b + 1)
+
+    vals_a = {name: data[name][period_a] for name in series_names}
+    vals_b = {name: data[name][period_b] for name in series_names}
+
+    # Sort by period B values descending
+    ranked = sorted(vals_b.items(), key=lambda x: x[1], reverse=True)
+    if top_n:
+        ranked = ranked[:top_n]
+
+    max_val = max(max(abs(vals_a[n]), abs(vals_b[n])) for n, _ in ranked) if ranked else 1
+    if max_val == 0:
+        max_val = 1
+
+    bar_width = 20
+
+    lines = []
+    header = f"{BOLD}=== {title} ==={RESET}" if color else f"=== {title} ==="
+    lines.append(header)
+    lines.append(f"  Comparing: {BOLD}{label_a}{RESET} vs {BOLD}{label_b}{RESET}" if color else f"  Comparing: {label_a} vs {label_b}")
+    lines.append("")
+
+    for rank, (name, val_b) in enumerate(ranked, 1):
+        val_a = vals_a[name]
+        change = val_b - val_a
+
+        # Color by name
+        name_idx = list(data.keys()).index(name) if name in data else rank - 1
+        color_idx = name_idx % len(COLORS)
+        c = COLORS[color_idx] if color else ""
+        r = RESET if color else ""
+
+        bar_len_a = int((abs(val_a) / max_val) * bar_width)
+        bar_len_b = int((abs(val_b) / max_val) * bar_width)
+
+        # Change indicator
+        if change > 0:
+            change_str = f"↑+{format_value(change, unit)}"
+        elif change < 0:
+            change_str = f"↓{format_value(change, unit)}"
+        else:
+            change_str = f"  {format_value(0, unit)}"
+
+        # Rank with medal
+        if rank == 1:
+            rank_str = "🥇" if color else "#1"
+        elif rank == 2:
+            rank_str = "🥈" if color else "#2"
+        elif rank == 3:
+            rank_str = "🥉" if color else "#3"
+        else:
+            rank_str = f"#{rank}"
+
+        line = f" {rank_str} {c}{BOLD}{name:<15s}{r} "
+        line += f"{c}{'█' * bar_len_a}{r} → {c}{'█' * bar_len_b}{r}  "
+        line += change_str
+        lines.append(line)
+
+    # Summary
+    lines.append("")
+    lines.append(f"  {'Series':<15s} {'From':>10s} {'To':>10s} {'Change':>10s} {'%':>8s}")
+    lines.append(f"  {'─' * 15} {'─' * 10} {'─' * 10} {'─' * 10} {'─' * 8}")
+
+    for name, _ in ranked:
+        val_a = vals_a[name]
+        val_b = vals_b[name]
+        change = val_b - val_a
+        if abs(val_a) > 1e-10:
+            pct = ((val_b - val_a) / abs(val_a)) * 100
+            pct_str = f"{pct:+.1f}%"
+        else:
+            pct_str = "N/A"
+        change_str = format_value(change, unit)
+        from_str = format_value(val_a, unit)
+        to_str = format_value(val_b, unit)
+        lines.append(f"  {name:<15s} {from_str:>10s} {to_str:>10s} {change_str:>10s} {pct_str:>8s}")
+
+    return "\n".join(lines)
+
+
+# ─── Ticker View ──────────────────────────────────────────────────────
+
+def render_ticker(dataset, frame_idx, width=None):
+    """Render a compact one-line ticker summary for the current period.
+    
+    Shows the top entries as: Rank Name Value │ ...
+    Useful for embedding in status bars or piped output.
+    """
+    data = dataset["data"]
+    title = dataset.get("title", "")
+    unit = dataset.get("unit", "")
+    labels = dataset.get("labels", [])
+
+    series_names = list(data.keys())
+    num_frames = len(data[series_names[0]])
+    frame_idx = max(0, min(frame_idx, num_frames - 1))
+
+    current_values = {name: data[name][frame_idx] for name in series_names}
+    ranked = sorted(current_values.items(), key=lambda x: x[1], reverse=True)[:5]
+
+    label_text = labels[frame_idx] if frame_idx < len(labels) else str(frame_idx + 1)
+
+    if width is None:
+        width = get_terminal_width()
+
+    parts = [f"{BOLD}{label_text}{RESET}"]
+    for rank, (name, val) in enumerate(ranked, 1):
+        medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, f"#{rank}")
+        parts.append(f"{medal}{name} {format_value(val, unit)}")
+
+    line = " │ ".join(parts)
+
+    # Truncate if too wide
+    # Strip ANSI for width calculation
+    visible_len = len(re.sub(r'\033\[[0-9;]*m', '', line))
+    if visible_len > width:
+        line = line[:width]  # rough truncation
+
+    return line
+
+
+# ─── HTML Export ──────────────────────────────────────────────────────
+
+def export_html(dataset, output_file, top_n=None, speed=1.0):
+    """Export the bar chart race as an animated HTML file using CSS animations.
+    
+    Creates a self-contained HTML file with CSS-driven bar animations that can
+    be opened in any browser. No JavaScript dependencies required.
+    """
+    dataset = validate_data(dataset)
+    data = dataset["data"]
+    title = dataset.get("title", "Bar Chart Race")
+    unit = dataset.get("unit", "")
+    labels = dataset.get("labels", [])
+    series_names = list(data.keys())
+    num_periods = len(data[series_names[0]])
+
+    if top_n is None:
+        top_n = len(series_names)
+
+    # Build ranked lists per period
+    period_data = []
+    for i in range(num_periods):
+        vals = {name: data[name][i] for name in series_names}
+        ranked = sorted(vals.items(), key=lambda x: x[1], reverse=True)[:top_n]
+        period_data.append(ranked)
+
+    # Compute max value across entire dataset for consistent bar scaling
+    max_val = max(abs(data[n][i]) for n in series_names for i in range(num_periods))
+    if max_val == 0:
+        max_val = 1
+
+    interval_ms = int(1000 / speed) if speed > 0 else 2000
+
+    # Generate HTML
+    html_parts = []
+    html_parts.append("""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>""" + html.escape(title) + """ — Bar Chart Race</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #1a1a2e; color: #eee; padding: 20px; max-width: 900px; margin: 0 auto;
+  }
+  h1 { text-align: center; margin-bottom: 5px; font-size: 1.5em; }
+  .period-label { text-align: center; font-size: 1.2em; color: #aaa; margin-bottom: 15px; }
+  .bar-row {
+    display: flex; align-items: center; margin: 4px 0; height: 28px;
+  }
+  .bar-rank { width: 30px; text-align: right; margin-right: 8px; font-weight: bold; }
+  .bar-name { width: 140px; font-weight: bold; text-align: right; margin-right: 8px; }
+  .bar-track { flex: 1; position: relative; height: 24px; background: #2a2a4a; border-radius: 3px; }
+  .bar-fill {
+    height: 100%; border-radius: 3px; transition: width """ + str(interval_ms) + """ms ease-in-out;
+    display: flex; align-items: center; justify-content: flex-end; padding-right: 5px;
+    font-size: 0.8em; color: #fff; min-width: 30px;
+  }
+  .bar-value { margin-left: 8px; width: 70px; font-family: monospace; }
+  .controls { text-align: center; margin: 20px 0; }
+  .controls button {
+    background: #4a4a7a; color: #fff; border: none; padding: 8px 16px; margin: 0 4px;
+    border-radius: 4px; cursor: pointer; font-size: 1em;
+  }
+  .controls button:hover { background: #6a6a9a; }
+  .progress-bar { width: 100%; height: 4px; background: #2a2a4a; border-radius: 2px; margin: 10px 0; }
+  .progress-fill { height: 100%; background: #667eea; border-radius: 2px; transition: width 0.3s; }
+</style>
+</head>
+<body>
+<h1>""" + html.escape(title) + """</h1>
+<div class="period-label" id="period-label"></div>
+<div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
+<div id="bars"></div>
+<div class="controls">
+  <button onclick="prevFrame()">◀ Prev</button>
+  <button id="playBtn" onclick="togglePlay()">⏸ Pause</button>
+  <button onclick="nextFrame()">Next ▶</button>
+  <button onclick="resetAnim()">↺ Reset</button>
+</div>
+<script>
+const data = """)
+
+    # Build JS data
+    js_series = {}
+    for name in series_names:
+        js_series[name] = data[name]
+    js_data = {
+        "series": js_series,
+        "labels": labels,
+        "colors": {name: HTML_COLORS[i % len(HTML_COLORS)] for i, name in enumerate(series_names)},
+        "unit": unit,
+        "maxVal": max_val,
+        "topN": top_n,
+    }
+    html_parts.append(json.dumps(js_data, indent=2))
+    html_parts.append(""";
+const interval = """ + str(interval_ms) + """;
+let currentFrame = 0;
+let playing = true;
+let timerId = null;
+
+function renderFrame(idx) {
+  const labels = data.labels;
+  const series = data.series;
+  const names = Object.keys(series);
+  const numFrames = series[names[0]].length;
+  idx = Math.max(0, Math.min(idx, numFrames - 1));
+  currentFrame = idx;
+
+  document.getElementById('period-label').textContent = labels[idx] || '';
+  document.getElementById('progress').style.width = ((idx / (numFrames - 1)) * 100) + '%';
+
+  let vals = names.map(n => ({name: n, val: series[n][idx]}));
+  vals.sort((a, b) => b.val - a.val);
+  vals = vals.slice(0, data.topN);
+
+  const barsDiv = document.getElementById('bars');
+  barsDiv.innerHTML = '';
+  vals.forEach((item, rank) => {
+    const row = document.createElement('div');
+    row.className = 'bar-row';
+    const pct = Math.max(1, (Math.abs(item.val) / data.maxVal) * 100);
+    const color = data.colors[item.name] || '#667eea';
+    const medals = ['🥇', '🥈', '🥉'];
+    const rankStr = rank < 3 ? medals[rank] : '#' + (rank + 1);
+    row.innerHTML = `
+      <div class="bar-rank">${rankStr}</div>
+      <div class="bar-name" style="color:${color}">${item.name}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}">${item.val >= 1000 ? item.val.toLocaleString() : item.val.toFixed(1)}${data.unit}</div></div>
+    `;
+    barsDiv.appendChild(row);
+  });
+}
+
+function nextFrame() {
+  const names = Object.keys(data.series);
+  const numFrames = data.series[names[0]].length;
+  currentFrame = (currentFrame + 1) % numFrames;
+  renderFrame(currentFrame);
+}
+
+function prevFrame() {
+  const names = Object.keys(data.series);
+  const numFrames = data.series[names[0]].length;
+  currentFrame = (currentFrame - 1 + numFrames) % numFrames;
+  renderFrame(currentFrame);
+}
+
+function togglePlay() {
+  playing = !playing;
+  document.getElementById('playBtn').textContent = playing ? '⏸ Pause' : '▶ Play';
+  if (playing) startTimer();
+  else stopTimer();
+}
+
+function resetAnim() {
+  currentFrame = 0;
+  renderFrame(0);
+}
+
+function startTimer() {
+  stopTimer();
+  timerId = setInterval(nextFrame, interval);
+}
+
+function stopTimer() {
+  if (timerId) { clearInterval(timerId); timerId = null; }
+}
+
+renderFrame(0);
+startTimer();
+</script>
+</body>
+</html>""")
+
+    html_content = "\n".join(html_parts)
+    with open(output_file, "w") as f:
+        f.write(html_content)
+
+    print(f"Exported HTML bar chart race to {output_file}")
+    return output_file
 
 
 # ─── Animation ─────────────────────────────────────────────────────────
@@ -593,7 +1039,7 @@ def print_final_ranking(dataset, top_n=None):
     for rank, (name, val) in enumerate(ranked, 1):
         medal = medals[rank - 1] if rank <= 3 else "  "
         bar_len = int((abs(val) / max_val) * 30)
-        color_idx = (rank - 1) % len(COLORS)
+        color_idx = (list(data.keys()).index(name) if name in data else rank - 1) % len(COLORS)
         c = COLORS[color_idx]
         bar = c + "█" * bar_len + RESET
         val_str = format_value(val, unit)
@@ -691,9 +1137,9 @@ def compute_stats(dataset):
     print(f"  Series count:    {len(series_names)}")
     print(f"  Time periods:    {num_periods}")
     
-    # Per-series stats
-    print(f"\n  {'Series':<15s} {'Min':>8s} {'Max':>8s} {'Mean':>8s} {'Growth':>8s}")
-    print(f"  {'─'*15} {'─'*8} {'─'*8} {'─'*8} {'─'*8}")
+    # Per-series stats with sparklines
+    print(f"\n  {'Series':<15s} {'Min':>8s} {'Max':>8s} {'Mean':>8s} {'Growth':>8s} {'Trend':>12s}")
+    print(f"  {'─'*15} {'─'*8} {'─'*8} {'─'*8} {'─'*8} {'─'*12}")
     
     for name in series_names:
         vals = data[name]
@@ -701,7 +1147,18 @@ def compute_stats(dataset):
         max_v = max(vals)
         mean_v = sum(vals) / len(vals)
         growth = vals[-1] - vals[0]
-        print(f"  {name:<15s} {min_v:>8.1f} {max_v:>8.1f} {mean_v:>8.1f} {growth:>+8.1f}")
+        trend = sparkline(vals, width=min(12, num_periods))
+        print(f"  {name:<15s} {min_v:>8.1f} {max_v:>8.1f} {mean_v:>8.1f} {growth:>+8.1f} {trend:>12s}")
+    
+    # Growth ranking
+    print(f"\n  {BOLD}Growth Ranking:{RESET}")
+    growths = [(name, data[name][-1] - data[name][0]) for name in series_names]
+    growths.sort(key=lambda x: x[1], reverse=True)
+    for i, (name, growth) in enumerate(growths[:5]):
+        pct_growth = ((data[name][-1] - data[name][0]) / abs(data[name][0]) * 100) if abs(data[name][0]) > 1e-10 else float('inf')
+        pct_str = f" ({pct_growth:+.1f}%)" if pct_growth != float('inf') else ""
+        medal = ["🥇", "🥈", "🥉"][i] if i < 3 else f"  "
+        print(f"    {medal} {name}: {format_value(growth, unit)}{pct_str}")
     
     # Correlation between series (simplified)
     print(f"\n  Most competitive pairs (high correlation):")
@@ -743,6 +1200,11 @@ Examples:
   %(prog)s --speed 4                     Faster animation
   %(prog)s --no-loop                    Don't loop animation
   %(prog)s --no-color                   Disable colors
+  %(prog)s --percent                    Show values as percentage of total
+  %(prog)s --growth                     Show growth from first period
+  %(prog)s --compare 0 -1               Compare first vs last period
+  %(prog)s --ticker                     Show compact one-line summary
+  %(prog)s --html output.html           Export as animated HTML
   %(prog)s --export frames/              Export frames to directory
   %(prog)s --stats                       Show dataset statistics
   %(prog)s --solve                       Show final ranking
@@ -770,6 +1232,16 @@ Examples:
                         help="Disable colored output")
     parser.add_argument("--minimal", "-m", action="store_true",
                         help="Use compact display mode")
+    parser.add_argument("--percent", "-p", action="store_true",
+                        help="Show values as percentage of total (market share mode)")
+    parser.add_argument("--growth", "-g", action="store_true",
+                        help="Show growth from first period instead of absolute values")
+    parser.add_argument("--compare", "-c", nargs=2, type=int, metavar=("PERIOD_A", "PERIOD_B"),
+                        help="Compare two periods side by side (e.g. --compare 0 -1)")
+    parser.add_argument("--ticker", "-t", action="store_true",
+                        help="Show compact one-line ticker for each period")
+    parser.add_argument("--html", metavar="FILE",
+                        help="Export as animated HTML file")
     parser.add_argument("--export", "-e", metavar="DIR",
                         help="Export frames to directory (no animation)")
     parser.add_argument("--export-movie", metavar="FILE",
@@ -820,14 +1292,48 @@ Examples:
     
     dataset = validate_data(dataset)
     
+    # Apply transforms
+    if args.percent:
+        dataset = transform_percentage(dataset)
+    elif args.growth:
+        dataset = transform_growth(dataset)
+    
     # Handle stats
     if args.stats:
         compute_stats(dataset)
         return
     
+    # Handle compare
+    if args.compare:
+        print(render_comparison(dataset, args.compare[0], args.compare[1], top_n=args.top, color=color))
+        return
+    
+    # Handle ticker
+    if args.ticker:
+        dataset_interp = interpolate_data(dataset, steps_per_period=3)
+        series_names = list(dataset_interp["data"].keys())
+        num_frames = len(dataset_interp["data"][series_names[0]])
+        frame_delay = 1.0 / args.speed
+        try:
+            for i in range(num_frames):
+                line = render_ticker(dataset_interp, i)
+                # Move cursor to beginning of line and clear it
+                sys.stdout.write(f"\r\033[K{line}")
+                sys.stdout.flush()
+                time.sleep(frame_delay)
+            sys.stdout.write("\n")
+        except KeyboardInterrupt:
+            sys.stdout.write("\n")
+        return
+    
     # Handle solve (final ranking)
     if args.solve:
         print_final_ranking(dataset, top_n=args.top)
+        return
+    
+    # Handle HTML export
+    if args.html:
+        export_html(dataset, args.html, top_n=args.top, speed=args.speed)
         return
     
     # Handle export

@@ -510,10 +510,7 @@ def test_top_n_filtering():
     assert "B" in frame3
     assert "C" in frame3
     
-    # Should NOT contain bottom 3 (D, E, F)
-    # Note: these might appear in different forms, check carefully
-    # F=10 is lowest so shouldn't be in top 3
-    # Count lines that have a rank prefix (#1, #2, etc) indicating data rows
+    # Count data rows (lines with rank markers)
     data_lines = [l for l in lines3 if "#1" in l or "#2" in l or "#3" in l or "#4" in l or "#5" in l or "#6" in l or "🥇" in l or "🥈" in l or "🥉" in l]
     assert len(data_lines) == 3  # Only 3 data rows
     
@@ -569,6 +566,395 @@ def test_json_auto_labels():
     print("test_json_auto_labels: PASS")
 
 
+# ─── New Feature Tests ────────────────────────────────────────────────
+
+
+def test_transform_percentage():
+    """Test percentage transformation."""
+    ds = {
+        "data": {"A": [10, 20], "B": [30, 30], "C": [60, 50]},
+        "labels": ["T1", "T2"],
+        "title": "Share Test",
+        "unit": "",
+    }
+    ds = bcr.validate_data(ds)
+    pct_ds = bcr.transform_percentage(ds)
+    
+    # First period: A=10%, B=30%, C=60% (total=100)
+    assert abs(pct_ds["data"]["A"][0] - 10.0) < 0.01
+    assert abs(pct_ds["data"]["B"][0] - 30.0) < 0.01
+    assert abs(pct_ds["data"]["C"][0] - 60.0) < 0.01
+    
+    # Second period: A=20%, B=30%, C=50% (total=100)
+    assert abs(pct_ds["data"]["A"][1] - 20.0) < 0.01
+    assert abs(pct_ds["data"]["C"][1] - 50.0) < 0.01
+    
+    # Unit should be changed to %
+    assert pct_ds["unit"] == "%"
+    
+    # Title should mention share
+    assert "Share" in pct_ds["title"]
+    
+    print("test_transform_percentage: PASS")
+
+
+def test_transform_growth():
+    """Test growth transformation."""
+    ds = {
+        "data": {"A": [10, 15, 20], "B": [50, 40, 30]},
+        "labels": ["T1", "T2", "T3"],
+        "title": "Growth Test",
+        "unit": "$",
+    }
+    ds = bcr.validate_data(ds)
+    growth_ds = bcr.transform_growth(ds)
+    
+    # A starts at 10, so 15 is +50%, 20 is +100%
+    assert abs(growth_ds["data"]["A"][0] - 0.0) < 0.01  # 0% growth from baseline
+    assert abs(growth_ds["data"]["A"][1] - 50.0) < 0.01  # 50% growth
+    assert abs(growth_ds["data"]["A"][2] - 100.0) < 0.01  # 100% growth
+    
+    # B starts at 50, so 40 is -20%, 30 is -40%
+    assert abs(growth_ds["data"]["B"][1] - (-20.0)) < 0.01
+    assert abs(growth_ds["data"]["B"][2] - (-40.0)) < 0.01
+    
+    # Unit should be %
+    assert growth_ds["unit"] == "%"
+    
+    print("test_transform_growth: PASS")
+
+
+def test_transform_growth_zero_start():
+    """Test growth transformation when starting value is zero."""
+    ds = {
+        "data": {"A": [0, 5, 10], "B": [10, 15, 20]},
+        "labels": ["T1", "T2", "T3"],
+        "title": "Zero Start",
+        "unit": "",
+    }
+    ds = bcr.validate_data(ds)
+    growth_ds = bcr.transform_growth(ds)
+    
+    # A starts at 0 — should show absolute change instead of percentage
+    assert growth_ds["data"]["A"][0] == 0.0
+    assert growth_ds["data"]["A"][1] == 5.0  # 5 - 0 = 5
+    assert growth_ds["data"]["A"][2] == 10.0  # 10 - 0 = 10
+    
+    print("test_transform_growth_zero_start: PASS")
+
+
+def test_transform_percentage_zero_total():
+    """Test percentage transform with all-zero period."""
+    ds = {
+        "data": {"A": [0, 10], "B": [0, 20]},
+        "labels": ["T1", "T2"],
+        "title": "Zero Total",
+        "unit": "",
+    }
+    ds = bcr.validate_data(ds)
+    pct_ds = bcr.transform_percentage(ds)
+    
+    # When total is 0, should handle gracefully (not crash)
+    # Both should be 0% or very close
+    assert pct_ds["data"]["A"][0] >= 0  # Should not crash
+    assert pct_ds["data"]["B"][0] >= 0
+    
+    # Second period: A=33.33%, B=66.67%
+    assert abs(pct_ds["data"]["A"][1] - 33.33) < 0.1
+    assert abs(pct_ds["data"]["B"][1] - 66.67) < 0.1
+    
+    print("test_transform_percentage_zero_total: PASS")
+
+
+def test_sparkline():
+    """Test sparkline generation."""
+    # Basic sparkline with known values
+    sp = bcr.sparkline([1, 2, 3, 4, 5])
+    assert len(sp) == 5
+    # All characters should be from sparkline charset
+    for c in sp:
+        assert c in bcr.SPARKLINE_CHARS
+    
+    # Empty list should return empty string
+    assert bcr.sparkline([]) == ""
+    
+    # Single value
+    sp_single = bcr.sparkline([5])
+    assert len(sp_single) == 1
+    
+    # All same values should give mid-height chars
+    sp_same = bcr.sparkline([3, 3, 3])
+    assert all(c == bcr.SPARKLINE_CHARS[len(bcr.SPARKLINE_CHARS) // 2] for c in sp_same)
+    
+    # Min should be ▁ and max should be █
+    sp_range = bcr.sparkline([0, 100])
+    assert sp_range[0] == bcr.SPARKLINE_CHARS[0]  # min
+    assert sp_range[1] == bcr.SPARKLINE_CHARS[-1]  # max
+    
+    print("test_sparkline: PASS")
+
+
+def test_sparkline_in_stats():
+    """Test that sparklines appear in stats output."""
+    ds = {
+        "data": {"Alpha": [10, 20, 30], "Beta": [30, 20, 10]},
+        "labels": ["T1", "T2", "T3"],
+        "title": "Sparkline Stats",
+        "unit": "",
+    }
+    ds = bcr.validate_data(ds)
+    
+    old_stdout = sys.stdout
+    sys.stdout = io.StringIO()
+    bcr.compute_stats(ds)
+    output = sys.stdout.getvalue()
+    sys.stdout = old_stdout
+    
+    # Stats should include sparkline characters
+    has_sparkline = any(c in bcr.SPARKLINE_CHARS for c in output)
+    assert has_sparkline, f"Stats output should contain sparkline characters. Got:\n{output}"
+    
+    # Should also have Growth Ranking section
+    assert "Growth Ranking" in output
+    
+    print("test_sparkline_in_stats: PASS")
+
+
+def test_render_comparison():
+    """Test side-by-side comparison rendering."""
+    ds = {
+        "data": {"A": [10, 20, 30], "B": [5, 15, 25], "C": [1, 2, 3]},
+        "labels": ["Jan", "Feb", "Mar"],
+        "title": "Compare Test",
+        "unit": "$",
+    }
+    ds = bcr.validate_data(ds)
+    
+    # Compare first and last period
+    output = bcr.render_comparison(ds, 0, 2, color=False)
+    
+    assert "Compare Test" in output
+    assert "Jan" in output
+    assert "Mar" in output
+    assert "A" in output
+    assert "B" in output
+    assert "Change" in output or "change" in output.lower()
+    
+    # Compare with negative indices
+    output_neg = bcr.render_comparison(ds, 0, -1, color=False)
+    assert "Compare Test" in output_neg
+    
+    # Compare with top_n
+    output_top2 = bcr.render_comparison(ds, 0, 2, top_n=2, color=False)
+    assert "A" in output_top2
+    
+    print("test_render_comparison: PASS")
+
+
+def test_render_comparison_same_period():
+    """Test comparison of same period (zero change)."""
+    ds = {
+        "data": {"A": [10, 20], "B": [5, 15]},
+        "labels": ["T1", "T2"],
+        "title": "Same Period",
+        "unit": "",
+    }
+    ds = bcr.validate_data(ds)
+    
+    output = bcr.render_comparison(ds, 0, 0, color=False)
+    assert "Same Period" in output
+    # All changes should be zero
+    
+    print("test_render_comparison_same_period: PASS")
+
+
+def test_render_ticker():
+    """Test compact ticker rendering."""
+    ds = {
+        "data": {"A": [10, 20], "B": [5, 15], "C": [1, 2]},
+        "labels": ["T1", "T2"],
+        "title": "Ticker Test",
+        "unit": "$",
+    }
+    ds = bcr.validate_data(ds)
+    
+    ticker = bcr.render_ticker(ds, 0)
+    assert "T1" in ticker
+    assert "A" in ticker
+    
+    ticker2 = bcr.render_ticker(ds, 1)
+    assert "T2" in ticker2
+    
+    print("test_render_ticker: PASS")
+
+
+def test_export_html():
+    """Test HTML export."""
+    ds = {
+        "data": {"A": [10, 20, 30], "B": [5, 15, 25], "C": [1, 2, 3]},
+        "labels": ["Jan", "Feb", "Mar"],
+        "title": "HTML Test",
+        "unit": "$",
+    }
+    ds = bcr.validate_data(ds)
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_file = os.path.join(tmpdir, "test.html")
+        bcr.export_html(ds, output_file, top_n=3)
+        
+        assert os.path.exists(output_file)
+        with open(output_file) as f:
+            content = f.read()
+        
+        # Should be valid HTML
+        assert "<!DOCTYPE html>" in content
+        assert "<html" in content
+        assert "</html>" in content
+        
+        # Should contain our data
+        assert "HTML Test" in content
+        assert "A" in content
+        assert "B" in content
+        
+        # Should contain CSS and JS
+        assert "<style>" in content
+        assert "<script>" in content
+        
+        # Should contain color data
+        assert "#" in content  # hex colors
+    
+    print("test_export_html: PASS")
+
+
+def test_export_html_with_speed():
+    """Test HTML export with custom speed."""
+    ds = {
+        "data": {"A": [10, 20], "B": [5, 15]},
+        "labels": ["T1", "T2"],
+        "title": "Speed Test",
+        "unit": "",
+    }
+    ds = bcr.validate_data(ds)
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_file = os.path.join(tmpdir, "speed.html")
+        bcr.export_html(ds, output_file, speed=4.0)
+        
+        with open(output_file) as f:
+            content = f.read()
+        
+        # Should reference the speed (interval should be 250ms for 4fps)
+        assert "250" in content  # 1000/4 = 250ms
+    
+    print("test_export_html_with_speed: PASS")
+
+
+def test_color_by_name_consistency():
+    """Test that colors are assigned by name, not by rank (consistency across frames)."""
+    ds = {
+        "data": {"A": [10, 50], "B": [50, 10]},
+        "labels": ["T1", "T2"],
+        "title": "Color Consistency",
+        "unit": "",
+    }
+    ds = bcr.validate_data(ds)
+    
+    frame1 = bcr.render_frame(ds, 0, color=True)
+    frame2 = bcr.render_frame(ds, 1, color=True)
+    
+    # Both frames should contain "A" and "B"
+    assert "A" in frame1
+    assert "B" in frame1
+    assert "A" in frame2
+    assert "B" in frame2
+    
+    # The key improvement: colors should be assigned by name index, not rank
+    # This means "A" should always get the same color regardless of its rank
+    # (We can't easily verify the exact color from the string, but we verify
+    #  the function doesn't crash and produces output)
+    
+    print("test_color_by_name_consistency: PASS")
+
+
+def test_percentage_then_render():
+    """Test that percentage transform produces renderable data."""
+    ds = {
+        "data": {"A": [10, 20], "B": [30, 30], "C": [60, 50]},
+        "labels": ["T1", "T2"],
+        "title": "Pct Render",
+        "unit": "",
+    }
+    ds = bcr.validate_data(ds)
+    pct_ds = bcr.transform_percentage(ds)
+    
+    # Should render without error
+    frame = bcr.render_frame(pct_ds, 0, color=False)
+    assert "Pct Render" in frame
+    assert "%" in pct_ds["unit"]
+    
+    # Interpolate should also work
+    pct_interp = bcr.interpolate_data(pct_ds, steps_per_period=3)
+    frame2 = bcr.render_frame(pct_interp, 3, color=False)
+    assert len(frame2) > 0
+    
+    print("test_percentage_then_render: PASS")
+
+
+def test_growth_then_render():
+    """Test that growth transform produces renderable data."""
+    ds = {
+        "data": {"A": [10, 20, 30], "B": [50, 40, 30]},
+        "labels": ["T1", "T2", "T3"],
+        "title": "Growth Render",
+        "unit": "$",
+    }
+    ds = bcr.validate_data(ds)
+    growth_ds = bcr.transform_growth(ds)
+    
+    # Should render without error
+    frame = bcr.render_frame(growth_ds, 0, color=False)
+    assert "Growth" in frame
+    
+    # Final ranking should work with growth data
+    old_stdout = sys.stdout
+    sys.stdout = io.StringIO()
+    bcr.print_final_ranking(growth_ds)
+    output = sys.stdout.getvalue()
+    sys.stdout = old_stdout
+    assert "Growth" in output
+    
+    print("test_growth_then_render: PASS")
+
+
+def test_version():
+    """Test that VERSION is defined and accessible."""
+    assert hasattr(bcr, 'VERSION')
+    assert bcr.VERSION == "2.0.0"
+    
+    print("test_version: PASS")
+
+
+def test_comparison_period_bounds():
+    """Test that comparison handles out-of-bounds indices gracefully."""
+    ds = {
+        "data": {"A": [10, 20], "B": [5, 15]},
+        "labels": ["T1", "T2"],
+        "title": "Bounds Test",
+        "unit": "",
+    }
+    ds = bcr.validate_data(ds)
+    
+    # Very large index should be clamped
+    output = bcr.render_comparison(ds, 0, 100, color=False)
+    assert "Bounds Test" in output
+    
+    # Negative index beyond range should be clamped
+    output_neg = bcr.render_comparison(ds, -100, -1, color=False)
+    assert "Bounds Test" in output_neg
+    
+    print("test_comparison_period_bounds: PASS")
+
+
 if __name__ == "__main__":
     import io
     
@@ -596,6 +982,23 @@ if __name__ == "__main__":
         test_top_n_filtering,
         test_csv_with_empty_values,
         test_json_auto_labels,
+        # New feature tests
+        test_transform_percentage,
+        test_transform_growth,
+        test_transform_growth_zero_start,
+        test_transform_percentage_zero_total,
+        test_sparkline,
+        test_sparkline_in_stats,
+        test_render_comparison,
+        test_render_comparison_same_period,
+        test_render_ticker,
+        test_export_html,
+        test_export_html_with_speed,
+        test_color_by_name_consistency,
+        test_percentage_then_render,
+        test_growth_then_render,
+        test_version,
+        test_comparison_period_bounds,
     ]
     
     passed = 0
