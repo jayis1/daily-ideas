@@ -19,7 +19,7 @@ import sys
 import os
 import argparse
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 # ─── Symbol Definitions ─────────────────────────────────────────────────────
 
@@ -264,7 +264,9 @@ class SlotMachine:
         if self.credits <= 0 or self.credits < self.bet:
             self.credits = self.DEFAULT_CREDITS
             self.game_over = False
-            self.bet = 1
+            # Lower bet only if new credits can't cover it
+            if self.bet > self.credits:
+                self.bet = self.credits
             self.message = f"💰 Rebuy! {self.credits} credits added. Good luck!"
 
     def check_wins(self):
@@ -454,15 +456,30 @@ class SlotMachine:
                 # Determine if this cell is part of a winning line
                 is_win = False
                 if self.win_flash_counter > 0 and not self.spinning:
+                    # Check if this row is part of a horizontal win
                     for win_row, win_sym, _ in self.win_lines:
                         if win_row == row_idx:
                             is_win = True
                             break
-                    # Also flash the whole reel on 3-of-a-kind diagonal
-                    if self.win_flash_counter > 0:
-                        payline = [r.get_payline() for r in self.reels]
-                        if payline[0] == payline[1] == payline[2] and row_idx == 1:
-                            is_win = True
+                    # Check if this cell is part of a diagonal win
+                    if not is_win:
+                        for win_row, win_sym, _ in self.win_lines:
+                            if win_row == 3:  # diagonal ↘ (top-left to bottom-right)
+                                # Cells: (col=0,row=0), (col=1,row=1), (col=2,row=2)
+                                if row_idx == 0 and i == 0:
+                                    is_win = True
+                                elif row_idx == 1 and i == 1:
+                                    is_win = True
+                                elif row_idx == 2 and i == 2:
+                                    is_win = True
+                            elif win_row == 4:  # diagonal ↗ (bottom-left to top-right)
+                                # Cells: (col=0,row=2), (col=1,row=1), (col=2,row=0)
+                                if row_idx == 2 and i == 0:
+                                    is_win = True
+                                elif row_idx == 1 and i == 1:
+                                    is_win = True
+                                elif row_idx == 0 and i == 2:
+                                    is_win = True
 
                 y_pos = ry + 1 + row_idx + bounce
 

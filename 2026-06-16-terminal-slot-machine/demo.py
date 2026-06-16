@@ -22,7 +22,7 @@ import sys
 
 import slots
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 
 def run_demo(num_spins=20, starting_credits=100, bet=1, seed=42):
@@ -108,35 +108,36 @@ def run_demo(num_spins=20, starting_credits=100, bet=1, seed=42):
         # Check for wins on all 5 paylines (matching the interactive game)
         wins = []
 
-        # Line 1: Middle row (main payline)
+        # Line IDs match slots.py: 1=payline(middle), 0=top, 2=bottom, 3=diag↘, 4=diag↗
+        # Middle row (main payline)
         mid = rows[1]
         if mid[0] == mid[1] == mid[2]:
             mult = slots.SYMBOL_PAYOUTS[mid[0]]
             wins.append((1, mid[0], mult))
 
-        # Line 2: Top row
+        # Top row
         top = rows[0]
         if top[0] == top[1] == top[2]:
             mult = slots.SYMBOL_PAYOUTS[top[0]]
-            wins.append((2, top[0], mult))
+            wins.append((0, top[0], mult))
 
-        # Line 3: Bottom row
+        # Bottom row
         bot = rows[2]
         if bot[0] == bot[1] == bot[2]:
             mult = slots.SYMBOL_PAYOUTS[bot[0]]
-            wins.append((3, bot[0], mult))
+            wins.append((2, bot[0], mult))
 
-        # Line 4: Diagonal top-left to bottom-right
+        # Diagonal top-left to bottom-right
         diag1 = [rows[0][0], rows[1][1], rows[2][2]]
         if diag1[0] == diag1[1] == diag1[2]:
             mult = slots.SYMBOL_PAYOUTS[diag1[0]]
-            wins.append((4, diag1[0], mult))
+            wins.append((3, diag1[0], mult))
 
-        # Line 5: Diagonal bottom-left to top-right
+        # Diagonal bottom-left to top-right
         diag2 = [rows[2][0], rows[1][1], rows[0][2]]
         if diag2[0] == diag2[1] == diag2[2]:
             mult = slots.SYMBOL_PAYOUTS[diag2[0]]
-            wins.append((5, diag2[0], mult))
+            wins.append((4, diag2[0], mult))
 
         # 2-of-a-kind on payline (small win) — only if not 3-of-a-kind on payline
         mid = rows[1]
@@ -154,7 +155,7 @@ def run_demo(num_spins=20, starting_credits=100, bet=1, seed=42):
             if len(wins) == 1:
                 line_id, sym, mult = wins[0]
                 sym_emoji = slots.SYMBOL_EMOJIS[slots.SYMBOL_NAMES.index(sym)]
-                line_names = {1: "payline", 2: "top", 3: "bottom", 4: "diag↘", 5: "diag↗"}
+                line_names = {0: "top", 1: "payline", 2: "bottom", 3: "diag↘", 4: "diag↗"}
                 if mult >= 3:
                     win_desc = f"3× {sym_emoji} ({line_names.get(line_id, '?')}) → ×{mult} ({mult * bet})"
                 else:
@@ -246,6 +247,10 @@ def main():
         sys.exit(1)
     if args.bet < 1:
         print("Error: --bet must be at least 1", file=sys.stderr)
+        sys.exit(1)
+    MAX_BET = 10
+    if args.bet > MAX_BET:
+        print(f"Error: --bet must be at most {MAX_BET} (matching TUI max bet)", file=sys.stderr)
         sys.exit(1)
 
     run_demo(

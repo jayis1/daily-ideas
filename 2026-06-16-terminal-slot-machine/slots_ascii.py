@@ -21,7 +21,7 @@ import sys
 import os
 import argparse
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 # ─── Symbol Definitions ─────────────────────────────────────────────────────
 
@@ -55,7 +55,7 @@ SYMBOLS = [
     ("BELL", (
         "  _O_ ",
         " / | \\",
-        "/__|__\\",
+        "/_|__\\",
     ), 15, 4, 8),
 
     ("BAR", (
@@ -274,7 +274,9 @@ class SlotMachine:
         if self.credits <= 0 or self.credits < self.bet:
             self.credits = self.DEFAULT_CREDITS
             self.game_over = False
-            self.bet = 1
+            # Lower bet only if new credits can't cover it
+            if self.bet > self.credits:
+                self.bet = self.credits
             self.message = f"Rebuy! {self.credits} credits added. Good luck!"
 
     def check_wins(self):
@@ -437,10 +439,28 @@ class SlotMachine:
 
                 is_win = False
                 if self.win_flash_counter > 0 and not self.spinning:
+                    # Check if this row is part of a horizontal win
                     for win_row, _, _ in self.win_lines:
                         if win_row == sym_idx:
                             is_win = True
                             break
+                    # Check if this cell is part of a diagonal win
+                    if not is_win:
+                        for win_row, _, _ in self.win_lines:
+                            if win_row == 3:  # diagonal ↘
+                                if sym_idx == 0 and i == 0:
+                                    is_win = True
+                                elif sym_idx == 1 and i == 1:
+                                    is_win = True
+                                elif sym_idx == 2 and i == 2:
+                                    is_win = True
+                            elif win_row == 4:  # diagonal ↗
+                                if sym_idx == 2 and i == 0:
+                                    is_win = True
+                                elif sym_idx == 1 and i == 1:
+                                    is_win = True
+                                elif sym_idx == 0 and i == 2:
+                                    is_win = True
 
                 for art_line in range(3):
                     y_pos = ry + 1 + sym_idx * self.reel_art_h + art_line + bounce
