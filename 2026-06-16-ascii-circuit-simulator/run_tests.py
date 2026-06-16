@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Run tests for the circuit simulator without pytest dependency."""
+"""Run tests for the circuit simulator without pytest dependency.
+
+This is a standalone test runner that verifies all core functionality:
+gate logic, circuit simulation, parsing, truth tables, validation,
+DSL export, and circuit statistics.
+"""
 import sys
 sys.path.insert(0, '.')
 
@@ -7,7 +12,7 @@ from circuit_sim import (
     Circuit, AndGate, OrGate, NotGate, NandGate, NorGate, XorGate, XnorGate,
     BufferGate, GATE_MAP, parse_circuit, generate_truth_table,
     half_adder, full_adder, mux_2to1, decoder_2to4, majority_gate,
-    EXAMPLE_CIRCUITS,
+    ripple_carry_adder_4bit, EXAMPLE_CIRCUITS,
 )
 
 passed = 0
@@ -28,6 +33,7 @@ g = AndGate("t", ["a", "b"], "o")
 test("AND TT", g.evaluate({"a": True, "b": True}) is True)
 test("AND TF", g.evaluate({"a": True, "b": False}) is False)
 test("AND FF", g.evaluate({"a": False, "b": False}) is False)
+test("AND 3-input", AndGate("t", ["a", "b", "c"], "o").evaluate({"a": True, "b": True, "c": True}) is True)
 
 g = OrGate("t", ["a", "b"], "o")
 test("OR TT", g.evaluate({"a": True, "b": True}) is True)
@@ -81,6 +87,17 @@ s = c.simulate({"A": True, "B": True, "Cin": False})
 test("FA 1+1+0 sum=0", s["sum"] is False)
 test("FA 1+1+0 cout=1", s["Cout"] is True)
 
+# ─── 4-bit Adder ───
+print("\n4-bit Ripple Carry Adder:")
+c = ripple_carry_adder_4bit()
+test("4bit has 20 gates", c.gate_count() == 20)
+inputs = {"A0": True, "A1": False, "A2": False, "A3": False,
+          "B0": True, "B1": False, "B2": False, "B3": False, "Cin": False}
+s = c.simulate(inputs)
+test("4bit: 1+1=2 (S0=0)", s["S0"] is False)
+test("4bit: 1+1=2 (S1=1)", s["S1"] is True)
+test("4bit: no carry out", s["Cout"] is False)
+
 # ─── Mux ───
 print("\nMultiplexer:")
 c = mux_2to1()
@@ -133,14 +150,26 @@ try:
 except ValueError:
     test("Parser rejects bad gate type", True)
 
+try:
+    parse_circuit("GATE AND out")
+    test("Parser rejects too few GATE args", False)
+except ValueError:
+    test("Parser rejects too few GATE args", True)
+
 # ─── Truth Table ───
 print("\nTruth Table:")
 c = half_adder()
 table = generate_truth_table(c)
-test("Table has 'sum'", "sum" in table)
-test("Table has 'carry'", "carry" in table)
+test("Table has 'Sum'", "Sum" in table)
+test("Table has 'Carry'", "Carry" in table)
 lines = [l for l in table.strip().split('\n') if l.strip()]
 test("Table has 6+ lines", len(lines) >= 6)
+
+# Test large truth table warning
+big_text = "\n".join(f"INPUT A{i}" for i in range(9)) + "\nGATE AND out " + " ".join(f"A{i}" for i in range(9)) + "\nOUTPUT out"
+big_circuit = parse_circuit(big_text)
+big_table = generate_truth_table(big_circuit)
+test("Large truth table shows warning", "too large" in big_table or "2^" in big_table)
 
 # ─── Auto Layout ───
 print("\nAuto Layout:")
@@ -156,9 +185,63 @@ s = c.simulate({"A": True, "B": False})
 output = c.render_ascii(s)
 test("Render produces output", len(output) > 0)
 
+c2 = ripple_carry_adder_4bit()
+s2 = c2.simulate({"A0": True, "A1": False, "A2": True, "A3": False,
+                   "B0": False, "B1": True, "B2": False, "B3": True, "Cin": False})
+output2 = c2.render_ascii(s2)
+test("4-bit adder renders", len(output2) > 0)
+
 # ─── Gate Map ───
 print("\nGate Map:")
 test("All 8 gates in map", set(GATE_MAP.keys()) == {"AND", "OR", "NOT", "NAND", "NOR", "XOR", "XNOR", "BUF"})
+
+# ─── Validation ───
+print("\nValidation:")
+c = half_adder()
+warnings = c.validate()
+test("Valid circuit has no warnings", len(warnings) == 0)
+
+empty = Circuit()
+warnings = empty.validate()
+test("Empty circuit has warnings", len(warnings) > 0)
+
+dangling_text = """INPUT A
+GATE AND out A B
+OUTPUT out"""
+dangling = parse_circuit(dangling_text)
+warnings = dangling.validate()
+test("Dangling input detected", any("dangling" in w.lower() for w in warnings))
+
+# ─── DSL Export ───
+print("\nDSL Export:")
+c = half_adder()
+dsl = c.to_dsl()
+test("Export contains INPUT", "INPUT" in dsl)
+test("Export contains GATE", "GATE" in dsl)
+test("Export contains OUTPUT", "OUTPUT" in dsl)
+
+# Re-import and verify
+c2 = parse_circuit(dsl)
+test("Re-import has same gate count", len(c2.gates) == len(c.gates))
+test("Re-import has same input count", len(c2.inputs) == len(c.inputs))
+test("Re-import produces same results",
+     c.simulate({"A": True, "B": True}) == c2.simulate({"A": True, "B": True}))
+
+# ─── Circuit Stats ───
+print("\nCircuit Stats:")
+c = full_adder()
+test("Gate count", c.gate_count() == 5)
+test("Input count", c.input_count() == 3)
+test("Output count", c.output_count() == 2)
+test("Depth > 0", c.depth() >= 1)
+
+# ─── Signal Map ───
+print("\nSignal Map:")
+c = half_adder()
+s = c.simulate({"A": True, "B": False})
+smap = c.render_signal_map(s)
+test("Signal map has content", len(smap) > 0)
+test("Signal map has header", "Signal Map" in smap)
 
 # ─── All examples load ───
 print("\nExample Circuits:")
