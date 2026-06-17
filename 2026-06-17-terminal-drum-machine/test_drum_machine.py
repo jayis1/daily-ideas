@@ -588,3 +588,121 @@ class TestVersion:
         assert len(parts) >= 2
         for part in parts:
             assert part.isdigit()
+
+
+class TestBugFixes:
+    """Tests for bugs that were found and fixed."""
+
+    def test_swing_preserves_total_duration(self):
+        """Swing should redistribute timing without changing total loop duration."""
+        dm_no_swing = DrumMachine(bpm=120, swing=0.0)
+        dm_swing = DrumMachine(bpm=120, swing=0.5)
+        total_no_swing = dm_no_swing.total_loop_duration()
+        total_swing = dm_swing.total_loop_duration()
+        assert abs(total_no_swing - total_swing) < 0.001, \
+            f"Swing changed total duration: {total_swing:.4f}s vs {total_no_swing:.4f}s"
+
+    def test_swing_step_0_treated_as_even(self):
+        """Step 0 should be treated the same as other even steps under swing."""
+        dm = DrumMachine(bpm=120, swing=0.5)
+        d0 = dm.step_duration(0)
+        d2 = dm.step_duration(2)
+        d4 = dm.step_duration(4)
+        assert abs(d0 - d2) < 0.001, f"Step 0 ({d0:.4f}) != Step 2 ({d2:.4f})"
+        assert abs(d0 - d4) < 0.001, f"Step 0 ({d0:.4f}) != Step 4 ({d4:.4f})"
+
+    def test_swing_pair_sums_to_double_base(self):
+        """Each pair of (even, odd) steps should sum to 2*base."""
+        dm = DrumMachine(bpm=120, swing=0.3)
+        base = 60.0 / 120 / 4
+        for i in range(0, 16, 2):
+            pair_sum = dm.step_duration(i) + dm.step_duration(i + 1)
+            assert abs(pair_sum - 2 * base) < 0.001, \
+                f"Pair {i},{i+1} sums to {pair_sum:.4f}, expected {2*base:.4f}"
+
+    def test_load_json_with_wrong_types_does_not_crash(self):
+        """Loading JSON with wrong value types should not corrupt DrumMachine state."""
+        dm = DrumMachine(bpm=120, steps=16, swing=0.1)
+        original_bpm = dm.bpm
+        original_swing = dm.swing
+        bad_data = {
+            "bpm": "fast",
+            "steps": "sixteen",
+            "swing": "groovy",
+            "pattern": "noise",
+        }
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+            json.dump(bad_data, tmp)
+            tmp_name = tmp.name
+        try:
+            result = dm.load_pattern_json(tmp_name)
+            assert result is True  # File loads, but bad values are ignored
+            # bpm and swing should remain unchanged (wrong types ignored)
+            assert dm.bpm == original_bpm
+            assert dm.swing == original_swing
+            # Steps should remain unchanged (wrong type)
+            assert dm.steps == 16
+            # Should still be functional after bad load
+            loop = dm.render_full_loop()
+            assert len(loop) > 0
+            dur = dm.step_duration(0)
+            assert dur > 0
+        finally:
+            os.unlink(tmp_name)
+
+    def test_load_json_with_numeric_types(self):
+        """Loading JSON with proper numeric types should work correctly."""
+        dm = DrumMachine()
+        good_data = {
+            "bpm": 140,
+            "steps": 16,
+            "swing": 0.25,
+            "pattern": {"Kick": [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]},
+            "volumes": {"Kick": 0.5},
+            "muted": {"Snare": True},
+        }
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+            json.dump(good_data, tmp)
+            tmp_name = tmp.name
+        try:
+            result = dm.load_pattern_json(tmp_name)
+            assert result is True
+            assert dm.bpm == 140
+            assert dm.swing == 0.25
+            assert dm.volumes[DrumName.KICK] == 0.5
+            assert dm.muted[DrumName.SNARE] is True
+        finally:
+            os.unlink(tmp_name)
+
+    def test_render_to_wav_rejects_zero_loops(self):
+        """render_to_wav should reject loops < 1."""
+        dm = DrumMachine()
+        dm.load_preset("four-on-floor")
+        with pytest.raises(ValueError, match="at least 1"):
+            dm.render_to_wav("/tmp/test_zero.wav", loops=0)
+
+    def test_swing_max_preserves_duration(self):
+        """Maximum swing (0.75) should still preserve total loop duration."""
+        dm = DrumMachine(bpm=120, swing=0.75)
+        total = dm.total_loop_duration()
+        expected = 16 * 60.0 / 120 / 4
+        assert abs(total - expected) < 0.01, \
+            f"Max swing changed total: {total:.4f}s vs {expected:.4f}s"
+
+    def test_load_json_pattern_with_non_list_value(self):
+        """Loading JSON where a pattern value is not a list should not crash."""
+        dm = DrumMachine()
+        data = {
+            "bpm": 120,
+            "pattern": {"Kick": "not_a_list"},
+        }
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+            json.dump(data, tmp)
+            tmp_name = tmp.name
+        try:
+            result = dm.load_pattern_json(tmp_name)
+            assert result is True
+            # Kick pattern should default to all-False since "not_a_list" is not a list
+            assert all(not s for s in dm.pattern[DrumName.KICK])
+        finally:
+            os.unlink(tmp_name)

@@ -32,7 +32,7 @@ from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -342,17 +342,21 @@ class DrumMachine:
             self.pattern[drum] = [random.random() < d for _ in range(self.steps)]
 
     def step_duration(self, step: int = 0) -> float:
-        """Duration of one step in seconds, accounting for swing on even steps.
+        """Duration of one step in seconds, accounting for swing.
 
-        Swing shifts the timing of even-numbered steps (0-indexed) later.
+        Swing redistributes timing within each pair of steps:
+        even-indexed steps (0, 2, 4...) get longer, odd-indexed steps
+        (1, 3, 5...) get shorter. Total loop duration is preserved.
         A swing of 0.0 is straight timing, 0.67 is a classic swing feel.
         """
         base = 60.0 / self.bpm / 4
-        if self.swing > 0 and step % 2 == 1:
-            # Even-indexed steps (1, 3, 5...) get shorter, making odd steps longer
-            return base * (1.0 - self.swing)
-        elif self.swing > 0 and step % 2 == 0 and step > 0:
-            return base * (1.0 + self.swing)
+        if self.swing > 0:
+            if step % 2 == 0:
+                # Even-indexed steps (0, 2, 4...) get longer
+                return base * (1.0 + self.swing)
+            else:
+                # Odd-indexed steps (1, 3, 5...) get shorter
+                return base * (1.0 - self.swing)
         return base
 
     def total_loop_duration(self) -> float:
@@ -393,6 +397,9 @@ class DrumMachine:
 
     def render_to_wav(self, filename: str, loops: int = 2) -> str:
         """Render pattern to a WAV file. Returns the filename."""
+        if loops < 1:
+            raise ValueError(f"Loops must be at least 1, got {loops}")
+
         loop = self.render_full_loop()
         if len(loop) == 0:
             raise ValueError("Cannot render empty loop — pattern may be empty")
@@ -452,26 +459,42 @@ class DrumMachine:
             print(f"Error loading pattern: {e}")
             return False
 
-        self.bpm = data.get("bpm", self.bpm)
-        self.swing = data.get("swing", 0.0)
+        # Validate and coerce types
+        bpm_val = data.get("bpm", self.bpm)
+        if isinstance(bpm_val, (int, float)):
+            self.bpm = int(bpm_val)
+        # else: keep current bpm
+
+        swing_val = data.get("swing", 0.0)
+        if isinstance(swing_val, (int, float)):
+            self.swing = float(swing_val)
+        # else: keep current swing
+
         loaded_steps = data.get("steps", self.steps)
-        if loaded_steps in VALID_STEP_COUNTS:
+        if isinstance(loaded_steps, int) and loaded_steps in VALID_STEP_COUNTS:
             self.steps = loaded_steps
 
         for drum in self.drums:
             if drum.value in data.get("pattern", {}):
                 src = data["pattern"][drum.value]
-                self.pattern[drum] = self._adapt_pattern(src, self.steps)
+                if isinstance(src, list):
+                    self.pattern[drum] = self._adapt_pattern(src, self.steps)
+                else:
+                    self.pattern[drum] = [False] * self.steps
             else:
                 self.pattern[drum] = [False] * self.steps
 
         for drum in self.drums:
             if drum.value in data.get("volumes", {}):
-                self.volumes[drum] = float(data["volumes"][drum.value])
+                vol = data["volumes"][drum.value]
+                if isinstance(vol, (int, float)):
+                    self.volumes[drum] = float(vol)
 
         for drum in self.drums:
             if drum.value in data.get("muted", {}):
-                self.muted[drum] = bool(data["muted"][drum.value])
+                m = data["muted"][drum.value]
+                if isinstance(m, (bool, int)):
+                    self.muted[drum] = bool(m)
 
         return True
 
@@ -700,7 +723,7 @@ def interactive_mode(machine: DrumMachine) -> None:
                 new_bpm = int(parts[1])
                 if new_bpm < 30 or new_bpm > 300:
                     print("BPM must be between 30 and 300")
-                    new_bpm = max(30, min(300, new_bpm))
+                    continue
                 machine.bpm = new_bpm
                 print(f"BPM set to {machine.bpm}")
             except ValueError:

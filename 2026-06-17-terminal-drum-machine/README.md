@@ -12,7 +12,7 @@ A step-sequencer drum machine that runs entirely in your terminal. Synthesizes 8
 
 ### Sequencer
 - **16-step sequencer** (also supports 8 and 32 steps via `--steps`)
-- **Swing/groove** — Add shuffle feel from 0% (straight) to 75% (heavy swing)
+- **Swing/groove** — Add shuffle feel from 0% (straight) to 75% (heavy swing). Swing redistributes timing between even/odd step pairs while preserving total loop duration.
 - **Pattern shift** — Rotate any drum's pattern left or right
 - **Copy patterns** — Copy one drum's pattern to another drum
 - **Pattern density view** — Visualize fill percentage per drum
@@ -117,7 +117,7 @@ Once in interactive mode, type commands at the `🥁 >` prompt:
 | `<drum> <step>` | Toggle a step (e.g. `kick 1`, `snare 5`) |
 | `preset <name>` | Load a preset |
 | `presets` | List available presets |
-| `bpm <n>` | Change tempo |
+| `bpm <n>` | Change tempo (30–300; invalid values are rejected) |
 | `swing <0-75>` | Set swing percentage |
 | `volume <drum> <0-200>` | Set drum volume (percentage) |
 | `mute <drum>` | Toggle mute on a drum |
@@ -167,7 +167,7 @@ All sounds are mixed per-step with automatic peak normalization and exported as 
 
 At BPM=120, each 16th-note step is 125ms (60/120/4 seconds), giving a full 16-step bar of exactly 2 seconds.
 
-With swing enabled, even-numbered steps (0-indexed) are lengthened and odd-numbered steps are shortened, creating a shuffle feel. For example, at 50% swing, steps alternate between 187.5ms and 62.5ms.
+With swing enabled, even-indexed steps (0, 2, 4...) are lengthened and odd-indexed steps (1, 3, 5...) are shortened. Each pair of steps still sums to `2 × base_duration`, so the total loop duration is always preserved regardless of swing setting.
 
 ### JSON Pattern Format
 
@@ -175,7 +175,7 @@ Saved patterns include BPM, steps, swing, pattern data, volumes, and mute state:
 
 ```json
 {
-  "version": "1.1.0",
+  "version": "1.2.0",
   "bpm": 140,
   "steps": 16,
   "swing": 0.3,
@@ -209,7 +209,18 @@ Drum Machine  │  1┼ 2┼ 3┼ 4┼ 5┼ 6┼ 7┼ 8┼ 9┼10┼11┼12┼13
 python3 -m pytest test_drum_machine.py -v
 ```
 
-101 tests covering sound synthesis, pattern manipulation, presets, volume/mute, swing timing, WAV export, JSON save/load, display, and more.
+109 tests covering sound synthesis, pattern manipulation, presets, volume/mute, swing timing, WAV export, JSON save/load (including type validation), display, and regression tests for fixed bugs.
+
+## Changelog
+
+### v1.2.0 — Bug Fixes
+- **Fixed swing timing bug**: Step 0 was not receiving swing adjustment, causing total loop duration to shrink when swing was applied. Now all even-indexed steps (0, 2, 4...) get the swing lengthening and odd-indexed steps (1, 3, 5...) get the swing shortening, preserving total loop duration.
+- **Fixed incorrect comment**: The `step_duration` docstring incorrectly described "Even-indexed steps (1, 3, 5...)" which are actually odd-indexed.
+- **Fixed JSON load type safety**: `load_pattern_json` now validates that `bpm`, `swing`, `steps`, `volumes`, and `muted` values are the correct numeric types before assignment. Previously, string values in a JSON file (e.g. `"bpm": "fast"`) would crash the DrumMachine with a `TypeError` on subsequent arithmetic operations.
+- **Fixed JSON load pattern validation**: Pattern values that are not lists now default to all-False instead of causing a crash.
+- **Fixed interactive BPM validation**: The `bpm` command now rejects invalid values (outside 30–300 range) instead of printing an error but still clamping and setting the value.
+- **Added `render_to_wav` loops validation**: `render_to_wav` now raises `ValueError` if `loops < 1`, preventing creation of empty/invalid WAV files.
+- Added 8 regression tests covering all fixed bugs.
 
 ## License
 
