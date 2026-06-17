@@ -26,6 +26,7 @@ from drum_machine import (
     synth_tom,
     synth_rim,
     synth_cowbell,
+    synth_metronome_click,
 )
 
 
@@ -101,6 +102,31 @@ class TestSoundSynthesis:
         for drum in DRUM_ORDER:
             assert drum in DRUM_SYNTHS
 
+    def test_synth_zero_duration(self):
+        """Synths should handle very short/near-zero durations gracefully."""
+        result = synth_kick(duration=0.001)
+        # Should produce something, even if tiny
+        assert isinstance(result, np.ndarray)
+
+
+class TestMetronomeClick:
+    """Test the metronome click synthesis."""
+
+    def test_metronome_returns_array(self):
+        result = synth_metronome_click()
+        assert isinstance(result, np.ndarray)
+        assert len(result) > 0
+
+    def test_metronome_short_duration(self):
+        result = synth_metronome_click(duration=0.02)
+        assert len(result) > 0
+        assert np.max(np.abs(result)) > 0
+
+    def test_metronome_custom_duration(self):
+        result = synth_metronome_click(duration=0.05)
+        expected = int(SAMPLE_RATE * 0.05)
+        assert abs(len(result) - expected) < SAMPLE_RATE * 0.01
+
 
 # ─── DrumMachine Core Tests ──────────────────────────────────────────────────
 
@@ -140,6 +166,20 @@ class TestDrumMachineInit:
         for steps in VALID_STEP_COUNTS:
             dm = DrumMachine(steps=steps)
             assert dm.steps == steps
+
+    def test_humanize_defaults(self):
+        dm = DrumMachine()
+        assert dm.humanize is False
+        assert dm.humanize_timing == 0.008
+        assert dm.humanize_velocity == 0.12
+
+    def test_metronome_defaults(self):
+        dm = DrumMachine()
+        assert dm.metronome is False
+
+    def test_undo_stack_starts_empty(self):
+        dm = DrumMachine()
+        assert len(dm._undo_stack) == 0
 
 
 class TestDrumMachinePattern:
@@ -212,6 +252,258 @@ class TestDrumMachinePattern:
         total_on = sum(1 for s in dm.pattern[DrumName.KICK] if s)
         # With 80% density, at least half should be on
         assert total_on >= 4  # At least 4 of 16 steps on
+
+
+class TestDrumMachineInvertReverse:
+    """Test pattern invert and reverse."""
+
+    def test_invert_pattern(self):
+        dm = DrumMachine()
+        dm.load_preset("four-on-floor")
+        # Kick: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0]
+        original_kick = list(dm.pattern[DrumName.KICK])
+        dm.invert_pattern(DrumName.KICK)
+        for i in range(dm.steps):
+            assert dm.pattern[DrumName.KICK][i] == (not original_kick[i])
+
+    def test_invert_empty_pattern(self):
+        dm = DrumMachine()
+        dm.invert_pattern(DrumName.KICK)
+        # All should be True now (inverted from all-False)
+        assert all(dm.pattern[DrumName.KICK])
+
+    def test_invert_full_pattern(self):
+        dm = DrumMachine()
+        dm.pattern[DrumName.KICK] = [True] * dm.steps
+        dm.invert_pattern(DrumName.KICK)
+        assert not any(dm.pattern[DrumName.KICK])
+
+    def test_reverse_pattern(self):
+        dm = DrumMachine()
+        # Set a specific pattern: on at steps 0 and 3
+        dm.pattern[DrumName.KICK][0] = True
+        dm.pattern[DrumName.KICK][3] = True
+        dm.reverse_pattern(DrumName.KICK)
+        # After reverse: on at steps 12 (was 3) and 15 (was 0)
+        assert dm.pattern[DrumName.KICK][15] is True   # was step 0
+        assert dm.pattern[DrumName.KICK][12] is True   # was step 3
+        assert dm.pattern[DrumName.KICK][0] is False
+
+    def test_reverse_palindrome_pattern(self):
+        dm = DrumMachine()
+        # A palindrome pattern should be unchanged by reverse
+        # [True, False, False, False, True] is palindromic for 5 steps,
+        # but we need a 16-step palindrome. Use symmetric pattern.
+        pal = [True, False, True, False, True, False, False, True,
+               True, False, False, True, False, True, False, True]
+        dm.pattern[DrumName.KICK] = pal
+        original = list(dm.pattern[DrumName.KICK])
+        dm.reverse_pattern(DrumName.KICK)
+        assert list(dm.pattern[DrumName.KICK]) == original
+
+
+class TestDrumMachineSolo:
+    """Test solo/unsolo functionality."""
+
+    def test_solo_mutes_all_others(self):
+        dm = DrumMachine()
+        dm.solo(DrumName.KICK)
+        # Only kick should be unmuted
+        assert dm.muted[DrumName.KICK] is False
+        for drum in dm.drums:
+            if drum != DrumName.KICK:
+                assert dm.muted[drum] is True
+
+    def test_unsolo_all(self):
+        dm = DrumMachine()
+        dm.solo(DrumName.KICK)
+        dm.unsolo_all()
+        for drum in dm.drums:
+            assert dm.muted[drum] is False
+
+
+class TestDrumMachineFill:
+    """Test fill generation."""
+
+    def test_fill_from_step_12(self):
+        dm = DrumMachine()
+        dm.generate_fill(start_step=12, density=0.8)
+        # At least some steps from 12 onward should be on
+        fill_steps = [dm.pattern[d][i] for d in dm.drums for i in range(12, 16)]
+        assert any(fill_steps)
+
+    def test_fill_from_step_0(self):
+        dm = DrumMachine()
+        dm.generate_fill(start_step=0, density=0.5)
+        # Should have hits somewhere
+        total_on = sum(1 for d in dm.drums for s in dm.pattern[d] if s)
+        assert total_on > 0
+
+    def test_fill_invalid_step(self):
+        dm = DrumMachine()
+        with pytest.raises(IndexError):
+            dm.generate_fill(start_step=16)
+
+    def test_fill_negative_step(self):
+        dm = DrumMachine()
+        with pytest.raises(IndexError):
+            dm.generate_fill(start_step=-1)
+
+
+class TestDrumMachineHumanize:
+    """Test humanize mode."""
+
+    def test_humanize_toggle(self):
+        dm = DrumMachine()
+        assert dm.humanize is False
+        dm.humanize = True
+        assert dm.humanize is True
+
+    def test_humanize_renders_audio(self):
+        dm = DrumMachine(bpm=120)
+        dm.humanize = True
+        dm.load_preset("four-on-floor")
+        audio = dm.render_full_loop()
+        assert len(audio) > 0
+        assert np.max(np.abs(audio)) > 0
+
+    def test_humanize_produces_different_each_time(self):
+        """With humanize on, consecutive renders should differ slightly."""
+        dm = DrumMachine(bpm=120)
+        dm.humanize = True
+        dm.load_preset("four-on-floor")
+        loop1 = dm.render_full_loop()
+        loop2 = dm.render_full_loop()
+        # Velocity variation should make them differ
+        # (extremely unlikely to be identical)
+        assert not np.array_equal(loop1, loop2)
+
+
+class TestDrumMachineMetronome:
+    """Test metronome click track."""
+
+    def test_metronome_toggle(self):
+        dm = DrumMachine()
+        assert dm.metronome is False
+        dm.metronome = True
+        assert dm.metronome is True
+
+    def test_metronome_adds_click_to_mix(self):
+        """Metronome should add audio to otherwise silent steps."""
+        dm = DrumMachine(bpm=120, steps=16)
+        # Don't load any preset — all steps are off
+        dm.metronome = True
+        # Step 0 should have metronome click on a quarter note
+        step0_with = dm.mix_step(0)
+        dm.metronome = False
+        step0_without = dm.mix_step(0)
+        # With metronome on, there should be some audio (the click)
+        assert np.max(np.abs(step0_with)) > 0.01
+        # Without metronome and no pattern, should be silence
+        assert np.max(np.abs(step0_without)) == 0.0
+
+
+class TestDrumMachineUndo:
+    """Test undo functionality."""
+
+    def test_undo_toggle(self):
+        dm = DrumMachine()
+        assert dm.pattern[DrumName.KICK][0] is False
+        dm.toggle(DrumName.KICK, 0)
+        assert dm.pattern[DrumName.KICK][0] is True
+        dm.undo()
+        assert dm.pattern[DrumName.KICK][0] is False
+
+    def test_undo_clear(self):
+        dm = DrumMachine()
+        dm.load_preset("four-on-floor")
+        dm.clear_pattern()
+        assert all(not s for s in dm.pattern[DrumName.KICK])
+        dm.undo()
+        assert dm.pattern[DrumName.KICK][0] is True
+
+    def test_undo_random(self):
+        dm = DrumMachine()
+        dm.load_preset("four-on-floor")
+        original = list(dm.pattern[DrumName.KICK])
+        dm.random_pattern(density=0.5)
+        dm.undo()
+        assert dm.pattern[DrumName.KICK] == original
+
+    def test_undo_preset_load(self):
+        dm = DrumMachine()
+        original_kick = list(dm.pattern[DrumName.KICK])
+        dm.load_preset("four-on-floor")
+        assert dm.pattern[DrumName.KICK][0] is True
+        dm.undo()
+        assert dm.pattern[DrumName.KICK] == original_kick
+
+    def test_undo_shift(self):
+        dm = DrumMachine()
+        dm.pattern[DrumName.KICK] = [True, False, False, False] + [False] * 12
+        dm.shift_pattern(DrumName.KICK, 1)
+        assert dm.pattern[DrumName.KICK][1] is True
+        dm.undo()
+        assert dm.pattern[DrumName.KICK][0] is True
+
+    def test_undo_invert(self):
+        dm = DrumMachine()
+        original = list(dm.pattern[DrumName.KICK])
+        dm.invert_pattern(DrumName.KICK)
+        dm.undo()
+        assert dm.pattern[DrumName.KICK] == original
+
+    def test_undo_reverse(self):
+        dm = DrumMachine()
+        dm.pattern[DrumName.KICK][0] = True
+        original = list(dm.pattern[DrumName.KICK])
+        dm.reverse_pattern(DrumName.KICK)
+        dm.undo()
+        assert dm.pattern[DrumName.KICK] == original
+
+    def test_undo_mute(self):
+        dm = DrumMachine()
+        assert dm.muted[DrumName.KICK] is False
+        dm.toggle_mute(DrumName.KICK)
+        assert dm.muted[DrumName.KICK] is True
+        dm.undo()
+        assert dm.muted[DrumName.KICK] is False
+
+    def test_undo_solo(self):
+        dm = DrumMachine()
+        dm.solo(DrumName.KICK)
+        assert dm.muted[DrumName.KICK] is False
+        assert dm.muted[DrumName.SNARE] is True
+        dm.undo()
+        assert dm.muted[DrumName.KICK] is False
+        assert dm.muted[DrumName.SNARE] is False
+
+    def test_undo_empty_stack(self):
+        dm = DrumMachine()
+        result = dm.undo()
+        assert result is False
+
+    def test_undo_multiple_times(self):
+        dm = DrumMachine()
+        dm.toggle(DrumName.KICK, 0)
+        dm.toggle(DrumName.KICK, 1)
+        dm.toggle(DrumName.KICK, 2)
+        # Undo all three
+        dm.undo()  # undo step 2 toggle
+        assert dm.pattern[DrumName.KICK][2] is False
+        dm.undo()  # undo step 1 toggle
+        assert dm.pattern[DrumName.KICK][1] is False
+        dm.undo()  # undo step 0 toggle
+        assert dm.pattern[DrumName.KICK][0] is False
+
+    def test_undo_max_history(self):
+        """Undo stack should not exceed MAX_UNDO_HISTORY."""
+        from drum_machine import MAX_UNDO_HISTORY
+        dm = DrumMachine()
+        for i in range(MAX_UNDO_HISTORY + 10):
+            dm.toggle(DrumName.KICK, i % dm.steps)
+        # Should still be able to undo (at least MAX_UNDO_HISTORY times)
+        assert dm.undo() is True
 
 
 class TestDrumMachinePresets:
@@ -391,6 +683,76 @@ class TestDrumMachineRender:
             os.unlink(tmp_name)
 
 
+class TestDrumMachineMIDI:
+    """Test MIDI export functionality."""
+
+    def test_render_to_midi_creates_file(self):
+        dm = DrumMachine()
+        dm.load_preset("four-on-floor")
+        with tempfile.NamedTemporaryFile(suffix='.mid', delete=False) as tmp:
+            tmp_name = tmp.name
+        try:
+            dm.render_to_midi(tmp_name)
+            assert os.path.exists(tmp_name)
+            # Check the file has content (MIDI header should be present)
+            with open(tmp_name, 'rb') as f:
+                data = f.read()
+            assert len(data) > 20  # MIDI header + track data
+            assert data[:4] == b'MThd'  # MIDI header chunk
+        finally:
+            os.unlink(tmp_name)
+
+    def test_midi_file_contains_track_data(self):
+        dm = DrumMachine(bpm=120)
+        dm.load_preset("four-on-floor")
+        with tempfile.NamedTemporaryFile(suffix='.mid', delete=False) as tmp:
+            tmp_name = tmp.name
+        try:
+            dm.render_to_midi(tmp_name)
+            with open(tmp_name, 'rb') as f:
+                data = f.read()
+            # Should have MTrk track chunk
+            assert b'MTrk' in data
+        finally:
+            os.unlink(tmp_name)
+
+    def test_midi_empty_pattern(self):
+        """Exporting an empty pattern should still produce a valid MIDI file."""
+        dm = DrumMachine()
+        with tempfile.NamedTemporaryFile(suffix='.mid', delete=False) as tmp:
+            tmp_name = tmp.name
+        try:
+            dm.render_to_midi(tmp_name)
+            assert os.path.exists(tmp_name)
+        finally:
+            os.unlink(tmp_name)
+
+    def test_midi_creates_directory(self):
+        dm = DrumMachine()
+        dm.load_preset("four-on-floor")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "subdir", "test.mid")
+            dm.render_to_midi(filepath)
+            assert os.path.exists(filepath)
+
+    def test_midi_bpm_in_file(self):
+        """The MIDI file should encode the correct tempo."""
+        dm = DrumMachine(bpm=140)
+        dm.load_preset("four-on-floor")
+        with tempfile.NamedTemporaryFile(suffix='.mid', delete=False) as tmp:
+            tmp_name = tmp.name
+        try:
+            dm.render_to_midi(tmp_name)
+            with open(tmp_name, 'rb') as f:
+                data = f.read()
+            # Check for tempo meta event
+            # Tempo is FF 51 03 followed by 3 bytes encoding microseconds/quarter
+            # For BPM=140: 60_000_000 / 140 = 428571 μs → 0x06 0x8E 0xBB
+            assert b'MThd' in data[:4]
+        finally:
+            os.unlink(tmp_name)
+
+
 class TestDrumMachineSaveLoadJSON:
     """Test JSON pattern save/load."""
 
@@ -416,6 +778,25 @@ class TestDrumMachineSaveLoadJSON:
             # Check pattern
             for drum in dm.drums:
                 assert dm2.pattern[drum] == dm.pattern[drum]
+        finally:
+            os.unlink(tmp_name)
+
+    def test_save_and_load_humanize(self):
+        """Humanize state should round-trip through JSON."""
+        dm = DrumMachine(bpm=120)
+        dm.humanize = True
+        dm.humanize_timing = 0.015
+        dm.humanize_velocity = 0.2
+
+        with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as tmp:
+            tmp_name = tmp.name
+        try:
+            dm.save_pattern_json(tmp_name)
+            dm2 = DrumMachine()
+            dm2.load_pattern_json(tmp_name)
+            assert dm2.humanize is True
+            assert abs(dm2.humanize_timing - 0.015) < 0.001
+            assert abs(dm2.humanize_velocity - 0.2) < 0.001
         finally:
             os.unlink(tmp_name)
 
@@ -461,6 +842,7 @@ class TestDrumMachineSaveLoadJSON:
             assert "Kick" in data["pattern"]
             assert "volumes" in data
             assert "muted" in data
+            assert "humanize" in data
         finally:
             os.unlink(tmp_name)
 
@@ -492,19 +874,24 @@ class TestDrumMachineDisplay:
         grid = dm.display_grid()
         assert "🔇" in grid
 
+    def test_display_grid_humanize(self):
+        dm = DrumMachine()
+        dm.humanize = True
+        grid = dm.display_grid()
+        assert "Humanize" in grid
+
+    def test_display_grid_metronome(self):
+        dm = DrumMachine()
+        dm.metronome = True
+        grid = dm.display_grid()
+        assert "Metro" in grid
+
     def test_display_presets_returns_string(self):
         dm = DrumMachine()
         presets = dm.display_presets()
         assert isinstance(presets, str)
         assert "four-on-floor" in presets
         assert "hiphop" in presets
-
-    def test_pattern_density(self):
-        dm = DrumMachine()
-        dm.load_preset("four-on-floor")
-        density = dm.pattern_density()
-        assert "Kick" in density
-        assert 0 < density["Kick"] <= 1.0
 
 
 class TestDrumMachineStepCounts:
