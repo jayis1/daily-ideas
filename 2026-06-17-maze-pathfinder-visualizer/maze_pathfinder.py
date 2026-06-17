@@ -31,7 +31,7 @@ from collections import deque
 import heapq
 from typing import Dict, List, Optional, Set, Tuple, Generator
 
-__version__ = "1.3.0"
+__version__ = "1.3.1"
 
 # ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -1203,7 +1203,9 @@ Examples:
         solver = SOLVERS[best[0]]
         total_passable = sum(1 for r in range(len(bitmap)) for c in range(len(bitmap[0])) if bitmap[r][c] != WALL)
 
+        compare_step = 0
         for visited, frontier, solution in solver(bitmap, start_pos, end_pos):
+            compare_step += 1
             if not args.no_animate:
                 clear_screen()
             else:
@@ -1222,7 +1224,7 @@ Examples:
                 )
             else:
                 pct = len(visited) / total_passable * 100 if total_passable > 0 else 0
-                print(f"  Step {0} | Exploring... {pct:.0f}% visited")
+                print(f"  Step {compare_step} | Exploring... {pct:.0f}% visited")
 
             if not args.no_animate:
                 time.sleep(args.speed)
@@ -1268,9 +1270,14 @@ Examples:
     final_solution = None
     final_visited = None
     total_passable = sum(1 for r in range(len(bitmap)) for c in range(len(bitmap[0])) if bitmap[r][c] != WALL)
-
     for visited, frontier, solution in solver(bitmap, start_pos, end_pos):
         step += 1
+
+        # In no-animate mode, skip intermediate frames and show only the final result
+        if args.no_animate and solution is None:
+            final_visited = visited
+            continue
+
         if not args.no_animate:
             clear_screen()
             print(header)

@@ -1,6 +1,6 @@
 # 🏛️ Maze Generator & Pathfinder Visualizer
 
-**v1.3.0** — Generate mazes with five algorithms and watch five pathfinding solvers explore them in real-time ASCII animation, right in your terminal.
+**v1.3.1** — Generate mazes with five algorithms and watch five pathfinding solvers explore them in real-time ASCII animation, right in your terminal.
 
 ## What It Does
 
@@ -28,6 +28,7 @@ Run **compare mode** to race all five solvers on the same maze and see which one
 - **Color-coded ASCII rendering** — walls (dim `█`), visited cells (gray `·`), frontier (cyan `○`), solution path (gold `◆`), start (`S`), end (`E`)
 - **Real-time animation** — watch the algorithm think, with percentage progress per step
 - **Step counter** — shows cells explored / total passable cells at each frame
+- **`--no-animate`** — skip animation and show only the final solved maze (concise output)
 - **Compare mode** — run all five solvers on the same maze and compare stats side-by-side with efficiency ratings; ties broken by fewest cells explored
 - **Heatmap mode** (`--heatmap`) — overlay visit frequency from all solvers using gradient characters, revealing hot spots and under-explored areas
 - **Maze difficulty rating** — Easy / Medium / Hard / Expert based on size, dead-end density, and branching factor
@@ -64,7 +65,7 @@ python3 maze_pathfinder.py
 python3 maze_pathfinder.py -g prim
 python3 maze_pathfinder.py -g kruskal
 python3 maze_pathfinder.py -g ellers
-python3 maze_pathfinder.py -g wilson       # New! Unbiased random spanning tree
+python3 maze_pathfinder.py -g wilson
 ```
 
 ### Choose pathfinding algorithm
@@ -72,7 +73,7 @@ python3 maze_pathfinder.py -g wilson       # New! Unbiased random spanning tree
 python3 maze_pathfinder.py -s bfs
 python3 maze_pathfinder.py -s dfs
 python3 maze_pathfinder.py -s greedy
-python3 maze_pathfinder.py -s dijkstra     # New! Classic uniform-cost search
+python3 maze_pathfinder.py -s dijkstra
 ```
 
 ### Adjust maze size
@@ -165,7 +166,7 @@ python3 maze_pathfinder.py --speed 0.1
 ### Check version
 ```bash
 python3 maze_pathfinder.py --version
-# maze_pathfinder.py 1.3.0
+# maze_pathfinder.py 1.3.1
 ```
 
 ### Full options
@@ -265,7 +266,7 @@ python3 maze_pathfinder.py --stats --show-path --export solution.txt -r 6 -c 12
 ## Error Handling
 
 The tool validates inputs and provides clear error messages:
-- Maze dimensions below 2×2 are rejected
+- Maze dimensions below 2×2 are automatically clamped to 2×2
 - Negative animation speeds are rejected
 - Loading a missing file reports `Error: File not found`
 - Invalid JSON reports the parse error
@@ -282,6 +283,10 @@ python3 -m pytest test_maze_pathfinder.py -v
 The test suite covers all five generation algorithms, all five solvers, maze connectivity validation, serialization round-trips, rendering, heatmap computation, difficulty rating, custom positions, file I/O, input validation for malformed data, edge cases, and more (72 tests total).
 
 ## Changelog
+
+### v1.3.1
+- **Fixed**: `--no-animate` flag in single-solver mode now correctly shows only the final solved maze instead of printing every intermediate exploration step (output reduced from hundreds of lines to ~15 lines for a typical maze)
+- **Fixed**: Compare mode animation step counter showed `Step 0` for all intermediate steps instead of the actual step number
 
 ### v1.3.0
 - **Added**: Wilson's algorithm (`-g wilson`) for unbiased random spanning tree maze generation — every maze is equally likely
