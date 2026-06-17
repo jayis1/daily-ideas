@@ -16,7 +16,7 @@ Features:
   - Deterministic seed support for reproducible mazes
   - Customizable start/end positions
 
-Version: 1.1.0
+Version: 1.2.0
 """
 
 import json
@@ -28,7 +28,7 @@ import argparse
 from collections import deque
 import heapq
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -117,8 +117,12 @@ class MazeGrid:
                     ends.append(cell)
         return ends
 
-    def stats(self):
-        """Compute maze statistics: dead ends, avg corridor length, branching factor."""
+    def stats(self, bitmap=None):
+        """Compute maze statistics: dead ends, avg corridor length, branching factor.
+
+        Args:
+            bitmap: Pre-computed bitmap to avoid recomputing. If None, computed here.
+        """
         dead_end_list = self.dead_ends()
         num_dead_ends = len(dead_end_list)
         total_cells = self.rows * self.cols
@@ -136,7 +140,8 @@ class MazeGrid:
         avg_branching = total_passages / total_cells if total_cells > 0 else 0
 
         # Longest corridor (BFS from start)
-        bitmap = self.to_bitmap()
+        if bitmap is None:
+            bitmap = self.to_bitmap()
         start = (1, 1)
         visited_bfs = {start}
         queue = deque([start])
@@ -687,10 +692,34 @@ def load_maze(filepath):
     # Validate required fields
     if "rows" not in data or "cols" not in data:
         raise ValueError("Invalid maze file: missing 'rows' or 'cols'")
+    if not isinstance(data["rows"], int) or not isinstance(data["cols"], int):
+        raise ValueError("Invalid maze file: 'rows' and 'cols' must be integers")
     if data["rows"] < 2 or data["cols"] < 2:
         raise ValueError(f"Invalid maze dimensions: {data['rows']}x{data['cols']}")
     if "cells" not in data:
         raise ValueError("Invalid maze file: missing 'cells'")
+
+    # Validate cells structure
+    if not isinstance(data["cells"], list):
+        raise ValueError("Invalid maze file: 'cells' must be a 2D array")
+    if len(data["cells"]) != data["rows"]:
+        raise ValueError(
+            f"Invalid maze file: cells has {len(data['cells'])} rows, expected {data['rows']}"
+        )
+    for r, row in enumerate(data["cells"]):
+        if not isinstance(row, list):
+            raise ValueError(f"Invalid maze file: cells row {r} is not a list")
+        if len(row) != data["cols"]:
+            raise ValueError(
+                f"Invalid maze file: cells row {r} has {len(row)} columns, expected {data['cols']}"
+            )
+        for c, cell in enumerate(row):
+            if not isinstance(cell, dict):
+                raise ValueError(f"Invalid maze file: cells[{r}][{c}] is not a dict")
+            if "row" not in cell or "col" not in cell or "walls" not in cell:
+                raise ValueError(
+                    f"Invalid maze file: cells[{r}][{c}] missing 'row', 'col', or 'walls'"
+                )
 
     return MazeGrid.from_dict(data)
 
@@ -816,7 +845,7 @@ Examples:
 
     # Show stats if requested
     if args.stats:
-        s = maze.stats()
+        s = maze.stats(bitmap=bitmap)
         print(f"\033[1m  Maze Statistics\033[0m")
         print(f"  ────────────────────────")
         print(f"  Size:           {s['size']}")
@@ -856,8 +885,11 @@ Examples:
             eff = f"{plen/vis*100:.1f}%" if vis > 0 else "N/A"
             print(f"  {name:<14} {vis:>10} {plen:>10} {stps:>10} {eff:>12}")
 
-        # Find best solver by shortest path
-        best = min(results, key=lambda x: x[2] if x[2] > 0 else float("inf"))
+        # Find best solver: shortest path, then fewest explored as tiebreaker
+        best = min(results, key=lambda x: (x[2] if x[2] > 0 else float("inf"), x[1]))
+        best_solution = None
+        best_visited = None
+
         print(f"\n  \033[93m★ Best solver: {best[0]} (path: {best[2]} steps, explored: {best[1]} cells)\033[0m")
         print(f"  Animating {best[0]}...")
         print()
@@ -866,15 +898,36 @@ Examples:
         for visited, frontier, solution in solver(bitmap, start_pos, end_pos):
             if not args.no_animate:
                 clear_screen()
+            else:
+                # In no-animate mode, skip to the final frame
+                if solution is None:
+                    continue
             frame = render(bitmap, visited, frontier, solution, start_pos, end_pos)
             print(frame)
             if solution:
+                best_solution = solution
+                best_visited = visited
                 print(
                     f"\n  \033[1m{best[0].upper()}\033[0m — Path length: {len(solution)}, "
                     f"Cells explored: {len(visited)}"
                 )
             if not args.no_animate:
                 time.sleep(args.speed)
+
+        # Export if requested (was previously skipped by early return)
+        if args.export:
+            try:
+                plain = export_plain(bitmap, solution=best_solution,
+                                     start=start_pos, end=end_pos)
+                with open(args.export, "w") as f:
+                    f.write(plain)
+                    f.write(f"\n\nPath length: {len(best_solution) if best_solution else 0}")
+                    f.write(f"\nCells explored: {len(best_visited) if best_visited else 0}")
+                    f.write(f"\nSolver: {best[0]} (compare mode winner)")
+                print(f"\n  Result exported to: {args.export}")
+            except OSError as e:
+                print(f"\n  Error exporting to {args.export}: {e}", file=sys.stderr)
+
         return
 
     # Single solver animation

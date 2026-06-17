@@ -521,5 +521,117 @@ class TestEdgeCases(unittest.TestCase):
                 break
 
 
+class TestLoadMazeValidation(unittest.TestCase):
+    """Tests for load_maze() input validation (bugs fixed in v1.2.0)."""
+
+    def test_load_cells_as_string(self):
+        """Cells field as a string should raise ValueError, not TypeError."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump({"rows": 3, "cols": 3, "cells": "not_a_list"}, f)
+            filepath = f.name
+        try:
+            with self.assertRaises(ValueError):
+                load_maze(filepath)
+        finally:
+            os.unlink(filepath)
+
+    def test_load_cells_wrong_dimensions(self):
+        """Cells array with wrong row count should raise ValueError."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            # 2 rows of cells but rows=3 declared
+            data = {"rows": 3, "cols": 2, "cells": [
+                [{"row": 0, "col": 0, "walls": {"N": True, "S": True, "E": True, "W": True}},
+                 {"row": 0, "col": 1, "walls": {"N": True, "S": True, "E": True, "W": True}}],
+                [{"row": 1, "col": 0, "walls": {"N": True, "S": True, "E": True, "W": True}},
+                 {"row": 1, "col": 1, "walls": {"N": True, "S": True, "E": True, "W": True}}],
+            ]}
+            json.dump(data, f)
+            filepath = f.name
+        try:
+            with self.assertRaises(ValueError):
+                load_maze(filepath)
+        finally:
+            os.unlink(filepath)
+
+    def test_load_cell_missing_keys(self):
+        """Cell dict missing required keys should raise ValueError."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            data = {"rows": 2, "cols": 2, "cells": [
+                [{"row": 0, "col": 0, "walls": {"N": True, "S": True, "E": True, "W": True}},
+                 {"wrong_key": 1}],  # Missing 'row', 'col', 'walls'
+                [{"row": 1, "col": 0, "walls": {"N": True, "S": True, "E": True, "W": True}},
+                 {"row": 1, "col": 1, "walls": {"N": True, "S": True, "E": True, "W": True}}],
+            ]}
+            json.dump(data, f)
+            filepath = f.name
+        try:
+            with self.assertRaises(ValueError):
+                load_maze(filepath)
+        finally:
+            os.unlink(filepath)
+
+    def test_load_cell_not_dict(self):
+        """Cell that is not a dict should raise ValueError."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            data = {"rows": 2, "cols": 2, "cells": [
+                [{"row": 0, "col": 0, "walls": {"N": True, "S": True, "E": True, "W": True}},
+                 {"row": 0, "col": 1, "walls": {"N": True, "S": True, "E": True, "W": True}}],
+                [{"row": 1, "col": 0, "walls": {"N": True, "S": True, "E": True, "W": True}},
+                 "not_a_dict"],
+            ]}
+            json.dump(data, f)
+            filepath = f.name
+        try:
+            with self.assertRaises(ValueError):
+                load_maze(filepath)
+        finally:
+            os.unlink(filepath)
+
+    def test_load_non_integer_rows(self):
+        """Non-integer rows/cols should raise ValueError."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump({"rows": "three", "cols": 3, "cells": []}, f)
+            filepath = f.name
+        try:
+            with self.assertRaises(ValueError):
+                load_maze(filepath)
+        finally:
+            os.unlink(filepath)
+
+    def test_load_cells_row_not_list(self):
+        """A cells row that is not a list should raise ValueError."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            data = {"rows": 2, "cols": 2, "cells": [
+                "not_a_list",
+                [{"row": 1, "col": 0, "walls": {"N": True, "S": True, "E": True, "W": True}},
+                 {"row": 1, "col": 1, "walls": {"N": True, "S": True, "E": True, "W": True}}],
+            ]}
+            json.dump(data, f)
+            filepath = f.name
+        try:
+            with self.assertRaises(ValueError):
+                load_maze(filepath)
+        finally:
+            os.unlink(filepath)
+
+
+class TestStatsWithBitmap(unittest.TestCase):
+    """Tests for stats() with optional bitmap parameter."""
+
+    def test_stats_with_precomputed_bitmap(self):
+        """stats() should accept pre-computed bitmap to avoid recomputation."""
+        maze = generate_dfs(5, 5, seed=42)
+        bitmap = maze.to_bitmap()
+        s1 = maze.stats()
+        s2 = maze.stats(bitmap=bitmap)
+        self.assertEqual(s1, s2)
+
+    def test_stats_with_none_uses_internal_bitmap(self):
+        """stats(bitmap=None) should compute bitmap internally."""
+        maze = generate_dfs(5, 5, seed=42)
+        s = maze.stats(bitmap=None)
+        self.assertGreater(s["total_cells"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
