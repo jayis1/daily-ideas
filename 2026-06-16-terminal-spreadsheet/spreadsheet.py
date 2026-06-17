@@ -32,7 +32,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 # ── Version ──────────────────────────────────────────────────────────────────
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -44,6 +44,14 @@ MAX_UNDO_HISTORY = 50
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
+def _display_str(val) -> str:
+    """Convert a value to a display-friendly string.
+    Floats that are whole numbers (e.g. 3.0) are shown as '3', not '3.0'."""
+    if isinstance(val, float) and val == int(val):
+        return str(int(val))
+    return str(val)
+
 
 def col_to_letter(col: int) -> str:
     """Convert a zero-based column index to a letter. 0→A, 1→B, …, 25→Z."""
@@ -202,6 +210,10 @@ def parse_range(tokens: List[Tuple[str, Any]], pos: int) -> Tuple[Optional[Tuple
 
 # ── Spreadsheet Engine ───────────────────────────────────────────────────────
 
+# Sentinel for empty cells — lets COUNT/AVG/etc distinguish actual 0 from empty
+_EMPTY_CELL = object()
+
+
 class Spreadsheet:
     """Core spreadsheet data model with formula evaluation, caching, and undo."""
 
@@ -222,7 +234,8 @@ class Spreadsheet:
         key = (row, col)
         if value == '' or value is None:
             self.cells.pop(key, None)
-            self.cache.pop(key, None)
+            # Clear entire cache — other cells may depend on this one
+            self.cache.clear()
             self.error_cells.discard(key)
         else:
             self.cells[key] = str(value)
@@ -391,15 +404,15 @@ class Spreadsheet:
 
     def _parse_expression(self, tokens, pos, source, eval_stack):
         """Parse addition / subtraction / concatenation level."""
-        left = self._parse_comparison(tokens, pos, source, eval_stack)
+        left = self._parse_logical_and(tokens, pos, source, eval_stack)
         while pos[0] < len(tokens) and tokens[pos[0]][0] == 'OP' and tokens[pos[0]][1] in ('+', '-'):
             op = tokens[pos[0]][1]
             pos[0] += 1
-            right = self._parse_comparison(tokens, pos, source, eval_stack)
+            right = self._parse_logical_and(tokens, pos, source, eval_stack)
             if op == '+':
                 # Support string + number concatenation
                 if isinstance(left, str) or isinstance(right, str):
-                    left = str(left) + str(right)
+                    left = _display_str(left) + _display_str(right)
                 else:
                     left = left + right
             else:
@@ -425,6 +438,15 @@ class Spreadsheet:
                 left = 1 if left > right else 0
             elif op == '>=':
                 left = 1 if left >= right else 0
+        return left
+
+    def _parse_logical_and(self, tokens, pos, source, eval_stack):
+        """Parse logical AND (&&)."""
+        left = self._parse_comparison(tokens, pos, source, eval_stack)
+        while pos[0] < len(tokens) and tokens[pos[0]][0] == 'OP' and tokens[pos[0]][1] == '&&':
+            pos[0] += 1
+            right = self._parse_comparison(tokens, pos, source, eval_stack)
+            left = 1 if left and right else 0
         return left
 
     def _parse_term(self, tokens, pos, source, eval_stack):
@@ -564,22 +586,27 @@ class Spreadsheet:
 
     def _expand_range(self, rng: Tuple[int, int, int, int],
                      source: Tuple[int, int], eval_stack: set) -> List[Any]:
-        """Expand a range (r1, c1, r2, c2) into a list of cell values."""
+        """Expand a range (r1, c1, r2, c2) into a list of cell values.
+        Empty cells are represented by _EMPTY_CELL sentinel."""
         r1, c1, r2, c2 = rng
         values: List[Any] = []
         for r in range(min(r1, r2), max(r1, r2) + 1):
             for c in range(min(c1, c2), max(c1, c2) + 1):
                 if (r, c) in eval_stack:
                     raise ValueError("Circular reference")
-                val = self.get_value_with_stack(r, c, eval_stack)
-                values.append(val)
+                if (r, c) not in self.cells:
+                    values.append(_EMPTY_CELL)
+                else:
+                    val = self.get_value_with_stack(r, c, eval_stack)
+                    values.append(val)
         return values
 
     def _apply_function(self, name: str, args: List[Any], source: Tuple[int, int]) -> Any:
         """Apply a spreadsheet function to a list of arguments."""
-        # Separate numeric args from string args
-        nums = [a for a in args if isinstance(a, (int, float))]
-        strs = [a for a in args if isinstance(a, str)]
+        # Filter out _EMPTY_CELL sentinels for aggregate functions
+        real_args = [a for a in args if a is not _EMPTY_CELL]
+        nums = [a for a in real_args if isinstance(a, (int, float))]
+        strs = [a for a in real_args if isinstance(a, str)]
 
         if name == 'SUM':
             return sum(nums) if nums else 0
@@ -604,7 +631,8 @@ class Spreadsheet:
         elif name == 'MAX':
             return max(nums) if nums else 0
         elif name == 'COUNT':
-            return len([a for a in args if a != 0 or isinstance(a, (int, float))])
+            # Count only non-empty cells (numeric or string, but not _EMPTY_CELL)
+            return len(real_args)
         elif name == 'ABS':
             return abs(nums[0]) if nums else 0
         elif name == 'INT':
@@ -616,6 +644,8 @@ class Spreadsheet:
         elif name == 'SQRT':
             if nums and nums[0] >= 0:
                 return math.sqrt(nums[0])
+            elif nums:
+                raise ValueError("SQRT of negative number")
             return 0
         elif name == 'IF':
             # IF(condition, true_val, false_val)
@@ -627,7 +657,7 @@ class Spreadsheet:
             return 0
         elif name == 'CONCAT':
             # CONCAT(val1, val2, ...) — concatenate all args as strings
-            return ''.join(str(a) for a in args)
+            return ''.join(_display_str(a) for a in real_args)
         else:
             raise ValueError(f"Unknown function: {name}")
 
@@ -946,9 +976,9 @@ class SpreadsheetUI:
                     if row == self.cursor_row and col == self.cursor_col and self.mode == 'NAV':
                         display = raw
                     else:
-                        display = self._format_value(val)
+                        display = self._format_value(val, raw)
                 else:
-                    display = self._format_value(val)
+                    display = self._format_value(val, raw)
 
                 # Determine color
                 color = 0  # default
@@ -1016,10 +1046,15 @@ class SpreadsheetUI:
 
         self.stdscr.refresh()
 
-    def _format_value(self, val) -> str:
+    def _format_value(self, val, raw: str = '') -> str:
         """Format a cell value for display in the grid."""
         if val == 0 and not isinstance(val, bool):
-            return ''
+            # Show '0' if the user explicitly entered a zero, blank otherwise
+            # (empty cells are handled before calling _format_value, but
+            # formulas can also evaluate to 0 — show those too)
+            if raw == '' or raw is None:
+                return ''
+            return '0'
         if isinstance(val, float):
             if val == int(val) and abs(val) < 1e10:
                 return str(int(val))

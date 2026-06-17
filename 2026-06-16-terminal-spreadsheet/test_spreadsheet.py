@@ -429,6 +429,78 @@ def test_version():
     assert len(parts) >= 2
 
 
+# ── Bug-fix regression tests ──────────────────────────────────────────────
+
+def test_count_excludes_empty_cells():
+    """COUNT should not count empty cells (Bug: empty cells returned 0, which
+    was counted as numeric). Fixed with _EMPTY_CELL sentinel."""
+    s = Spreadsheet()
+    s.set_cell(0, 0, '10')
+    s.set_cell(2, 0, '20')
+    # A2 is empty
+    s.set_cell(5, 0, '=COUNT(A1:A4)')
+    assert s.get_value(5, 0) == 2, f"Expected 2 (skip empty), got {s.get_value(5, 0)}"
+
+
+def test_count_empty_range():
+    """COUNT of a fully empty range should return 0."""
+    s = Spreadsheet()
+    s.set_cell(5, 0, '=COUNT(A1:A4)')
+    assert s.get_value(5, 0) == 0
+
+
+def test_cache_invalidation_on_delete():
+    """Deleting a cell should clear the entire cache so dependent formulas
+    recalculate. (Bug: only the deleted cell's cache was cleared.)"""
+    s = Spreadsheet()
+    s.set_cell(0, 0, '10')
+    s.set_cell(1, 0, '=A1*2')
+    assert s.get_value(1, 0) == 20
+    s.set_cell(0, 0, '')  # Delete A1
+    assert s.get_value(1, 0) == 0, f"After deleting A1, A2 should be 0, got {s.get_value(1, 0)}"
+
+
+def test_concat_float_formatting():
+    """CONCAT should format whole-number floats cleanly (3.0 → '3').
+    (Bug: str(3.0) gave '3.0' instead of '3'.)"""
+    s = Spreadsheet()
+    s.set_cell(0, 0, '=CONCAT(1, "+", 2, "=", 3)')
+    assert s.get_value(0, 0) == '1+2=3', f"Expected '1+2=3', got {s.get_value(0, 0)!r}"
+
+
+def test_sqrt_negative():
+    """SQRT of a negative number should return an error, not silently return 0.
+    (Bug: SQRT(-4) returned 0 with no indication of error.)"""
+    s = Spreadsheet()
+    s.set_cell(0, 0, '-4')
+    s.set_cell(1, 0, '=SQRT(A1)')
+    val = s.get_value(1, 0)
+    assert isinstance(val, str) and 'ERR' in val, f"Expected ERR, got {val!r}"
+
+
+def test_logical_and():
+    """The && operator should work as logical AND.
+    (Bug: && was tokenized but never parsed, giving silently wrong results.)"""
+    s = Spreadsheet()
+    s.set_cell(0, 0, '=1&&1')
+    assert s.get_value(0, 0) == 1
+    s.set_cell(1, 0, '=1&&0')
+    assert s.get_value(1, 0) == 0
+    s.set_cell(2, 0, '=0&&1')
+    assert s.get_value(2, 0) == 0
+    s.set_cell(3, 0, '=0&&0')
+    assert s.get_value(3, 0) == 0
+
+
+def test_string_plus_number_formatting():
+    """String + number via + operator should format whole floats cleanly.
+    (Bug: 'hello'+5 gave 'hello5.0' instead of 'hello5'.)"""
+    s = Spreadsheet()
+    s.set_cell(0, 0, 'hello')
+    s.set_cell(1, 0, '=A1+5')
+    assert s.get_value(1, 0) == 'hello5', f"Expected 'hello5', got {s.get_value(1, 0)!r}"
+
+
 # ── Main ────────────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
@@ -466,4 +538,12 @@ if __name__ == '__main__':
     test_search_after()
     test_modulo()
     test_version()
+    # ── Bug-fix regression tests ─────────────────────────────────────────
+    test_count_excludes_empty_cells()
+    test_count_empty_range()
+    test_cache_invalidation_on_delete()
+    test_concat_float_formatting()
+    test_sqrt_negative()
+    test_logical_and()
+    test_string_plus_number_formatting()
     print("All tests passed!")
