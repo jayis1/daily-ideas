@@ -7,10 +7,12 @@ grid, and exports patterns as WAV or MIDI files. No external audio libraries nee
 Features:
   - 8 synthesized drum sounds (Kick, Snare, HH-Closed, HH-Open, Clap, Tom, Rim, Cowbell)
   - 16-step sequencer with configurable step count (8/16/32)
-  - 6 built-in presets + random pattern generator
+  - 9 built-in presets + random pattern generator
   - Shuffle/swing for groove feel
   - Humanize mode for organic timing/velocity variation
   - Per-drum volume control
+  - Per-step accent control for dynamic expression
+  - Flam support — quick double-hits on any step
   - Mute/solo per drum
   - Pattern save/load (JSON)
   - Pattern shift/rotate, invert, reverse
@@ -19,7 +21,8 @@ Features:
   - Undo support for pattern changes
   - WAV export at 44.1kHz 16-bit mono
   - MIDI export (basic, single-track)
-  - Interactive REPL mode
+  - Interactive REPL mode with on-the-fly step count changes
+  - Pattern info / statistics display
 """
 
 from __future__ import annotations
@@ -38,7 +41,7 @@ from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 
-__version__ = "1.4.0"
+__version__ = "1.5.0"
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -332,8 +335,11 @@ class DrumMachine:
     """Terminal-based step sequencer drum machine with sound synthesis.
 
     Supports pattern editing, presets, swing, humanize, undo, fill generation,
-    WAV/MIDI export, and more.
+    accent patterns, flam hits, WAV/MIDI export, and more.
     """
+
+    # Default flam offset in seconds (how early the grace note hits before the main hit)
+    DEFAULT_FLAM_OFFSET = 0.03
 
     def __init__(self, bpm: int = 120, steps: int = 16, swing: float = 0.0):
         if bpm < 30 or bpm > 300:
@@ -350,6 +356,12 @@ class DrumMachine:
         self.pattern: Dict[DrumName, List[bool]] = {
             drum: [False] * steps for drum in self.drums
         }
+        # Accent pattern: per-step volume multiplier (1.0 = normal, >1.0 = accented)
+        self.accents: List[float] = [1.0] * steps
+        # Flam pattern: which steps have a flam (grace note just before the main hit)
+        self.flams: Dict[DrumName, List[bool]] = {
+            drum: [False] * steps for drum in self.drums
+        }
         self.volumes: Dict[DrumName, float] = {drum: 1.0 for drum in self.drums}
         self.muted: Dict[DrumName, bool] = {drum: False for drum in self.drums}
         self.synths: Dict[DrumName, callable] = dict(DRUM_SYNTHS)
@@ -362,7 +374,7 @@ class DrumMachine:
         # Metronome: click track on quarter-note steps
         self.metronome: bool = False
 
-        # Undo history: stores snapshots of (pattern, volumes, muted, bpm, swing)
+        # Undo history: stores snapshots of (pattern, volumes, muted, accents, flams, bpm, swing)
         self._undo_stack: List[tuple] = []
 
     # ─── Undo Support ────────────────────────────────────────────────────
@@ -372,7 +384,9 @@ class DrumMachine:
         pattern_copy = {d: list(v) for d, v in self.pattern.items()}
         volumes_copy = dict(self.volumes)
         muted_copy = dict(self.muted)
-        return (pattern_copy, volumes_copy, muted_copy, self.bpm, self.swing)
+        accents_copy = list(self.accents)
+        flams_copy = {d: list(v) for d, v in self.flams.items()}
+        return (pattern_copy, volumes_copy, muted_copy, accents_copy, flams_copy, self.bpm, self.swing, self.steps)
 
     def _push_undo(self) -> None:
         """Push current state onto the undo stack."""
@@ -384,12 +398,15 @@ class DrumMachine:
         """Restore the most recent undo state. Returns True if undone."""
         if not self._undo_stack:
             return False
-        pattern_copy, volumes_copy, muted_copy, bpm, swing = self._undo_stack.pop()
+        pattern_copy, volumes_copy, muted_copy, accents_copy, flams_copy, bpm, swing, steps = self._undo_stack.pop()
         self.pattern = pattern_copy
         self.volumes = volumes_copy
         self.muted = muted_copy
+        self.accents = accents_copy
+        self.flams = flams_copy
         self.bpm = bpm
         self.swing = swing
+        self.steps = steps
         return True
 
     # ─── Pattern Manipulation ─────────────────────────────────────────────
@@ -402,9 +419,11 @@ class DrumMachine:
         for key, pattern in presets.items():
             if key.replace("-", "").replace(" ", "") == name_lower:
                 self._push_undo()
-                # Clear current pattern first
+                # Clear current pattern, accents, and flams
                 for drum in self.drums:
                     self.pattern[drum] = [False] * self.steps
+                    self.flams[drum] = [False] * self.steps
+                self.accents = [1.0] * self.steps
                 # Load preset, adapting to current step count
                 for drum, steps in pattern.items():
                     adapted = self._adapt_pattern(steps, self.steps)
@@ -478,10 +497,12 @@ class DrumMachine:
         self.pattern[dst] = list(self.pattern[src])
 
     def clear_pattern(self) -> None:
-        """Clear all steps."""
+        """Clear all steps, accents, and flams."""
         self._push_undo()
         for drum in self.drums:
             self.pattern[drum] = [False] * self.steps
+            self.flams[drum] = [False] * self.steps
+        self.accents = [1.0] * self.steps
 
     def random_pattern(self, density: float = 0.3) -> None:
         """Generate a random pattern with given overall density (0.0-1.0)."""
@@ -497,6 +518,129 @@ class DrumMachine:
             else:
                 d = density
             self.pattern[drum] = [random.random() < d for _ in range(self.steps)]
+        # Randomly accent some quarter-note steps
+        self.accents = [1.0] * self.steps
+        quarter = max(1, self.steps // 4)
+        for i in range(0, self.steps, quarter):
+            if random.random() < 0.5:
+                self.accents[i] = 1.3
+        # Clear flams on random
+        for drum in self.drums:
+            self.flams[drum] = [False] * self.steps
+
+    # ─── Accent & Flam ────────────────────────────────────────────────────
+
+    def toggle_accent(self, step: int, accent_value: float = 1.3) -> float:
+        """Toggle accent on a step. Returns the new accent value.
+
+        If the step is already accented, resets it to 1.0 (normal).
+        Otherwise, sets it to accent_value.
+        Accent values multiply the volume of all hits on that step.
+        """
+        if step < 0 or step >= self.steps:
+            raise IndexError(f"Step must be 0-{self.steps - 1}, got {step}")
+        self._push_undo()
+        if self.accents[step] > 1.01:
+            self.accents[step] = 1.0
+        else:
+            self.accents[step] = accent_value
+        return self.accents[step]
+
+    def clear_accents(self) -> None:
+        """Reset all accents to normal (1.0)."""
+        self._push_undo()
+        self.accents = [1.0] * self.steps
+
+    def toggle_flam(self, drum: DrumName, step: int) -> bool:
+        """Toggle a flam on a specific drum/step. Returns new flam state.
+
+        A flam adds a quiet grace note just before the main hit,
+        creating a classic drumming flam effect.
+        """
+        if step < 0 or step >= self.steps:
+            raise IndexError(f"Step must be 0-{self.steps - 1}, got {step}")
+        self._push_undo()
+        self.flams[drum][step] = not self.flams[drum][step]
+        return self.flams[drum][step]
+
+    def clear_flams(self) -> None:
+        """Clear all flams."""
+        self._push_undo()
+        for drum in self.drums:
+            self.flams[drum] = [False] * self.steps
+
+    # ─── Step Count Change ────────────────────────────────────────────────
+
+    def set_steps(self, new_steps: int) -> None:
+        """Change the number of steps, adapting the pattern.
+
+        Existing pattern data is preserved via tiling/truncation.
+        Accents and flams are also adapted.
+        """
+        if new_steps not in VALID_STEP_COUNTS:
+            raise ValueError(f"Steps must be one of {VALID_STEP_COUNTS}, got {new_steps}")
+        if new_steps == self.steps:
+            return
+        self._push_undo()
+        old_steps = self.steps
+        self.steps = new_steps
+        for drum in self.drums:
+            self.pattern[drum] = self._adapt_pattern(self.pattern[drum], new_steps)
+            self.flams[drum] = self._adapt_pattern(self.flams[drum], new_steps)
+        # Adapt accents
+        new_accents = []
+        for i in range(new_steps):
+            new_accents.append(self.accents[i % old_steps])
+        self.accents = new_accents
+
+    # ─── Pattern Info ──────────────────────────────────────────────────────
+
+    def pattern_info(self) -> str:
+        """Return a detailed statistics string about the current pattern."""
+        density_per_drum = self.pattern_density()
+        total_hits = sum(
+            sum(1 for s in self.pattern[drum] if s)
+            for drum in self.drums
+        )
+        total_steps = self.steps * len(self.drums)
+        overall_density = total_hits / total_steps if total_steps > 0 else 0
+
+        total_flams = sum(
+            sum(1 for s in self.flams[drum] if s)
+            for drum in self.drums
+        )
+        total_accents = sum(1 for a in self.accents if a > 1.01)
+
+        active_drums = sum(
+            1 for drum in self.drums
+            if any(self.pattern[drum]) and not self.muted[drum]
+        )
+
+        lines = [
+            "╔════════════════════════════════════════╗",
+            "║        Pattern Info & Stats            ║",
+            "╠════════════════════════════════════════╣",
+            f"║  BPM:          {self.bpm}",
+            f"║  Steps:        {self.steps}",
+            f"║  Swing:        {self.swing:.0%}",
+            f"║  Humanize:     {'ON' if self.humanize else 'OFF'}",
+            f"║  Metronome:    {'ON' if self.metronome else 'OFF'}",
+            "╠════════════════════════════════════════╣",
+            f"║  Total hits:   {total_hits}",
+            f"║  Overall density: {overall_density:.0%}",
+            f"║  Active drums: {active_drums}",
+            f"║  Accented steps: {total_accents}",
+            f"║  Flam hits:    {total_flams}",
+            "╠════════════════════════════════════════╣",
+        ]
+        for drum in self.drums:
+            d = density_per_drum[drum.value]
+            hits = sum(1 for s in self.pattern[drum] if s)
+            mute = " [MUTED]" if self.muted[drum] else ""
+            vol = f" vol:{self.volumes[drum]:.0%}" if self.volumes[drum] != 1.0 else ""
+            lines.append(f"║  {drum.value:>5}: {hits:>2}/{self.steps} hits ({d:>4.0%}){mute}{vol}")
+        lines.append("╚════════════════════════════════════════╝")
+        return "\n".join(lines)
 
     def generate_fill(self, start_step: int = 0, density: float = 0.7) -> None:
         """Generate a random fill starting from start_step to end of pattern.
@@ -557,8 +701,9 @@ class DrumMachine:
     def mix_step(self, step: int) -> np.ndarray:
         """Mix all active (un-muted) sounds for a given step.
 
-        Applies humanize timing jitter and velocity variation if enabled.
-        Optionally includes a metronome click on quarter-note steps.
+        Applies accent boost, flam grace notes, humanize timing jitter
+        and velocity variation if enabled. Optionally includes a metronome
+        click on quarter-note steps.
         """
         duration = self.step_duration(step)
         n = int(SAMPLE_RATE * duration)
@@ -566,11 +711,17 @@ class DrumMachine:
             n = 1
         mixed = np.zeros(n)
 
+        # Accent multiplier for this step
+        accent = self.accents[step] if step < len(self.accents) else 1.0
+
         for drum in self.drums:
             if self.pattern[drum][step] and not self.muted[drum]:
                 sound = self.synths[drum](duration=min(duration, 0.5))
                 # Apply per-drum volume
                 vol = self.volumes[drum]
+
+                # Apply accent boost
+                vol *= accent
 
                 # Apply humanize velocity variation if enabled
                 if self.humanize:
@@ -587,6 +738,19 @@ class DrumMachine:
                 elif len(sound) < n:
                     sound = np.pad(sound, (0, n - len(sound)))
                 mixed += sound
+
+                # Flam: add a quiet grace note just before the main hit
+                if step < len(self.flams.get(drum, [])) and self.flams[drum][step]:
+                    flam_offset_samples = int(self.DEFAULT_FLAM_OFFSET * SAMPLE_RATE)
+                    flam_sound = self.synths[drum](duration=min(duration * 0.5, 0.15))
+                    flam_sound = flam_sound * 0.4  # Grace note is quieter
+                    # Place grace note so it ends right before the main hit
+                    start = max(0, flam_offset_samples - len(flam_sound))
+                    end = min(flam_offset_samples, n)
+                    snippet_len = end - start
+                    if snippet_len > 0 and start < len(mixed):
+                        flam_snippet = flam_sound[len(flam_sound) - snippet_len:]
+                        mixed[start:end] += flam_snippet[:end - start]
 
         # Metronome click on quarter-note steps (every 4th step in 16-step mode)
         if self.metronome:
@@ -752,7 +916,7 @@ class DrumMachine:
     # ─── Save / Load ───────────────────────────────────────────────────────
 
     def save_pattern_json(self, filename: str) -> None:
-        """Save the current pattern, volumes, BPM, swing, and humanize state to JSON."""
+        """Save the current pattern, volumes, BPM, swing, accents, flams, and humanize state to JSON."""
         data = {
             "version": __version__,
             "bpm": self.bpm,
@@ -761,8 +925,13 @@ class DrumMachine:
             "humanize": self.humanize,
             "humanize_timing": self.humanize_timing,
             "humanize_velocity": self.humanize_velocity,
+            "accents": [round(a, 2) for a in self.accents],
             "pattern": {
                 drum.value: [int(s) for s in self.pattern[drum]]
+                for drum in self.drums
+            },
+            "flams": {
+                drum.value: [int(s) for s in self.flams[drum]]
                 for drum in self.drums
             },
             "volumes": {
@@ -831,6 +1000,34 @@ class DrumMachine:
             else:
                 self.pattern[drum] = [False] * self.steps
 
+        # Load accents if present (backward-compatible)
+        accents_data = data.get("accents", [])
+        if isinstance(accents_data, list) and len(accents_data) > 0:
+            self.accents = []
+            for i in range(self.steps):
+                if i < len(accents_data) and isinstance(accents_data[i], (int, float)):
+                    self.accents.append(float(accents_data[i]))
+                else:
+                    self.accents.append(1.0)
+        else:
+            self.accents = [1.0] * self.steps
+
+        # Load flams if present (backward-compatible)
+        if "flams" in data and isinstance(data["flams"], dict):
+            for drum in self.drums:
+                if drum.value in data["flams"]:
+                    src = data["flams"][drum.value]
+                    if isinstance(src, list):
+                        self.flams[drum] = self._adapt_pattern(src, self.steps)
+                    else:
+                        self.flams[drum] = [False] * self.steps
+                else:
+                    self.flams[drum] = [False] * self.steps
+        else:
+            # No flams in file — clear them
+            for drum in self.drums:
+                self.flams[drum] = [False] * self.steps
+
         for drum in self.drums:
             if drum.value in data.get("volumes", {}):
                 vol = data["volumes"][drum.value]
@@ -848,7 +1045,11 @@ class DrumMachine:
     # ─── Display ───────────────────────────────────────────────────────────
 
     def display_grid(self, highlight_step: Optional[int] = None) -> str:
-        """Return a string representation of the sequencer grid."""
+        """Return a string representation of the sequencer grid.
+
+        Shows accent markers (^) and flam markers (~) alongside
+        the standard step indicators.
+        """
         lines: List[str] = []
 
         # Build header with step numbers
@@ -863,7 +1064,7 @@ class DrumMachine:
         lines.append(header)
         lines.append(sep)
 
-        # Drum rows
+        # Drum rows — show flams with ~ prefix
         for drum in self.drums:
             mute_marker = "🔇" if self.muted[drum] else "  "
             row = f"{drum.value:>13}{mute_marker}│ "
@@ -871,6 +1072,8 @@ class DrumMachine:
                 if self.pattern[drum][i]:
                     if highlight_step is not None and i == highlight_step:
                         marker = "◉ "
+                    elif self.flams.get(drum, [False] * self.steps)[i]:
+                        marker = "~●" if i < len(self.flams.get(drum, [])) else "● "
                     else:
                         marker = "● "
                 else:
@@ -882,6 +1085,18 @@ class DrumMachine:
             row += "│"
             lines.append(row)
 
+        # Accent row
+        has_accents = any(a > 1.01 for a in self.accents)
+        if has_accents:
+            accent_row = f"{'Accents':>13}  │ "
+            for i in range(self.steps):
+                if self.accents[i] > 1.01:
+                    accent_row += "^ "
+                else:
+                    accent_row += "  "
+            accent_row += "│"
+            lines.append(accent_row)
+
         lines.append(sep)
 
         # Status line
@@ -892,6 +1107,11 @@ class DrumMachine:
             status_parts.append("Humanize: ON")
         if self.metronome:
             status_parts.append("Metro: ON")
+        if has_accents:
+            status_parts.append("Accents: ON")
+        total_flams = sum(sum(1 for s in self.flams.get(d, [])) for d in self.drums)
+        if total_flams > 0:
+            status_parts.append(f"Flams: {total_flams}")
         if highlight_step is not None:
             status_parts.append(f"Step: {highlight_step + 1}")
         lines.append("  " + "  ".join(status_parts))
@@ -907,6 +1127,9 @@ class DrumMachine:
             ("reggaeton", "Dembow rhythm with rimshot accent"),
             ("bossa-nova", "Brazilian bossa nova feel with cowbell"),
             ("dnb", "Fast drum and bass with open hi-hat tail"),
+            ("trap", "Trap beat with rapid hi-hats and 808-style kick"),
+            ("jazz", "Jazz ride cymbal pattern with swung feel"),
+            ("garage", "UK garage 2-step groove with offbeat kick"),
         ]
         lines = ["Available Presets:", ""]
         for name, desc in presets:
@@ -957,6 +1180,24 @@ class DrumMachine:
                 DrumName.KICK:     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
                 DrumName.SNARE:   [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
                 DrumName.HH_CLOSED:[1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
+                DrumName.HH_OPEN: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            },
+            "trap": {
+                DrumName.KICK:     [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1],
+                DrumName.SNARE:   [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+                DrumName.HH_CLOSED:[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                DrumName.CLAP:    [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+            },
+            "jazz": {
+                DrumName.KICK:     [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+                DrumName.RIM:     [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0],
+                DrumName.HH_CLOSED:[1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
+                DrumName.HH_OPEN: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
+            },
+            "garage": {
+                DrumName.KICK:     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+                DrumName.SNARE:   [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
+                DrumName.HH_CLOSED:[1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1, 1, 0],
                 DrumName.HH_OPEN: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
             },
         }
@@ -1012,6 +1253,7 @@ def interactive_mode(machine: DrumMachine) -> None:
     print("║  preset <name>       — Load a preset                      ║")
     print("║  presets             — List presets                        ║")
     print("║  bpm <n>             — Set BPM (30-300)                   ║")
+    print("║  steps <8|16|32>     — Change step count                   ║")
     print("║  swing <0-75>        — Set swing %  (0=straight)         ║")
     print("║  volume <drum> <0-200> — Set drum volume %              ║")
     print("║  mute <drum>         — Toggle mute on a drum            ║")
@@ -1022,11 +1264,16 @@ def interactive_mode(machine: DrumMachine) -> None:
     print("║  reverse <drum>       — Reverse pattern order             ║")
     print("║  copy <src> <dst>    — Copy pattern between drums        ║")
     print("║  fill [start_step]   — Generate fill from step onward     ║")
+    print("║  accent <step>       — Toggle accent on step (1-indexed)  ║")
+    print("║  clearaccents        — Clear all accents                  ║")
+    print("║  flam <drum> <step>  — Toggle flam on a drum/step         ║")
+    print("║  clearflams          — Clear all flams                    ║")
     print("║  humanize [on|off]   — Toggle humanize (timing/velocity)  ║")
     print("║  metronome           — Toggle click track on quarter notes║")
     print("║  clear               — Clear pattern                      ║")
     print("║  random [density]    — Random pattern (0.0-1.0)           ║")
     print("║  density             — Show pattern density per drum       ║")
+    print("║  info                — Show pattern stats & details        ║")
     print("║  undo                — Undo last change                  ║")
     print("║  save <file>         — Save pattern to JSON               ║")
     print("║  load <file>         — Load pattern from JSON              ║")
@@ -1302,6 +1549,74 @@ def interactive_mode(machine: DrumMachine) -> None:
                 mute_str = " (muted)" if machine.muted[drum] else ""
                 vol_str = f" vol:{machine.volumes[drum]:.0%}" if machine.volumes[drum] != 1.0 else ""
                 print(f"  {drum.value:>8} {bar} {d:5.1%}{mute_str}{vol_str}")
+            print()
+
+        elif parts[0] == "info":
+            print(machine.pattern_info())
+            print()
+
+        elif parts[0] == "accent":
+            if len(parts) < 2:
+                print("Usage: accent <step_number>  (1-indexed, e.g. accent 1)")
+                continue
+            try:
+                step = int(parts[1]) - 1
+                if step < 0 or step >= machine.steps:
+                    print(f"Step must be between 1 and {machine.steps}")
+                    continue
+                new_val = machine.toggle_accent(step)
+                state = f"ON (x{new_val:.1f})" if new_val > 1.01 else "OFF"
+                print(f"Accent on step {step + 1}: {state}")
+                print(machine.display_grid(highlight_step=step))
+            except ValueError:
+                print("Step must be a number")
+            print()
+
+        elif parts[0] == "clearaccents":
+            machine.clear_accents()
+            print("All accents cleared.")
+            print(machine.display_grid())
+            print()
+
+        elif parts[0] == "flam":
+            if len(parts) < 3:
+                print("Usage: flam <drum> <step>  (e.g. flam snare 2)")
+                continue
+            drum_name = parts[1]
+            if drum_name not in DRUM_ALIASES:
+                print(f"Unknown drum: {drum_name}. Use: k, s, hhc, hho, c, t, r, cb")
+                continue
+            try:
+                step = int(parts[2]) - 1
+                if step < 0 or step >= machine.steps:
+                    print(f"Step must be between 1 and {machine.steps}")
+                    continue
+                drum = DRUM_ALIASES[drum_name]
+                new_state = machine.toggle_flam(drum, step)
+                state = "ON" if new_state else "OFF"
+                print(f"Flam on {drum.value} step {step + 1}: {state}")
+                print(machine.display_grid(highlight_step=step))
+            except ValueError:
+                print("Step must be a number")
+            print()
+
+        elif parts[0] == "clearflams":
+            machine.clear_flams()
+            print("All flams cleared.")
+            print(machine.display_grid())
+            print()
+
+        elif parts[0] == "steps":
+            if len(parts) < 2:
+                print(f"Current steps: {machine.steps}. Usage: steps <8|16|32>")
+                continue
+            try:
+                new_steps = int(parts[1])
+                machine.set_steps(new_steps)
+                print(f"Step count changed to {machine.steps}")
+                print(machine.display_grid())
+            except ValueError as e:
+                print(f"Error: {e}")
             print()
 
         elif parts[0] == "undo":

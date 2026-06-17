@@ -1,22 +1,38 @@
 # 🥁 Terminal Drum Machine
 
-A feature-rich, Python-based drum machine that runs entirely in your terminal. Synthesize 8 drum sounds, build patterns with a step sequencer, apply swing and humanize, export to WAV or MIDI, and more — all with zero external audio dependencies beyond NumPy.
+A feature-rich, Python-based drum machine that runs entirely in your terminal. Synthesize 8 drum sounds, build patterns with a step sequencer, add accents and flams for expression, apply swing and humanize, export to WAV or MIDI, and more — all with zero external audio dependencies beyond NumPy.
 
 ## Features
 
+### Sound Engine
 - **8 synthesized drum sounds** — kick, snare, hi-hat (closed/open), clap, tom, rimshot, cowbell — generated with pure NumPy, no samples needed
-- **16-step sequencer** with support for 8 or 32 steps as well
-- **Interactive mode** — real-time pattern editing with a terminal UI
-- **6 built-in presets** — four-on-floor, hiphop, breakbeat, reggaeton, bossa nova, drum-and-bass
+- **Accent patterns** — boost volume on any step for dynamic emphasis (1.3× default, configurable)
+- **Flam hits** — add grace notes 30ms before the main hit on any drum/step for snare rushes and rhythmic texture
+
+### Sequencer
+- **8/16/32-step sequencer** — change step count on the fly with the `steps` command
+- **9 built-in presets** — four-on-floor, hiphop, breakbeat, reggaeton, bossa nova, drum-and-bass, **trap**, **jazz**, **garage house**
 - **Swing timing** — adjustable swing feel (0.0–0.75)
 - **Humanize mode** — adds realistic timing jitter and velocity variation
 - **Metronome click track** — optional quarter-note click during playback
-- **Pattern operations** — invert, reverse, shift, copy, random, fill generator, solo/unsolo
-- **Undo support** — undo up to 50 pattern changes
-- **Save/Load JSON** — persist and restore patterns with BPM, swing, humanize, and mute state
+
+### Pattern Operations
+- **Invert, reverse, shift, copy** — full pattern manipulation toolkit
+- **Random & fill generators** — create patterns with adjustable density
+- **Solo/unsolo** — isolate any drum or unmute all
+- **Undo support** — undo up to 50 pattern changes (including accents, flams, and step count changes)
+
+### Display
+- **ASCII grid** — visual step sequencer with `█` for hits, `·` for rests, `^` for accents, `~` for flams
+- **Pattern info** — `info` command shows BPM, step count, swing, density stats, accent/flam counts
+
+### Import/Export
+- **Save/Load JSON** — persist and restore patterns with BPM, swing, humanize, mute state, accents, and flams
 - **WAV export** — render patterns to `.wav` audio files
 - **MIDI export** — export patterns as standard MIDI format 0 files (GM percussion channel 10)
-- **CLI interface** — `--export`, `--export-midi`, `--save`, `--list-presets`, `--version`, and more
+
+### CLI Interface
+- `--export`, `--export-midi`, `--save`, `--list-presets`, `--version`, and more
 
 ## Installation
 
@@ -31,67 +47,124 @@ cd 2026-06-17-terminal-drum-machine
 ## Quick Start
 
 ```bash
-# Launch interactive mode (default)
+# Interactive mode — the main way to use it
 python3 drum_machine.py
 
-# Play with a preset and humanize
-python3 drum_machine.py --preset hiphop --humanize
-
-# Export to WAV
-python3 drum_machine.py --preset four-on-floor --export output.wav
-
-# Export to MIDI
-python3 drum_machine.py --preset dnb --export-midi output.mid
-
-# Save a pattern to JSON
-python3 drum_machine.py --preset bossanova --save pattern.json
+# Or use CLI flags for quick actions
+python3 drum_machine.py --preset hiphop --bpm 90 --play
+python3 drum_machine.py --preset trap --export trap_beat.wav
+python3 drum_machine.py --list-presets
 ```
 
 ## Interactive Commands
 
+Once inside interactive mode, use these commands:
+
 | Command | Description |
-|---------|-------------|
-| `toggle <drum> <step>` | Toggle a step on/off (e.g. `toggle kick 0`) |
-| `clear <drum>` | Clear all steps for a drum |
+|---|---|
+| `<drum> <step>` | Toggle a step (e.g. `kick 1`, `snare 5`) |
 | `preset <name>` | Load a preset pattern |
 | `presets` | List available presets |
-| `bpm <value>` | Set tempo (30–300) |
-| `swing <value>` | Set swing (0.0–0.75) |
-| `humanize [on\|off]` | Toggle humanize mode |
-| `metronome` | Toggle metronome click |
-| `invert <drum>` | Invert all steps (ON↔OFF) |
-| `reverse <drum>` | Reverse step order |
-| `shift <drum> <steps>` | Shift pattern left (neg) or right (pos) |
-| `solo <drum>` | Mute all drums except one |
-| `unsolo` | Unmute all drums |
+| `bpm <n>` | Set BPM (30–300) |
+| `steps <8\|16\|32>` | Change step count |
+| `swing <0-75>` | Set swing percentage |
+| `volume <drum> <0-200>` | Set drum volume percentage |
 | `mute <drum>` | Toggle mute on a drum |
-| `volume <drum> <val>` | Set drum volume (0.0–2.0) |
-| `random [density]` | Randomize pattern (0.0–1.0 density) |
-| `fill [step] [density]` | Generate building fill |
+| `solo <drum>` | Solo a drum (mute all others) |
+| `unsolo` | Unmute all drums |
+| `shift <drum> <n>` | Rotate pattern by n steps |
+| `invert <drum>` | Invert pattern (on↔off) |
+| `reverse <drum>` | Reverse pattern order |
 | `copy <src> <dst>` | Copy pattern between drums |
-| `save <file.json>` | Save pattern to JSON |
-| `load <file.json>` | Load pattern from JSON |
-| `export <file.wav>` | Export to WAV audio |
-| `exportmidi <file.mid>` | Export to MIDI |
-| `undo` | Undo last pattern change |
-| `play` | Play the pattern |
-| `grid` | Display current pattern |
-| `quit` / `exit` / `q` | Exit |
-
-> **Note:** Filenames with spaces are supported in `save`, `load`, `export`, and `exportmidi` commands.
+| `fill [start_step]` | Generate fill from step onward |
+| `accent <step>` | Toggle accent on a step (1-indexed) |
+| `clearaccents` | Clear all accents |
+| `flam <drum> <step>` | Toggle flam on a drum/step |
+| `clearflams` | Clear all flams |
+| `humanize [on\|off]` | Toggle humanize (timing/velocity) |
+| `metronome` | Toggle click track |
+| `clear` | Clear pattern |
+| `random [density]` | Random pattern (0.0–1.0 density) |
+| `density` | Show pattern density per drum |
+| `info` | Show pattern stats & details |
+| `undo` | Undo last change |
+| `save <file>` | Save pattern to JSON |
+| `load <file>` | Load pattern from JSON |
+| `play` | Play pattern (audio) |
+| `export <file>` | Export to WAV |
+| `exportmidi <file>` | Export to MIDI |
+| `grid` | Redraw the grid |
+| `quit` | Exit |
 
 ## Drum Aliases
 
-| Full Name | Short Alias |
-|-----------|-------------|
-| kick | k |
-| snare | s |
-| hihat_closed | hc |
-| hihat_open | ho |
-| clap | c |
-| tom | t |
-| rim | r |
-| cowbell | cb |
+Use short names for drums in commands:
+
+| Alias | Drum |
+|---|---|
+| `k` | Kick |
+| `s` | Snare |
+| `hhc` | HH Closed |
+| `hho` | HH Open |
+| `c` | Clap |
+| `t` | Tom |
+| `r` | Rim |
+| `cb` | Cowbell |
+
+## Presets
+
+| Name | Style | Description |
+|---|---|---|
+| `four-on-floor` | House/Pop | Classic four-on-the-floor kick pattern |
+| `hiphop` | Hip-Hop | Boom-bap hip-hop beat |
+| `breakbeat` | Breakbeat | Broken beat pattern |
+| `reggaeton` | Reggaeton | Dembow rhythm |
+| `bossa-nova` | Bossa Nova | Brazilian bossa nova |
+| `drum-and-bass` | DnB | Fast DnB pattern |
+| `trap` | Trap | Trap with rapid hi-hats and 808 kick |
+| `jazz` | Jazz | Swing jazz with ride and rim |
+| `garage` | Garage House | 2-step garage house |
+
+## Accent & Flam Details
+
+### Accents
+Accents boost the volume of all hits on a given step by a multiplier (default 1.3×). Use `accent <step>` to toggle. Accented steps show `^` in the grid.
+
+```
+🥁 > accent 1
+Accent on step 1: ON (x1.3)
+🥁 > accent 1
+Accent on step 1: OFF
+```
+
+### Flams
+Flams add a quiet grace note 30ms before the main hit on a specific drum/step. The grace note plays at 60% volume. Use `flam <drum> <step>` to toggle. Flammed steps show `~` in the grid.
+
+```
+🥁 > flam snare 5
+Flam on Snare step 5: ON
+🥁 > flam k 1
+Flam on Kick step 1: ON
+```
+
+## JSON Format
+
+Saved patterns include accents and flams:
+
+```json
+{
+  "bpm": 120,
+  "steps": 16,
+  "swing": 0.0,
+  "pattern": {"Kick": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0], ...},
+  "accents": [1.3, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, ...],
+  "flams": {"Kick": [0,0,0,0,...], "Snare": [0,0,0,0,1,...], ...},
+  "volumes": {"Kick": 1.0, ...},
+  "muted": {"Kick": false, ...}
+}
+```
+
+Old JSON files without `accents` or `flams` keys load without errors — they default to no accents and no flams.
 
 ## Running Tests
 
@@ -99,42 +172,8 @@ python3 drum_machine.py --preset bossanova --save pattern.json
 python3 -m pytest test_drum_machine.py -v
 ```
 
-168 tests covering all features, edge cases, and bug regressions.
+The test suite includes 205 tests covering all features: sound synthesis, pattern manipulation, presets, accents, flams, step changes, undo, save/load, MIDI export, and more.
 
-## Bug Fixes (v1.4.0)
+## License
 
-This release fixes 5 bugs found in v1.3.0:
-
-1. **Hi-hat synthesis crash with very short durations** — `synth_hihat_closed` and `synth_hihat_open` could crash with `ValueError` when `duration` was shorter than the convolution kernel. Now the number of samples is automatically clamped to be at least as long as the kernel.
-
-2. **JSON load accepted out-of-range BPM** — Loading a JSON file with `bpm` outside 30–300 (e.g., 0, -50, or 999) would silently corrupt the machine state, leading to crashes in rendering (division by zero) or MIDI export. BPM values from JSON are now clamped to the 30–300 range and coerced to `int`.
-
-3. **JSON load accepted out-of-range swing** — Loading a JSON file with `swing` outside 0.0–0.75 (e.g., 1.5 or -0.5) would cause negative step durations, producing invalid audio. Swing values from JSON are now clamped to 0.0–0.75.
-
-4. **MIDI export crash with invalid BPM** — `render_to_midi` would crash with `OverflowError` if BPM was 0 or negative (from `tempo.to_bytes(3, 'big')`). Now raises `ValueError` with a clear message instead.
-
-5. **Interactive mode filenames with spaces** — Commands like `load my pattern.json` would only capture `my` as the filename. All file-related commands (`save`, `load`, `export`, `exportmidi`) now correctly join remaining arguments to support filenames with spaces.
-
-Additional defensive improvements:
-- `step_duration()` now returns a minimum of 1ms and gracefully handles BPM ≤ 0 (falls back to 120 BPM timing) instead of crashing with `ZeroDivisionError`
-- All synth functions have zero-duration guards that return a tiny silent array
-
-## Changelog
-
-### v1.4.0 (2026-06-17)
-- Fixed hi-hat crash with very short durations
-- Fixed JSON load accepting out-of-range BPM and swing values
-- Fixed MIDI export crash with invalid BPM
-- Fixed interactive mode filename parsing for paths with spaces
-- Added defensive guards in `step_duration()` for BPM ≤ 0 and extreme swing
-- Added 17 regression tests (168 total)
-
-### v1.3.0 (2026-06-17)
-- Added pattern invert, reverse, solo/unsolo, fill generator
-- Added humanize mode, metronome click track
-- Added undo support (50 levels)
-- Added MIDI export
-- Added --help and --version flags
-
-### v1.0.0
-- Initial release with 8 drum sounds, 16-step sequencer, WAV export, presets, swing, save/load
+MIT
