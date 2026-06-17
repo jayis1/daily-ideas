@@ -1093,3 +1093,248 @@ class TestBugFixes:
             assert all(not s for s in dm.pattern[DrumName.KICK])
         finally:
             os.unlink(tmp_name)
+
+
+class TestBugFixesRound2:
+    """Regression tests for bugs found in v1.3.0 and fixed in v1.4.0."""
+
+    def test_load_json_rejects_out_of_range_bpm(self):
+        """BPM values outside 30-300 should be rejected on JSON load."""
+        dm = DrumMachine(bpm=120)
+
+        # BPM=500 (too high)
+        data = {"bpm": 500}
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(data, f)
+            tmp_name = f.name
+        try:
+            dm.load_pattern_json(tmp_name)
+            assert dm.bpm == 120, f"BPM=500 should be rejected, got {dm.bpm}"
+        finally:
+            os.unlink(tmp_name)
+
+        # BPM=0 (too low — causes ZeroDivisionError)
+        data = {"bpm": 0}
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(data, f)
+            tmp_name = f.name
+        try:
+            dm.load_pattern_json(tmp_name)
+            assert dm.bpm == 120, f"BPM=0 should be rejected, got {dm.bpm}"
+        finally:
+            os.unlink(tmp_name)
+
+        # BPM=-50 (negative)
+        data = {"bpm": -50}
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(data, f)
+            tmp_name = f.name
+        try:
+            dm.load_pattern_json(tmp_name)
+            assert dm.bpm == 120, f"BPM=-50 should be rejected, got {dm.bpm}"
+        finally:
+            os.unlink(tmp_name)
+
+    def test_load_json_rejects_out_of_range_swing(self):
+        """Swing values outside 0.0-0.75 should be rejected on JSON load."""
+        dm = DrumMachine(swing=0.0)
+
+        # Swing=1.5 (too high — causes negative step durations)
+        data = {"swing": 1.5}
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(data, f)
+            tmp_name = f.name
+        try:
+            dm.load_pattern_json(tmp_name)
+            assert dm.swing == 0.0, f"Swing=1.5 should be rejected, got {dm.swing}"
+        finally:
+            os.unlink(tmp_name)
+
+        # Swing=-0.5 (negative)
+        data = {"swing": -0.5}
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(data, f)
+            tmp_name = f.name
+        try:
+            dm.load_pattern_json(tmp_name)
+            assert dm.swing == 0.0, f"Swing=-0.5 should be rejected, got {dm.swing}"
+        finally:
+            os.unlink(tmp_name)
+
+    def test_hihat_closed_very_short_duration(self):
+        """synth_hihat_closed should not crash with very short durations."""
+        result = synth_hihat_closed(duration=0.0001)
+        assert isinstance(result, np.ndarray)
+        # Result may be empty or short, but should not crash
+
+    def test_hihat_closed_short_duration(self):
+        """synth_hihat_closed should work with short but plausible durations."""
+        result = synth_hihat_closed(duration=0.005)
+        assert isinstance(result, np.ndarray)
+        assert len(result) > 0
+
+    def test_hihat_open_very_short_duration(self):
+        """synth_hihat_open should not crash with very short durations."""
+        result = synth_hihat_open(duration=0.0001)
+        assert isinstance(result, np.ndarray)
+
+    def test_hihat_open_short_duration(self):
+        """synth_hihat_open should work with short but plausible durations."""
+        result = synth_hihat_open(duration=0.005)
+        assert isinstance(result, np.ndarray)
+        assert len(result) > 0
+
+    def test_render_with_zero_bpm_does_not_crash(self):
+        """Rendering should not crash even if BPM is set to 0 via JSON."""
+        dm = DrumMachine(bpm=120)
+        dm.load_preset("four-on-floor")
+        dm.bpm = 0  # Simulate corrupted state
+        try:
+            loop = dm.render_full_loop()
+            assert len(loop) > 0
+        except ZeroDivisionError:
+            pytest.fail("render_full_loop crashed with BPM=0")
+
+    def test_render_with_negative_bpm_does_not_crash(self):
+        """Rendering should not crash with negative BPM."""
+        dm = DrumMachine(bpm=120)
+        dm.load_preset("four-on-floor")
+        dm.bpm = -50  # Simulate corrupted state
+        try:
+            loop = dm.render_full_loop()
+            assert len(loop) > 0
+        except Exception as e:
+            pytest.fail(f"render_full_loop crashed with BPM=-50: {e}")
+
+    def test_midi_export_rejects_zero_bpm(self):
+        """MIDI export should raise ValueError with invalid BPM."""
+        dm = DrumMachine(bpm=120)
+        dm.load_preset("four-on-floor")
+        dm.bpm = 0
+        with tempfile.NamedTemporaryFile(suffix='.mid', delete=False) as tmp:
+            tmp_name = tmp.name
+        try:
+            with pytest.raises(ValueError, match="invalid BPM"):
+                dm.render_to_midi(tmp_name)
+        finally:
+            if os.path.exists(tmp_name):
+                os.unlink(tmp_name)
+
+    def test_midi_export_rejects_negative_bpm(self):
+        """MIDI export should raise ValueError with negative BPM."""
+        dm = DrumMachine(bpm=120)
+        dm.load_preset("four-on-floor")
+        dm.bpm = -10
+        with tempfile.NamedTemporaryFile(suffix='.mid', delete=False) as tmp:
+            tmp_name = tmp.name
+        try:
+            with pytest.raises(ValueError, match="invalid BPM"):
+                dm.render_to_midi(tmp_name)
+        finally:
+            if os.path.exists(tmp_name):
+                os.unlink(tmp_name)
+
+    def test_load_json_valid_bpm_in_range(self):
+        """Valid BPM values in JSON should still be accepted."""
+        dm = DrumMachine(bpm=120)
+        data = {"bpm": 140}
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(data, f)
+            tmp_name = f.name
+        try:
+            dm.load_pattern_json(tmp_name)
+            assert dm.bpm == 140
+        finally:
+            os.unlink(tmp_name)
+
+    def test_load_json_valid_swing_in_range(self):
+        """Valid swing values in JSON should still be accepted."""
+        dm = DrumMachine(swing=0.0)
+        data = {"swing": 0.5}
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(data, f)
+            tmp_name = f.name
+        try:
+            dm.load_pattern_json(tmp_name)
+            assert dm.swing == 0.5
+        finally:
+            os.unlink(tmp_name)
+
+    def test_load_json_boundary_bpm(self):
+        """BPM at boundary values (30, 300) should be accepted."""
+        dm = DrumMachine(bpm=120)
+
+        data = {"bpm": 30}
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(data, f)
+            tmp_name = f.name
+        try:
+            dm.load_pattern_json(tmp_name)
+            assert dm.bpm == 30
+        finally:
+            os.unlink(tmp_name)
+
+        data = {"bpm": 300}
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(data, f)
+            tmp_name = f.name
+        try:
+            dm.load_pattern_json(tmp_name)
+            assert dm.bpm == 300
+        finally:
+            os.unlink(tmp_name)
+
+    def test_load_json_boundary_swing(self):
+        """Swing at boundary values (0.0, 0.75) should be accepted."""
+        dm = DrumMachine(swing=0.0)
+
+        data = {"swing": 0.0}
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(data, f)
+            tmp_name = f.name
+        try:
+            dm.load_pattern_json(tmp_name)
+            assert dm.swing == 0.0
+        finally:
+            os.unlink(tmp_name)
+
+        data = {"swing": 0.75}
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(data, f)
+            tmp_name = f.name
+        try:
+            dm.load_pattern_json(tmp_name)
+            assert dm.swing == 0.75
+        finally:
+            os.unlink(tmp_name)
+
+    def test_all_muted_render_to_wav_succeeds(self):
+        """Rendering WAV with all drums muted should succeed (silence)."""
+        dm = DrumMachine()
+        for drum in dm.drums:
+            dm.muted[drum] = True
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
+            tmp_name = tmp.name
+        try:
+            dm.render_to_wav(tmp_name, loops=1)
+            assert os.path.exists(tmp_name)
+            with wave.open(tmp_name, 'r') as wf:
+                assert wf.getnframes() > 0
+        finally:
+            os.unlink(tmp_name)
+
+    def test_step_duration_with_invalid_bpm_returns_positive(self):
+        """step_duration should return a positive value even with invalid BPM."""
+        dm = DrumMachine(bpm=120)
+        dm.bpm = 0
+        d = dm.step_duration(0)
+        assert d > 0, f"step_duration should be positive even with BPM=0, got {d}"
+
+    def test_step_duration_with_extreme_swing_returns_positive(self):
+        """step_duration should return a positive value even with extreme swing."""
+        dm = DrumMachine(bpm=120)
+        dm.swing = 1.5  # Invalid but loaded from corrupted JSON
+        d0 = dm.step_duration(0)
+        d1 = dm.step_duration(1)
+        assert d0 > 0, f"step_duration(0) should be positive, got {d0}"
+        assert d1 > 0, f"step_duration(1) should be positive, got {d1}"

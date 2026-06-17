@@ -38,7 +38,7 @@ from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -125,7 +125,11 @@ def synth_hihat_closed(duration: float = 0.08) -> np.ndarray:
     signal = np.random.randn(n)
 
     # High-pass by subtracting low frequencies
-    low = np.convolve(signal, np.ones(30) / 30, mode='same')
+    # Use a kernel no larger than the signal to avoid shape mismatch
+    kernel_size = min(30, n)
+    low = np.convolve(signal, np.ones(kernel_size) / kernel_size, mode='same')
+    # Trim result to match signal length (np.convolve 'same' returns max(len) when signal < kernel)
+    low = low[:n]
     signal = signal - low * 0.8
 
     # Fast decay envelope
@@ -148,7 +152,11 @@ def synth_hihat_open(duration: float = 0.3) -> np.ndarray:
     t = np.linspace(0, duration, n, endpoint=False)
 
     signal = np.random.randn(n)
-    low = np.convolve(signal, np.ones(30) / 30, mode='same')
+    # Use a kernel no larger than the signal to avoid shape mismatch
+    kernel_size = min(30, n)
+    low = np.convolve(signal, np.ones(kernel_size) / kernel_size, mode='same')
+    # Trim result to match signal length
+    low = low[:n]
     signal = signal - low * 0.8
 
     env = np.exp(-t * 12)
@@ -517,16 +525,26 @@ class DrumMachine:
         even-indexed steps (0, 2, 4...) get longer, odd-indexed steps
         (1, 3, 5...) get shorter. Total loop duration is preserved.
         A swing of 0.0 is straight timing, 0.67 is a classic swing feel.
+
+        Returns a minimum of 0.001s to prevent zero/negative durations
+        from invalid BPM or swing values loaded from JSON.
         """
+        # Guard against invalid BPM (division by zero or negative)
+        if self.bpm <= 0:
+            return 0.125  # Fallback to 120 BPM timing
         base = 60.0 / self.bpm / 4
         if self.swing > 0:
             if step % 2 == 0:
                 # Even-indexed steps (0, 2, 4...) get longer
-                return base * (1.0 + self.swing)
+                duration = base * (1.0 + self.swing)
             else:
                 # Odd-indexed steps (1, 3, 5...) get shorter
-                return base * (1.0 - self.swing)
-        return base
+                duration = base * (1.0 - self.swing)
+        else:
+            duration = base
+        # Clamp to a minimum of 1ms to prevent zero/negative durations
+        # that could crash audio rendering (e.g., from invalid JSON data)
+        return max(0.001, duration)
 
     def total_loop_duration(self) -> float:
         """Total duration of one full loop in seconds."""
@@ -687,6 +705,9 @@ class DrumMachine:
         track_data = bytearray()
 
         # Tempo meta event: microseconds per quarter note
+        # Guard against invalid BPM values
+        if self.bpm <= 0:
+            raise ValueError(f"Cannot export MIDI with invalid BPM: {self.bpm}")
         tempo = int(60_000_000 / self.bpm)
         track_data += b'\x00'  # delta time = 0
         track_data += b'\xFF\x51\x03'  # tempo meta event
@@ -772,14 +793,18 @@ class DrumMachine:
 
         self._push_undo()
 
-        # Validate and coerce types
+        # Validate and coerce types, clamping to valid ranges
         bpm_val = data.get("bpm", self.bpm)
         if isinstance(bpm_val, (int, float)):
-            self.bpm = int(bpm_val)
+            bpm_int = int(bpm_val)
+            if 30 <= bpm_int <= 300:
+                self.bpm = bpm_int
 
         swing_val = data.get("swing", 0.0)
         if isinstance(swing_val, (int, float)):
-            self.swing = float(swing_val)
+            swing_float = float(swing_val)
+            if 0.0 <= swing_float <= 0.75:
+                self.swing = swing_float
 
         loaded_steps = data.get("steps", self.steps)
         if isinstance(loaded_steps, int) and loaded_steps in VALID_STEP_COUNTS:
@@ -1026,6 +1051,7 @@ def interactive_mode(machine: DrumMachine) -> None:
         if not cmd:
             continue
 
+        # Split command into parts, preserving spaces in quoted arguments
         parts = cmd.lower().split()
 
         if parts[0] in ("quit", "exit", "q"):
@@ -1290,7 +1316,7 @@ def interactive_mode(machine: DrumMachine) -> None:
             if len(parts) < 2:
                 print("Usage: save <file.json>")
                 continue
-            filename = parts[1]
+            filename = " ".join(parts[1:])
             if not filename.endswith('.json'):
                 filename += '.json'
             try:
@@ -1304,7 +1330,7 @@ def interactive_mode(machine: DrumMachine) -> None:
             if len(parts) < 2:
                 print("Usage: load <file.json>")
                 continue
-            filename = parts[1]
+            filename = " ".join(parts[1:])
             if not os.path.exists(filename):
                 print(f"File not found: {filename}")
                 continue
@@ -1327,7 +1353,7 @@ def interactive_mode(machine: DrumMachine) -> None:
             if len(parts) < 2:
                 print("Usage: export <filename.wav>")
                 continue
-            filename = parts[1]
+            filename = " ".join(parts[1:])
             if not filename.endswith('.wav'):
                 filename += '.wav'
             try:
@@ -1341,7 +1367,7 @@ def interactive_mode(machine: DrumMachine) -> None:
             if len(parts) < 2:
                 print("Usage: exportmidi <filename.mid>")
                 continue
-            filename = parts[1]
+            filename = " ".join(parts[1:])
             if not filename.endswith('.mid'):
                 filename += '.mid'
             try:

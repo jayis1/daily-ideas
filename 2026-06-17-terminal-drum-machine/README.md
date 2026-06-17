@@ -1,256 +1,97 @@
 # 🥁 Terminal Drum Machine
 
-A step-sequencer drum machine that runs entirely in your terminal. Synthesizes 8 different drum sounds from scratch using numpy waveforms — no external audio samples or libraries needed. Display animated sequencer grids, load preset beats, generate random patterns, add swing or humanize feel, control per-drum volume, mute/solo drums, undo changes, save/load patterns as JSON, and export to WAV or MIDI.
+A feature-rich, Python-based drum machine that runs entirely in your terminal. Synthesize 8 drum sounds, build patterns with a step sequencer, apply swing and humanize, export to WAV or MIDI, and more — all with zero external audio dependencies beyond NumPy.
 
 ## Features
 
-### Sound Engine
-- **8 synthesized drum sounds** — Kick, Snare, Closed Hi-Hat, Open Hi-Hat, Clap, Tom, Rimshot, Cowbell
-- **All-digital synthesis** — Sounds generated from sine waves, noise, and pitch envelopes (no samples)
-- **Per-drum volume control** — Set each drum's volume from 0% to 200%
-- **Mute/solo** — Toggle individual drums on/off, or solo a drum (mute all others)
-
-### Sequencer
-- **16-step sequencer** (also supports 8 and 32 steps via `--steps`)
-- **Swing/groove** — Add shuffle feel from 0% (straight) to 75% (heavy swing). Swing redistributes timing between even/odd step pairs while preserving total loop duration.
-- **Humanize mode** — Add organic timing jitter (±8ms) and velocity variation (±12%) for a more natural, less robotic feel. Toggle on/off in interactive mode or via `--humanize` CLI flag.
-- **Metronome click track** — Optional quarter-note click for keeping time during playback
-- **Pattern shift** — Rotate any drum's pattern left or right
-- **Pattern invert** — Flip all steps on/off for a drum (empty becomes full, full becomes empty)
-- **Pattern reverse** — Reverse the order of steps in a drum's pattern
-- **Copy patterns** — Copy one drum's pattern to another drum
-- **Fill generator** — Generate a random fill from a given step onward, with density that builds toward the end
-- **Undo support** — Undo the last 50 pattern changes (toggle, clear, preset load, shift, invert, reverse, solo, mute, random, fill)
-
-### Presets & Patterns
-- **6 built-in presets** — Four-on-the-floor, Hip-hop, Breakbeat, Reggaeton, Bossa Nova, Drum & Bass
-- **Random pattern generator** — Create beats with configurable density
-- **Save/load patterns as JSON** — Full round-trip persistence including BPM, swing, volumes, mute state, and humanize settings
-- **Adaptive step counts** — Presets automatically adapt to 8/16/32 step sequencers
-
-### Export & Playback
-- **WAV export** — Render loops to 44.1kHz 16-bit mono WAV files
-- **MIDI export** — Export patterns as standard MIDI files (format 0) with GM percussion note mappings on channel 10
-- **Audio playback** — Attempts system audio via aplay/paplay/play/afplay
-- **Configurable loop count** — Export 1 or more loops per WAV file
-
-### Interactive Mode
-- **Full REPL** — Toggle steps, load presets, change BPM, set swing, adjust volumes, mute/solo drums, and more
-- **Shorthand aliases** — `k`=Kick, `s`=Snare, `hhc`=HH-Closed, `hho`=HH-Open, `c`=Clap, `t`=Tom, `r`=Rim, `cb`=Cowbell
+- **8 synthesized drum sounds** — kick, snare, hi-hat (closed/open), clap, tom, rimshot, cowbell — generated with pure NumPy, no samples needed
+- **16-step sequencer** with support for 8 or 32 steps as well
+- **Interactive mode** — real-time pattern editing with a terminal UI
+- **6 built-in presets** — four-on-floor, hiphop, breakbeat, reggaeton, bossa nova, drum-and-bass
+- **Swing timing** — adjustable swing feel (0.0–0.75)
+- **Humanize mode** — adds realistic timing jitter and velocity variation
+- **Metronome click track** — optional quarter-note click during playback
+- **Pattern operations** — invert, reverse, shift, copy, random, fill generator, solo/unsolo
+- **Undo support** — undo up to 50 pattern changes
+- **Save/Load JSON** — persist and restore patterns with BPM, swing, humanize, and mute state
+- **WAV export** — render patterns to `.wav` audio files
+- **MIDI export** — export patterns as standard MIDI format 0 files (GM percussion channel 10)
+- **CLI interface** — `--export`, `--export-midi`, `--save`, `--list-presets`, `--version`, and more
 
 ## Installation
 
-Requires Python 3.8+ and numpy:
-
 ```bash
+# Requires Python 3.10+ and NumPy
 pip install numpy
 
-# Or on Debian/Ubuntu:
-sudo apt-get install python3-numpy
+# Clone or download this repository
+cd 2026-06-17-terminal-drum-machine
 ```
 
-No other dependencies needed!
-
-## How to Run
-
-### Interactive Mode (default)
+## Quick Start
 
 ```bash
+# Launch interactive mode (default)
 python3 drum_machine.py
-```
 
-Opens an interactive session with full command access.
+# Play with a preset and humanize
+python3 drum_machine.py --preset hiphop --humanize
 
-### Command-Line Mode
+# Export to WAV
+python3 drum_machine.py --preset four-on-floor --export output.wav
 
-```bash
-# Load a preset and show the grid
-python3 drum_machine.py --preset hiphop
-
-# Export a preset to WAV
-python3 drum_machine.py --preset four-on-floor --export beat.wav
-
-# Set BPM and export
-python3 drum_machine.py --bpm 140 --preset dnb --export dnb_beat.wav
-
-# Generate a random beat with specific density and export
-python3 drum_machine.py --random --density 0.4 --export random_beat.wav
-
-# Add swing feel
-python3 drum_machine.py --preset breakbeat --swing 30 --export swing_beat.wav
-
-# Add humanize for organic feel
-python3 drum_machine.py --preset hiphop --humanize --export live_beat.wav
-
-# Use a 32-step sequencer
-python3 drum_machine.py --steps 32 --random --export long_pattern.wav
+# Export to MIDI
+python3 drum_machine.py --preset dnb --export-midi output.mid
 
 # Save a pattern to JSON
-python3 drum_machine.py --preset bossa-nova --save pattern.json
-
-# Load and re-export a saved pattern
-python3 drum_machine.py --load pattern.json --export loaded.wav
-
-# Export as MIDI
-python3 drum_machine.py --preset four-on-floor --export-midi beat.mid
-
-# List available presets
-python3 drum_machine.py --list-presets
-
-# Show version
-python3 drum_machine.py --version
+python3 drum_machine.py --preset bossanova --save pattern.json
 ```
-
-### All CLI Options
-
-| Flag | Description |
-|------|-------------|
-| `--version` | Show version number |
-| `--bpm N` | Set tempo (30–300, default: 120) |
-| `--steps {8,16,32}` | Number of sequencer steps (default: 16) |
-| `--preset NAME` | Load a preset pattern |
-| `--export FILE.wav` | Export to WAV file |
-| `--export-midi FILE.mid` | Export as MIDI file |
-| `--loops N` | Number of loops for WAV export (default: 2) |
-| `--random` | Generate a random pattern |
-| `--density 0.0-1.0` | Fill density for random (default: 0.3) |
-| `--swing 0-75` | Swing percentage (default: 0 = straight) |
-| `--humanize` | Add timing jitter and velocity variation |
-| `--play` | Attempt audio playback |
-| `--list-presets` | Show available presets |
-| `--save FILE.json` | Save pattern to JSON |
-| `--load FILE.json` | Load pattern from JSON |
-| `-i, --interactive` | Start interactive mode |
 
 ## Interactive Commands
 
-Once in interactive mode, type commands at the `🥁 >` prompt:
-
 | Command | Description |
 |---------|-------------|
-| `<drum> <step>` | Toggle a step (e.g. `kick 1`, `snare 5`) |
-| `preset <name>` | Load a preset |
+| `toggle <drum> <step>` | Toggle a step on/off (e.g. `toggle kick 0`) |
+| `clear <drum>` | Clear all steps for a drum |
+| `preset <name>` | Load a preset pattern |
 | `presets` | List available presets |
-| `bpm <n>` | Change tempo (30–300; invalid values are rejected) |
-| `swing <0-75>` | Set swing percentage |
-| `volume <drum> <0-200>` | Set drum volume (percentage) |
-| `mute <drum>` | Toggle mute on a drum |
-| `solo <drum>` | Solo a drum (mute all others) |
-| `unsolo` | Unmute all drums |
-| `shift <drum> <n>` | Rotate pattern by n steps (+right/-left) |
-| `invert <drum>` | Invert pattern (ON↔OFF) |
-| `reverse <drum>` | Reverse pattern order |
-| `copy <src> <dst>` | Copy pattern between drums |
-| `fill [step] [density]` | Generate random fill from step onward |
+| `bpm <value>` | Set tempo (30–300) |
+| `swing <value>` | Set swing (0.0–0.75) |
 | `humanize [on\|off]` | Toggle humanize mode |
-| `metronome` | Toggle click track on quarter notes |
-| `clear` | Clear all steps |
-| `random [density]` | Generate random pattern (0.05–0.95) |
-| `density` | Show pattern density per drum |
+| `metronome` | Toggle metronome click |
+| `invert <drum>` | Invert all steps (ON↔OFF) |
+| `reverse <drum>` | Reverse step order |
+| `shift <drum> <steps>` | Shift pattern left (neg) or right (pos) |
+| `solo <drum>` | Mute all drums except one |
+| `unsolo` | Unmute all drums |
+| `mute <drum>` | Toggle mute on a drum |
+| `volume <drum> <val>` | Set drum volume (0.0–2.0) |
+| `random [density]` | Randomize pattern (0.0–1.0 density) |
+| `fill [step] [density]` | Generate building fill |
+| `copy <src> <dst>` | Copy pattern between drums |
+| `save <file.json>` | Save pattern to JSON |
+| `load <file.json>` | Load pattern from JSON |
+| `export <file.wav>` | Export to WAV audio |
+| `exportmidi <file.mid>` | Export to MIDI |
 | `undo` | Undo last pattern change |
-| `save <file>` | Save pattern to JSON |
-| `load <file>` | Load pattern from JSON |
-| `play` | Play current pattern |
-| `export <file>` | Export to WAV |
-| `exportmidi <file>` | Export as MIDI |
-| `grid` | Redraw the grid |
-| `quit` | Exit |
+| `play` | Play the pattern |
+| `grid` | Display current pattern |
+| `quit` / `exit` / `q` | Exit |
 
-Shorthand aliases: `k`=Kick, `s`=Snare, `hhc`=HH-Closed, `hho`=HH-Open, `c`=Clap, `t`=Tom, `r`=Rim, `cb`=Cowbell
+> **Note:** Filenames with spaces are supported in `save`, `load`, `export`, and `exportmidi` commands.
 
-## Available Presets
+## Drum Aliases
 
-| Preset | Description |
-|--------|-------------|
-| `four-on-floor` | Classic 4/4 dance beat — kick on every quarter note |
-| `hiphop` | Boom-bap hip-hop groove with syncopated kick |
-| `breakbeat` | Amen-inspired breakbeat pattern |
-| `reggaeton` | Dembow rhythm with rimshot accent |
-| `bossa-nova` | Brazilian bossa nova feel with cowbell |
-| `dnb` | Fast drum and bass with open hi-hat tail |
-
-## How It Works
-
-### Sound Synthesis
-
-Each drum sound is synthesized from first principles:
-
-- **Kick** — Pitch-swept sine wave (150Hz→40Hz exponential sweep) with fast exponential decay and a transient click
-- **Snare** — Layered sine tones (200Hz + 350Hz) mixed with white noise, shaped by a fast decay envelope and smoothed with a moving-average bandpass
-- **Closed Hi-Hat** — High-pass filtered noise burst with very fast decay (50/s)
-- **Open Hi-Hat** — Similar to closed but with slower decay (12/s)
-- **Clap** — Layered noise bursts with micro-offsets for the layered-hand effect
-- **Tom** — Mid-frequency swept sine (200Hz→100Hz) with medium decay
-- **Rimshot** — Short 800Hz tone mixed with noise, extremely fast decay
-- **Cowbell** — Two detuned square waves (560Hz + 845Hz) for that classic metallic timbre
-- **Metronome** — Short 1000Hz sine beep with very fast decay, for click track
-
-All sounds are mixed per-step with automatic peak normalization and exported as standard 44.1kHz 16-bit mono WAV.
-
-### Humanize Mode
-
-When humanize is enabled, each note gets:
-- **Timing jitter**: ±8ms random offset (configurable via `humanize_timing`)
-- **Velocity variation**: ±12% random amplitude change (configurable via `humanize_velocity`)
-
-This creates subtle, natural-sounding variations that make programmed beats feel less robotic.
-
-### Swing Timing
-
-At BPM=120, each 16th-note step is 125ms (60/120/4 seconds), giving a full 16-step bar of exactly 2 seconds.
-
-With swing enabled, even-indexed steps (0, 2, 4...) are lengthened and odd-indexed steps (1, 3, 5...) are shortened. Each pair of steps still sums to `2 × base_duration`, so the total loop duration is always preserved regardless of swing setting.
-
-### MIDI Export
-
-MIDI export maps each drum to a General MIDI percussion note on channel 10:
-- Kick → 36 (Bass Drum 1)
-- Snare → 38 (Acoustic Snare)
-- HH-Closed → 42 (Closed Hi-Hat)
-- HH-Open → 46 (Open Hi-Hat)
-- Clap → 39 (Hand Clap)
-- Tom → 47 (Low-Mid Tom)
-- Rim → 37 (Side Stick)
-- Cowbell → 56 (Cowbell)
-
-Velocity is derived from per-drum volume (0–200% maps to 1–127).
-
-### JSON Pattern Format
-
-Saved patterns include BPM, steps, swing, humanize settings, pattern data, volumes, and mute state:
-
-```json
-{
-  "version": "1.3.0",
-  "bpm": 140,
-  "steps": 16,
-  "swing": 0.3,
-  "humanize": true,
-  "humanize_timing": 0.008,
-  "humanize_velocity": 0.12,
-  "pattern": { "Kick": [1,0,0,0,...], ... },
-  "volumes": { "Kick": 1.0, "Snare": 0.8, ... },
-  "muted": { "Cowbell": true, ... }
-}
-```
-
-## Example Output
-
-```
-──────────────┼───────────────────────────────────────────────┼─
-Drum Machine  │  1┼ 2┼ 3┼ 4┼ 5┼ 6┼ 7┼ 8┼ 9┼10┼11┼12┼13┼14┼15┼16 │
-──────────────┼───────────────────────────────────────────────┼─
-         Kick  │ ● · · · ● · · · ● · · · ● · · · │
-        Snare  │ · · · · ● · · · · · · · ● · · · │
-         HH-C  │ ● · ● · ● · ● · ● · ● · ● · ● · │
-         HH-O  │ · · · · · · · · · · · · · · · · │
-         Clap  │ · · · · · · · · · · · · · · · · │
-          Tom  │ · · · · · · · · · · · · · · · · │
-          Rim  │ · · · · · · · · · · · · · · · · │
-          Cow  │ · · · · · · · · · · · · · · · · │
-──────────────┼───────────────────────────────────────────────┼─
-  BPM: 120  Steps: 16  Humanize: ON
-```
+| Full Name | Short Alias |
+|-----------|-------------|
+| kick | k |
+| snare | s |
+| hihat_closed | hc |
+| hihat_open | ho |
+| clap | c |
+| tom | t |
+| rim | r |
+| cowbell | cb |
 
 ## Running Tests
 
@@ -258,33 +99,42 @@ Drum Machine  │  1┼ 2┼ 3┼ 4┼ 5┼ 6┼ 7┼ 8┼ 9┼10┼11┼12┼13
 python3 -m pytest test_drum_machine.py -v
 ```
 
-151 tests covering sound synthesis, pattern manipulation, presets, volume/mute, solo, swing timing, invert/reverse, fill generation, humanize, metronome, undo, WAV export, MIDI export, JSON save/load (including type validation), display, and regression tests for fixed bugs.
+168 tests covering all features, edge cases, and bug regressions.
+
+## Bug Fixes (v1.4.0)
+
+This release fixes 5 bugs found in v1.3.0:
+
+1. **Hi-hat synthesis crash with very short durations** — `synth_hihat_closed` and `synth_hihat_open` could crash with `ValueError` when `duration` was shorter than the convolution kernel. Now the number of samples is automatically clamped to be at least as long as the kernel.
+
+2. **JSON load accepted out-of-range BPM** — Loading a JSON file with `bpm` outside 30–300 (e.g., 0, -50, or 999) would silently corrupt the machine state, leading to crashes in rendering (division by zero) or MIDI export. BPM values from JSON are now clamped to the 30–300 range and coerced to `int`.
+
+3. **JSON load accepted out-of-range swing** — Loading a JSON file with `swing` outside 0.0–0.75 (e.g., 1.5 or -0.5) would cause negative step durations, producing invalid audio. Swing values from JSON are now clamped to 0.0–0.75.
+
+4. **MIDI export crash with invalid BPM** — `render_to_midi` would crash with `OverflowError` if BPM was 0 or negative (from `tempo.to_bytes(3, 'big')`). Now raises `ValueError` with a clear message instead.
+
+5. **Interactive mode filenames with spaces** — Commands like `load my pattern.json` would only capture `my` as the filename. All file-related commands (`save`, `load`, `export`, `exportmidi`) now correctly join remaining arguments to support filenames with spaces.
+
+Additional defensive improvements:
+- `step_duration()` now returns a minimum of 1ms and gracefully handles BPM ≤ 0 (falls back to 120 BPM timing) instead of crashing with `ZeroDivisionError`
+- All synth functions have zero-duration guards that return a tiny silent array
 
 ## Changelog
 
-### v1.3.0 — New Features & Enhancements
-- **Added pattern invert**: `invert <drum>` flips all steps ON↔OFF for a drum
-- **Added pattern reverse**: `reverse <drum>` reverses the step order
-- **Added solo/unsolo**: `solo <drum>` mutes all drums except one; `unsolo` unmutes all
-- **Added fill generator**: `fill [start_step] [density]` creates a building fill toward the end of the pattern
-- **Added humanize mode**: `--humanize` flag and `humanize [on|off]` command add timing jitter (±8ms) and velocity variation (±12%) for organic feel. Settings persist in JSON saves.
-- **Added metronome click track**: `metronome` command toggles quarter-note clicks during playback
-- **Added undo support**: `undo` command reverts the last pattern change (up to 50 levels). Tracks toggle, clear, preset load, shift, invert, reverse, solo, mute, random, and fill operations.
-- **Added MIDI export**: `--export-midi FILE.mid` and `exportmidi <file>` command export patterns as standard MIDI files with GM percussion note mappings
-- **Added `--export-midi` CLI flag** for MIDI file export
-- **Added metronome click synthesis**: `synth_metronome_click()` produces a short 1000Hz beep
-- **Improved code comments** throughout all synthesis functions and core methods
-- **Improved interactive help display**: expanded to show all new commands
+### v1.4.0 (2026-06-17)
+- Fixed hi-hat crash with very short durations
+- Fixed JSON load accepting out-of-range BPM and swing values
+- Fixed MIDI export crash with invalid BPM
+- Fixed interactive mode filename parsing for paths with spaces
+- Added defensive guards in `step_duration()` for BPM ≤ 0 and extreme swing
+- Added 17 regression tests (168 total)
 
-### v1.2.0 — Bug Fixes
-- **Fixed swing timing bug**: Step 0 was not receiving swing adjustment, causing total loop duration to shrink when swing was applied
-- **Fixed incorrect comment**: The `step_duration` docstring incorrectly described even-indexed steps
-- **Fixed JSON load type safety**: `load_pattern_json` now validates that `bpm`, `swing`, `steps`, `volumes`, and `muted` values are the correct numeric types before assignment
-- **Fixed JSON load pattern validation**: Pattern values that are not lists now default to all-False instead of causing a crash
-- **Fixed interactive BPM validation**: The `bpm` command now rejects invalid values (outside 30–300 range) instead of printing an error but still clamping
-- **Added `render_to_wav` loops validation**: `render_to_wav` now raises `ValueError` if `loops < 1`
-- Added 8 regression tests covering all fixed bugs
+### v1.3.0 (2026-06-17)
+- Added pattern invert, reverse, solo/unsolo, fill generator
+- Added humanize mode, metronome click track
+- Added undo support (50 levels)
+- Added MIDI export
+- Added --help and --version flags
 
-## License
-
-MIT
+### v1.0.0
+- Initial release with 8 drum sounds, 16-step sequencer, WAV export, presets, swing, save/load
