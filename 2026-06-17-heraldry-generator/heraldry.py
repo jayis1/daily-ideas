@@ -10,6 +10,8 @@ import argparse
 import sys
 import math
 
+__version__ = "1.1.0"
+
 # ─── Heraldic Tinctures ───────────────────────────────────────────────
 # Colour names, ANSI codes, and metal names follow classic heraldry
 TINCTURES = {
@@ -24,6 +26,9 @@ TINCTURES = {
     "Purpure": {"ansi": "\033[38;5;091m", "bg": "\033[48;5;091m", "class": "colour",  "char": "█"},
 }
 
+# Save originals so we can restore after --no-color
+_TINCTURE_ORIGINALS = {k: dict(v) for k, v in TINCTURES.items()}
+
 METALS = [t for t, v in TINCTURES.items() if v["class"] == "metal"]
 COLOURS = [t for t, v in TINCTURES.items() if v["class"] == "colour"]
 ALL_TINCTURES = list(TINCTURES.keys())
@@ -32,6 +37,24 @@ RESET = "\033[0m"
 BOLD = "\033[1m"
 DIM = "\033[2m"
 ITALIC = "\033[3m"
+
+# Originals for restoration
+_RESET_ORIG = RESET
+_BOLD_ORIG = BOLD
+_DIM_ORIG = DIM
+_ITALIC_ORIG = ITALIC
+
+# ─── Plain-ASCII replacements ─────────────────────────────────────────
+PLAIN_BORDERS = {
+    "top_left": "+",
+    "top_right": "+",
+    "bottom_left": "+",
+    "bottom_right": "+",
+    "horizontal": "-",
+    "vertical": "|",
+    "top_tee": "+",
+    "bottom_tee": "+",
+}
 
 # ─── Shield Shape ─────────────────────────────────────────────────────
 # The shield is defined as a grid. Each cell is a boolean indicating
@@ -48,7 +71,6 @@ def make_shield_mask():
             cx = SHIELD_W / 2
             # Top portion: straight sides
             if y < 18:
-                half_w = 13 - (y * 0.05 if y < 4 else 0)
                 # Gentle taper at top
                 if y < 4:
                     half_w = 11 + y * 0.5
@@ -185,7 +207,6 @@ DIVISIONS = {
     "Gyronny":             division_gyronny,
 }
 
-
 # ─── Charges (symbols placed on the shield) ───────────────────────────
 
 def _in_ellipse(x, y, cx, cy, rx, ry):
@@ -289,7 +310,6 @@ def charge_star(field, charge_tincture, mask):
                 angle = math.atan2(dy, dx)
                 # Star radius at this angle
                 a = ((angle % (2 * math.pi / points)) - math.pi / points)
-                star_r = inner_r + (outer_r - inner_r) * max(0, 1 - abs(a) / (math.pi / points) * 2)
                 # Smoother star
                 star_r_smooth = outer_r * (inner_r / outer_r) ** (2 * abs(a) / (math.pi / points))
                 if dist < star_r_smooth + 1:
@@ -436,7 +456,14 @@ def compliant_tincture(for_class):
 
 
 def generate_blazon():
-    """Generate a random heraldic blazon and its visual components."""
+    """Generate a random heraldic blazon and its visual components.
+
+    Enforces the Rule of Tincture: a charge must contrast with the
+    field it sits on.  When the shield is divided into a metal and a
+    colour, a single central charge cannot contrast with both halves —
+    in that situation we omit the charge and produce a plain divided
+    field instead (which is heraldically correct).
+    """
     # Decide on complexity
     complexity = random.choices(["simple", "medium", "complex"], weights=[3, 5, 2])[0]
 
@@ -448,7 +475,7 @@ def generate_blazon():
 
     # Pick tinctures
     if division_name:
-        # Two field tinctures — must follow rule of tincture
+        # Two field tinctures — must follow rule of tincture between themselves
         field1 = random.choice(ALL_TINCTURES)
         opposite_class = "colour" if TINCTURES[field1]["class"] == "metal" else "metal"
         field2 = random.choice([t for t in ALL_TINCTURES if TINCTURES[t]["class"] == opposite_class])
@@ -456,26 +483,33 @@ def generate_blazon():
         field1 = random.choice(ALL_TINCTURES)
         field2 = None
 
-    # Pick charge
-    charge_name = random.choice(list(CHARGES.keys()))
+    # Pick charge (may be omitted for heraldic correctness)
+    # When the field is divided into a metal and a colour, a single
+    # central charge cannot contrast with both halves at once.  In that
+    # case we omit the charge entirely — a plain divided field is
+    # perfectly valid heraldry and avoids violating the Rule of Tincture.
+    charge_name = None
+    charge_tincture = None
 
-    # Pick charge tincture (must contrast with field)
     if division_name:
-        # Must contrast with both fields
+        # Try to find a tincture that contrasts with BOTH fields
         candidates = [t for t in ALL_TINCTURES
                       if not violates_rule_of_tincture(field1, t)
                       and not violates_rule_of_tincture(field2, t)]
         if candidates:
+            charge_name = random.choice(list(CHARGES.keys()))
             charge_tincture = random.choice(candidates)
-        else:
-            # Fallback: just contrast with primary field
-            charge_tincture = compliant_tincture(TINCTURES[field1]["class"])
+        # else: no charge possible — divided metal+colour field is
+        # heraldically complete on its own
     else:
+        # Solid field — charge must contrast with it
         candidates = [t for t in ALL_TINCTURES
                       if not violates_rule_of_tincture(field1, t)]
         if candidates:
+            charge_name = random.choice(list(CHARGES.keys()))
             charge_tincture = random.choice(candidates)
         else:
+            # Should never happen (both metals and colours exist)
             charge_tincture = compliant_tincture(TINCTURES[field1]["class"])
 
     # Build blazon text
@@ -485,7 +519,8 @@ def generate_blazon():
     else:
         blazon_parts.append(field1)
 
-    blazon_parts.append(f"charged with a {charge_name} {charge_tincture}")
+    if charge_name:
+        blazon_parts.append(f"charged with a {charge_name} {charge_tincture}")
 
     blazon = ", ".join(blazon_parts)
 
@@ -508,21 +543,38 @@ def render_shield(spec, mask):
     else:
         field = [[spec["field1"]] * SHIELD_W for _ in range(SHIELD_H)]
 
-    # Apply charge
-    charge_fn = CHARGES[spec["charge"]]
-    field = charge_fn(field, spec["charge_tincture"], mask)
+    # Apply charge (may be None if omitted for tincture-rule reasons)
+    if spec["charge"]:
+        charge_fn = CHARGES[spec["charge"]]
+        field = charge_fn(field, spec["charge_tincture"], mask)
 
     return field
 
 
-def field_to_ascii(field, mask):
-    """Convert tincture grid to colored ASCII art."""
+def field_to_ascii(field, mask, plain=False):
+    """Convert tincture grid to colored ASCII art.
+
+    Args:
+        field: 2D grid of tincture name strings (or None).
+        mask:   2D boolean grid indicating shield shape.
+        plain:  If True, use plain ASCII characters instead of Unicode.
+    """
+    if plain:
+        top_border = " " + "-" * SHIELD_W
+        bottom_border = " " + "-" * SHIELD_W
+        side_border = "|"
+        fill_char = "#"
+    else:
+        top_border = TINCTURES["Sable"]["ansi"] + "▄" * SHIELD_W + RESET
+        bottom_border = TINCTURES["Sable"]["ansi"] + "▀" * SHIELD_W + RESET
+        side_border = TINCTURES["Sable"]["ansi"] + "█" + RESET
+        fill_char = "█"
+
     lines = []
     # Shield border top
-    lines.append("        " + TINCTURES["Sable"]["ansi"] + "▄" * (SHIELD_W) + RESET)
+    lines.append("        " + top_border)
 
     for y in range(SHIELD_H):
-        row = ""
         # Find leftmost and rightmost shield pixels
         left = right = None
         for x in range(SHIELD_W):
@@ -534,43 +586,54 @@ def field_to_ascii(field, mask):
         if left is None:
             continue
 
-        # Left border
-        border_left = TINCTURES["Sable"]["ansi"] + "█" + RESET
-
-        line = "        " + border_left
+        line = "        " + side_border
 
         for x in range(left, right + 1):
             if mask[y][x]:
                 tincture = field[y][x]
                 if tincture and tincture in TINCTURES:
-                    # Choose character based on tincture for texture
-                    ch = "█"
-                    line += TINCTURES[tincture]["ansi"] + ch + RESET
+                    if plain:
+                        line += fill_char
+                    else:
+                        line += TINCTURES[tincture]["ansi"] + fill_char + RESET
                 else:
                     line += " "
             else:
                 line += " "
 
-        # Right border
-        line += TINCTURES["Sable"]["ansi"] + "█" + RESET
+        line += side_border
         lines.append(line)
 
     # Shield border bottom
-    lines.append("        " + TINCTURES["Sable"]["ansi"] + "▀" * (SHIELD_W) + RESET)
+    lines.append("        " + bottom_border)
 
     return "\n".join(lines)
 
 
-def render_banner(blazon, shield_ascii):
-    """Render the complete display with banner and blazon."""
+def render_banner(spec, shield_ascii, plain=False):
+    """Render the complete display with banner and blazon.
+
+    Args:
+        spec:        Blazon spec dict.
+        shield_ascii: Pre-rendered shield ASCII art string.
+        plain:       If True, use plain ASCII characters instead of Unicode.
+    """
+    blazon = spec["blazon"]
+
     # Decorative banner
     width = 46
-    top = "╔" + "═" * (width) + "╗"
-    title_line = "║" + BOLD + " COAT OF ARMS ".center(width) + RESET + "║"
-    divider = "╟" + "─" * (width) + "╢"
+
+    if plain:
+        top = "+" + "-" * width + "+"
+        title_line = "|" + " COAT OF ARMS ".center(width) + "|"
+        divider = "+" + "-" * width + "+"
+    else:
+        top = "╔" + "═" * width + "╗"
+        title_line = "║" + BOLD + " COAT OF ARMS ".center(width) + RESET + "║"
+        divider = "╟" + "─" * width + "╢"
 
     # Word-wrap blazon
-    blazon_text = f'"{blazon["blazon"]}"'
+    blazon_text = f'"{blazon}"'
     blazon_lines = []
     max_len = width - 4
     words = blazon_text.split()
@@ -586,12 +649,28 @@ def render_banner(blazon, shield_ascii):
 
     blazon_display = []
     for line in blazon_lines:
-        blazon_display.append("║ " + ITALIC + line.ljust(max_len) + RESET + " ║")
+        if plain:
+            blazon_display.append("| " + line.ljust(max_len) + " |")
+        else:
+            blazon_display.append("║ " + ITALIC + line.ljust(max_len) + RESET + " ║")
 
-    bottom = "╚" + "═" * (width) + "╝"
+    if plain:
+        bottom = "+" + "-" * width + "+"
+    else:
+        bottom = "╚" + "═" * width + "╝"
 
     # Helmet/crest decoration
-    crest = BOLD + TINCTURES["Argent"]["ansi"] + """
+    if plain:
+        crest = """
+                                   /^^^\\
+                                  /  /\\   \\
+                                 /  /  \\   \\
+                                /  /    \\   \\
+                                ^^^^^^^^^^^^^^^^^
+                                   ||||
+                                   ||||"""
+    else:
+        crest = BOLD + TINCTURES["Argent"]["ansi"] + """
                                    ╱▔▔▔╲
                                   ╱  ╱╲   ╲
                                  ╱  ╱  ╲   ╲
@@ -601,15 +680,22 @@ def render_banner(blazon, shield_ascii):
                                    ║║║║""" + RESET
 
     # Mantling
-    mantling_color = blazon["field1"]
-    mantling_color2 = blazon["field2"] if blazon["field2"] else random.choice([t for t in ALL_TINCTURES if t != mantling_color])
+    mantling_color = spec["field1"]
+    mantling_color2 = spec["field2"] if spec["field2"] else random.choice([t for t in ALL_TINCTURES if t != mantling_color])
     mc1 = TINCTURES[mantling_color]["ansi"]
     mc2 = TINCTURES[mantling_color2]["ansi"]
-    mantling = (
-        mc1 + "  ╱╲    ╱╲    ╱╲    ╱╲    ╱╲    ╱╲" + RESET + "\n"
-        + mc2 + " ╱  ╲  ╱  ╲  ╱  ╲  ╱  ╲  ╱  ╲  ╱  ╲" + RESET + "\n"
-        + mc1 + "╱    ╲╱    ╲╱    ╲╱    ╲╱    ╲╱    ╲" + RESET
-    )
+    if plain:
+        mantling = (
+            "  /\\    /\\    /\\    /\\    /\\    /\\\n"
+            " /  \\  /  \\  /  \\  /  \\  /  \\  /  \\\n"
+            "/    \\/    \\/    \\/    \\/    \\/    \\"
+        )
+    else:
+        mantling = (
+            mc1 + "  ╱╲    ╱╲    ╱╲    ╱╲    ╱╲    ╱╲" + RESET + "\n"
+            + mc2 + " ╱  ╲  ╱  ╲  ╱  ╲  ╱  ╲  ╱  ╲  ╱  ╲" + RESET + "\n"
+            + mc1 + "╱    ╲╱    ╲╱    ╲╱    ╲╱    ╲╱    ╲" + RESET
+        )
 
     # Motto
     mottos = [
@@ -628,7 +714,10 @@ def render_banner(blazon, shield_ascii):
     ]
     motto = random.choice(mottos)
 
-    motto_line = BOLD + DIM + f"  « {motto} »".center(width) + RESET
+    if plain:
+        motto_line = "  " + f"<< {motto} >>".center(width)
+    else:
+        motto_line = BOLD + DIM + f"  « {motto} »".center(width) + RESET
 
     output = "\n".join([
         "",
@@ -650,9 +739,14 @@ def render_banner(blazon, shield_ascii):
     output += "     " + mantling + "\n\n"
 
     # Motto
-    motto_banner = "╭" + "─" * (width) + "╮"
-    motto_text = "│" + f" « {motto} » ".center(width) + "│"
-    motto_bottom = "╰" + "─" * (width) + "╯"
+    if plain:
+        motto_banner = "+" + "-" * width + "+"
+        motto_text = "|" + f" << {motto} >> ".center(width) + "|"
+        motto_bottom = "+" + "-" * width + "+"
+    else:
+        motto_banner = "╭" + "─" * width + "╮"
+        motto_text = "│" + f" « {motto} » ".center(width) + "│"
+        motto_bottom = "╰" + "─" * width + "╯"
     output += motto_banner + "\n" + motto_text + "\n" + motto_bottom + "\n"
 
     output += "\n" + bottom + "\n"
@@ -722,6 +816,30 @@ HISTORICAL_NAMES = {
 }
 
 
+def apply_no_color():
+    """Disable all ANSI color codes (non-destructive — can be reversed)."""
+    global RESET, BOLD, DIM, ITALIC
+    for key in TINCTURES:
+        TINCTURES[key]["ansi"] = ""
+        TINCTURES[key]["bg"] = ""
+    RESET = ""
+    BOLD = ""
+    DIM = ""
+    ITALIC = ""
+
+
+def restore_colors():
+    """Restore ANSI color codes after apply_no_color()."""
+    global RESET, BOLD, DIM, ITALIC
+    for key in _TINCTURE_ORIGINALS:
+        TINCTURES[key]["ansi"] = _TINCTURE_ORIGINALS[key]["ansi"]
+        TINCTURES[key]["bg"] = _TINCTURE_ORIGINALS[key]["bg"]
+    RESET = _RESET_ORIG
+    BOLD = _BOLD_ORIG
+    DIM = _DIM_ORIG
+    ITALIC = _ITALIC_ORIG
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Procedural Heraldry Generator — Create random medieval coats of arms"
@@ -741,60 +859,66 @@ def main():
                         help="Disable colored output")
     parser.add_argument("--plain", action="store_true",
                         help="Use plain ASCII characters instead of Unicode")
+    parser.add_argument("--version", action="version",
+                        version=f"heraldry {__version__}")
 
     args = parser.parse_args()
 
+    # Validate -n
+    if args.number < 1:
+        parser.error(f"--number must be at least 1, got {args.number}")
+
+    # Apply color mode
     if args.no_color:
-        for key in TINCTURES:
-            TINCTURES[key]["ansi"] = ""
-            TINCTURES[key]["bg"] = ""
-        global RESET, BOLD, DIM, ITALIC
-        RESET = ""
-        BOLD = ""
-        DIM = ""
-        ITALIC = ""
+        apply_no_color()
 
-    mask = make_shield_mask()
+    try:
+        mask = make_shield_mask()
+        plain = args.plain
 
-    if args.list_historical:
-        print("Available historical coats of arms:")
-        for key, name in HISTORICAL_NAMES.items():
-            blazon = HISTORICAL[key]["blazon"]
-            print(f"  {key:15s} — {name}: {blazon}")
-        return
-
-    if args.historical:
-        spec = HISTORICAL[args.historical]
-        name = HISTORICAL_NAMES[args.historical]
-        if args.blazon_only:
-            print(f"{name}: {spec['blazon']}")
+        if args.list_historical:
+            print("Available historical coats of arms:")
+            for key, name in HISTORICAL_NAMES.items():
+                blazon = HISTORICAL[key]["blazon"]
+                print(f"  {key:15s} — {name}: {blazon}")
             return
-        field = render_shield(spec, mask)
-        ascii_art = field_to_ascii(field, mask)
-        full = render_banner(spec, ascii_art)
-        print(f"\n  {BOLD}Historical:{RESET} {name}\n")
-        print(full)
-        return
 
-    if args.seed is not None:
-        random.seed(args.seed)
+        if args.historical:
+            spec = HISTORICAL[args.historical]
+            name = HISTORICAL_NAMES[args.historical]
+            if args.blazon_only:
+                print(f"{name}: {spec['blazon']}")
+                return
+            field = render_shield(spec, mask)
+            ascii_art = field_to_ascii(field, mask, plain=plain)
+            full = render_banner(spec, ascii_art, plain=plain)
+            print(f"\n  {BOLD}Historical:{RESET} {name}\n")
+            print(full)
+            return
 
-    for i in range(args.number):
-        spec = generate_blazon()
-        if args.blazon_only:
-            print(f"#{i+1}: {spec['blazon']}")
-            continue
+        if args.seed is not None:
+            random.seed(args.seed)
 
-        field = render_shield(spec, mask)
-        ascii_art = field_to_ascii(field, mask)
-        full = render_banner(spec, ascii_art)
+        for i in range(args.number):
+            spec = generate_blazon()
+            if args.blazon_only:
+                print(f"#{i+1}: {spec['blazon']}")
+                continue
 
-        if args.number > 1:
-            print(f"\n{'═' * 50}")
-            print(f"  Coat of Arms #{i+1}")
-            print(f"{'═' * 50}")
+            field = render_shield(spec, mask)
+            ascii_art = field_to_ascii(field, mask, plain=plain)
+            full = render_banner(spec, ascii_art, plain=plain)
 
-        print(full)
+            if args.number > 1:
+                print(f"\n{'═' * 50}")
+                print(f"  Coat of Arms #{i+1}")
+                print(f"{'═' * 50}")
+
+            print(full)
+    finally:
+        # Always restore colors so the module state is not corrupted
+        if args.no_color:
+            restore_colors()
 
 
 if __name__ == "__main__":
