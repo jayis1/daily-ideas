@@ -1,12 +1,12 @@
 # 🏛️ Maze Generator & Pathfinder Visualizer
 
-**v1.2.0** — Generate mazes with four algorithms and watch pathfinding solve them in real-time ASCII animation, right in your terminal.
+**v1.3.0** — Generate mazes with five algorithms and watch five pathfinding solvers explore them in real-time ASCII animation, right in your terminal.
 
 ## What It Does
 
-This tool combines **maze generation** and **pathfinding visualization**. First, it carves a perfect maze using one of four generation algorithms. Then it animates a pathfinding algorithm exploring that maze step by step, showing you exactly how the search frontier expands, which cells get visited, and the final solution path.
+This tool combines **maze generation** and **pathfinding visualization**. Generate a perfect maze using one of five algorithms, then animate a solver exploring it step by step — showing you exactly how the search frontier expands, which cells get visited, and the final solution path.
 
-Run **compare mode** to race all four solvers on the same maze and see which one visits the fewest cells. Save mazes to JSON, load them later, or export solutions to plain text files.
+Run **compare mode** to race all five solvers on the same maze and see which one visits the fewest cells. Use **heatmap mode** to overlay visit-frequency data from all solvers, revealing the corridors every algorithm explores. Save mazes to JSON, load them later, export solutions to plain text, or print path coordinates for scripting.
 
 ## Features
 
@@ -15,24 +15,30 @@ Run **compare mode** to race all four solvers on the same maze and see which one
 - **Prim's** — Grows the maze organically from a seed cell, producing more branching paths with shorter dead ends.
 - **Kruskal's** — Randomly merges disjoint sets using Union-Find, creating a more uniform distribution of passages.
 - **Eller's** — Memory-efficient row-by-row algorithm that's great for wide mazes.
+- **Wilson's** — Loop-erased random walk producing uniform random spanning trees. Every possible maze is equally likely — the gold standard for fairness.
 
 ### Pathfinding Algorithms
 - **BFS (Breadth-First Search)** — Explores layer by layer. Guarantees the shortest path but visits many cells.
 - **DFS (Depth-First Search)** — Dives deep before backtracking. Fast but the path is rarely optimal.
 - **A\*** — Uses Manhattan distance heuristic + actual cost. Optimal and efficient — the default solver.
 - **Greedy Best-First** — Chases the goal using heuristic only. Often fast but can take suboptimal paths.
+- **Dijkstra** — Uniform cost search using a priority queue. Optimal like BFS; included as a classic reference algorithm.
 
 ### Visualization & Output
 - **Color-coded ASCII rendering** — walls (dim `█`), visited cells (gray `·`), frontier (cyan `○`), solution path (gold `◆`), start (`S`), end (`E`)
-- **Real-time animation** — watch the algorithm think
-- **Step counter** — shows exploration progress at each step
-- **Compare mode** — run all solvers on the same maze and compare stats side by side with efficiency ratings; ties broken by fewest cells explored
+- **Real-time animation** — watch the algorithm think, with percentage progress per step
+- **Step counter** — shows cells explored / total passable cells at each frame
+- **Compare mode** — run all five solvers on the same maze and compare stats side-by-side with efficiency ratings; ties broken by fewest cells explored
+- **Heatmap mode** (`--heatmap`) — overlay visit frequency from all solvers using gradient characters, revealing hot spots and under-explored areas
+- **Maze difficulty rating** — Easy / Medium / Hard / Expert based on size, dead-end density, and branching factor
+- **Solution path output** (`--show-path`) — print the full solution path as `(row,col)` coordinates
+- **Custom start/end positions** (`--start` / `--end`) — solve from any cell to any cell
 - **Configurable speed** — slow it down to study or speed it up for results
-- **Maze statistics** — dead ends, branching factor, reachable passage count
+- **Maze statistics** — dead ends, branching factor, reachable passage count, difficulty rating
 - **Save/Load** — persist mazes as JSON files, reload and solve them with any algorithm
-- **Export** — save solved mazes to plain text files (no ANSI codes) for sharing or piping; works with both single-solver and compare mode
+- **Export** — save solved mazes to plain text files (no ANSI codes); works in both single-solver and compare mode
 - **Version flag** — `--version` support
-- **Robust file validation** — `--load` validates JSON structure thoroughly (cell types, dimensions, required keys) and reports clear errors instead of crashing
+- **Robust file validation** — `--load` validates JSON structure thoroughly and reports clear errors
 
 ## Installation
 
@@ -55,21 +61,38 @@ python3 maze_pathfinder.py
 
 ### Choose generation algorithm
 ```bash
-python3 maze_pathfinder.py --generator prim
-python3 maze_pathfinder.py --generator kruskal
-python3 maze_pathfinder.py --generator ellers
+python3 maze_pathfinder.py -g prim
+python3 maze_pathfinder.py -g kruskal
+python3 maze_pathfinder.py -g ellers
+python3 maze_pathfinder.py -g wilson       # New! Unbiased random spanning tree
 ```
 
 ### Choose pathfinding algorithm
 ```bash
-python3 maze_pathfinder.py --solver bfs
-python3 maze_pathfinder.py --solver dfs
-python3 maze_pathfinder.py --solver greedy
+python3 maze_pathfinder.py -s bfs
+python3 maze_pathfinder.py -s dfs
+python3 maze_pathfinder.py -s greedy
+python3 maze_pathfinder.py -s dijkstra     # New! Classic uniform-cost search
 ```
 
 ### Adjust maze size
 ```bash
-python3 maze_pathfinder.py --rows 6 --cols 20
+python3 maze_pathfinder.py -r 6 -c 20
+```
+
+### Show visit-frequency heatmap
+```bash
+python3 maze_pathfinder.py --heatmap -r 8 -c 20
+```
+
+### Custom start and end positions
+```bash
+python3 maze_pathfinder.py --start 3,3 --end 15,59 -r 8 -c 30
+```
+
+### Print the solution path as coordinates
+```bash
+python3 maze_pathfinder.py --show-path --no-animate -r 5 -c 10
 ```
 
 ### Compare all solvers on the same maze
@@ -82,7 +105,7 @@ python3 maze_pathfinder.py --compare
 python3 maze_pathfinder.py --compare --no-animate
 ```
 
-### Show maze statistics
+### Show maze statistics (with difficulty rating)
 ```bash
 python3 maze_pathfinder.py --stats --no-animate
 ```
@@ -96,6 +119,7 @@ Output:
   Dead ends:      47 (13.1%)
   Avg branching:  1.97
   Reachable:      707 passages
+  Difficulty:     Medium
 ```
 
 ### Save a maze to JSON
@@ -105,7 +129,7 @@ python3 maze_pathfinder.py --save maze.json -r 10 -c 20 --seed 42
 
 ### Load and solve a saved maze
 ```bash
-python3 maze_pathfinder.py --load maze.json --solver greedy
+python3 maze_pathfinder.py --load maze.json -s greedy
 ```
 
 ### Export solution to a plain text file
@@ -116,6 +140,11 @@ python3 maze_pathfinder.py --export result.txt -r 5 -c 15
 ### Export with compare mode
 ```bash
 python3 maze_pathfinder.py --compare --export result.txt -r 5 -c 15
+```
+
+### Export heatmap to text
+```bash
+python3 maze_pathfinder.py --heatmap --export heatmap.txt -r 8 -c 20
 ```
 
 ### Skip animation, just show final result
@@ -136,29 +165,18 @@ python3 maze_pathfinder.py --speed 0.1
 ### Check version
 ```bash
 python3 maze_pathfinder.py --version
-# maze_pathfinder.py 1.2.0
+# maze_pathfinder.py 1.3.0
 ```
 
 ### Full options
 ```
 usage: maze_pathfinder.py [-h] [--rows ROWS] [--cols COLS]
-                           [--generator {dfs,prim,kruskal,ellers}]
-                           [--solver {bfs,dfs,astar,greedy}] [--speed SPEED]
-                           [--seed SEED] [--no-animate] [--compare] [--stats]
-                           [--save FILE] [--load FILE] [--export FILE]
-                           [--version]
-
-Examples:
-  maze_pathfinder.py                                    # Default: DFS maze, A* solver
-  maze_pathfinder.py -g prim -s bfs                    # Prim's maze, BFS solver
-  maze_pathfinder.py -r 8 -c 25 --seed 42              # Reproducible 8x25 maze
-  maze_pathfinder.py --compare --speed 0.01            # Race all solvers
-  maze_pathfinder.py --compare --no-animate            # Compare, no animation
-  maze_pathfinder.py --no-animate --stats              # Stats only, no animation
-  maze_pathfinder.py --save maze.json -r 10 -c 20      # Save maze to file
-  maze_pathfinder.py --load maze.json -s greedy         # Load and solve saved maze
-  maze_pathfinder.py --export result.txt -r 5 -c 15    # Export solution to text file
-  maze_pathfinder.py --compare --export result.txt      # Export compare mode winner
+                           [--generator {dfs,prim,kruskal,ellers,wilson}]
+                           [--solver {bfs,dfs,astar,greedy,dijkstra}]
+                           [--speed SPEED] [--seed SEED] [--start R,C]
+                           [--end R,C] [--no-animate] [--compare] [--heatmap]
+                           [--stats] [--show-path] [--save FILE]
+                           [--load FILE] [--export FILE] [--version]
 ```
 
 ## Examples
@@ -173,6 +191,21 @@ python3 maze_pathfinder.py -r 5 -c 12 -g dfs -s astar
 python3 maze_pathfinder.py -r 15 -c 40 --compare --speed 0.005
 ```
 
+**Wilson's maze with Dijkstra solver:**
+```bash
+python3 maze_pathfinder.py -g wilson -s dijkstra -r 10 -c 20
+```
+
+**Heatmap of all solver visit patterns:**
+```bash
+python3 maze_pathfinder.py --heatmap -r 8 -c 20 --no-animate
+```
+
+**Custom start and end with path output:**
+```bash
+python3 maze_pathfinder.py --start 1,1 --end 19,39 --show-path -r 10 -c 20
+```
+
 **Deterministic maze for benchmarking:**
 ```bash
 python3 maze_pathfinder.py -r 10 -c 25 --seed 999 --no-animate --compare
@@ -181,17 +214,12 @@ python3 maze_pathfinder.py -r 10 -c 25 --seed 999 --no-animate --compare
 **Save, then load and solve with a different algorithm:**
 ```bash
 python3 maze_pathfinder.py --save my_maze.json -r 8 -c 15 --seed 7
-python3 maze_pathfinder.py --load my_maze.json --solver bfs --no-animate
+python3 maze_pathfinder.py --load my_maze.json -s dijkstra --no-animate
 ```
 
-**Get stats and export:**
+**Get stats, path, and export:**
 ```bash
-python3 maze_pathfinder.py --stats --export solution.txt -r 6 -c 12
-```
-
-**Compare mode with export:**
-```bash
-python3 maze_pathfinder.py --compare --export compare_result.txt -r 6 -c 12
+python3 maze_pathfinder.py --stats --show-path --export solution.txt -r 6 -c 12
 ```
 
 ## Color Legend
@@ -207,13 +235,32 @@ python3 maze_pathfinder.py --compare --export compare_result.txt -r 6 -c 12
 | `S` | Green | Start |
 | `E` | Red | End |
 
+### Heatmap Characters
+
+| Char | Level | Meaning |
+|------|-------|---------|
+| ` ` | 0 | Never visited |
+| `.` | 1 | Rarely visited |
+| `:` | 2 | Light traffic |
+| `-` | 3 | Moderate traffic |
+| `=` | 4 | Moderate traffic |
+| `+` | 5 | Above average |
+| `*` | 6 | Well-traveled |
+| `#` | 7 | Frequently visited |
+| `%` | 8 | Heavily visited |
+| `@` | 9 | Visited by every solver |
+
 ## How It Works
 
 1. **Generation**: A `MazeGrid` of cells with directional walls (N/S/E/W) is created. The chosen algorithm removes walls to carve passages, then the grid is converted to a 2D character bitmap (2R+1 × 2C+1).
 
 2. **Pathfinding**: The bitmap is converted to an adjacency graph. Each solver is a Python generator that yields `(visited_set, frontier_set, path_or_none)` at each step, enabling frame-by-frame animation.
 
-3. **Rendering**: Each frame overlays the algorithm's state onto the maze bitmap with ANSI color codes, then clears the terminal for the next frame.
+3. **Rendering**: Each frame overlays the algorithm's state onto the maze bitmap with ANSI color codes, then clears the terminal for the next frame. Step progress shows percentage of passable cells explored.
+
+4. **Heatmap**: All five solvers are run on the same maze. Each cell's visit count is tallied and mapped to a gradient character, showing which areas are always explored vs. which are solver-specific.
+
+5. **Difficulty**: Computed from maze size (bigger = harder), dead-end density (more = harder), and average branching factor (more open passages = harder). Rated Easy / Medium / Hard / Expert.
 
 ## Error Handling
 
@@ -223,6 +270,8 @@ The tool validates inputs and provides clear error messages:
 - Loading a missing file reports `Error: File not found`
 - Invalid JSON reports the parse error
 - Malformed maze files (wrong cell types, missing keys, dimension mismatches) report specific `Error:` messages instead of crashing with tracebacks
+- Custom start/end positions that land on walls are rejected with a clear message
+- Invalid position format is caught and explained
 
 ## Running Tests
 
@@ -230,31 +279,20 @@ The tool validates inputs and provides clear error messages:
 python3 -m pytest test_maze_pathfinder.py -v
 ```
 
-The test suite covers all four generation algorithms, all four solvers, maze connectivity validation, serialization round-trips, rendering, file I/O, input validation for malformed data, edge cases, and more (58 tests total).
+The test suite covers all five generation algorithms, all five solvers, maze connectivity validation, serialization round-trips, rendering, heatmap computation, difficulty rating, custom positions, file I/O, input validation for malformed data, edge cases, and more (72 tests total).
 
 ## Changelog
 
-### v1.2.0
-- **Fixed**: `load_maze()` crashed with unhandled `TypeError`/`KeyError`/`IndexError` on malformed JSON data (cells as string, missing cell keys, wrong dimensions). Now validates cell structure thoroughly and raises `ValueError` with clear messages.
-- **Fixed**: `--export` flag was silently ignored when `--compare` was used (compare mode returned early before export). Export now works in compare mode, saving the winning solver's result.
-- **Fixed**: `--compare --no-animate` printed every animation frame without clearing the screen, producing a flood of output. Now only prints the final solved frame when `--no-animate` is set.
-- **Fixed**: Compare mode "best solver" selection was arbitrary when multiple solvers found the same path length. Now breaks ties by fewest cells explored (efficiency).
-- **Improved**: `MazeGrid.stats()` accepts an optional `bitmap` parameter to avoid redundant `to_bitmap()` calls. `main()` now passes the already-computed bitmap.
-- Added 8 new tests for `load_maze()` validation and `stats()` bitmap parameter.
-
-### v1.1.0
-- Added `--stats` flag to print maze statistics (dead ends, branching factor, reachable passages)
-- Added `--save` flag to persist mazes as JSON files
-- Added `--load` flag to load mazes from JSON files instead of generating
-- Added `--export` flag to save solved mazes as plain text (no ANSI codes)
-- Added `--version` flag showing version number
-- Added step counter in animation output
-- Added efficiency column in compare mode table
-- Added Cell serialization (`to_dict`/`from_dict`) and MazeGrid JSON round-trip
-- Added `export_plain()` for ANSI-free rendering
-- Added dead-end symbol (`✕`) and stats rendering support
-- Added input validation for maze dimensions and speed
-- Added error handling for file I/O (missing files, invalid JSON, bad maze data)
-- Improved compare mode to highlight best solver with `★` marker
-- Improved code documentation with detailed docstrings
-- Added comprehensive test suite (50 tests)
+### v1.3.0
+- **Added**: Wilson's algorithm (`-g wilson`) for unbiased random spanning tree maze generation — every maze is equally likely
+- **Added**: Dijkstra's algorithm (`-s dijkstra`) as a fifth pathfinding solver — classic uniform-cost search
+- **Added**: `--heatmap` flag to show visit-frequency overlay from all solvers, with gradient characters (`.:-=+*#%@`) and color coding
+- **Added**: `--start R,C` and `--end R,C` flags for custom start/end positions, with wall-cell and bounds validation
+- **Added**: `--show-path` flag to print the full solution path as `(row,col)` coordinates
+- **Added**: Maze difficulty rating (Easy / Medium / Hard / Expert) in `--stats` output, based on size, dead-end density, and branching factor
+- **Added**: Progress percentage in animation steps (e.g., `Exploring... 42% visited (50/119)`)
+- **Added**: Type hints throughout the codebase for better IDE support and readability
+- **Added**: Heatmap export support via `--heatmap --export FILE`
+- **Added**: 14 new tests covering Wilson generation, Dijkstra solver, heatmap computation, difficulty rating, and custom positions
+- **Fixed**: Wilson's algorithm could loop infinitely when picking out-of-bounds directions during random walks — now only valid in-bounds neighbors are considered
+- **Improved**: Compare mode now includes Dijkstra in the solver lineup (5 solvers instead of 4)

@@ -6,17 +6,19 @@ Generates mazes using different algorithms and visualizes
 pathfinding algorithms solving them in real-time ASCII animation.
 
 Features:
-  - 4 maze generation algorithms (DFS, Prim's, Kruskal's, Eller's)
-  - 4 pathfinding algorithms (BFS, DFS, A*, Greedy Best-First)
+  - 5 maze generation algorithms (DFS, Prim's, Kruskal's, Eller's, Wilson's)
+  - 5 pathfinding algorithms (BFS, DFS, A*, Greedy Best-First, Dijkstra)
   - Real-time color-coded ASCII animation
   - Compare mode to race all solvers side-by-side
+  - Heatmap mode showing visit frequency across all solvers
+  - Custom start/end positions
   - Save/load mazes as JSON
   - Export final result to text file (no ANSI codes)
-  - Maze statistics (dead ends, corridor length, branching factor)
+  - Maze statistics with difficulty rating
+  - Solution path coordinates output
   - Deterministic seed support for reproducible mazes
-  - Customizable start/end positions
 
-Version: 1.2.0
+Version: 1.3.0
 """
 
 import json
@@ -27,8 +29,9 @@ import os
 import argparse
 from collections import deque
 import heapq
+from typing import Dict, List, Optional, Set, Tuple, Generator
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 # ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -40,19 +43,20 @@ START = "S"
 END = "E"
 SOLUTION = "◆"
 DEAD_END = "✕"
+HEATMAP_CHARS = " .:-=+*#%@"  # 10 levels, space=0, @=max
 
 # ─── Maze Generation ──────────────────────────────────────────────────────────
 
 class Cell:
     """Represents a single cell in the maze grid with four directional walls."""
 
-    def __init__(self, row, col):
+    def __init__(self, row: int, col: int):
         self.row = row
         self.col = col
-        self.walls = {"N": True, "S": True, "E": True, "W": True}
+        self.walls: Dict[str, bool] = {"N": True, "S": True, "E": True, "W": True}
         self.visited = False
 
-    def to_dict(self):
+    def to_dict(self) -> Dict:
         """Serialize cell state to a dictionary."""
         return {
             "row": self.row,
@@ -61,7 +65,7 @@ class Cell:
         }
 
     @classmethod
-    def from_dict(cls, d):
+    def from_dict(cls, d: Dict) -> "Cell":
         """Deserialize cell from a dictionary."""
         cell = cls(d["row"], d["col"])
         cell.walls = d["walls"]
@@ -77,7 +81,6 @@ DIRECTIONS = {
     "W": (0, -1),
 }
 
-
 class MazeGrid:
     """Internal representation: a grid of cells with walls between them.
 
@@ -86,18 +89,18 @@ class MazeGrid:
     converts this into a 2D character grid for rendering and pathfinding.
     """
 
-    def __init__(self, rows, cols):
+    def __init__(self, rows: int, cols: int):
         self.rows = rows
         self.cols = cols
         self.cells = [[Cell(r, c) for c in range(cols)] for r in range(rows)]
 
-    def get(self, r, c):
+    def get(self, r: int, c: int) -> Optional["Cell"]:
         """Return the cell at (r, c), or None if out of bounds."""
         if 0 <= r < self.rows and 0 <= c < self.cols:
             return self.cells[r][c]
         return None
 
-    def neighbors(self, cell):
+    def neighbors(self, cell: Cell) -> List[Cell]:
         """Return adjacent cells that are connected (wall removed between them)."""
         result = []
         for d, (dr, dc) in DIRECTIONS.items():
@@ -106,7 +109,7 @@ class MazeGrid:
                 result.append(n)
         return result
 
-    def dead_ends(self):
+    def dead_ends(self) -> List[Cell]:
         """Return list of cells that are dead ends (exactly one open passage)."""
         ends = []
         for r in range(self.rows):
@@ -117,7 +120,40 @@ class MazeGrid:
                     ends.append(cell)
         return ends
 
-    def stats(self, bitmap=None):
+    def difficulty_rating(self, bitmap: Optional[List[List[str]]] = None) -> str:
+        """Estimate maze difficulty on a scale from Easy to Expert.
+
+        Based on maze size, dead-end percentage, and branching factor.
+        Larger, more branched mazes with more dead ends are harder.
+        Small mazes get a difficulty penalty because they're trivially solvable.
+        """
+        stats = self.stats(bitmap=bitmap)
+        total = stats["total_cells"]
+        de_pct = float(stats["dead_end_pct"].rstrip("%"))
+        branch = float(stats["avg_branching"])
+
+        # Score from 0-100 combining factors
+        # Size factor: small mazes are trivially easy, large mazes are harder
+        # 4 cells = 0pts, 400+ cells = 40pts
+        size_score = min(total / 400, 1.0) * 40
+        # Dead-end density: more dead ends make navigation harder (up to 30pts)
+        # Clamped because tiny mazes have inflated percentages
+        de_score = min(de_pct / 25, 1.0) * 30
+        # Branching: more open passages per cell make it more complex (up to 30pts)
+        branch_score = min(branch / 3.0, 1.0) * 30
+
+        score = size_score + de_score + branch_score
+
+        if score < 25:
+            return "Easy"
+        elif score < 50:
+            return "Medium"
+        elif score < 75:
+            return "Hard"
+        else:
+            return "Expert"
+
+    def stats(self, bitmap: Optional[List[List[str]]] = None) -> Dict:
         """Compute maze statistics: dead ends, avg corridor length, branching factor.
 
         Args:
@@ -128,7 +164,7 @@ class MazeGrid:
         total_cells = self.rows * self.cols
 
         # Count cells by number of open passages (branching factor)
-        passage_counts = {}
+        passage_counts: Dict[int, int] = {}
         for r in range(self.rows):
             for c in range(self.cols):
                 cell = self.cells[r][c]
@@ -139,13 +175,12 @@ class MazeGrid:
         total_passages = sum(k * v for k, v in passage_counts.items())
         avg_branching = total_passages / total_cells if total_cells > 0 else 0
 
-        # Longest corridor (BFS from start)
+        # Reachable passages via BFS
         if bitmap is None:
             bitmap = self.to_bitmap()
         start = (1, 1)
-        visited_bfs = {start}
-        queue = deque([start])
-        max_dist = 0
+        visited_bfs: Set = {start}
+        queue: deque = deque([start])
         while queue:
             pos = queue.popleft()
             for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
@@ -166,7 +201,7 @@ class MazeGrid:
             "reachable_passages": reachable,
         }
 
-    def to_bitmap(self):
+    def to_bitmap(self) -> List[List[str]]:
         """Convert the cell-wall maze to a 2D character bitmap (2R+1 x 2C+1).
 
         Each cell maps to position (2r+1, 2c+1) in the bitmap. Walls between
@@ -187,7 +222,7 @@ class MazeGrid:
                     grid[gr][gc + 1] = PATH
         return grid
 
-    def to_dict(self):
+    def to_dict(self) -> Dict:
         """Serialize the entire maze to a dictionary for JSON export."""
         return {
             "rows": self.rows,
@@ -199,7 +234,7 @@ class MazeGrid:
         }
 
     @classmethod
-    def from_dict(cls, d):
+    def from_dict(cls, d: Dict) -> "MazeGrid":
         """Deserialize a maze from a dictionary."""
         maze = cls(d["rows"], d["cols"])
         maze.cells = [
@@ -208,19 +243,19 @@ class MazeGrid:
         ]
         return maze
 
-    def to_json(self):
+    def to_json(self) -> str:
         """Serialize the maze to a JSON string."""
         return json.dumps(self.to_dict(), indent=2)
 
     @classmethod
-    def from_json(cls, json_str):
+    def from_json(cls, json_str: str) -> "MazeGrid":
         """Deserialize a maze from a JSON string."""
         return cls.from_dict(json.loads(json_str))
 
 
 # ─── Generation Algorithms ────────────────────────────────────────────────────
 
-def generate_dfs(rows, cols, seed=None):
+def generate_dfs(rows: int, cols: int, seed: Optional[int] = None) -> MazeGrid:
     """Recursive-backtracker (DFS) maze generation.
 
     Creates long winding corridors with a strong directional bias.
@@ -253,7 +288,7 @@ def generate_dfs(rows, cols, seed=None):
     return maze
 
 
-def generate_prim(rows, cols, seed=None):
+def generate_prim(rows: int, cols: int, seed: Optional[int] = None) -> MazeGrid:
     """Prim's algorithm maze generation.
 
     Grows the maze organically from a seed cell, producing more branching
@@ -285,7 +320,7 @@ def generate_prim(rows, cols, seed=None):
     return maze
 
 
-def generate_kruskal(rows, cols, seed=None):
+def generate_kruskal(rows: int, cols: int, seed: Optional[int] = None) -> MazeGrid:
     """Kruskal's algorithm maze generation.
 
     Randomly merges disjoint sets using Union-Find, creating a more
@@ -299,16 +334,16 @@ def generate_kruskal(rows, cols, seed=None):
     maze = MazeGrid(rows, cols)
 
     # Union-Find with path compression and union by rank
-    parent = {}
-    rank = {}
+    parent: Dict[Tuple, Tuple] = {}
+    rank: Dict[Tuple, int] = {}
 
-    def find(x):
+    def find(x: Tuple) -> Tuple:
         while parent[x] != x:
             parent[x] = parent[parent[x]]  # Path compression
             x = parent[x]
         return x
 
-    def union(a, b):
+    def union(a: Tuple, b: Tuple) -> bool:
         ra, rb = find(a), find(b)
         if ra == rb:
             return False
@@ -342,7 +377,7 @@ def generate_kruskal(rows, cols, seed=None):
     return maze
 
 
-def generate_ellers(rows, cols, seed=None):
+def generate_ellers(rows: int, cols: int, seed: Optional[int] = None) -> MazeGrid:
     """Eller's algorithm maze generation — efficient for wide mazes.
 
     Builds the maze row by row, using O(cols) memory. Great for
@@ -354,7 +389,7 @@ def generate_ellers(rows, cols, seed=None):
     rng = random.Random(seed)
     maze = MazeGrid(rows, cols)
     # Each cell's set id
-    set_id = {}
+    set_id: Dict[Tuple, int] = {}
     next_id = 0
 
     for r in range(rows):
@@ -385,14 +420,13 @@ def generate_ellers(rows, cols, seed=None):
 
         # Decide vertical connections (south walls)
         # For each set in this row, connect at least one cell downward
-        sets_in_row = {}
+        sets_in_row: Dict[int, List[int]] = {}
         for c in range(cols):
             sid = set_id[(r, c)]
             if sid not in sets_in_row:
                 sets_in_row[sid] = []
             sets_in_row[sid].append(c)
 
-        connected_down = set()
         for sid, members in sets_in_row.items():
             # Connect at least one member downward
             rng.shuffle(members)
@@ -402,7 +436,86 @@ def generate_ellers(rows, cols, seed=None):
                 maze.get(r, c).walls["S"] = False
                 maze.get(r + 1, c).walls["N"] = False
                 set_id[(r + 1, c)] = sid
-                connected_down.add((r + 1, c))
+
+    return maze
+
+
+def generate_wilson(rows: int, cols: int, seed: Optional[int] = None) -> MazeGrid:
+    """Wilson's algorithm maze generation — uniform random spanning tree.
+
+    Produces unbiased mazes by performing loop-erased random walks.
+    Every possible maze is equally likely, making this the gold standard
+    for fairness. Slower than other methods but worth it for uniformity.
+    """
+    if rows < 2 or cols < 2:
+        raise ValueError(f"Maze must be at least 2x2, got {rows}x{cols}")
+
+    rng = random.Random(seed)
+    maze = MazeGrid(rows, cols)
+
+    # Start with one random cell already in the maze
+    all_cells = [(r, c) for r in range(rows) for c in range(cols)]
+    rng.shuffle(all_cells)
+    in_maze: Set[Tuple[int, int]] = {all_cells[0]}
+    maze.cells[all_cells[0][0]][all_cells[0][1]].visited = True
+
+    # Direction offsets for random walks (as tuples for deterministic lookup)
+    dir_offsets = [("N", -1, 0), ("S", 1, 0), ("E", 0, 1), ("W", 0, -1)]
+
+    for start_r, start_c in all_cells:
+        if (start_r, start_c) in in_maze:
+            continue
+
+        # Perform a loop-erased random walk from this cell
+        path = [(start_r, start_c)]
+        path_index = {(start_r, start_c): 0}  # position -> index in path
+
+        while True:
+            r, c = path[-1]
+            # Collect valid in-bounds neighbors
+            neighbors = []
+            for d, dr, dc in dir_offsets:
+                nr, nc = r + dr, c + dc
+                if 0 <= nr < rows and 0 <= nc < cols:
+                    neighbors.append((d, nr, nc))
+
+            # Pick a random valid neighbor
+            d, nr, nc = rng.choice(neighbors)
+
+            if (nr, nc) in path_index:
+                # Loop detected — erase the loop portion
+                loop_start = path_index[(nr, nc)]
+                for pos in path[loop_start + 1:]:
+                    del path_index[pos]
+                path = path[:loop_start + 1]
+                # Rebuild index (path was truncated)
+                # No need — we only need the existing index entries to be valid
+            else:
+                path.append((nr, nc))
+                path_index[(nr, nc)] = len(path) - 1
+
+                if (nr, nc) in in_maze:
+                    # We reached the maze — done with this walk
+                    break
+
+        # Carve the path into the maze
+        for i in range(len(path) - 1):
+            r1, c1 = path[i]
+            r2, c2 = path[i + 1]
+            dr, dc = r2 - r1, c2 - c1
+            for d, (ddr, ddc) in DIRECTIONS.items():
+                if (ddr, ddc) == (dr, dc):
+                    cell1 = maze.cells[r1][c1]
+                    cell2 = maze.cells[r2][c2]
+                    cell1.walls[d] = False
+                    cell2.walls[OPPOSITE[d]] = False
+                    break
+            in_maze.add((r1, c1))
+            maze.cells[r1][c1].visited = True
+
+        # Also mark the final cell
+        in_maze.add(path[-1])
+        maze.cells[path[-1][0]][path[-1][1]].visited = True
 
     return maze
 
@@ -412,19 +525,19 @@ GENERATORS = {
     "prim": generate_prim,
     "kruskal": generate_kruskal,
     "ellers": generate_ellers,
+    "wilson": generate_wilson,
 }
-
 
 # ─── Pathfinding Algorithms ───────────────────────────────────────────────────
 
-def _bitmap_to_graph(bitmap):
+def _bitmap_to_graph(bitmap: List[List[str]]) -> Dict[Tuple[int, int], List[Tuple[int, int]]]:
     """Convert bitmap grid to adjacency list for pathfinding.
 
     Each passable cell (non-WALL) becomes a node with edges to its
     cardinal neighbors that are also passable.
     """
     h, w = len(bitmap), len(bitmap[0])
-    graph = {}
+    graph: Dict[Tuple[int, int], List[Tuple[int, int]]] = {}
     for r in range(h):
         for c in range(w):
             if bitmap[r][c] != WALL:
@@ -436,7 +549,7 @@ def _bitmap_to_graph(bitmap):
     return graph
 
 
-def solve_bfs(bitmap, start, end):
+def solve_bfs(bitmap: List[List[str]], start: Tuple[int, int], end: Tuple[int, int]):
     """Breadth-First Search — yields (visited_set, frontier_set, path_or_None).
 
     Explores layer by layer. Guarantees the shortest path but visits
@@ -445,7 +558,7 @@ def solve_bfs(bitmap, start, end):
     graph = _bitmap_to_graph(bitmap)
     visited = {start}
     frontier = deque([start])
-    parent = {start: None}
+    parent: Dict = {start: None}
 
     while frontier:
         current = frontier.popleft()
@@ -468,16 +581,16 @@ def solve_bfs(bitmap, start, end):
     yield set(visited), set(), None  # No path found
 
 
-def solve_dfs(bitmap, start, end):
+def solve_dfs(bitmap: List[List[str]], start: Tuple[int, int], end: Tuple[int, int]):
     """Depth-First Search — yields exploration steps.
 
     Dives deep before backtracking. Fast but the path is rarely optimal.
     Shows the top of the stack as the frontier indicator.
     """
     graph = _bitmap_to_graph(bitmap)
-    visited = set()
+    visited: Set = set()
     stack = [start]
-    parent = {start: None}
+    parent: Dict = {start: None}
 
     while stack:
         current = stack.pop()
@@ -501,7 +614,7 @@ def solve_dfs(bitmap, start, end):
     yield set(visited), set(), None
 
 
-def solve_astar(bitmap, start, end):
+def solve_astar(bitmap: List[List[str]], start: Tuple[int, int], end: Tuple[int, int]):
     """A* Search — uses Manhattan distance heuristic + actual cost.
 
     Optimal and efficient — the best general-purpose solver.
@@ -509,14 +622,14 @@ def solve_astar(bitmap, start, end):
     """
     graph = _bitmap_to_graph(bitmap)
 
-    def heuristic(pos):
+    def heuristic(pos: Tuple[int, int]) -> int:
         return abs(pos[0] - end[0]) + abs(pos[1] - end[1])
 
     open_set = [(heuristic(start), 0, start)]
-    g_score = {start: 0}
-    parent = {start: None}
-    visited = set()
-    frontier_set = {start}
+    g_score: Dict = {start: 0}
+    parent: Dict = {start: None}
+    visited: Set = set()
+    frontier_set: Set = {start}
 
     while open_set:
         f, cost, current = heapq.heappop(open_set)
@@ -551,7 +664,7 @@ def solve_astar(bitmap, start, end):
     yield set(visited), set(), None
 
 
-def solve_greedy(bitmap, start, end):
+def solve_greedy(bitmap: List[List[str]], start: Tuple[int, int], end: Tuple[int, int]):
     """Greedy Best-First Search — uses heuristic only, no cost tracking.
 
     Chases the goal using only the Manhattan distance heuristic. Often
@@ -559,18 +672,17 @@ def solve_greedy(bitmap, start, end):
     """
     graph = _bitmap_to_graph(bitmap)
 
-    def heuristic(pos):
+    def heuristic(pos: Tuple[int, int]) -> int:
         return abs(pos[0] - end[0]) + abs(pos[1] - end[1])
 
     open_set = [(heuristic(start), start)]
-    visited = set()
-    parent = {start: None}
-    frontier_set = {start}
+    visited: Set = set()
+    parent: Dict = {start: None}
+    frontier_set: Set = {start}
 
     while open_set:
         _, current = heapq.heappop(open_set)
         frontier_set.discard(current)
-
         if current in visited:
             continue
         visited.add(current)
@@ -595,18 +707,69 @@ def solve_greedy(bitmap, start, end):
     yield set(visited), set(), None
 
 
+def solve_dijkstra(bitmap: List[List[str]], start: Tuple[int, int], end: Tuple[int, int]):
+    """Dijkstra's algorithm — uniform cost search, optimal for unweighted graphs.
+
+    Like BFS but uses a priority queue. On unweighted mazes it behaves
+    identically to BFS, but it's included as a classic reference algorithm.
+    In weighted mazes it would find the optimal cost path.
+    """
+    graph = _bitmap_to_graph(bitmap)
+    open_set = [(0, start)]
+    g_score: Dict = {start: 0}
+    parent: Dict = {start: None}
+    visited: Set = set()
+    frontier_set: Set = {start}
+
+    while open_set:
+        cost, current = heapq.heappop(open_set)
+        frontier_set.discard(current)
+
+        if current in visited:
+            continue
+        visited.add(current)
+
+        if current == end:
+            path = []
+            node = end
+            while node is not None:
+                path.append(node)
+                node = parent[node]
+            yield set(visited), set(frontier_set), list(reversed(path))
+            return
+
+        for neighbor in graph.get(current, []):
+            if neighbor in visited:
+                continue
+            tentative_g = cost + 1
+            if neighbor not in g_score or tentative_g < g_score[neighbor]:
+                g_score[neighbor] = tentative_g
+                parent[neighbor] = current
+                heapq.heappush(open_set, (tentative_g, neighbor))
+                frontier_set.add(neighbor)
+
+        yield set(visited), set(frontier_set), None
+
+    yield set(visited), set(), None
+
+
 SOLVERS = {
     "bfs": solve_bfs,
     "dfs": solve_dfs,
     "astar": solve_astar,
     "greedy": solve_greedy,
+    "dijkstra": solve_dijkstra,
 }
-
 
 # ─── Rendering ────────────────────────────────────────────────────────────────
 
-def render(bitmap, visited=None, frontier=None, solution=None,
-           start=None, end=None, dead_ends=None, use_color=True):
+def render(bitmap: List[List[str]], visited: Optional[Set] = None,
+           frontier: Optional[Set] = None, solution: Optional = None,
+           start: Optional[Tuple[int, int]] = None,
+           end: Optional[Tuple[int, int]] = None,
+           dead_ends: Optional[Set] = None,
+           use_color: bool = True,
+           heatmap: Optional[Dict] = None) -> str:
     """Render the maze bitmap with overlaid pathfinding state.
 
     Args:
@@ -618,6 +781,7 @@ def render(bitmap, visited=None, frontier=None, solution=None,
         end: (row, col) position of the end cell.
         dead_ends: Set of (row, col) dead-end positions to mark.
         use_color: If True, use ANSI color codes; if False, plain text.
+        heatmap: Dict mapping (row, col) -> visit count for heatmap rendering.
 
     Returns:
         String representation of the rendered maze.
@@ -625,6 +789,13 @@ def render(bitmap, visited=None, frontier=None, solution=None,
     # Convert solution list to set for O(1) lookup
     if solution and isinstance(solution, list):
         solution = set(solution)
+
+    # Compute heatmap scale if needed
+    max_heat = 0
+    if heatmap:
+        max_heat = max(heatmap.values()) if heatmap else 1
+        if max_heat == 0:
+            max_heat = 1
 
     h, w = len(bitmap), len(bitmap[0])
     lines = []
@@ -638,6 +809,22 @@ def render(bitmap, visited=None, frontier=None, solution=None,
                 row_chars.append(f"\033[91m{END}\033[0m" if use_color else END)
             elif solution and pos in solution:
                 row_chars.append(f"\033[93m{SOLUTION}\033[0m" if use_color else SOLUTION)
+            elif heatmap and pos in heatmap:
+                # Render heatmap intensity
+                intensity = heatmap[pos]
+                level = min(int(intensity / max_heat * (len(HEATMAP_CHARS) - 1)),
+                            len(HEATMAP_CHARS) - 1)
+                ch = HEATMAP_CHARS[level]
+                if use_color:
+                    # Color gradient: blue (cold) → yellow → red (hot)
+                    if level <= 3:
+                        row_chars.append(f"\033[96m{ch}\033[0m")
+                    elif level <= 6:
+                        row_chars.append(f"\033[93m{ch}\033[0m")
+                    else:
+                        row_chars.append(f"\033[91m{ch}\033[0m")
+                else:
+                    row_chars.append(ch)
             elif frontier and pos in frontier:
                 row_chars.append(f"\033[96m{FRONTIER}\033[0m" if use_color else FRONTIER)
             elif visited and pos in visited:
@@ -652,6 +839,22 @@ def render(bitmap, visited=None, frontier=None, solution=None,
     return "\n".join(lines)
 
 
+def render_heatmap_legend() -> str:
+    """Render a legend explaining the heatmap intensity characters."""
+    lines = [
+        "\033[1m  Heatmap Legend:\033[0m",
+        "  " + " ".join(
+            f"\033[96m{HEATMAP_CHARS[i]}\033[0m" if i <= 3
+            else f"\033[93m{HEATMAP_CHARS[i]}\033[0m" if i <= 6
+            else f"\033[91m{HEATMAP_CHARS[i]}\033[0m"
+            for i in range(len(HEATMAP_CHARS))
+        ),
+        f"  0 {'─' * 33} {len(HEATMAP_CHARS) - 1}",
+        "  never visited                      always visited",
+    ]
+    return "\n".join(lines)
+
+
 def clear_screen():
     """Clear the terminal screen in a cross-platform way."""
     os.system("cls" if os.name == "nt" else "clear")
@@ -659,7 +862,7 @@ def clear_screen():
 
 # ─── File I/O ─────────────────────────────────────────────────────────────────
 
-def save_maze(maze, filepath):
+def save_maze(maze: MazeGrid, filepath: str) -> str:
     """Save a maze to a JSON file.
 
     Args:
@@ -672,7 +875,7 @@ def save_maze(maze, filepath):
     return filepath
 
 
-def load_maze(filepath):
+def load_maze(filepath: str) -> MazeGrid:
     """Load a maze from a JSON file.
 
     Args:
@@ -724,13 +927,38 @@ def load_maze(filepath):
     return MazeGrid.from_dict(data)
 
 
-def export_plain(bitmap, solution=None, start=None, end=None):
+def export_plain(bitmap: List[List[str]], solution: Optional = None,
+                 start: Optional[Tuple[int, int]] = None,
+                 end: Optional[Tuple[int, int]] = None,
+                 heatmap: Optional[Dict] = None) -> str:
     """Render maze as plain text without ANSI color codes.
 
     Useful for saving to files, piping to other commands, or
     terminals that don't support ANSI escape codes.
     """
-    return render(bitmap, solution=solution, start=start, end=end, use_color=False)
+    return render(bitmap, solution=solution, start=start, end=end,
+                  use_color=False, heatmap=heatmap)
+
+
+def compute_heatmap(bitmap: List[List[str]], start: Tuple[int, int],
+                    end: Tuple[int, int]) -> Dict[Tuple[int, int], int]:
+    """Compute a visit-count heatmap by running all solvers and counting visits.
+
+    Each cell gets a count of how many different algorithms visited it.
+    Cells visited by all solvers get the highest count.
+    """
+    heat: Dict[Tuple[int, int], int] = {}
+    for name, solver in SOLVERS.items():
+        for visited, _, solution in solver(bitmap, start, end):
+            pass  # Run to completion
+        if visited:
+            for pos in visited:
+                heat[pos] = heat.get(pos, 0) + 1
+        # Solution path also counts
+        if solution:
+            for pos in solution:
+                heat[pos] = heat.get(pos, 0) + 1
+    return heat
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -743,12 +971,17 @@ def main():
 Examples:
   %(prog)s                                    # Default: DFS maze, A* solver
   %(prog)s -g prim -s bfs                    # Prim's maze, BFS solver
+  %(prog)s -g wilson -s dijkstra             # Wilson's maze, Dijkstra solver
   %(prog)s -r 8 -c 25 --seed 42              # Reproducible 8x25 maze
   %(prog)s --compare --speed 0.01            # Race all solvers
+  %(prog)s --heatmap                         # Show visit-frequency heatmap
+  %(prog)s --compare --no-animate            # Compare, no animation
   %(prog)s --no-animate --stats              # Stats only, no animation
   %(prog)s --save maze.json -r 10 -c 20      # Save maze to file
   %(prog)s --load maze.json -s greedy         # Load and solve saved maze
   %(prog)s --export result.txt -r 5 -c 15    # Export solution to text file
+  %(prog)s --show-path -r 5 -c 10            # Print solution coordinates
+  %(prog)s --start 3,3 --end 9,19            # Custom start and end positions
 """,
     )
     parser.add_argument(
@@ -780,6 +1013,14 @@ Examples:
         help="Random seed for reproducibility"
     )
     parser.add_argument(
+        "--start", metavar="R,C",
+        help="Custom start position as row,col (e.g., 1,1). Default: top-left"
+    )
+    parser.add_argument(
+        "--end", metavar="R,C",
+        help="Custom end position as row,col (e.g., 23,59). Default: bottom-right"
+    )
+    parser.add_argument(
         "--no-animate", action="store_true",
         help="Skip animation, just show final result"
     )
@@ -788,8 +1029,16 @@ Examples:
         help="Run all solvers on the same maze and compare stats"
     )
     parser.add_argument(
+        "--heatmap", action="store_true",
+        help="Show visit-frequency heatmap (all solvers overlaid)"
+    )
+    parser.add_argument(
         "--stats", action="store_true",
         help="Print maze statistics (dead ends, branching factor, etc.)"
+    )
+    parser.add_argument(
+        "--show-path", action="store_true",
+        help="Print the solution path as coordinates"
     )
     parser.add_argument(
         "--save", metavar="FILE",
@@ -839,13 +1088,40 @@ Examples:
 
     bitmap = maze.to_bitmap()
 
+    # Parse custom start/end positions
+    def parse_position(pos_str: str, default_r: int, default_c: int, label: str):
+        """Parse a 'row,col' position string, with bounds checking."""
+        try:
+            parts = pos_str.split(",")
+            if len(parts) != 2:
+                raise ValueError(f"{label} must be 'row,col' (e.g., 1,1)")
+            r, c = int(parts[0].strip()), int(parts[1].strip())
+            if not (0 <= r < len(bitmap) and 0 <= c < len(bitmap[0])):
+                print(f"Error: {label} position ({r},{c}) is out of bounds for "
+                      f"a {len(bitmap)}×{len(bitmap[0])} bitmap", file=sys.stderr)
+                sys.exit(1)
+            if bitmap[r][c] == WALL:
+                print(f"Error: {label} position ({r},{c}) is a wall cell — "
+                      f"choose a passable cell", file=sys.stderr)
+                sys.exit(1)
+            return (r, c)
+        except ValueError as e:
+            print(f"Error: Invalid {label} position: {e}", file=sys.stderr)
+            sys.exit(1)
+
     # Default start (top-left) and end (bottom-right) positions
     start_pos = (1, 1)
     end_pos = (2 * rows - 1, 2 * cols - 1)
 
+    if args.start:
+        start_pos = parse_position(args.start, 1, 1, "start")
+    if args.end:
+        end_pos = parse_position(args.end, 2 * rows - 1, 2 * cols - 1, "end")
+
     # Show stats if requested
     if args.stats:
         s = maze.stats(bitmap=bitmap)
+        difficulty = maze.difficulty_rating(bitmap=bitmap)
         print(f"\033[1m  Maze Statistics\033[0m")
         print(f"  ────────────────────────")
         print(f"  Size:           {s['size']}")
@@ -853,12 +1129,40 @@ Examples:
         print(f"  Dead ends:      {s['dead_ends']} ({s['dead_end_pct']})")
         print(f"  Avg branching:  {s['avg_branching']}")
         print(f"  Reachable:      {s['reachable_passages']} passages")
+        print(f"  Difficulty:     {difficulty}")
         print()
 
     # Save maze if requested
     if args.save:
         save_maze(maze, args.save)
         print(f"  Maze saved to: {args.save}")
+
+    # Heatmap mode: show visit frequency across all solvers
+    if args.heatmap:
+        print(f"\033[1m  Maze Visit-Frequency Heatmap\033[0m")
+        print(f"  Maze: {rows}×{cols}  |  Generator: {args.generator if not args.load else 'loaded'}  |  Seed: {seed}")
+        print()
+
+        heat = compute_heatmap(bitmap, start_pos, end_pos)
+        frame = render(bitmap, heatmap=heat, start=start_pos, end=end_pos)
+        print(frame)
+        print()
+        print(render_heatmap_legend())
+        print()
+
+        # Export if requested
+        if args.export:
+            try:
+                plain = export_plain(bitmap, heatmap=heat, start=start_pos, end=end_pos)
+                with open(args.export, "w") as f:
+                    f.write(plain)
+                    f.write(f"\n\nHeatmap: visit frequency across all {len(SOLVERS)} solvers")
+                print(f"  Heatmap exported to: {args.export}")
+            except OSError as e:
+                print(f"  Error exporting to {args.export}: {e}", file=sys.stderr)
+
+        if not (args.stats or args.save or args.compare):
+            return
 
     # Compare mode: run all solvers on the same maze
     if args.compare:
@@ -871,11 +1175,13 @@ Examples:
             total_visited = 0
             path_len = 0
             steps = 0
+            final_solution = None
             for visited, frontier, solution in solver(bitmap, start_pos, end_pos):
                 steps += 1
                 total_visited = len(visited)
                 if solution:
                     path_len = len(solution)
+                    final_solution = solution
             results.append((name, total_visited, path_len, steps))
 
         # Print comparison table
@@ -895,6 +1201,8 @@ Examples:
         print()
 
         solver = SOLVERS[best[0]]
+        total_passable = sum(1 for r in range(len(bitmap)) for c in range(len(bitmap[0])) if bitmap[r][c] != WALL)
+
         for visited, frontier, solution in solver(bitmap, start_pos, end_pos):
             if not args.no_animate:
                 clear_screen()
@@ -907,14 +1215,24 @@ Examples:
             if solution:
                 best_solution = solution
                 best_visited = visited
+                pct = len(visited) / total_passable * 100 if total_passable > 0 else 0
                 print(
                     f"\n  \033[1m{best[0].upper()}\033[0m — Path length: {len(solution)}, "
-                    f"Cells explored: {len(visited)}"
+                    f"Cells explored: {len(visited)} ({pct:.1f}%)"
                 )
+            else:
+                pct = len(visited) / total_passable * 100 if total_passable > 0 else 0
+                print(f"  Step {0} | Exploring... {pct:.0f}% visited")
+
             if not args.no_animate:
                 time.sleep(args.speed)
 
-        # Export if requested (was previously skipped by early return)
+        # Show path coordinates if requested
+        if args.show_path and best_solution:
+            print(f"\n  \033[1mSolution Path ({len(best_solution)} steps):\033[0m")
+            print("  " + " → ".join(f"({r},{c})" for r, c in best_solution))
+
+        # Export if requested
         if args.export:
             try:
                 plain = export_plain(bitmap, solution=best_solution,
@@ -949,6 +1267,7 @@ Examples:
     step = 0
     final_solution = None
     final_visited = None
+    total_passable = sum(1 for r in range(len(bitmap)) for c in range(len(bitmap[0])) if bitmap[r][c] != WALL)
 
     for visited, frontier, solution in solver(bitmap, start_pos, end_pos):
         step += 1
@@ -963,18 +1282,25 @@ Examples:
         if solution:
             final_solution = solution
             final_visited = visited
+            pct = len(visited) / total_passable * 100 if total_passable > 0 else 0
             print(
                 f"\n  \033[1m{args.solver.upper()}\033[0m — "
                 f"Path length: {len(solution)}, "
-                f"Cells explored: {len(visited)}, "
+                f"Cells explored: {len(visited)} ({pct:.1f}%), "
                 f"Steps: {step}"
             )
         else:
             explored = len(visited) if visited else 0
-            print(f"  Step {step} | Exploring... cells visited: {explored}")
+            pct = explored / total_passable * 100 if total_passable > 0 else 0
+            print(f"  Step {step} | Exploring... {pct:.0f}% visited ({explored}/{total_passable})")
 
         if not args.no_animate:
             time.sleep(args.speed)
+
+    # Show path coordinates if requested
+    if args.show_path and final_solution:
+        print(f"\n  \033[1mSolution Path ({len(final_solution)} steps):\033[0m")
+        print("  " + " → ".join(f"({r},{c})" for r, c in final_solution))
 
     # Export if requested
     if args.export:
@@ -993,7 +1319,6 @@ Examples:
     # Handle no solution found
     if final_solution is None and not args.compare:
         print("\n  \033[91mNo path found!\033[0m", file=sys.stderr)
-
 
 if __name__ == "__main__":
     main()

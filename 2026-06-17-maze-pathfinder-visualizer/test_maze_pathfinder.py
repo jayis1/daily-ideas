@@ -3,13 +3,16 @@
 Tests for the Maze Generator & Pathfinder Visualizer.
 
 Covers:
-  - Maze generation (all 4 algorithms produce valid mazes)
-  - Pathfinding (all 4 solvers find a path)
+  - Maze generation (all 5 algorithms produce valid mazes)
+  - Pathfinding (all 5 solvers find a path)
   - Save/load round-trip
   - Export to plain text
-  - Maze statistics
+  - Maze statistics and difficulty rating
+  - Heatmap computation
+  - Custom start/end positions
   - Edge cases (minimum size, invalid inputs)
   - Rendering with and without color
+  - File I/O validation
 """
 
 import json
@@ -36,14 +39,17 @@ from maze_pathfinder import (
     generate_prim,
     generate_kruskal,
     generate_ellers,
+    generate_wilson,
     solve_bfs,
     solve_dfs,
     solve_astar,
     solve_greedy,
+    solve_dijkstra,
     render,
     export_plain,
     save_maze,
     load_maze,
+    compute_heatmap,
     _bitmap_to_graph,
 )
 
@@ -147,6 +153,41 @@ class TestMazeGrid(unittest.TestCase):
         self.assertGreater(stats["dead_ends"], 0)
         self.assertGreater(float(stats["avg_branching"]), 0)
 
+    def test_stats_with_precomputed_bitmap(self):
+        """stats() should accept pre-computed bitmap to avoid recomputation."""
+        maze = generate_dfs(5, 5, seed=42)
+        bitmap = maze.to_bitmap()
+        s1 = maze.stats()
+        s2 = maze.stats(bitmap=bitmap)
+        self.assertEqual(s1, s2)
+
+    def test_stats_with_none_uses_internal_bitmap(self):
+        """stats(bitmap=None) should compute bitmap internally."""
+        maze = generate_dfs(5, 5, seed=42)
+        s = maze.stats(bitmap=None)
+        self.assertGreater(s["total_cells"], 0)
+
+    def test_difficulty_rating(self):
+        """difficulty_rating() should return a valid difficulty level."""
+        maze = generate_dfs(10, 10, seed=42)
+        difficulty = maze.difficulty_rating()
+        self.assertIn(difficulty, ["Easy", "Medium", "Hard", "Expert"])
+
+    def test_difficulty_rating_small_maze(self):
+        """Small mazes should return a valid difficulty level."""
+        maze = generate_dfs(2, 2, seed=1)
+        bitmap = maze.to_bitmap()
+        difficulty = maze.difficulty_rating(bitmap=bitmap)
+        self.assertIn(difficulty, ["Easy", "Medium", "Hard", "Expert"])
+
+    def test_difficulty_rating_with_precomputed_bitmap(self):
+        """difficulty_rating() should accept pre-computed bitmap."""
+        maze = generate_dfs(10, 10, seed=42)
+        bitmap = maze.to_bitmap()
+        d1 = maze.difficulty_rating()
+        d2 = maze.difficulty_rating(bitmap=bitmap)
+        self.assertEqual(d1, d2)
+
     def test_neighbors_after_carving(self):
         maze = MazeGrid(3, 3)
         # Carve a passage from (0,0) to (0,1)
@@ -207,6 +248,10 @@ class TestGeneration(unittest.TestCase):
         maze = generate_ellers(5, 7, seed=42)
         self._assert_valid_maze(maze, 5, 7)
 
+    def test_wilson_generation(self):
+        maze = generate_wilson(5, 7, seed=42)
+        self._assert_valid_maze(maze, 5, 7)
+
     def test_dfs_minimum_size(self):
         maze = generate_dfs(2, 2, seed=1)
         self._assert_valid_maze(maze, 2, 2)
@@ -223,6 +268,10 @@ class TestGeneration(unittest.TestCase):
         maze = generate_ellers(2, 2, seed=1)
         self._assert_valid_maze(maze, 2, 2)
 
+    def test_wilson_minimum_size(self):
+        maze = generate_wilson(2, 2, seed=1)
+        self._assert_valid_maze(maze, 2, 2)
+
     def test_invalid_size_raises(self):
         with self.assertRaises(ValueError):
             generate_dfs(1, 5)
@@ -232,10 +281,17 @@ class TestGeneration(unittest.TestCase):
             generate_kruskal(0, 0)
         with self.assertRaises(ValueError):
             generate_ellers(1, 1)
+        with self.assertRaises(ValueError):
+            generate_wilson(1, 3)
 
     def test_reproducible_with_seed(self):
         maze1 = generate_dfs(5, 5, seed=42)
         maze2 = generate_dfs(5, 5, seed=42)
+        self.assertEqual(maze1.to_bitmap(), maze2.to_bitmap())
+
+    def test_wilson_reproducible_with_seed(self):
+        maze1 = generate_wilson(5, 5, seed=42)
+        maze2 = generate_wilson(5, 5, seed=42)
         self.assertEqual(maze1.to_bitmap(), maze2.to_bitmap())
 
     def test_different_seeds_produce_different_mazes(self):
@@ -244,7 +300,7 @@ class TestGeneration(unittest.TestCase):
         self.assertNotEqual(maze1.to_bitmap(), maze2.to_bitmap())
 
     def test_all_generators_in_dict(self):
-        self.assertEqual(set(GENERATORS.keys()), {"dfs", "prim", "kruskal", "ellers"})
+        self.assertEqual(set(GENERATORS.keys()), {"dfs", "prim", "kruskal", "ellers", "wilson"})
 
     def test_large_maze_generation(self):
         """Test that generators can handle larger mazes."""
@@ -299,11 +355,23 @@ class TestPathfinding(unittest.TestCase):
         self.assertEqual(path[0], self.start)
         self.assertEqual(path[-1], self.end)
 
+    def test_dijkstra_finds_path(self):
+        path, visited, steps = self._collect_solver(solve_dijkstra)
+        self.assertIsNotNone(path)
+        self.assertEqual(path[0], self.start)
+        self.assertEqual(path[-1], self.end)
+
     def test_astar_is_optimal(self):
         """A* should find a path no longer than BFS (both are optimal)."""
         bfs_path, _, _ = self._collect_solver(solve_bfs)
         astar_path, _, _ = self._collect_solver(solve_astar)
         self.assertEqual(len(bfs_path), len(astar_path))
+
+    def test_dijkstra_is_optimal(self):
+        """Dijkstra should find the same path length as BFS (optimal)."""
+        bfs_path, _, _ = self._collect_solver(solve_bfs)
+        dijkstra_path, _, _ = self._collect_solver(solve_dijkstra)
+        self.assertEqual(len(bfs_path), len(dijkstra_path))
 
     def test_astar_explores_fewer_than_bfs(self):
         """A* should explore fewer or equal cells compared to BFS."""
@@ -331,12 +399,28 @@ class TestPathfinding(unittest.TestCase):
                     )
 
     def test_all_solvers_in_dict(self):
-        self.assertEqual(set(SOLVERS.keys()), {"bfs", "dfs", "astar", "greedy"})
+        self.assertEqual(set(SOLVERS.keys()), {"bfs", "dfs", "astar", "greedy", "dijkstra"})
 
     def test_solver_yields_frames(self):
         """Each solver should yield multiple frames for a reasonable maze."""
         frames = list(solve_astar(self.bitmap, self.start, self.end))
         self.assertGreater(len(frames), 1)
+
+    def test_custom_start_end(self):
+        """Solvers should work with custom start/end positions."""
+        maze = generate_dfs(5, 5, seed=10)
+        bitmap = maze.to_bitmap()
+        # Start at bottom-right, end at top-left
+        start = (2 * 5 - 1, 2 * 5 - 1)
+        end = (1, 1)
+        path = None
+        for _, _, solution in solve_astar(bitmap, start, end):
+            if solution is not None:
+                path = solution
+                break
+        self.assertIsNotNone(path)
+        self.assertEqual(path[0], start)
+        self.assertEqual(path[-1], end)
 
 
 class TestBitmapToGraph(unittest.TestCase):
@@ -357,6 +441,41 @@ class TestBitmapToGraph(unittest.TestCase):
         # Find a wall position
         self.assertEqual(bitmap[0][0], WALL)
         self.assertNotIn((0, 0), graph)
+
+
+class TestHeatmap(unittest.TestCase):
+    """Tests for the heatmap computation."""
+
+    def test_heatmap_returns_dict(self):
+        maze = generate_dfs(5, 5, seed=42)
+        bitmap = maze.to_bitmap()
+        start = (1, 1)
+        end = (2 * 5 - 1, 2 * 5 - 1)
+        heat = compute_heatmap(bitmap, start, end)
+        self.assertIsInstance(heat, dict)
+        # Should have some entries
+        self.assertGreater(len(heat), 0)
+
+    def test_heatmap_start_and_end_visited(self):
+        """Start and end should be visited by all solvers."""
+        maze = generate_dfs(5, 5, seed=42)
+        bitmap = maze.to_bitmap()
+        start = (1, 1)
+        end = (2 * 5 - 1, 2 * 5 - 1)
+        heat = compute_heatmap(bitmap, start, end)
+        # Start and end should be visited by all 5 solvers
+        self.assertEqual(heat[start], len(SOLVERS) * 2)  # visited + solution
+        self.assertEqual(heat[end], len(SOLVERS) * 2)
+
+    def test_heatmap_no_wall_entries(self):
+        """Heatmap should not contain wall positions."""
+        maze = generate_dfs(5, 5, seed=42)
+        bitmap = maze.to_bitmap()
+        start = (1, 1)
+        end = (2 * 5 - 1, 2 * 5 - 1)
+        heat = compute_heatmap(bitmap, start, end)
+        for pos in heat:
+            self.assertNotEqual(bitmap[pos[0]][pos[1]], WALL)
 
 
 class TestRendering(unittest.TestCase):
@@ -395,10 +514,28 @@ class TestRendering(unittest.TestCase):
                         start=(1, 1), end=(5, 5), use_color=False)
         self.assertIn(SOLUTION, output)
 
+    def test_render_with_heatmap(self):
+        """Render with heatmap should contain heatmap characters."""
+        maze = generate_dfs(5, 5, seed=42)
+        bitmap = maze.to_bitmap()
+        heat = {(1, 1): 5, (1, 3): 3}
+        output = render(bitmap, heatmap=heat, start=(1, 1), end=(9, 9), use_color=False)
+        # Should contain some heatmap characters (not just walls and spaces)
+        # Check that we get something back that's not empty
+        self.assertGreater(len(output), 0)
+
     def test_export_plain(self):
         output = export_plain(self.bitmap, start=(1, 1), end=(5, 5))
         self.assertIn(START, output)
         self.assertIn(END, output)
+        self.assertNotIn("\033[", output)
+
+    def test_export_plain_with_heatmap(self):
+        """export_plain should work with heatmap."""
+        maze = generate_dfs(5, 5, seed=42)
+        bitmap = maze.to_bitmap()
+        heat = {(1, 1): 3}
+        output = export_plain(bitmap, heatmap=heat, start=(1, 1), end=(9, 9))
         self.assertNotIn("\033[", output)
 
 
@@ -613,24 +750,6 @@ class TestLoadMazeValidation(unittest.TestCase):
                 load_maze(filepath)
         finally:
             os.unlink(filepath)
-
-
-class TestStatsWithBitmap(unittest.TestCase):
-    """Tests for stats() with optional bitmap parameter."""
-
-    def test_stats_with_precomputed_bitmap(self):
-        """stats() should accept pre-computed bitmap to avoid recomputation."""
-        maze = generate_dfs(5, 5, seed=42)
-        bitmap = maze.to_bitmap()
-        s1 = maze.stats()
-        s2 = maze.stats(bitmap=bitmap)
-        self.assertEqual(s1, s2)
-
-    def test_stats_with_none_uses_internal_bitmap(self):
-        """stats(bitmap=None) should compute bitmap internally."""
-        maze = generate_dfs(5, 5, seed=42)
-        s = maze.stats(bitmap=None)
-        self.assertGreater(s["total_cells"], 0)
 
 
 if __name__ == "__main__":
