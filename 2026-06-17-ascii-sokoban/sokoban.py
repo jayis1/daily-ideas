@@ -20,11 +20,12 @@ import sys
 import tty
 import termios
 import copy
+import re
 import time
 import argparse
 from collections import deque
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # ─── Unicode tile set ──────────────────────────────────────────────
 UNICODE_TILES = {
@@ -85,6 +86,10 @@ def colorize(text, *codes):
     """Apply ANSI codes to text, ending with RESET."""
     return "".join(codes) + text + Colors.RESET
 
+def strip_ansi(text):
+    """Remove ANSI escape sequences from a string to get its visible width."""
+    return re.sub(r'\033\[[0-9;]*[A-Za-z]', '', text)
+
 # ─── Level definitions ─────────────────────────────────────────────
 # Each level is a list of strings. Legend:
 #   # = wall   . = goal   $ = box   @ = player   + = player on goal
@@ -132,24 +137,23 @@ LEVELS = [
     ],
     # Level 5 — Challenge (4 boxes, 4 goals)
     [
-        "  #####   ",
-        "###   ##  ",
-        "# .$  #  ",
-        "# # .$##  ",
-        "# .$ $ #  ",
-        "## .#@ #  ",
-        " #   ##   ",
-        " #####    ",
+        " ###### ",
+        "##    ##",
+        "# .$   #",
+        "# .$ @ #",
+        "# .$   #",
+        "# $.  ##",
+        " ###### ",
     ],
     # Level 6 — Three boxes, zigzag paths
     [
-        "  ######",
-        "  #  . #",
-        "###$ . #",
-        "#  $#. #",
-        "# @#   #",
-        "#  $  ##",
-        "######  ",
+        " ##### ",
+        "##   ##",
+        "# $ . #",
+        "#  $  #",
+        "# .$.@#",
+        "##   ##",
+        " ##### ",
     ],
     # Level 7 — Four boxes, open layout
     [
@@ -375,14 +379,22 @@ def try_move(state, direction):
         }
 
     # Simple move (no box pushed)
+    # Copy boxes set to avoid shared mutable reference
     return {
         **state,
         'player': new_player,
+        'boxes': set(state['boxes']),
         'pushed': False,
     }
 
 def is_win(state):
-    """Check if all goals have boxes on them."""
+    """Check if all goals have boxes on them.
+
+    Returns False if there are no goals (vacuous truth is incorrect here;
+    an empty goal set means the level is malformed).
+    """
+    if not state['goals']:
+        return False
     return state['goals'] <= frozenset(state['boxes'])
 
 # ─── Deadlock detection ─────────────────────────────────────────────
@@ -410,9 +422,12 @@ def is_simple_deadlock(state):
 def is_wall_deadlock(state):
     """Detect boxes stuck against a wall with no goal along that wall line.
 
-    If a box is against a wall row/column and there are no goals reachable
-    along that wall, the box is deadlocked (it can only slide along the wall
-    but can never reach a goal).
+    A box is only considered wall-line deadlocked if it is in a *corridor*
+    — i.e., it has walls on BOTH sides of the perpendicular axis, meaning
+    it can ONLY slide along the wall line and cannot be pushed away from it.
+
+    For example, a box with a wall above AND below can only move left/right.
+    If no goal is reachable along that row, the box is deadlocked.
     """
     walls = state['walls']
     goals = state['goals']
@@ -422,22 +437,21 @@ def is_wall_deadlock(state):
             continue
         r, c = box
 
-        # Check horizontal wall deadlock (box against top or bottom wall)
+        # Check horizontal corridor deadlock (wall above AND below → can only slide left/right)
         wall_up = (r - 1, c) in walls
         wall_down = (r + 1, c) in walls
 
-        if wall_up or wall_down:
-            # The box is against a horizontal wall — can it reach a goal
-            # by sliding along this wall? Check if any goal exists on the
-            # same row between wall segments.
+        if wall_up and wall_down:
+            # The box is in a horizontal corridor — it can only slide left/right
             if not _goal_reachable_on_wall_line(state, box, horizontal=True):
                 return True
 
-        # Check vertical wall deadlock (box against left or right wall)
+        # Check vertical corridor deadlock (wall left AND right → can only slide up/down)
         wall_left = (r, c - 1) in walls
         wall_right = (r, c + 1) in walls
 
-        if wall_left or wall_right:
+        if wall_left and wall_right:
+            # The box is in a vertical corridor — it can only slide up/down
             if not _goal_reachable_on_wall_line(state, box, horizontal=False):
                 return True
 
@@ -448,13 +462,17 @@ def _goal_reachable_on_wall_line(state, box, horizontal=True):
     """Check if a goal is reachable along a wall line for a box.
 
     If horizontal=True, checks if the box can slide left/right along a
-    horizontal wall to reach a goal. If horizontal=False, checks up/down
-    along a vertical wall.
+    horizontal corridor to reach a goal. If horizontal=False, checks up/down
+    along a vertical corridor.
+
+    Note: This is a heuristic — it checks that no wall blocks the path to a
+    goal, but does not account for other boxes that may temporarily block the
+    path (since boxes can be moved). This may produce false negatives
+    (missing a true deadlock) but avoids false positives.
     """
     r, c = box
     walls = state['walls']
     goals = state['goals']
-    boxes = state['boxes']
 
     if horizontal:
         # Scan left and right along the row for goals that are reachable
@@ -616,8 +634,8 @@ def play_level(level_num, level_data, tiles, use_color):
         status_line = f"  Sokoban — {level_name}  |  Moves: {moves}  Pushes: {pushes}  Progress: {progress}  Time: {time_str}"
 
         # Draw bordered game area
-        width = max(len(l) for l in lines) if lines else 40
-        # Calculate visual width (account for ANSI codes — use raw chars)
+        # Use visible width (strip ANSI codes) so borders align correctly
+        width = max(len(strip_ansi(l)) for l in lines) if lines else 40
         border = tiles["border_h"] * (width + 2)
 
         sys.stdout.write(f"  {tiles['top_border']}{border}{tiles['top_border']}\n")

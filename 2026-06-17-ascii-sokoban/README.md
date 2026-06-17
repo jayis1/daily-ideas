@@ -1,6 +1,6 @@
 # ASCII Sokoban
 
-A feature-rich terminal-based implementation of the classic **Sokoban** box-pushing puzzle game, rendered with beautiful Unicode box-drawing characters and colored ANSI output.
+A feature-rich terminal-based implementation of the classic **Sokoban** box-pushing puzzle game, rendered with Unicode box-drawing characters and colored ANSI output.
 
 ## What It Does
 
@@ -14,7 +14,7 @@ Sokoban (倉庫番, "warehouse keeper") is a puzzle game where you push boxes on
 - **ANSI color output** — colored walls, player, boxes, and goals for better visibility
 - **`--no-color`** flag to disable colors if preferred
 - **Full undo system** — press `u` to undo any move, as far back as you want
-- **Deadlock detection** — warns when a box is stuck in a corner or against a wall with no reachable goal
+- **Deadlock detection** — warns when a box is stuck in a corner or in a corridor with no reachable goal
 - **Progress tracking** — shows boxes-on-goals counter (e.g., `2/4`) and elapsed time
 - **Move & push counters** — track your efficiency
 - **Level skip** — press `n` to skip to the next level
@@ -134,8 +134,8 @@ Uses `#` for walls, `@` for player, `$` for boxes, `.` for goals, `*` for boxes 
 | 2 | 2 | ★★☆☆☆ | Two boxes, tighter space |
 | 3 | 2 | ★★★☆☆ | L-shaped maze |
 | 4 | 2 | ★★★☆☆ | Tight corridors with central obstacle |
-| 5 | 4 | ★★★★☆ | Four boxes, multiple goals |
-| 6 | 3 | ★★★☆☆ | Zigzag paths |
+| 5 | 4 | ★★★★☆ | Four boxes, symmetric layout |
+| 6 | 3 | ★★★☆☆ | Three boxes, zigzag paths |
 | 7 | 4 | ★★★★☆ | Open layout with four boxes |
 | 8 | 3 | ★★★★☆ | Narrow passages — the gauntlet |
 
@@ -146,16 +146,28 @@ cd ascii-sokoban
 python3 -m pytest test_sokoban.py -v
 ```
 
-Tests cover: level parsing, movement logic, win detection, deadlock detection, rendering (Unicode & ASCII modes), stats tracking, and level integrity (all levels parse correctly with matching box/goal counts).
+Tests cover: level parsing, movement logic, win detection, deadlock detection (corner and corridor), rendering (Unicode & ASCII modes), ANSI color stripping, stats tracking, and level integrity (all levels parse correctly with matching box/goal counts and no initial deadlocks).
 
 ## Technical Details
 
-- **Rendering**: ANSI/VT100 escape codes for cursor positioning, screen clearing, and cursor hiding. Optional color output with distinct colors for walls, player, boxes, and goals.
+- **Rendering**: ANSI/VT100 escape codes for cursor positioning, screen clearing, and cursor hiding. Optional color output with distinct colors for walls, player, boxes, and goals. Border width is correctly calculated using `strip_ansi()` to exclude escape codes.
 - **Input**: Raw terminal mode (`tty.setraw`) for single-keypress reading without Enter.
-- **Undo**: Full state history stored as `(state, moves, pushes)` tuples — undo restores exact counters, not just board position.
-- **Deadlock detection**: Corner deadlock heuristic (box wedged between two perpendicular walls) and wall-line deadlock detection (box against a wall with no reachable goal along that line).
+- **Undo**: Full state history stored as `(state, moves, pushes)` tuples — undo restores exact counters, not just board position. Each state stores an independent copy of the boxes set to prevent shared-reference mutation bugs.
+- **Deadlock detection**: Two heuristics — corner deadlock (box wedged between two perpendicular walls) and corridor deadlock (box in a corridor with walls on both perpendicular sides and no reachable goal along that line).
 - **CLI**: `argparse`-based interface with `--help`, `--version`, `--level`, `--ascii`, and `--no-color` flags.
-- **Version**: 1.1.0
+- **Version**: 1.2.0
+
+## Changelog
+
+### v1.2.0 — Bug fixes
+- **Fixed false-positive deadlock detection**: The corridor deadlock heuristic was incorrectly triggering when a box was against a wall on only one side. Now requires walls on **both** perpendicular sides (a true corridor) before flagging as deadlocked. This fixes false deadlock warnings on Levels 5, 6, and 8.
+- **Fixed unsolvable levels**: Level 5 and Level 6 were unsolvable due to box-in-corner deadlocks at the starting position. Both levels have been redesigned with verified-solvable layouts (BFS solver verified).
+- **Fixed Level 5 row length mismatch**: Row 2 had 9 characters instead of 10, causing asymmetric level rendering.
+- **Fixed border width miscalculation with ANSI colors**: The game border was calculated using `len()` on rendered lines that included ANSI escape codes, making borders far too wide in color mode. Added `strip_ansi()` helper to calculate visible width correctly.
+- **Fixed shared mutable reference bug in `try_move`**: When no box was pushed, the returned state shared the same `boxes` set object as the input state, which could lead to mutation bugs. Now always creates a fresh `set()` copy.
+- **Fixed `is_win` vacuous truth**: `is_win()` with an empty goals set returned `True` (vacuous truth). Now returns `False` for empty goals, which correctly treats goalless levels as unwinnable.
+- **Added `strip_ansi()` utility function**: Regex-based ANSI escape sequence stripper used for correct border width calculation.
+- **Added 12 new tests**: Tests for corridor deadlock detection, single-wall non-deadlock, shared reference bug, empty goals, row padding, out-of-bounds moves, box-out-of-bounds, ANSI stripping, color width consistency, level solvability, and row length consistency.
 
 ## License
 

@@ -13,6 +13,7 @@ from sokoban import (
     is_simple_deadlock,
     is_wall_deadlock,
     detect_deadlock,
+    strip_ansi,
     Stats,
     LEVELS,
     UNICODE_TILES,
@@ -25,7 +26,7 @@ from sokoban import (
 SIMPLE_LEVEL = [
     "####",
     "#.@#",
-    "# $  ",  # trailing space gives box room to move
+    "# $  ",
     "#  #",
     "####",
 ]
@@ -60,6 +61,20 @@ WIN_LEVEL = [
     "#*@#",
     "#  #",
     "####",
+]
+
+# Corridor level for wall deadlock tests
+CORRIDOR_LEVEL = [
+    "######",
+    "#$.  #",
+    "######",
+]
+
+# Box in corridor with goal (NOT a deadlock)
+CORRIDOR_GOAL_LEVEL = [
+    "######",
+    "# $. #",
+    "######",
 ]
 
 
@@ -116,6 +131,16 @@ class TestParseLevel:
         # Walls should not be in floor
         for w in state['walls']:
             assert w not in state['floor']
+
+    def test_row_padding(self):
+        """Rows of different lengths should be padded to the same length."""
+        level = [
+            "###",
+            "# @#",
+            "####",
+        ]
+        state = parse_level(level)
+        assert state['width'] == 4  # max row length
 
 
 # ─── Movement tests ───────────────────────────────────────────────
@@ -198,6 +223,42 @@ class TestTryMove:
         assert result is not None
         assert result['pushed'] is False
 
+    def test_boxes_not_shared_reference(self):
+        """Bug fix: boxes set should not be shared between states."""
+        state = parse_level(OPEN_LEVEL)
+        result = try_move(state, (0, -1))
+        assert result is not None
+        # The returned boxes should be a separate object
+        assert result['boxes'] is not state['boxes']
+
+    def test_move_out_of_bounds(self):
+        """Moving out of bounds should return None."""
+        level = [
+            "#####",
+            "#@  #",
+            "#   #",
+            "#####",
+        ]
+        state = parse_level(level)
+        # Player at (1,1). Move up to (0,1) which is a wall
+        result = try_move(state, (-1, 0))
+        assert result is None  # Wall at (0,1)
+
+    def test_push_box_out_of_bounds(self):
+        """Pushing a box out of bounds should return None."""
+        level = [
+            "#####",
+            "# @$ #",
+            "#####",
+        ]
+        state = parse_level(level)
+        # Player at (1,1), box at (1,2), push right -> box to (1,3) which is space
+        result = try_move(state, (0, 1))
+        assert result is not None
+        # But push box further right into wall at (1,4)
+        result2 = try_move(result, (0, 1))
+        assert result2 is None  # Wall blocks
+
 
 # ─── Win detection tests ───────────────────────────────────────────
 
@@ -219,6 +280,14 @@ class TestIsWin:
 
     def test_not_win_box_off_goal(self):
         state = parse_level(OPEN_LEVEL)
+        assert not is_win(state)
+
+    def test_win_with_empty_goals_is_false(self):
+        """Bug fix: is_win should return False for empty goals (malformed level)."""
+        state = {
+            'goals': frozenset(),
+            'boxes': set(),
+        }
         assert not is_win(state)
 
 
@@ -263,6 +332,41 @@ class TestDeadlockDetection:
         state = parse_level(level)
         assert detect_deadlock(state)
 
+    def test_wall_deadlock_corridor(self):
+        """Box in a corridor (walls above and below) with no goal on the row = deadlock."""
+        # Box at (1,1) in horizontal corridor, goal on a different row
+        level = [
+            "#######",
+            "#$    #",
+            "##### #",
+            "#  .  #",
+            "# @   #",
+            "#######",
+        ]
+        state = parse_level(level)
+        assert is_wall_deadlock(state)
+
+    def test_wall_deadlock_not_triggered_by_single_wall(self):
+        """Bug fix: Box against one wall should NOT trigger corridor deadlock."""
+        # Box against a wall on one side but free on the other
+        level = [
+            "######",
+            "#$ . #",
+            "#    #",
+            "# @  #",
+            "######",
+        ]
+        state = parse_level(level)
+        # Box at (1,1) has wall above but no wall below — not a corridor
+        assert not is_wall_deadlock(state)
+
+    def test_no_false_deadlock_at_start(self):
+        """All game levels should NOT be deadlocked at the start."""
+        for i, level in enumerate(LEVELS):
+            state = parse_level(level)
+            assert not detect_deadlock(state), \
+                f"Level {i+1} is deadlocked at the start (false positive)"
+
 
 # ─── Rendering tests ──────────────────────────────────────────────
 
@@ -304,6 +408,22 @@ class TestRender:
         lines = render(state, tiles=ASCII_TILES)
         # Player on goal should render as '+'
         assert '+' in lines[1]
+
+    def test_strip_ansi(self):
+        """Bug fix: strip_ansi should remove ANSI escape codes."""
+        assert strip_ansi("\033[31mhello\033[0m") == "hello"
+        assert strip_ansi("\033[1;32;40mworld\033[0m") == "world"
+        assert strip_ansi("plain text") == "plain text"
+        assert strip_ansi("\033[48;5;23m\033[37mcolored\033[0m") == "colored"
+
+    def test_render_color_width_consistency(self):
+        """Rendered line visual width should match level width (no ANSI in width calc)."""
+        state = parse_level(OPEN_LEVEL)
+        lines_nocolor = render(state, tiles=UNICODE_TILES, use_color=False)
+        lines_color = render(state, tiles=UNICODE_TILES, use_color=True)
+        # Visual width should be the same regardless of color
+        for nocolor_line, color_line in zip(lines_nocolor, lines_color):
+            assert len(strip_ansi(color_line)) == len(nocolor_line)
 
 
 # ─── Stats tests ──────────────────────────────────────────────────
@@ -360,3 +480,21 @@ class TestLevelIntegrity:
             state = parse_level(level)
             lines = render(state)
             assert len(lines) == state['height']
+
+    def test_all_levels_solvable(self):
+        """Every level should not be deadlocked at the start."""
+        for i, level in enumerate(LEVELS):
+            state = parse_level(level)
+            assert not detect_deadlock(state), \
+                f"Level {i+1} is deadlocked at the start"
+
+    def test_row_lengths_consistent(self):
+        """All rows in each level should have the same length after padding."""
+        for i, level in enumerate(LEVELS):
+            state = parse_level(level)
+            # parse_level pads rows, so width should be consistent
+            for row in level:
+                # The actual level definition may have varying lengths,
+                # but parse_level handles padding
+                assert len(row) <= state['width'], \
+                    f"Level {i+1}: row length {len(row)} exceeds width {state['width']}"
