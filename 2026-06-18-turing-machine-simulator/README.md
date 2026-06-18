@@ -8,7 +8,7 @@ A visual, interactive Turing machine simulator with 10 built-in programs, curses
 - **Curses Visualization**: Real-time animated tape display with state highlighting, transition rules, and keyboard controls
 - **Text-Mode Stepping**: Step-by-step execution with colored terminal output (no curses dependency)
 - **Batch Execution**: Run all programs at once and compare results with execution statistics
-- **Execution Trace**: Detailed step-by-step trace showing state, head position, symbols read/written, direction, and tape snapshots
+- **Execution Trace**: Detailed step-by-step trace showing state, head position, symbols read/written, direction, and tape snapshots (`--trace`)
 - **Custom Machines**: Interactive creator for defining your own Turing machines
 - **Machine Validation**: Detects unused states, undefined transitions, and orphan states
 - **JSON Persistence**: Save and load machine definitions as JSON files
@@ -27,7 +27,7 @@ A visual, interactive Turing machine simulator with 10 built-in programs, curses
 | `count_ones` | Count 1s in binary, write unary tally after `=` | `10110=` | `10110=\|\|\|` |
 | `binary_decrement` | Decrement a binary number by 1 | `1100` (12) | `1011` (11) |
 | `unary_doubler` | Double a unary number | `111` (3) | `111111` (6) |
-| `binary_and` | Bitwise AND of two binary numbers separated by `&` | `1100&1010` | `1100&1000` |
+| `binary_and` | Bitwise AND of two equal-length binary strings separated by `&` | `1100&1010` | `1100&1000` |
 | `string_reverser` | Reverse a binary string | `110` | `011` |
 
 ## How to Install
@@ -79,7 +79,7 @@ python3 turing.py --trace --run binary_not      # Trace binary NOT
 python3 turing.py --trace --run busy_beaver_3   # Trace Busy Beaver
 ```
 
-The `--trace` flag produces a detailed execution log showing each step with the current state, head position, symbol read, symbol written, movement direction, next state, and a tape snapshot. Each step is numbered so you can follow the exact execution path of any program.
+The `--trace` flag produces a detailed execution log showing each step with the current state, head position, symbol read, symbol written, movement direction, next state, and a tape snapshot. Each step is numbered so you can follow the exact execution path.
 
 ### Override Tape Input
 
@@ -167,7 +167,7 @@ $ python3 turing.py --text --run binary_and --tape 1100&1010
   Final tape: 1100&1000
 ```
 
-The `binary_and` program processes two binary numbers separated by `&`, computing the bitwise AND column by column. It marks left-side bits as X (for 0) or Y (for 1) to track position correspondence, then converts markers back and cleans up to produce the final result.
+The `binary_and` program processes two equal-length binary numbers separated by `&`, computing the bitwise AND column by column. It marks left-side bits as X (for 0) or Y (for 1) to track position correspondence, then converts markers back and cleans up to produce the final result.
 
 ### Example: String Reverser
 
@@ -272,20 +272,32 @@ This simulator implements a complete Turing machine — the mathematical model o
 
 The simulator supports multiple execution modes (visual, text, batch, trace), machine validation with helpful warnings, execution statistics tracking, custom machine creation interactively or via JSON files, and ten carefully verified built-in programs that demonstrate different computational tasks — from simple bit-flipping and arithmetic to the famous Busy Beaver problem, bitwise AND operations, and string reversal.
 
-### New in v1.2.0
-
-- **Binary AND program**: Computes bitwise AND of two binary numbers separated by `&`, using a position-correspondence strategy with X/Y markers
-- **String Reverser program**: Reverses a binary string using a separator-based approach that reads from right-to-left and builds output left-to-right
-- **Execution Trace** (`--trace`): Detailed step-by-step execution log with state, head position, symbol read/written, direction, next state, and tape snapshots
-- **`ExecutionStep` dataclass**: Programmatic access to trace data via the `run_trace()` function
-- **`__all__` exports**: Clean public API with explicit symbol exports
-- **Improved error handling**: Better validation and edge case coverage
-- **44 tests**: Comprehensive test suite covering all programs, trace feature, and edge cases
-
 ## Running Tests
 
 ```bash
 python3 test_turing.py
 ```
 
-The test suite covers tape operations, transitions, machine validation, all 10 built-in programs (including binary AND and string reverser), batch execution, execution trace, save/load functionality, and the version string.
+The test suite (51 tests) covers tape operations, transitions, machine validation, all 10 built-in programs (including edge cases), batch execution, execution trace, save/load functionality, and the version string.
+
+## Changelog
+
+### v1.2.1 — Bug Fixes
+
+- **Fixed palindrome checker** for single-character and two-character palindromes: inputs like `0`, `1`, `00`, and `11` were incorrectly rejected because the machine lacked transitions for `q0` reading `X` (all chars marked) and `q_left0`/`q_left1` reading `X` (single remaining character). Added three transitions:
+  - `(q0, X)` → accept (all characters processed → palindrome)
+  - `(q_left0, X)` → accept (single character matches itself)
+  - `(q_left1, X)` → accept (single character matches itself)
+
+- **Fixed binary decrement** leaving `Z` markers in output: the `q_strip` state wrote `Z` to mark stripped leading zeros, but these markers were never cleaned up. Changed to write `_` (blank) instead, which is automatically erased from the sparse tape representation. Also removed `Z` from the alphabet since it's no longer needed.
+
+- **Fixed string reverser** for empty input: an empty tape caused the machine to get stuck because `q0` had no transition for `_` after the `=` separator was placed. Added `(q0, _)` → cleanup to handle empty and degenerate inputs gracefully.
+
+- **Added 7 new tests** for edge cases:
+  - `test_palindrome_single_char`: single-character palindromes (`0`, `1`)
+  - `test_palindrome_two_same_chars`: two-character palindromes (`00`, `11`)
+  - `test_palindrome_two_diff_chars`: two-character non-palindromes (`01`, `10`)
+  - `test_binary_decrement_no_z_markers`: verifies no `Z` in output for power-of-two decrements
+  - `test_binary_decrement_underflow`: verifies `0` is correctly rejected
+  - `test_string_reverser_empty_input`: empty string reverses to empty string
+  - `test_string_reverser_single_char`: single characters reverse to themselves

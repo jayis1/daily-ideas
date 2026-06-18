@@ -226,6 +226,60 @@ class TestBuiltinPrograms:
         result = run_batch(machine)
         assert result["accepted"] is False
 
+    def test_palindrome_single_char(self):
+        """Bug fix: single-character strings should be palindromes."""
+        for tape_input in ["0", "1"]:
+            machine = TuringMachine(
+                name="palindrome_checker",
+                description="Check if a binary string is a palindrome",
+                states=BUILTIN_PROGRAMS["palindrome_checker"].states,
+                alphabet=BUILTIN_PROGRAMS["palindrome_checker"].alphabet,
+                blank_symbol="_",
+                initial_state="q0",
+                accept_states=["q_accept"],
+                reject_states=["q_reject"],
+                transitions=BUILTIN_PROGRAMS["palindrome_checker"].transitions,
+                initial_tape=tape_input,
+            )
+            result = run_batch(machine)
+            assert result["accepted"] is True, f"palindrome_checker('{tape_input}') should be accepted (single char)"
+
+    def test_palindrome_two_same_chars(self):
+        """Bug fix: two same chars ('00') should be a palindrome."""
+        for tape_input in ["00", "11"]:
+            machine = TuringMachine(
+                name="palindrome_checker",
+                description="Check if a binary string is a palindrome",
+                states=BUILTIN_PROGRAMS["palindrome_checker"].states,
+                alphabet=BUILTIN_PROGRAMS["palindrome_checker"].alphabet,
+                blank_symbol="_",
+                initial_state="q0",
+                accept_states=["q_accept"],
+                reject_states=["q_reject"],
+                transitions=BUILTIN_PROGRAMS["palindrome_checker"].transitions,
+                initial_tape=tape_input,
+            )
+            result = run_batch(machine)
+            assert result["accepted"] is True, f"palindrome_checker('{tape_input}') should be accepted"
+
+    def test_palindrome_two_diff_chars(self):
+        """Two different chars ('01') should NOT be a palindrome."""
+        for tape_input in ["01", "10"]:
+            machine = TuringMachine(
+                name="palindrome_checker",
+                description="Check if a binary string is a palindrome",
+                states=BUILTIN_PROGRAMS["palindrome_checker"].states,
+                alphabet=BUILTIN_PROGRAMS["palindrome_checker"].alphabet,
+                blank_symbol="_",
+                initial_state="q0",
+                accept_states=["q_accept"],
+                reject_states=["q_reject"],
+                transitions=BUILTIN_PROGRAMS["palindrome_checker"].transitions,
+                initial_tape=tape_input,
+            )
+            result = run_batch(machine)
+            assert result["accepted"] is False, f"palindrome_checker('{tape_input}') should be rejected"
+
     def test_busy_beaver(self):
         result = run_batch(BUILTIN_PROGRAMS["busy_beaver_3"])
         assert result["accepted"] is True
@@ -263,9 +317,7 @@ class TestBuiltinPrograms:
         )
         result = run_batch(machine)
         assert result["accepted"] is True
-        # The output may contain Z markers from stripping leading zeros;
-        # the key 1 should be present
-        assert "1" in result["output"]
+        assert result["output"] == "1"
 
     def test_binary_decrement_power_of_two(self):
         machine = TuringMachine(
@@ -282,9 +334,45 @@ class TestBuiltinPrograms:
         )
         result = run_batch(machine)
         assert result["accepted"] is True
-        # Should produce 111 (leading zeros stripped)
-        ones = result["output"].replace("Z", "").replace("_", "")
-        assert ones == "111"
+        # Leading zeros should be stripped cleanly (no Z markers)
+        assert "Z" not in result["output"]
+        assert result["output"] == "111"
+
+    def test_binary_decrement_no_z_markers(self):
+        """Bug fix: binary_decrement should not leave Z markers in output."""
+        for tape_input, expected in [("10", "1"), ("100", "11"), ("1000", "111")]:
+            machine = TuringMachine(
+                name="binary_decrement",
+                description="Decrement a binary number by 1",
+                states=BUILTIN_PROGRAMS["binary_decrement"].states,
+                alphabet=BUILTIN_PROGRAMS["binary_decrement"].alphabet,
+                blank_symbol="_",
+                initial_state="q0",
+                accept_states=["q_accept"],
+                reject_states=["q_reject"],
+                transitions=BUILTIN_PROGRAMS["binary_decrement"].transitions,
+                initial_tape=tape_input,
+            )
+            result = run_batch(machine)
+            assert result["accepted"] is True, f"decrement({tape_input}) not accepted"
+            assert result["output"] == expected, f"decrement({tape_input}): expected '{expected}', got '{result['output']}'"
+
+    def test_binary_decrement_underflow(self):
+        """Decrementing 0 should be rejected (underflow)."""
+        machine = TuringMachine(
+            name="binary_decrement",
+            description="Decrement a binary number by 1",
+            states=BUILTIN_PROGRAMS["binary_decrement"].states,
+            alphabet=BUILTIN_PROGRAMS["binary_decrement"].alphabet,
+            blank_symbol="_",
+            initial_state="q0",
+            accept_states=["q_accept"],
+            reject_states=["q_reject"],
+            transitions=BUILTIN_PROGRAMS["binary_decrement"].transitions,
+            initial_tape="0",
+        )
+        result = run_batch(machine)
+        assert result["accepted"] is False
 
     def test_unary_doubler(self):
         result = run_batch(BUILTIN_PROGRAMS["unary_doubler"])
@@ -323,6 +411,43 @@ class TestBuiltinPrograms:
         result = run_batch(BUILTIN_PROGRAMS["string_reverser"])
         assert result["accepted"] is True
         assert result["output"] == "011"
+
+    def test_string_reverser_empty_input(self):
+        """Bug fix: string_reverser should handle empty input gracefully."""
+        machine = TuringMachine(
+            name="string_reverser",
+            description=BUILTIN_PROGRAMS["string_reverser"].description,
+            states=BUILTIN_PROGRAMS["string_reverser"].states,
+            alphabet=BUILTIN_PROGRAMS["string_reverser"].alphabet,
+            blank_symbol="_",
+            initial_state=BUILTIN_PROGRAMS["string_reverser"].initial_state,
+            accept_states=BUILTIN_PROGRAMS["string_reverser"].accept_states,
+            reject_states=BUILTIN_PROGRAMS["string_reverser"].reject_states,
+            transitions=BUILTIN_PROGRAMS["string_reverser"].transitions,
+            initial_tape="",
+        )
+        result = run_batch(machine)
+        assert result["accepted"] is True
+        assert result["output"] == ""  # empty string reversed is empty
+
+    def test_string_reverser_single_char(self):
+        """String reverser: single character should remain the same."""
+        for tape_input in ["0", "1"]:
+            machine = TuringMachine(
+                name="string_reverser",
+                description=BUILTIN_PROGRAMS["string_reverser"].description,
+                states=BUILTIN_PROGRAMS["string_reverser"].states,
+                alphabet=BUILTIN_PROGRAMS["string_reverser"].alphabet,
+                blank_symbol="_",
+                initial_state=BUILTIN_PROGRAMS["string_reverser"].initial_state,
+                accept_states=BUILTIN_PROGRAMS["string_reverser"].accept_states,
+                reject_states=BUILTIN_PROGRAMS["string_reverser"].reject_states,
+                transitions=BUILTIN_PROGRAMS["string_reverser"].transitions,
+                initial_tape=tape_input,
+            )
+            result = run_batch(machine)
+            assert result["accepted"] is True
+            assert result["output"] == tape_input
 
 
 class TestTraceFeature:
@@ -462,7 +587,7 @@ class TestVersion:
     """Test that version is accessible."""
 
     def test_version_string(self):
-        assert __version__ == "1.2.0"
+        assert __version__ == "1.2.1"
 
 
 def run_all_tests():

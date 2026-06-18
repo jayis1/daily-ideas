@@ -1,0 +1,53 @@
+{
+  "name": "busy_beaver_3",
+  "description": "Busy Beaver 3-state champion \u2014 writes 6 ones then halts (13 steps)",
+  "states": [
+    "A",
+    "B",
+    "C",
+    "HALT"
+  ],
+  "alphabet": [
+    "0",
+    "1"
+  ],
+  "blank_symbol": "0",
+  "initial_state": "A",
+  "accept_states": [
+    "HALT"
+  ],
+  "reject_states": [],
+  "transitions": {
+    "A,0": {
+      "next_state": "B",
+      "write_symbol": "1",
+      "direction": "R"
+    },
+    "A,1": {
+      "next_state": "C",
+      "write_symbol": "1",
+      "direction": "R"
+    },
+    "B,0": {
+      "next_state": "C",
+      "write_symbol": "1",
+      "direction": "L"
+    },
+    "B,1": {
+      "next_state": "HALT",
+      "write_symbol": "1",
+      "direction": "S"
+    },
+    "C,0": {
+      "next_state": "A",
+      "write_symbol": "1",
+      "direction": "R"
+    },
+    "C,1": {
+      "next_state": "B",
+      "write_symbol": "0",
+      "direction": "L"
+    }
+  },
+  "initial_tape": ""
+}

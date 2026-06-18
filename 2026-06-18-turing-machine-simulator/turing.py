@@ -4,7 +4,7 @@ Turing Machine Simulator — A visual, interactive simulator for Turing machines
 with built-in example programs, custom machine creation, validation, and
 multiple execution modes (visual, text, batch, trace).
 
-Version: 1.2.0
+Version: 1.2.1
 """
 
 import os
@@ -15,7 +15,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Dict, Tuple, Optional, List
 
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 __all__ = [
     "Transition", "Tape", "TuringMachine", "ExecutionStats", "ExecutionStep",
@@ -255,11 +255,13 @@ _register(
     accept=["q_accept"],
     reject=["q_reject"],
     transitions={
-        # Empty tape or single char is palindrome
+        # Empty tape is palindrome
         ("q0", "_"): ("q_accept", "_", "S"),
         # Read leftmost symbol, mark it, go right
         ("q0", "0"): ("q_right0", "X", "R"),
         ("q0", "1"): ("q_right1", "X", "R"),
+        # All characters marked — it's a palindrome
+        ("q0", "X"): ("q_accept", "X", "S"),
         # q_right0: skip to rightmost, check it's 0
         ("q_right0", "0"): ("q_right0", "0", "R"),
         ("q_right0", "1"): ("q_right0", "1", "R"),
@@ -273,8 +275,10 @@ _register(
         # Found rightmost: verify it matches, mark it, go back left
         ("q_left0", "0"): ("q_back", "X", "L"),
         ("q_left0", "1"): ("q_reject", "1", "S"),
+        ("q_left0", "X"): ("q_accept", "X", "S"),  # single char or all marked
         ("q_left1", "1"): ("q_back", "X", "L"),
         ("q_left1", "0"): ("q_reject", "0", "S"),
+        ("q_left1", "X"): ("q_accept", "X", "S"),  # single char or all marked
         # Go back to leftmost
         ("q_back", "0"): ("q_back", "0", "L"),
         ("q_back", "1"): ("q_back", "1", "L"),
@@ -382,7 +386,7 @@ _register(
     "binary_decrement",
     "Decrement a binary number by 1 (e.g., 1100 → 1011, 1000 → 111)",
     states=["q0", "q_carry", "q_done", "q_strip", "q_accept", "q_reject"],
-    alphabet=["0", "1", "_", "Z"],
+    alphabet=["0", "1", "_"],
     blank="_",
     initial="q0",
     accept=["q_accept"],
@@ -399,9 +403,9 @@ _register(
         # Move back to start, then strip leading zeros
         ("q_done", "0"): ("q_done", "0", "L"),
         ("q_done", "1"): ("q_accept", "1", "S"),
-        ("q_done", "_"): ("q_strip", "Z", "R"),
-        # Strip leading zeros (mark them with Z, skip past)
-        ("q_strip", "0"): ("q_strip", "Z", "R"),
+        ("q_done", "_"): ("q_strip", "_", "R"),
+        # Strip leading zeros (erase them by writing blank, skip past)
+        ("q_strip", "0"): ("q_strip", "_", "R"),
         ("q_strip", "1"): ("q_accept", "1", "S"),
         ("q_strip", "_"): ("q_reject", "_", "S"),  # was 1 → now 0, edge case
     },
@@ -584,6 +588,7 @@ _register(
         ("q0", "1"): ("q0", "1", "R"),
         ("q0", "X"): ("q0", "X", "R"),
         ("q0", "="): ("q_left", "=", "L"),     # found separator, go left
+        ("q0", "_"): ("q_cleanup", "_", "R"),   # no input chars, go to cleanup
 
         # q_left: find the rightmost unprocessed input char (left of =)
         ("q_left", "0"): ("q_found0", "X", "L"),  # erase it, remember 0
