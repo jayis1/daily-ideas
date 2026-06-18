@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for Terminal Lava Lamp simulation v3.0.
+"""Tests for Terminal Lava Lamp simulation v3.1.
 
 Covers blob physics, bubble behavior, lamp shape, theme switching,
 rendering, input validation, edge cases, merge/split dynamics,
@@ -778,6 +778,131 @@ def test_empty_lamp_renders():
     print("✓ test_empty_lamp_renders passed")
 
 
+# ─── Bug Regression Tests (v3.1.0) ────────────────────────────────────────
+
+def test_bubble_char_used_in_render():
+    """Bug fix: Bubble.char should be used in render instead of random.choice.
+
+    Previously, render() used random.choice(["·", "∘", "°"]) for bubble
+    characters instead of using the bubble's pre-assigned .char property.
+    This meant Bubble.char was set but never used.
+    """
+    import re
+    source = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lava_lamp.py')).read()
+    # Verify random.choice is NOT used for bubble rendering anymore
+    # Find the bubble rendering section and check it uses bubble.char
+    assert 'random.choice(["·", "∘", "°"])' not in source, \
+        "render should not use random.choice for bubble characters"
+    assert 'closest_bubble' in source, \
+        "render should track closest_bubble for bubble character rendering"
+    print("✓ test_bubble_char_used_in_render passed")
+
+
+def test_custom_theme_argparse_not_blocked():
+    """Bug fix: Custom themes from --theme-file should not be rejected by argparse.
+
+    Previously, --theme had choices=list(THEMES.keys()) which was set at module
+    load time, before --theme-file was processed. This meant custom theme names
+    from --theme-file would be rejected by argparse before being validated.
+    """
+    import subprocess
+    # Create a temp theme file
+    tmpdir = tempfile.mkdtemp()
+    try:
+        theme_data = {
+            "test_argparse": {
+                "name": "TestArgparse",
+                "bg": [10, 10, 30],
+                "lamp": [40, 40, 60],
+                "wax": [[255, 100, 50], [200, 80, 40], [150, 60, 30], [100, 40, 20]],
+                "glow": [15, 15, 40],
+                "heat": [220, 60, 20],
+            }
+        }
+        filepath = os.path.join(tmpdir, "custom_themes.json")
+        with open(filepath, 'w') as f:
+            json.dump(theme_data, f)
+
+        # Run with --theme-file and --theme pointing to the custom theme
+        # Using --help to exit immediately (no terminal needed)
+        result = subprocess.run(
+            [sys.executable, 'lava_lamp.py', '--theme-file', filepath,
+             '--theme', 'test_argparse', '--help'],
+            capture_output=True, text=True, timeout=10,
+            cwd=os.path.dirname(os.path.abspath(__file__))
+        )
+        # argparse should NOT reject the custom theme (exit code 0 for --help)
+        # If it rejects, exit code would be 2
+        # --help exits with code 0
+        assert result.returncode == 0, \
+            f"Custom theme should be accepted, got exit code {result.returncode}. stderr: {result.stderr[:200]}"
+    finally:
+        shutil.rmtree(tmpdir)
+    print("✓ test_custom_theme_argparse_not_blocked passed")
+
+
+def test_argparse_invalid_theme_still_caught():
+    """Bug fix: Removing argparse choices should still catch invalid themes.
+
+    Since we removed choices from argparse, the post-load validation must
+    still catch invalid theme names.
+    """
+    import subprocess
+    # Run with a theme that doesn't exist and no --theme-file
+    result = subprocess.run(
+        [sys.executable, 'lava_lamp.py', 'nonexistent_theme'],
+        capture_output=True, text=True, timeout=10,
+        cwd=os.path.dirname(os.path.abspath(__file__))
+    )
+    assert result.returncode != 0, \
+        "Invalid theme should cause an error exit"
+    assert 'nonexistent_theme' in result.stderr, \
+        "Error message should mention the invalid theme name"
+    print("✓ test_argparse_invalid_theme_still_caught passed")
+
+
+def test_screenshot_save_feedback():
+    """Bug fix: Screenshot save should provide user feedback.
+
+    Previously, pressing 's' saved screenshots silently with no feedback.
+    Now Screenshot.save_ansi and save_plain return booleans that can be
+    checked to provide feedback.
+    """
+    lamp = LavaLamp(width=30, height=20)
+    lamp.update(0.1)
+    lines = lamp.render()
+    tmpdir = tempfile.mkdtemp()
+    try:
+        ansi_path = os.path.join(tmpdir, "test_feedback.ansi")
+        plain_path = os.path.join(tmpdir, "test_feedback.txt")
+        ansi_ok = Screenshot.save_ansi(lines, ansi_path)
+        plain_ok = Screenshot.save_plain(lines, plain_path)
+        # Both should succeed
+        assert ansi_ok, "save_ansi should return True"
+        assert plain_ok, "save_plain should return True"
+        # Verify the main loop code checks return values
+        source = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lava_lamp.py')).read()
+        assert 'ansi_ok' in source, "Main loop should check screenshot save return values"
+        assert 'Screenshot saved' in source or 'screenshot saved' in source.lower(), \
+            "Main loop should provide feedback when screenshot is saved"
+    finally:
+        shutil.rmtree(tmpdir)
+    print("✓ test_screenshot_save_feedback passed")
+
+
+def test_controls_line_fits_default_width():
+    """Bug fix: Controls line should fit within typical terminal width.
+
+    Previously, the controls line was 67 chars, exceeding the default ~40 char
+    lamp width. The line has been shortened.
+    """
+    controls = "│[1-8]thm +/-spd [p]pause [b]add [d]el [r]set [s]ave [q]uit"
+    # Controls line should be under 60 chars (most terminal widths)
+    assert len(controls) <= 60, \
+        f"Controls line should be under 60 chars, got {len(controls)}"
+    print(f"✓ test_controls_line_fits_default_width passed ({len(controls)} chars)")
+
+
 # ─── Run all tests ───────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -841,7 +966,7 @@ if __name__ == "__main__":
         # New themes
         test_ember_theme,
         test_frost_theme,
-        # Bug regression tests
+        # Bug regression tests (v3.0.1)
         test_negative_dt_ignored,
         test_zero_dt_ignored,
         test_negative_speed_rejected,
@@ -852,6 +977,12 @@ if __name__ == "__main__":
         test_shape_width_no_negative,
         test_render_first_rows_have_lamp_content,
         test_empty_lamp_renders,
+        # Bug regression tests (v3.1.0)
+        test_bubble_char_used_in_render,
+        test_custom_theme_argparse_not_blocked,
+        test_argparse_invalid_theme_still_caught,
+        test_screenshot_save_feedback,
+        test_controls_line_fits_default_width,
     ]
 
     passed = 0

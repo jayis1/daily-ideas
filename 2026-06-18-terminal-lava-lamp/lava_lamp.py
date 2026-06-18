@@ -29,7 +29,7 @@ from typing import List, Tuple, Optional, Dict, Any
 
 # ── Version ────────────────────────────────────────────────────────────────
 
-VERSION = "3.0.1"
+VERSION = "3.1.0"
 
 # ── ANSI helpers ──────────────────────────────────────────────────────────
 
@@ -814,6 +814,8 @@ class LavaLamp:
 
                     # Check bubble influence at this pixel
                     bubble_density = 0.0
+                    closest_bubble = None
+                    closest_bub_dist = float('inf')
                     for bubble in self.bubbles:
                         bub_dx = bx - bubble.x
                         bub_dy = by - bubble.y
@@ -821,6 +823,9 @@ class LavaLamp:
                         if bub_dist < 0.06:
                             bub_core = max(0, 1.0 - bub_dist / 0.06)
                             bubble_density += bub_core
+                            if bub_dist < closest_bub_dist:
+                                closest_bub_dist = bub_dist
+                                closest_bubble = bubble
 
                     # Near edges: darken slightly for depth effect
                     edge_dist = min(bx - 0, 1 - bx)
@@ -866,7 +871,7 @@ class LavaLamp:
                         br = int(min(255, bg[0] * (1 - b_alpha) + 220 * b_alpha))
                         bg_c = int(min(255, bg[1] * (1 - b_alpha) + 230 * b_alpha))
                         bb = int(min(255, bg[2] * (1 - b_alpha) + 240 * b_alpha))
-                        bub_char = random.choice(["·", "∘", "°"]) if bubble_density > 0.6 else "·"
+                        bub_char = closest_bubble.char if (closest_bubble and bubble_density > 0.6) else "·"
                         line_parts.append(rgb_to_ansi(br, bg_c, bb) + bub_char + esc(0))
 
                     elif glow > 0.05:
@@ -988,8 +993,7 @@ Themes: classic, ocean, toxic, sunset, neon, aurora, ember, frost
 
 Controls while running:
   1-8      Switch theme
-  +/=      Increase speed
-  -/_      Decrease speed
+  +/-      Increase/decrease speed
   p        Pause / Resume
   b        Add a blob
   d        Remove a blob
@@ -1006,10 +1010,9 @@ Examples:
 """
     )
     parser.add_argument("theme", nargs="?", default="classic",
-                        choices=list(THEMES.keys()),
-                        help="Color theme (default: classic)")
-    parser.add_argument("--theme", dest="theme_flag", choices=list(THEMES.keys()),
-                        help="Color theme (alternative to positional arg)")
+                        help="Color theme: classic, ocean, toxic, sunset, neon, aurora, ember, frost, or a custom theme name (default: classic)")
+    parser.add_argument("--theme", dest="theme_flag",
+                        help="Color theme (alternative to positional arg; supports custom themes loaded via --theme-file)")
     parser.add_argument("--theme-file", dest="theme_file", default=None,
                         help="Load additional themes from a JSON file")
     parser.add_argument("-W", "--width", type=int, default=None,
@@ -1047,10 +1050,8 @@ Examples:
         try:
             custom_themes = load_themes_from_file(args.theme_file)
             THEMES.update(custom_themes)
-            # Update theme choices for argparse (for future validation)
             print(f"Loaded {len(custom_themes)} custom theme(s): "
                   f"{', '.join(custom_themes.keys())}")
-            # If the selected theme is one of the new ones, it's valid now
         except (FileNotFoundError, ValueError, json.JSONDecodeError) as e:
             parser.error(f"Error loading theme file: {e}")
 
@@ -1153,7 +1154,7 @@ def main():
             if lamp.split_count > 0:
                 status_parts.append(f"Splits:{lamp.split_count}")
             status_line = "  ".join(status_parts)
-            controls = "│ [1-8]themes [+/-]speed [p]ause [b]add [d]el [r]eset [s]ave [q]uit"
+            controls = "│[1-8]thm +/-spd [p]pause [b]add [d]el [r]set [s]ave [q]uit"
             sys.stdout.write(
                 rgb_to_ansi(120, 120, 140) +
                 status_line.ljust(width) + "\n" +
@@ -1200,8 +1201,12 @@ def main():
                         screenshot_count += 1
                         filename = f"lava_lamp_screenshot_{screenshot_count}.txt"
                         plain_filename = f"lava_lamp_screenshot_{screenshot_count}_plain.txt"
-                        Screenshot.save_ansi(output_lines, filename)
-                        Screenshot.save_plain(output_lines, plain_filename)
+                        ansi_ok = Screenshot.save_ansi(output_lines, filename)
+                        plain_ok = Screenshot.save_plain(output_lines, plain_filename)
+                        if ansi_ok and plain_ok:
+                            sys.stderr.write(f"\nScreenshot saved: {filename}, {plain_filename}\n")
+                        elif ansi_ok or plain_ok:
+                            sys.stderr.write(f"\nScreenshot partially saved\n")
             except (OSError, ValueError):
                 pass
 

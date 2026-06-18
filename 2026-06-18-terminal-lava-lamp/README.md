@@ -1,8 +1,6 @@
-# 🫧 Terminal Lava Lamp v3.0.1
+# 🫧 Terminal Lava Lamp v3.1.0
 
 A mesmerizing ASCII lava lamp simulation that runs in your terminal, featuring colored wax blobs that rise and fall inside a lamp-shaped container with real-time physics, rising bubbles, heat glow effects, blob merging and splitting, screenshot export, custom theme loading, and smooth animation — all rendered with 24-bit ANSI colors and Unicode characters.
-
-![Terminal Lava Lamp](https://img.shields.io/badge/terminal-lava%20lamp-purple)
 
 ## Features
 
@@ -10,30 +8,30 @@ A mesmerizing ASCII lava lamp simulation that runs in your terminal, featuring c
 - **Realistic blob physics** — Wax blobs expand when heated (rising) and contract when cooled (sinking), with smooth velocity transitions and organic horizontal wobble
 - **Blob merging** — When two blobs get close together, they merge into a larger blob (area-conserving)
 - **Blob splitting** — Large blobs can spontaneously split into two smaller ones for dynamic, organic motion
-- **Bubble particles** — Small rising bubbles add visual flair and realism
+- **Bubble particles** — Small rising bubbles with individual characters add visual flair and realism
 - **Heat glow** — Pulsing heat source glow at the bottom that tints nearby wax
 - **Lamp-shaped container** — Classic lava lamp silhouette with cap, body, and base
 
 ### Color Themes (8 themes!)
-| Key | Theme | Description |
-|-----|-------|-------------|
+| Key | Theme  | Description                    |
+|-----|--------|--------------------------------|
 | `1` | Classic | Red/orange/yellow wax on dark purple |
-| `2` | Ocean | Blue/cyan/white wax on deep navy |
-| `3` | Toxic | Green/lime wax on dark forest |
-| `4` | Sunset | Pink/magenta wax on dark crimson |
-| `5` | Neon | Multi-color cycling wax on deep black |
-| `6` | Aurora | Green/purple/blue wax on dark teal |
-| `7` | Ember | Deep red/orange wax on dark brown |
-| `8` | Frost | Ice blue/white wax on dark navy |
+| `2` | Ocean   | Blue/cyan/white wax on deep navy |
+| `3` | Toxic   | Green/lime wax on dark forest |
+| `4` | Sunset  | Pink/magenta wax on dark crimson |
+| `5` | Neon    | Multi-color cycling wax on deep black |
+| `6` | Aurora  | Green/purple/blue wax on dark teal |
+| `7` | Ember   | Deep red/orange wax on dark brown |
+| `8` | Frost   | Ice blue/white wax on dark navy |
 
 ### Interactive Controls
-- **Live theme switching** — Press `1`-`8` to swap themes while running
+- **Live theme switching** — Press `1`–`8` to swap themes while running
 - **Speed control** — `+`/`-` to speed up or slow down (0.25x–5.0x)
 - **Pause/Resume** — Press `p` to pause with visual PAUSED indicator
 - **Add blob** — Press `b` to add more wax blobs dynamically
 - **Remove blob** — Press `d` to remove a random blob
 - **Reset** — Press `r` to reset all blobs and bubbles
-- **Screenshot** — Press `s` to save an ANSI screenshot and a plain-text version
+- **Screenshot** — Press `s` to save an ANSI screenshot and a plain-text version (with confirmation feedback)
 - **Quit** — Press `q` or `Ctrl+C`
 
 ### Rendering
@@ -44,13 +42,14 @@ A mesmerizing ASCII lava lamp simulation that runs in your terminal, featuring c
 
 ### Code Quality
 - **Argparse CLI** — Full `--help`, `--version`, and option flags
+- **Custom theme support** — Load themes from JSON files with `--theme-file` (no longer blocked by argparse validation)
 - **Input validation** — Graceful errors for invalid parameters; constructor validates speed, dimensions
 - **Negative dt guard** — Simulation ignores negative or zero time deltas to prevent corruption
 - **Shape width clamping** — `_shape_width()` and `_row_to_y()` clamped to prevent negative values
 - **Terminal cbreak mode** — Proper raw terminal mode for single-key input (no Enter required)
 - **Terminal restoration** — Terminal settings are always restored on exit, even after crashes
 - **Error reporting** — Exceptions in the main loop print tracebacks instead of being silently swallowed
-- **56 unit tests** — Comprehensive test suite covering all components plus bug regression tests
+- **61 unit tests** — Comprehensive test suite covering all components plus bug regression tests
 - **Well-documented** — Every class and method has docstrings
 
 ## Installation
@@ -98,8 +97,8 @@ python3 lava_lamp.py --help
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `theme` (positional) | classic | Color theme: classic, ocean, toxic, sunset, neon, aurora, ember, frost |
-| `--theme` | classic | Color theme (alternative to positional) |
+| `theme` (positional) | classic | Color theme name (built-in or custom) |
+| `--theme` | classic | Color theme (alternative to positional arg; supports custom themes from `--theme-file`) |
 | `--theme-file` | — | Load additional themes from a JSON file |
 | `-W`, `--width` | auto | Terminal width (default: auto-detect) |
 | `-H`, `--height` | auto | Terminal height (default: auto-detect) |
@@ -114,13 +113,12 @@ python3 lava_lamp.py --help
 | Key | Action |
 |-----|--------|
 | `1`–`8` | Switch theme |
-| `+` / `=` | Increase speed |
-| `-` / `_` | Decrease speed |
+| `+` / `-` | Increase / decrease speed |
 | `p` | Pause / Resume |
 | `b` | Add a blob |
 | `d` | Remove a blob |
 | `r` | Reset (new blobs and bubbles) |
-| `s` | Save screenshot |
+| `s` | Save screenshot (with confirmation) |
 | `q` | Quit |
 
 ### Custom Theme File Format
@@ -140,7 +138,7 @@ Create a JSON file with theme definitions:
 }
 ```
 
-Load with `--theme-file my_themes.json` and use with `--theme my_theme`.
+Load with `--theme-file my_themes.json` and use with `--theme my_theme`. Each theme needs at least 4 wax colors. All color values must be in 0–255 range.
 
 ## How It Works
 
@@ -148,7 +146,7 @@ Load with `--theme-file my_themes.json` and use with `--theme my_theme`.
 
 2. **Merge/split dynamics**: When two blobs are closer than `MERGE_DISTANCE` (0.08) and neither is on cooldown, they merge — the larger absorbs the smaller, conserving area. When a blob's radius exceeds `SPLIT_RADIUS_THRESHOLD` (0.10), it may randomly split into two smaller blobs, simulating a large wax mass breaking apart.
 
-3. **Bubble particles**: Small bubbles spawn near the base and float upward with a wobbling path, adding visual texture and realism.
+3. **Bubble particles**: Each bubble has a unique character (`·`, `∘`, `○`, `°`, `•`) assigned at creation. The renderer uses the bubble's `.char` property to display it, so different bubbles show different characters — adding visual variety.
 
 4. **Heat glow**: The bottom of the lamp pulses with a warm glow that tints nearby wax blobs, simulating the heat source in a real lava lamp.
 
@@ -164,69 +162,23 @@ Load with `--theme-file my_themes.json` and use with `--theme my_theme`.
 python3 test_lava_lamp.py
 ```
 
-The test suite (56 tests) covers blob physics, bubble behavior, lamp shape, theme switching, rendering, merge/split dynamics, screenshot export, custom theme loading, input validation, edge cases, and bug regression tests.
+The test suite (61 tests) covers blob physics, bubble behavior, lamp shape, theme switching, rendering, merge/split dynamics, screenshot export, custom theme loading, input validation, edge cases, and bug regression tests.
 
-## Bugs Fixed in v3.0.1
+## Bugs Fixed in v3.1.0
 
-- **Negative dt bug**: `LavaLamp.update()` with a negative `dt` would set `self.time` and blob `life` to negative values, corrupting the simulation. Now, `update()` ignores `dt <= 0` entirely.
+- **Bubble.char unused in render**: `Bubble.__init__` assigned each bubble a random character (`self.char`) from `["·", "∘", "○", "°", "•"]`, but the render loop ignored it and used `random.choice(["·", "∘", "°"])` instead. This meant (a) each bubble's character changed every frame instead of being consistent, and (b) two of the five possible bubble characters (`○` and `•`) were never displayed. Now the render loop tracks the closest bubble and uses its `.char` property.
 
-- **Rendering bug at lamp top**: `_row_to_y()` returned negative y-values for rows 0 and 1, causing `_shape_width()` to return negative widths. This meant `left > right` in the render loop, resulting in no lamp content at the top rows. Both `_row_to_y()` and `_shape_width()` now clamp their values to [0, 1].
+- **Custom themes blocked by argparse**: The `--theme` flag and positional `theme` argument used `choices=list(THEMES.keys())`, which was evaluated at module load time before `--theme-file` could be processed. This meant `python3 lava_lamp.py --theme-file custom.json --theme my_custom` would fail with "invalid choice" error. The `choices` restriction has been removed from argparse, and theme validation now happens after `--theme-file` loading via the existing manual check.
 
-- **Non-functional keyboard controls**: The main loop used `select` + `sys.stdin.read(1)` for non-blocking input but never set the terminal to cbreak/raw mode, so keypresses required pressing Enter. Now `tty.setcbreak()` is called on startup and terminal settings are properly restored on exit.
+- **No screenshot save feedback**: When pressing `s` to save a screenshot, files were saved silently with no indication to the user. Now the main loop checks the return values of `Screenshot.save_ansi()` and `Screenshot.save_plain()`, and prints a confirmation message (with filenames) to stderr on success.
 
-- **Silent exception swallowing**: `except Exception: pass` in the main loop hid all errors. Now exceptions print a traceback to stderr for debugging.
+- **Controls line too long for default width**: The controls help line `│ [1-8]themes [+/-]speed [p]ause [b]add [d]el [r]eset [s]ave [q]uit` was 67 characters, significantly wider than the default lamp width of ~40 characters, causing it to be truncated. Shortened to `│[1-8]thm +/-spd [p]pause [b]add [d]el [r]set [s]ave [q]uit` (59 chars) to fit within typical terminal widths.
 
-- **No input validation in constructor**: `LavaLamp(speed=-1.0)`, `LavaLamp(width=2)`, or `LavaLamp(height=1)` would silently create broken instances. Now the constructor raises `ValueError` for invalid speed (≤ 0), width (< 5), and height (< 3).
+## Running Tests
 
-- **`select` imported inside loop**: The `import select` statement was re-executed every frame. Now it's imported once at module level.
-
-- **Inefficient `select` import in except clause**: The `except` block caught `ImportError` which was impossible since `select` was already imported inside the `try`. Now `select` is a top-level import and `ImportError` is no longer caught.
-
-## Example Output
-
+```bash
+python3 test_lava_lamp.py
 ```
-  ✦ CLASSIC LAVA LAMP ✦
-
-         ▄▄▄▄▄▄▄▄▄▄▄
-      │  ░░░████████░░░  │
-      │  ░░██████████░░  │
-      │     ░░████░░     │
-      │        ░░        │
-      │  ░░░████████░░░  │
-      │  ██████████████  │
-      │  ██████████████  │
-         ▀▀▀▀▀▀▀▀▀▀▀
-
-Speed:1.00x  Blobs:8  Time:0:42  FPS:14
-│ [1-8]themes [+/-]speed [p]ause [b]add [d]el [r]eset [s]ave [q]uit
-```
-
-## What's New in v3.0.1
-
-- **Bug fix**: Negative `dt` values no longer corrupt simulation time or blob life
-- **Bug fix**: Top rows of the lamp now render correctly (was blank due to negative y-values)
-- **Bug fix**: Interactive controls now work without pressing Enter (terminal cbreak mode)
-- **Bug fix**: Constructor validates speed (> 0), width (≥ 5), and height (≥ 3)
-- **Bug fix**: `_shape_width()` clamped to [0, 1] to prevent negative widths
-- **Bug fix**: `_row_to_y()` clamped to [0, 1] to prevent negative y-values
-- **Bug fix**: Main loop exceptions are reported to stderr instead of silently swallowed
-- **Bug fix**: Terminal settings are properly restored on exit
-- **Bug fix**: `select` module imported once at top-level instead of per-frame
-
-## What's New in v3.0
-
-- **2 new themes**: Ember and Frost (8 total)
-- **Blob merging**: Nearby blobs merge into larger ones (area-conserving)
-- **Blob splitting**: Large blobs spontaneously split into two smaller ones
-- **Merge/split cooldowns**: Prevents immediate re-merge after splitting
-- **Screenshot export**: Press `s` to save ANSI and plain-text screenshots
-- **Custom theme loading**: `--theme-file` loads themes from JSON
-- **Remove blob**: Press `d` to delete a random blob
-- **FPS display**: Live FPS counter in the status bar
-- **Elapsed time**: Time display in the status bar
-- **Merge/split counters**: Shown in status bar when non-zero
-- **Improved string building**: Uses list join instead of concatenation in render
-- **Type hints**: All function signatures have type annotations
 
 ## License
 
