@@ -657,6 +657,127 @@ def test_frost_theme():
     print("✓ test_frost_theme passed")
 
 
+# ─── Bug Regression Tests ──────────────────────────────────────────────────
+
+def test_negative_dt_ignored():
+    """Bug fix: negative dt values should be ignored (no negative time)."""
+    lamp = LavaLamp(width=40, height=30)
+    lamp.update(-0.5)
+    assert lamp.time == 0.0, f"Time should stay 0 after negative dt, got {lamp.time}"
+    for blob in lamp.blobs:
+        assert blob.life == 0.0, f"Blob life should stay 0 after negative dt, got {blob.life}"
+    print("✓ test_negative_dt_ignored passed")
+
+
+def test_zero_dt_ignored():
+    """Bug fix: zero dt values should be ignored (no time advance)."""
+    lamp = LavaLamp(width=40, height=30)
+    lamp.update(0.0)
+    assert lamp.time == 0.0, f"Time should stay 0 after zero dt, got {lamp.time}"
+    print("✓ test_zero_dt_ignored passed")
+
+
+def test_negative_speed_rejected():
+    """Bug fix: negative speed should raise ValueError."""
+    try:
+        LavaLamp(width=40, height=30, speed=-1.0)
+        assert False, "Should raise ValueError for negative speed"
+    except ValueError as e:
+        assert "positive" in str(e).lower(), f"Error message should mention positive, got: {e}"
+    print("✓ test_negative_speed_rejected passed")
+
+
+def test_zero_speed_rejected():
+    """Bug fix: zero speed should raise ValueError."""
+    try:
+        LavaLamp(width=40, height=30, speed=0.0)
+        assert False, "Should raise ValueError for zero speed"
+    except ValueError:
+        pass
+    print("✓ test_zero_speed_rejected passed")
+
+
+def test_too_small_width_rejected():
+    """Bug fix: very small width should raise ValueError."""
+    try:
+        LavaLamp(width=2, height=30)
+        assert False, "Should raise ValueError for width < 5"
+    except ValueError as e:
+        assert "5" in str(e), f"Error message should mention minimum 5, got: {e}"
+    print("✓ test_too_small_width_rejected passed")
+
+
+def test_too_small_height_rejected():
+    """Bug fix: very small height should raise ValueError."""
+    try:
+        LavaLamp(width=40, height=1)
+        assert False, "Should raise ValueError for height < 3"
+    except ValueError as e:
+        assert "3" in str(e), f"Error message should mention minimum 3, got: {e}"
+    print("✓ test_too_small_height_rejected passed")
+
+
+def test_row_to_y_clamped():
+    """Bug fix: _row_to_y should return values in [0, 1].
+
+    Previously, rows 0 and 1 returned negative y values, causing
+    negative shape widths and broken rendering at the top of the lamp.
+    """
+    lamp = LavaLamp(width=40, height=30)
+    y0 = lamp._row_to_y(0)
+    y1 = lamp._row_to_y(1)
+    assert y0 >= 0.0, f"_row_to_y(0) should be >= 0, got {y0}"
+    assert y1 >= 0.0, f"_row_to_y(1) should be >= 0, got {y1}"
+    assert y0 <= 1.0, f"_row_to_y(0) should be <= 1, got {y0}"
+    assert y1 <= 1.0, f"_row_to_y(1) should be <= 1, got {y1}"
+    y_last = lamp._row_to_y(lamp.height - 1)
+    assert y_last <= 1.0, f"_row_to_y(last) should be <= 1, got {y_last}"
+    print("✓ test_row_to_y_clamped passed")
+
+
+def test_shape_width_no_negative():
+    """Bug fix: _shape_width should never return negative values.
+
+    Previously, values of y outside [0, 1] could produce negative widths,
+    causing rendering artifacts.
+    """
+    lamp = LavaLamp(width=40, height=30)
+    for y_val in [-0.5, -0.1, 0.0, 0.01, 0.5, 0.99, 1.0, 1.5]:
+        w = lamp._shape_width(y_val)
+        assert w > 0, f"_shape_width({y_val}) should be > 0, got {w}"
+    print("✓ test_shape_width_no_negative passed")
+
+
+def test_render_first_rows_have_lamp_content():
+    """Bug fix: first rows of render should contain lamp content.
+
+    Previously, the top 2 rows had no lamp content because _row_to_y
+    returned negative values, causing _shape_width to return negative widths.
+    """
+    lamp = LavaLamp(width=40, height=30)
+    lamp.update(0.1)
+    lines = lamp.render()
+    found_lamp_content = False
+    import re
+    ansi_escape = re.compile(r'\033\[[0-9;]*m')
+    for i in range(2, min(6, len(lines))):
+        stripped = ansi_escape.sub('', lines[i])
+        if '│' in stripped:
+            found_lamp_content = True
+            break
+    assert found_lamp_content, "Early lamp rows should contain lamp outline characters"
+    print("✓ test_render_first_rows_have_lamp_content passed")
+
+
+def test_empty_lamp_renders():
+    """Bug fix: a lamp with zero blobs and bubbles should still render."""
+    lamp = LavaLamp(width=40, height=30, num_blobs=0, num_bubbles=0)
+    lamp.update(0.1)
+    lines = lamp.render()
+    assert len(lines) > 0, "Empty lamp should still render"
+    print("✓ test_empty_lamp_renders passed")
+
+
 # ─── Run all tests ───────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -720,6 +841,17 @@ if __name__ == "__main__":
         # New themes
         test_ember_theme,
         test_frost_theme,
+        # Bug regression tests
+        test_negative_dt_ignored,
+        test_zero_dt_ignored,
+        test_negative_speed_rejected,
+        test_zero_speed_rejected,
+        test_too_small_width_rejected,
+        test_too_small_height_rejected,
+        test_row_to_y_clamped,
+        test_shape_width_no_negative,
+        test_render_first_rows_have_lamp_content,
+        test_empty_lamp_renders,
     ]
 
     passed = 0

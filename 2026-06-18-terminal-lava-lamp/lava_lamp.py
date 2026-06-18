@@ -29,7 +29,7 @@ from typing import List, Tuple, Optional, Dict, Any
 
 # ── Version ────────────────────────────────────────────────────────────────
 
-VERSION = "3.0.0"
+VERSION = "3.0.1"
 
 # ── ANSI helpers ──────────────────────────────────────────────────────────
 
@@ -485,19 +485,25 @@ class LavaLamp:
         """Initialize the lava lamp.
 
         Args:
-            width: Rendering width in terminal characters.
-            height: Rendering height in terminal rows.
+            width: Rendering width in terminal characters (min 5).
+            height: Rendering height in terminal rows (min 3).
             theme: Theme name (key in THEMES dict).
             num_blobs: Number of wax blobs to simulate.
             num_bubbles: Number of rising bubbles.
-            speed: Animation speed multiplier (0.5 = slow, 2.0 = fast).
+            speed: Animation speed multiplier (must be positive, 0.5 = slow, 2.0 = fast).
 
         Raises:
-            ValueError: If theme is not found in THEMES.
+            ValueError: If theme is not found, speed is not positive, or dimensions are too small.
         """
         if theme not in THEMES:
             raise ValueError(
                 f"Unknown theme '{theme}'. Available: {', '.join(THEMES.keys())}")
+        if speed <= 0:
+            raise ValueError(f"Speed must be positive, got {speed}")
+        if width < 5:
+            raise ValueError(f"Width must be at least 5, got {width}")
+        if height < 3:
+            raise ValueError(f"Height must be at least 3, got {height}")
         self.width = width
         self.height = height
         self.theme_name = theme
@@ -543,7 +549,12 @@ class LavaLamp:
             blob.color_idx = random.randint(0, len(blob.colors) - 1)
 
     def _compute_shape(self):
-        """Pre-compute lamp shape widths for each row."""
+        """Pre-compute lamp shape widths for each row.
+
+        Note: shape_points is kept for potential future use (e.g., caching),
+        but render() currently calls _shape_width() directly for accuracy
+        with clamped y values.
+        """
         self.shape_points = []
         for i in range(self.height + 4):  # extra rows for cap and base
             y = i / (self.height + 3)
@@ -1152,8 +1163,7 @@ def main():
 
             # Check for keypress (non-blocking)
             try:
-                import select as _select
-                if _select.select([sys.stdin], [], [], 0)[0]:
+                if select.select([sys.stdin], [], [], 0)[0]:
                     key = sys.stdin.read(1)
                     if key in ('q', 'Q'):
                         break
@@ -1192,7 +1202,7 @@ def main():
                         plain_filename = f"lava_lamp_screenshot_{screenshot_count}_plain.txt"
                         Screenshot.save_ansi(output_lines, filename)
                         Screenshot.save_plain(output_lines, plain_filename)
-            except (ImportError, OSError, ValueError):
+            except (OSError, ValueError):
                 pass
 
             # Frame rate limiting
