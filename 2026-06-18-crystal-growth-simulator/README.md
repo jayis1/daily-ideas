@@ -1,4 +1,4 @@
-# ✦ Crystal Growth Simulator
+# ✦ Crystal Growth Simulator v2.0
 
 A real-time terminal visualization of **Diffusion-Limited Aggregation (DLA)** — the process where particles randomly walking through space stick together on contact, forming beautiful, branching, fractal-like crystalline structures.
 
@@ -18,16 +18,47 @@ The key insight: because random walkers are more likely to reach the tips of exi
 
 ## Features
 
+### Core Simulation
 - **Real-time animation** — watch crystals grow live in your terminal
 - **Multiple seed configurations** — center, line, corners, or ring seeds
 - **Adjustable physics** — tune stickiness, walker count, and diagonal movement
-- **Beautiful color gradients** — ANSI 24-bit color tracks particle age
-- **Interactive controls** — pause, speed up, reset, or save mid-simulation
-- **Multiple character sets** — fancy Unicode, minimal ASCII, or block styles
-- **Export to file** — save final crystal as plain text for sharing
 - **Reproducible** — set a random seed to recreate specific crystals
+
+### 🆕 Symmetry Modes (v2.0)
+- **Horizontal symmetry** (`--symmetry horizontal`) — mirrors growth across the vertical axis for snowflake-like patterns
+- **Vertical symmetry** (`--symmetry vertical`) — mirrors growth across the horizontal axis
+- **Both** (`--symmetry both`) — 4-fold symmetry for mandala-like crystals
+
+### 🆕 JSON Export
+- **`--export-json`** — saves the full simulation state (grid, parameters, statistics) as a JSON file for analysis or reconstruction
+- **Interactive JSON save** — press `J` during animation to snapshot state to a file
+
+### 🆕 Auto-Snapshots
+- **`--snapshot N`** — automatically saves a plain-text snapshot every N particles
+
+### 🆕 Growth Analytics
+- **Real-time statistics** — particle count, steps, radius, density, and growth rate
+- **Density tracking** — shows what percentage of the grid is occupied
+- **Growth rate** — displays particles grown per 1,000 simulation steps
+- **Growth history** — internally tracked for analytics (available via JSON export)
+
+### Rendering
+- **Beautiful color gradients** — ANSI 24-bit color tracks particle age
+- **Multiple character sets** — fancy Unicode, minimal ASCII, or block styles
+- **`render_plain()` API** — clean text output without ANSI escapes
+
+### Interactive Controls
+- **Pause/Resume** — `P` key toggles pause with visual indicator
+- **Speed control** — `+`/`-` keys adjust simulation speed (1–50)
+- **Reset** — `R` key restarts the simulation
+- **Save** — `S` key saves current frame to a text file
+- **JSON export** — `J` key exports current state as JSON
+
+### Safety & Quality
 - **Input validation** — graceful errors for invalid parameters
-- **Safe file output** — path traversal protection on the `-o` flag
+- **Path traversal protection** — blocks writing to system directories (`/etc/`, `/usr/`, etc.)
+- **`~` expansion** — tilde paths work correctly in `-o` and `--export-json`
+- **Comprehensive test suite** — 20 unit tests covering all major features
 
 ## Installation
 
@@ -60,17 +91,29 @@ python3 crystal_growth.py -S line
 # Ring seed for circular growth patterns
 python3 crystal_growth.py -S ring -w 8
 
-# Corner seeds grow from all four corners
-python3 crystal_growth.py -S corners
+# Horizontal symmetry for snowflake-like crystals
+python3 crystal_growth.py --symmetry horizontal -s 0.4
+
+# 4-fold symmetry for mandala patterns
+python3 crystal_growth.py --symmetry both -s 0.3
 
 # Save result to file (no animation)
 python3 crystal_growth.py -o crystal.txt --max-particles 500
+
+# Export simulation state as JSON
+python3 crystal_growth.py --no-animate -m 200 --export-json crystal_state.json
+
+# Auto-save snapshots every 100 particles
+python3 crystal_growth.py --snapshot 100 -m 500
 
 # Reproducible with a seed
 python3 crystal_growth.py --seed 42
 
 # Show version
 python3 crystal_growth.py --version
+
+# Show help (all options)
+python3 crystal_growth.py --help
 ```
 
 ### Command-Line Options
@@ -83,6 +126,7 @@ python3 crystal_growth.py --version
 | `-s, --stickiness` | 1.0 | Probability of sticking on contact (0.0–1.0, exclusive of 0) |
 | `-S, --seed-pos` | center | Seed shape: `center`, `line`, `corners`, `ring` |
 | `-c, --charset` | fancy | Character style: `fancy`, `minimal`, `bw` |
+| `--symmetry` | none | Mirror mode: `none`, `horizontal`, `vertical`, `both` |
 | `--no-color` | off | Disable colored output |
 | `--no-diagonal` | off | Only allow 4-directional walking (no diagonals) |
 | `--seed` | random | Random seed for reproducibility |
@@ -90,6 +134,8 @@ python3 crystal_growth.py --version
 | `-m, --max-particles` | unlimited | Stop after growing this many particles (0=unlimited) |
 | `--speed` | 5 | Simulation steps per frame (min: 1, higher = faster) |
 | `-o, --output` | none | Save result to file and exit (blocks system dirs) |
+| `--export-json` | none | Export simulation state as JSON file |
+| `--snapshot` | 0 | Auto-save a snapshot every N particles (0=disabled) |
 | `--version` | — | Show version and exit |
 
 ### Interactive Controls (during animation)
@@ -100,7 +146,8 @@ python3 crystal_growth.py --version
 | `P` | Pause / Resume |
 | `+` / `-` | Increase / Decrease speed |
 | `R` | Reset simulation |
-| `S` | Save current frame to file |
+| `S` | Save current frame to text file |
+| `J` | Export current state as JSON file |
 
 ## How It Works
 
@@ -108,8 +155,9 @@ python3 crystal_growth.py --version
 2. **Walker spawning** — Multiple particles are spawned on a circle around the existing aggregate, ensuring they don't start on occupied cells
 3. **Random walking** — Each particle takes a random step in one of 4 or 8 directions. If the target cell is occupied, the walker tries other directions; if completely surrounded, it respawns
 4. **Sticking** — When a walker lands next to an aggregate particle, it sticks with probability = `stickiness`
-5. **Respawning** — After sticking (or wandering too far), a new walker spawns to continue the process
-6. **Growth** — Over time, the aggregate develops branching, fractal-like structures
+5. **Symmetry** — When a particle sticks, its mirror positions (based on symmetry mode) are also filled, creating symmetric growth
+6. **Respawning** — After sticking (or wandering too far), a new walker spawns to continue the process
+7. **Growth** — Over time, the aggregate develops branching, fractal-like structures
 
 The color of each particle encodes its age: early particles appear in cool blues/purples, while later growth appears in warm oranges/golds — letting you visually trace the crystal's growth history.
 
@@ -120,17 +168,25 @@ The color of each particle encodes its age: early particles appear in cool blues
 - **Line seeds** (`-S line`) create symmetric tree-like structures
 - **Corner seeds** (`-S corners`) grow four separate clusters from the corners
 - **Ring seeds** (`-S ring`) grow inward for a completely different aesthetic
+- **Horizontal symmetry** (`--symmetry horizontal`) creates snowflake-like patterns
+- **Both symmetry** (`--symmetry both`) creates mandala/crystalline structures
 - **No diagonals** (`--no-diagonal`) produces more orthogonal, circuit-board-like patterns
-- Try combining: `python3 crystal_growth.py -S line -s 0.3 -w 10`
+- Try combining: `python3 crystal_growth.py -S line -s 0.3 -w 10 --symmetry horizontal`
 
 ## Examples
 
-```
+```bash
 # Classic DLA crystal (default)
 python3 crystal_growth.py --seed 42 -m 300
 
 # Fast-growing branching frost
 python3 crystal_growth.py -s 0.25 -w 15 -S center --speed 10
+
+# Snowflake symmetry
+python3 crystal_growth.py --symmetry horizontal -s 0.4 --seed 42
+
+# Mandala / 4-fold crystal
+python3 crystal_growth.py --symmetry both -s 0.3 -w 8
 
 # Slow, delicate growth
 python3 crystal_growth.py -s 1.0 -w 1 --speed 2
@@ -141,21 +197,68 @@ python3 crystal_growth.py -S corners -w 8
 # Circuit board aesthetic
 python3 crystal_growth.py --no-diagonal -c minimal -S line
 
-# Export a large crystal
-python3 crystal_growth.py -W 120 -H 50 -m 800 -o my_crystal.txt
+# Export a large crystal with JSON state
+python3 crystal_growth.py -W 120 -H 50 -m 800 -o my_crystal.txt --export-json state.json
+
+# Auto-snapshot progress every 200 particles
+python3 crystal_growth.py --snapshot 200 -m 1000
 ```
 
-## Bug Fixes (v1.1.0)
+## JSON Export Format
 
-This version fixes several bugs found in the original release:
+The `--export-json` flag saves the complete simulation state:
 
-- **Corners seed mode now works** — Walkers couldn't reach corner seeds because the kill-distance was too small. Fixed by increasing `max_dist` to accommodate all seed types
-- **Ring seed mode no longer causes explosive growth** — Walkers spawning on ring particles would instantly stick, creating thousands of phantom particles. Fixed by checking spawn positions aren't on occupied cells
-- **Walkers on occupied cells are now respawned** — A walker that ends up on an aggregate cell (through spawning or movement) is immediately respawned to an empty cell
-- **Walker stuck-in-corner handling** — When a walker's random walk target is occupied, it now tries all directions before respawning, instead of getting stuck indefinitely
-- **Input validation** — Width/height < 3, walkers < 1, stickiness ≤ 0 or > 1, negative max-particles, and speed < 1 are now rejected with clear error messages
-- **Path traversal protection** — The `-o` flag no longer allows writing to system directories like `/etc/`
-- **`--version` flag added** — Shows version number
+```json
+{
+  "version": "2.0.0",
+  "width": 80,
+  "height": 35,
+  "particle_count": 250,
+  "step_count": 15000,
+  "max_radius": 15.3,
+  "density_percent": 8.93,
+  "stickiness": 1.0,
+  "num_walkers": 5,
+  "diagonal": true,
+  "symmetry": "none",
+  "elapsed_seconds": 12.5,
+  "grid": [[0, 0, 0, ...], ...]
+}
+```
+
+The `grid` array contains the age of each particle (0 = empty, >0 = age order when attached), which can be used to reconstruct and analyze the crystal.
+
+## Running Tests
+
+```bash
+python3 test_crystal_growth.py
+```
+
+The test suite covers seed placement, simulation stepping, symmetry modes, rendering, JSON export, input validation, and path security.
+
+## Changelog
+
+### v2.0.0
+- **New:** Symmetry modes (`--symmetry horizontal|vertical|both`) for snowflake and mandala-like crystals
+- **New:** JSON export (`--export-json`) saves full simulation state for analysis
+- **New:** Auto-snapshots (`--snapshot N`) periodically saves crystal progress
+- **New:** Growth analytics — density, growth rate, and elapsed time in stats
+- **New:** Interactive `J` key for JSON export during animation
+- **New:** Status bar showing RUNNING/PAUSED state during animation
+- **New:** `render_plain()` method for clean ANSI-free text output
+- **Improved:** Walker position lookup optimized from O(n) to O(1) using a set
+- **Improved:** `validate_output_path` now handles `~` expansion correctly
+- **Improved:** Comprehensive docstrings on all classes and methods
+- **Improved:** Version number displayed in title bar
+- **New:** 20 unit tests covering all major features
+
+### v1.1.0
+- Fixed corners seed mode (walkers couldn't reach corner seeds)
+- Fixed ring seed mode explosive growth (spawn on occupied cell check)
+- Fixed walker stuck-in-corner handling
+- Added input validation for all parameters
+- Added path traversal protection on `-o` flag
+- Added `--version` flag
 
 ## License
 
