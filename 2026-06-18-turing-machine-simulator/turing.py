@@ -4,7 +4,7 @@ Turing Machine Simulator — A visual, interactive simulator for Turing machines
 with built-in example programs, custom machine creation, validation, and
 multiple execution modes (visual, text, batch, trace).
 
-Version: 1.2.1
+Version: 2.0.0
 """
 
 import os
@@ -15,12 +15,13 @@ import json
 from dataclasses import dataclass, field
 from typing import Dict, Tuple, Optional, List
 
-__version__ = "1.2.1"
+__version__ = "2.0.0"
 
 __all__ = [
     "Transition", "Tape", "TuringMachine", "ExecutionStats", "ExecutionStep",
     "BUILTIN_PROGRAMS", "run_batch", "run_text", "run_visual", "run_trace",
     "save_machine", "load_machine", "create_custom_machine",
+    "export_dot", "compare_tapes", "machine_info",
 ]
 
 # ─── Data structures ────────────────────────────────────────────────
@@ -635,6 +636,153 @@ _register(
     tape="110",  # 110 reversed = 011
 )
 
+# 11. Unary subtractor — subtracts second unary number from first (separated by '-')
+# Strategy: Erase one 1 from the first number for each 1 in the second number.
+# Find a 1 in the second number, mark it M, then go left to find - and erase
+# the rightmost 1 from the first number. Repeat until all second-number 1s are M.
+# Then clean up: erase - and all Ms.
+_register(
+    "unary_subtract",
+    "Subtract two unary numbers separated by '-' (e.g., 11111-11=111)",
+    states=[
+        "q0",            # scan right to find - separator
+        "q_find_one",    # in second operand, find next unmarked 1
+        "q_mark",        # found a 1, mark it M, go left to find -
+        "q_erase_one",   # go left past - to find rightmost 1 in first number
+        "q_go_right",    # go right past - to get back to second operand
+        "q_cleanup",     # erase Ms going left
+        "q_cleanup2",    # skip past first-number 1s going right, accept
+        "q_accept",
+        "q_reject",
+    ],
+    alphabet=["1", "-", "M", "_"],
+    blank="_",
+    initial="q0",
+    accept=["q_accept"],
+    reject=["q_reject"],
+    transitions={
+        # q0: scan right to find - separator
+        ("q0", "1"): ("q0", "1", "R"),
+        ("q0", "-"): ("q_find_one", "-", "R"),
+
+        # q_find_one: find next unmarked 1 in second number
+        ("q_find_one", "1"): ("q_mark", "M", "L"),    # mark it, go left
+        ("q_find_one", "M"): ("q_find_one", "M", "R"), # skip marked
+        ("q_find_one", "_"): ("q_cleanup", "_", "L"),  # no more 1s, done
+
+        # q_mark: go left to find - separator
+        ("q_mark", "M"): ("q_mark", "M", "L"),
+        ("q_mark", "1"): ("q_mark", "1", "L"),
+        ("q_mark", "-"): ("q_erase_one", "-", "L"),
+
+        # q_erase_one: scan left through first number to find rightmost 1 and erase it
+        ("q_erase_one", "1"): ("q_go_right", "_", "R"),  # found and erased a 1
+        ("q_erase_one", "_"): ("q_erase_one", "_", "L"), # skip blanks (already erased)
+        ("q_erase_one", "-"): ("q_reject", "-", "S"),   # shouldn't reach here
+
+        # q_go_right: go right through first number to find - and get back to second operand
+        ("q_go_right", "1"): ("q_go_right", "1", "R"),
+        ("q_go_right", "_"): ("q_go_right", "_", "R"),
+        ("q_go_right", "-"): ("q_find_one", "-", "R"),
+
+        # q_cleanup: erase all Ms going left
+        ("q_cleanup", "M"): ("q_cleanup", "_", "L"),
+        ("q_cleanup", "-"): ("q_cleanup2", "_", "R"),
+
+        # q_cleanup2: skip past remaining first-number 1s, we're done
+        ("q_cleanup2", "_"): ("q_accept", "_", "S"),
+        ("q_cleanup2", "1"): ("q_cleanup2", "1", "R"),
+    },
+    tape="11111-11",  # 5 - 2 = 3 ones: 111
+)
+
+# 12. Unary multiplier — multiplies two unary numbers separated by 'x'
+# Strategy: Place = at end as result separator. For each 1 in first number (mark as A),
+# for each 1 in second number (mark as B), append 1 after =. Restore B→1 after each
+# inner loop, restore A→1 after all outer loops. Final tape: 11x111=111111
+_register(
+    "unary_multiplier",
+    "Multiply two unary numbers separated by 'x' (e.g., 11x111 → 11x111=111111)",
+    states=[
+        "q_init",        # scan right to end, place = separator
+        "q_left",        # go left to start of first number
+        "q0",            # find leftmost unmarked 1 in first number, mark it A
+        "q_scan_x",      # scan right to find x
+        "q_find_B",      # find leftmost unmarked 1 in second number, mark it B
+        "q_goto_eq",     # scan right past remaining second number to find =
+        "q_find_end",    # go right past result 1s, write 1 at end
+        "q_back2x",      # go left back to x to restart inner loop
+        "q_restore_B",   # all B's become 1s again (inner loop done)
+        "q_back2first",  # go left to find next 1 in first number
+        "q_cleanup",     # convert A→1 in first number, then accept
+        "q_accept",
+    ],
+    alphabet=["1", "x", "=", "A", "B", "_"],
+    blank="_",
+    initial="q_init",
+    accept=["q_accept"],
+    reject=[],
+    transitions={
+        # q_init: scan right to end of tape, place = separator
+        ("q_init", "1"): ("q_init", "1", "R"),
+        ("q_init", "x"): ("q_init", "x", "R"),
+        ("q_init", "_"): ("q_left", "=", "L"),
+
+        # q_left: go all the way left to start of first number
+        ("q_left", "1"): ("q_left", "1", "L"),
+        ("q_left", "x"): ("q_left", "x", "L"),
+        ("q_left", "="): ("q_left", "=", "L"),
+        ("q_left", "A"): ("q_left", "A", "L"),
+        ("q_left", "B"): ("q_left", "B", "L"),
+        ("q_left", "_"): ("q0", "_", "R"),    # at left edge, go right
+
+        # q0: find leftmost 1 in first number, mark it A
+        ("q0", "1"): ("q_scan_x", "A", "R"),    # mark it, start scanning
+        ("q0", "A"): ("q0", "A", "R"),          # skip already marked
+        ("q0", "x"): ("q_cleanup", "x", "L"),  # all first-number 1s processed
+
+        # q_scan_x: scan right to find x separator
+        ("q_scan_x", "1"): ("q_scan_x", "1", "R"),
+        ("q_scan_x", "A"): ("q_scan_x", "A", "R"),
+        ("q_scan_x", "x"): ("q_find_B", "x", "R"),
+
+        # q_find_B: find leftmost unmarked 1 in second number, mark it B
+        ("q_find_B", "1"): ("q_goto_eq", "B", "R"),   # mark as B
+        ("q_find_B", "B"): ("q_find_B", "B", "R"),     # skip already marked
+        ("q_find_B", "="): ("q_restore_B", "=", "L"),  # all 1s marked for this iteration
+
+        # q_goto_eq: scan right past remaining chars to find = separator
+        ("q_goto_eq", "1"): ("q_goto_eq", "1", "R"),
+        ("q_goto_eq", "B"): ("q_goto_eq", "B", "R"),
+        ("q_goto_eq", "="): ("q_find_end", "=", "R"),
+
+        # q_find_end: go right past result 1s, append 1 at end
+        ("q_find_end", "1"): ("q_find_end", "1", "R"),
+        ("q_find_end", "_"): ("q_back2x", "1", "L"),
+
+        # q_back2x: go left back to x to restart inner loop
+        ("q_back2x", "1"): ("q_back2x", "1", "L"),
+        ("q_back2x", "="): ("q_back2x", "=", "L"),
+        ("q_back2x", "B"): ("q_back2x", "B", "L"),
+        ("q_back2x", "x"): ("q_find_B", "x", "R"),
+
+        # q_restore_B: convert B markers back to 1 in second number (inner loop done)
+        ("q_restore_B", "B"): ("q_restore_B", "1", "L"),
+        ("q_restore_B", "x"): ("q_back2first", "x", "L"),
+
+        # q_back2first: go left to start, find next unmarked 1 in first number
+        ("q_back2first", "1"): ("q_back2first", "1", "L"),
+        ("q_back2first", "A"): ("q_back2first", "A", "L"),
+        ("q_back2first", "x"): ("q_back2first", "x", "L"),
+        ("q_back2first", "_"): ("q0", "_", "R"),
+
+        # q_cleanup: convert A markers back to 1 (going left), then accept
+        ("q_cleanup", "A"): ("q_cleanup", "1", "L"),
+        ("q_cleanup", "_"): ("q_accept", "_", "S"),
+    },
+    tape="11x111",  # 2 * 3 = 6 ones, output: 11x111=111111
+)
+
 
 # ─── Visual simulator using curses ──────────────────────────────────
 
@@ -1165,13 +1313,30 @@ def save_machine(machine: TuringMachine, filepath: str):
 
 
 def load_machine(filepath: str) -> TuringMachine:
-    """Load a TuringMachine from JSON."""
+    """Load a TuringMachine from JSON.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        json.JSONDecodeError: If the file is not valid JSON.
+        KeyError: If required fields are missing from the JSON data.
+        ValueError: If transition keys have unexpected format.
+    """
     with open(filepath) as f:
         data = json.load(f)
 
+    # Validate required top-level fields
+    required_fields = ["name", "description", "states", "alphabet", "blank_symbol",
+                       "initial_state", "accept_states", "reject_states", "transitions"]
+    missing = [f for f in required_fields if f not in data]
+    if missing:
+        raise KeyError(f"Missing required fields in machine JSON: {', '.join(missing)}")
+
     transitions = {}
     for key, val in data["transitions"].items():
-        s, r = key.split(",")
+        parts = key.split(",")
+        if len(parts) != 2:
+            raise ValueError(f"Invalid transition key '{key}': expected 'state,symbol' format")
+        s, r = parts
         transitions[(s, r)] = Transition(
             next_state=val["next_state"], write_symbol=val["write_symbol"], direction=val["direction"]
         )
@@ -1183,6 +1348,126 @@ def load_machine(filepath: str) -> TuringMachine:
         reject_states=data["reject_states"], transitions=transitions,
         initial_tape=data.get("initial_tape", ""),
     )
+
+
+# ─── Additional utility functions ──────────────────────────────────
+
+def export_dot(machine: TuringMachine, filepath: str = None) -> str:
+    """Export a Turing machine's state diagram as Graphviz DOT format.
+
+    Generates a directed graph showing all states and transitions.
+    Accept states are rendered with double borders. Transitions are
+    labeled with 'read -> write, dir'.
+
+    Args:
+        machine: The TuringMachine to export.
+        filepath: Optional file path to write the DOT source to.
+                  If None, the DOT source is only returned as a string.
+
+    Returns:
+        The DOT source code as a string.
+    """
+    lines = [
+        "digraph TuringMachine {",
+        f'  label="{machine.name}: {machine.description}";',
+        "  rankdir=LR;",
+        "  node [shape=circle];",
+        '  __blank [label="" shape=point];',
+        f'  __blank -> {machine.initial_state} [label="start"];',
+        "",
+    ]
+
+    # Mark accept states
+    for state in machine.accept_states:
+        lines.append(f"  {state} [shape=doublecircle];")
+
+    # Mark reject states
+    for state in machine.reject_states:
+        lines.append(f"  {state} [shape=triangle];")
+
+    lines.append("")
+
+    # Group transitions by (from_state, to_state) for edge consolidation
+    edge_labels = {}
+    for (state, symbol), trans in machine.transitions.items():
+        key = (state, trans.next_state)
+        label = f"{symbol} -> {trans.write_symbol}, {trans.direction}"
+        if key in edge_labels:
+            edge_labels[key] += "\\n" + label
+        else:
+            edge_labels[key] = label
+
+    for (from_state, to_state), label in edge_labels.items():
+        lines.append(f'  {from_state} -> {to_state} [label="{label}"];')
+
+    lines.append("}")
+
+    dot_source = "\n".join(lines)
+
+    if filepath:
+        with open(filepath, "w") as f:
+            f.write(dot_source)
+
+    return dot_source
+
+
+def compare_tapes(tape1: Tape, tape2: Tape) -> dict:
+    """Compare two tapes and return a detailed comparison.
+
+    Useful for verifying machine outputs against expected results.
+
+    Args:
+        tape1: First tape to compare.
+        tape2: Second tape to compare.
+
+    Returns:
+        A dict with keys:
+            'match': bool - whether the tape contents match exactly
+            'contents1': str - non-blank contents of tape1
+            'contents2': str - non-blank contents of tape2
+            'diff_positions': list of (pos, val1, val2) tuples where they differ
+    """
+    contents1 = tape1.get_contents()
+    contents2 = tape2.get_contents()
+    match = contents1 == contents2
+
+    all_positions = set(tape1.cells.keys()) | set(tape2.cells.keys())
+    diff_positions = []
+    for pos in sorted(all_positions):
+        v1 = tape1.read(pos)
+        v2 = tape2.read(pos)
+        if v1 != v2:
+            diff_positions.append((pos, v1, v2))
+
+    return {
+        "match": match,
+        "contents1": contents1,
+        "contents2": contents2,
+        "diff_positions": diff_positions,
+    }
+
+
+def machine_info(machine: TuringMachine) -> dict:
+    """Return a summary dict of machine properties for display or inspection.
+
+    Args:
+        machine: The TuringMachine to inspect.
+
+    Returns:
+        A dict with keys: name, description, num_states, num_transitions,
+        alphabet, accept_states, reject_states, initial_state, initial_tape.
+    """
+    return {
+        "name": machine.name,
+        "description": machine.description,
+        "num_states": len(machine.states),
+        "num_transitions": len(machine.transitions),
+        "alphabet": sorted(machine.alphabet),
+        "accept_states": list(machine.accept_states),
+        "reject_states": list(machine.reject_states),
+        "initial_state": machine.initial_state,
+        "initial_tape": machine.initial_tape,
+    }
 
 
 # ─── Main entry point ───────────────────────────────────────────────
@@ -1219,6 +1504,8 @@ Examples:
     parser.add_argument("--validate", action="store_true", help="Validate machine definition before running")
     parser.add_argument("--trace", action="store_true", help="Print a detailed execution trace (each step)")
     parser.add_argument("--export", metavar="NAME", help="Export a built-in machine to JSON (e.g., 'busy_beaver_3')")
+    parser.add_argument("--info", "-i", metavar="NAME", help="Show detailed info about a built-in machine")
+    parser.add_argument("--dot", metavar="NAME", help="Export a built-in machine's state diagram as Graphviz DOT format")
 
     args = parser.parse_args()
 
@@ -1246,6 +1533,46 @@ Examples:
         filepath = os.path.join(out_dir, f"{name}.json")
         save_machine(machine, filepath)
         print(f"Exported '{name}' to {filepath}")
+        return
+
+    if args.info:
+        name = args.info
+        if name not in BUILTIN_PROGRAMS:
+            print(f"Unknown program: {name}")
+            print(f"Available: {', '.join(BUILTIN_PROGRAMS.keys())}")
+            sys.exit(1)
+        machine = BUILTIN_PROGRAMS[name]
+        info = machine_info(machine)
+        print(f"\n{'='*60}")
+        print(f"  Machine: {info['name']}")
+        print(f"  Description: {info['description']}")
+        print(f"  States ({info['num_states']}): {', '.join(machine.states)}")
+        print(f"  Transitions: {info['num_transitions']}")
+        print(f"  Alphabet: {', '.join(info['alphabet'])}")
+        print(f"  Blank symbol: {machine.blank_symbol}")
+        print(f"  Initial state: {info['initial_state']}")
+        print(f"  Accept states: {', '.join(info['accept_states'])}")
+        print(f"  Reject states: {', '.join(info['reject_states'])}")
+        print(f"  Initial tape: {info['initial_tape'] or '(blank)'}")
+        warnings = machine.validate()
+        if warnings:
+            print(f"\n  Validation warnings:")
+            for w in warnings:
+                print(f"    - {w}")
+        else:
+            print(f"\n  Validation: OK")
+        print(f"{'='*60}\n")
+        return
+
+    if args.dot:
+        name = args.dot
+        if name not in BUILTIN_PROGRAMS:
+            print(f"Unknown program: {name}")
+            print(f"Available: {', '.join(BUILTIN_PROGRAMS.keys())}")
+            sys.exit(1)
+        machine = BUILTIN_PROGRAMS[name]
+        dot_source = export_dot(machine)
+        print(dot_source)
         return
 
     if args.create:

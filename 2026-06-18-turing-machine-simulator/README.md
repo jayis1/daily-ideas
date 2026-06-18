@@ -1,303 +1,197 @@
 # Turing Machine Simulator
 
-A visual, interactive Turing machine simulator with 10 built-in programs, curses-based visualization, text-mode stepping, batch execution, execution tracing, machine validation, execution statistics, and JSON import/export. Explore the fundamentals of computation through animated tape heads and state transitions.
+A fully-featured Turing machine simulator with 12 built-in programs, visual (curses) and batch execution modes, state diagram export, and comprehensive testing.
 
 ## Features
 
-- **10 Built-in Programs**: Binary increment, unary addition, palindrome checker, 3-state Busy Beaver, binary NOT, 1-counter, binary decrement, unary doubler, binary AND, and string reverser
-- **Curses Visualization**: Real-time animated tape display with state highlighting, transition rules, and keyboard controls
-- **Text-Mode Stepping**: Step-by-step execution with colored terminal output (no curses dependency)
-- **Batch Execution**: Run all programs at once and compare results with execution statistics
-- **Execution Trace**: Detailed step-by-step trace showing state, head position, symbols read/written, direction, and tape snapshots (`--trace`)
-- **Custom Machines**: Interactive creator for defining your own Turing machines
-- **Machine Validation**: Detects unused states, undefined transitions, and orphan states
-- **JSON Persistence**: Save and load machine definitions as JSON files
-- **Execution Statistics**: Track steps, cells written, tape span, and unique cells visited
-- **CLI Flags**: `--version`, `--tape`, `--export`, `--list`, `--create`, `--visual`, `--text`, `--run`, `--trace`
+- **12 built-in programs** covering binary arithmetic, unary operations, string manipulation, and more
+- **Visual mode** — interactive curses-based step-by-step visualization
+- **Text mode** — terminal-friendly step display with configurable delay
+- **Batch mode** — run machines programmatically and capture results
+- **Trace mode** — detailed execution traces showing every step
+- **Machine info** — inspect state count, transitions, alphabet, and more
+- **State diagram export** — generate Graphviz DOT format for any built-in machine
+- **Tape comparison** — programmatically compare tape contents for verification
+- **JSON save/load** — export and import machine definitions
+- **Validation** — check machine definitions for unreachable states and other issues
+- **Interactive creator** — build custom machines from the command line
+- **Custom tape input** — override initial tape for any built-in program via `--tape`
 
 ## Built-in Programs
 
-| Program | Description | Input | Output |
-|---------|-------------|-------|--------|
-| `binary_increment` | Increment a binary number by 1 | `1011` (11) | `1100` (12) |
-| `unary_addition` | Add two unary numbers with `+` | `111+11` | `11111` (5 ones) |
-| `palindrome_checker` | Check if a binary string is a palindrome | `10101` | ACCEPTED |
-| `busy_beaver_3` | The champion 3-state Busy Beaver | (blank) | 6 ones in 13 steps |
-| `binary_not` | Flip all bits (NOT operation) | `10110011` | `01001100` |
-| `count_ones` | Count 1s in binary, write unary tally after `=` | `10110=` | `10110=\|\|\|` |
-| `binary_decrement` | Decrement a binary number by 1 | `1100` (12) | `1011` (11) |
-| `unary_doubler` | Double a unary number | `111` (3) | `111111` (6) |
-| `binary_and` | Bitwise AND of two equal-length binary strings separated by `&` | `1100&1010` | `1100&1000` |
-| `string_reverser` | Reverse a binary string | `110` | `011` |
+| Name | Input | Output | Description |
+|------|-------|--------|-------------|
+| `binary_increment` | `1011` | `1100` | Increment a binary number by 1 |
+| `unary_addition` | `111+11` | `11111` | Add two unary numbers separated by `+` |
+| `palindrome_checker` | `10101` | `XX10X` | Check if input is a palindrome (accepts if yes) |
+| `busy_beaver_3` | (blank) | `1111101` | Busy Beaver 3-state champion (writes 6 ones, halts in 13 steps) |
+| `binary_not` | `10110011` | `01001100` | Bitwise NOT of a binary string |
+| `count_ones` | `10110=` | `10110=\|\|\|` | Count the 1s in a binary string (tally marks after `=`) |
+| `binary_decrement` | `1100` | `1011` | Decrement a binary number by 1 |
+| `unary_doubler` | `111` | `111111` | Double a unary number |
+| `binary_and` | `1100&1010` | `1100&1000` | Bitwise AND of two binary numbers separated by `&` |
+| `string_reverser` | `110` | `011` | Reverse a binary string |
+| `unary_subtract` | `11111-11` | `111` | Subtract two unary numbers separated by `-` |
+| `unary_multiplier` | `11x111` | `11x111=111111` | Multiply two unary numbers separated by `x` |
 
-## How to Install
+## Installation
 
-No external dependencies needed — uses only Python 3 standard library:
+No external dependencies required — uses only the Python standard library (including `curses` for visual mode).
 
 ```bash
-cd ~/daily-ideas/2026-06-18-turing-machine-simulator
+# Clone or copy the project
+cd turing-machine-simulator
+
+# Run directly
+python3 turing.py --help
 ```
 
-Requires Python 3.6+ (tested with 3.11+). The curses module is part of the standard library on most systems.
+## Usage
 
-## How to Run
-
-### Show Version
+### Command-Line Interface
 
 ```bash
+# Show help and version
+python3 turing.py --help
 python3 turing.py --version
-```
 
-### Visual Mode (Interactive, requires a terminal)
-
-```bash
-python3 turing.py                    # Show menu, pick a program
-python3 turing.py --visual           # Same as above
-python3 turing.py --run busy_beaver_3  # Run specific program visually
-```
-
-### Text Mode (Step-by-step output, no curses)
-
-```bash
-python3 turing.py --text                       # Default program (binary_increment)
-python3 turing.py --text --run palindrome_checker
-python3 turing.py --text --speed 0.1           # Faster stepping
-```
-
-### Batch Mode (Run all programs, show results with statistics)
-
-```bash
-python3 turing.py --run all
-python3 turing.py --run all --max-steps 500
-```
-
-### Execution Trace (Detailed step-by-step trace)
-
-```bash
-python3 turing.py --trace                       # Default program (binary_increment)
-python3 turing.py --trace --run binary_not      # Trace binary NOT
-python3 turing.py --trace --run busy_beaver_3   # Trace Busy Beaver
-```
-
-The `--trace` flag produces a detailed execution log showing each step with the current state, head position, symbol read, symbol written, movement direction, next state, and a tape snapshot. Each step is numbered so you can follow the exact execution path.
-
-### Override Tape Input
-
-```bash
-python3 turing.py --tape 1010 --run binary_increment   # Custom input
-python3 turing.py --tape 1111 --run unary_doubler       # Double four ones
-python3 turing.py --tape 1100 --run string_reverser     # Reverse 1100
-python3 turing.py --tape 1111&0101 --run binary_and     # AND two numbers
-```
-
-### Export a Machine to JSON
-
-```bash
-python3 turing.py --export busy_beaver_3    # Saves to machines/busy_beaver_3.json
-python3 turing.py --export unary_doubler    # Saves to machines/unary_doubler.json
-```
-
-### List Available Programs
-
-```bash
+# List all built-in programs
 python3 turing.py --list
-```
 
-### Custom Machine (Interactive Creator)
+# Run a specific program in batch mode
+python3 turing.py --run binary_increment
 
-```bash
-python3 turing.py --create
-```
+# Run with custom tape input
+python3 turing.py --run binary_increment --tape 1111
 
-### Load Machine from JSON
+# Run all programs in batch
+python3 turing.py --run all
 
-```bash
+# Text-mode step display
+python3 turing.py --text --run busy_beaver_3
+
+# Detailed execution trace
+python3 turing.py --trace --run palindrome_checker --tape 1001
+
+# Validate a machine before running
+python3 turing.py --validate --run binary_decrement
+
+# Show detailed machine info
+python3 turing.py --info unary_subtract
+
+# Export state diagram as Graphviz DOT
+python3 turing.py --dot busy_beaver_3 > busy_beaver.dot
+
+# Export machine to JSON
+python3 turing.py --export binary_increment
+
+# Load and run a custom machine from JSON
 python3 turing.py --load machines/my_machine.json
-python3 turing.py --load machines/my_machine.json --visual
-python3 turing.py --load machines/my_machine.json --text
+
+# Interactive visual mode (default if no --run)
+python3 turing.py --visual
+
+# Create a custom machine interactively
+python3 turing.py --create
+
+# Adjust step speed (in seconds)
+python3 turing.py --text --run busy_beaver_3 --speed 0.1
+
+# Set maximum steps for batch mode
+python3 turing.py --run binary_increment --max-steps 5000
 ```
 
-## Usage Examples
-
-### Visual Mode Controls
-
-When running in visual (curses) mode:
-
-| Key | Action |
-|-----|--------|
-| `Space` | Pause / Resume |
-| `S` | Execute one step (when paused) |
-| `R` | Reset to initial state |
-| `+` | Speed up (decrease delay) |
-| `-` | Slow down (increase delay) |
-| `Q` | Quit |
-
-### Example: Binary Increment
-
-```
-$ python3 turing.py --text --run binary_increment
-
-============================================================
-  Machine: Binary Increment
-  Increment a binary number by 1
-  Input: 1011
-============================================================
-
-  Step    0  State: q0
-  ..._______________[1]011________...
-
-  Step    1  State: q0
-  ...______________0[0]11_________...
-
-  ✓ ACCEPTED after 9 steps
-  Final tape: 1100
-  Stats: Steps: 9  Cells written: 9  Tape span: [0, 4]  Unique cells: 5
-```
-
-### Example: Binary AND
-
-```
-$ python3 turing.py --text --run binary_and --tape 1100&1010
-
-  Machine: Binary AND
-  Bitwise AND of two binary numbers separated by &
-  Input: 1100&1010
-
-  ✓ ACCEPTED after 80 steps
-  Final tape: 1100&1000
-```
-
-The `binary_and` program processes two equal-length binary numbers separated by `&`, computing the bitwise AND column by column. It marks left-side bits as X (for 0) or Y (for 1) to track position correspondence, then converts markers back and cleans up to produce the final result.
-
-### Example: String Reverser
-
-```
-$ python3 turing.py --text --run string_reverser --tape 110
-
-  Machine: String Reverser
-  Reverse a binary string (e.g., 110 → 011)
-  Input: 110
-
-  ✓ ACCEPTED after 54 steps
-  Final tape: 011
-```
-
-The `string_reverser` works by placing a `=` separator at the end of the input, then repeatedly taking the rightmost input character, erasing it (marking with X), and appending it past the separator. This naturally builds the reversed string. Finally, X markers and the separator are cleaned up.
-
-### Example: Execution Trace
-
-```
-$ python3 turing.py --trace --run binary_not
-
-Step   0 | State: q0 | Head: 0 | Read: 1 → Write: 0 | Move: R → q0
-  ..._[0]0110011_...
-Step   1 | State: q0 | Head: 1 | Read: 0 → Write: 1 | Move: R → q0
-  ..._01[1]110011_...
-...
-```
-
-### Example: Unary Doubler
-
-```
-$ python3 turing.py --text --run unary_doubler --tape 111
-
-  Machine: Unary Doubler
-  Double a unary number (e.g., 111 → 111111)
-  Input: 111
-
-  ✓ ACCEPTED after 58 steps
-  Final tape: 111111
-```
-
-### Example: Count Ones
-
-```
-$ python3 turing.py --text --run count_ones
-
-  Machine: Count Ones
-  Count the 1s in a binary string and write unary result after '='
-  Input: 10110=
-
-  ✓ ACCEPTED after 42 steps
-  Final tape: 10110=|||
-```
-
-### Example: Machine Validation
+### Python API
 
 ```python
-from turing import TuringMachine, BUILTIN_PROGRAMS
+from turing import (
+    TuringMachine, Tape, Transition, BUILTIN_PROGRAMS,
+    run_batch, run_trace, run_text,
+    export_dot, compare_tapes, machine_info,
+    save_machine, load_machine,
+)
 
-# Validate any machine
-warnings = machine.validate()
-for w in warnings:
-    print(f"  ⚠ {w}")
+# Run a built-in program
+result = run_batch(BUILTIN_PROGRAMS["unary_addition"])
+print(f"Output: {result['output']}")  # Output: 11111
+print(f"Accepted: {result['accepted']}")  # Accepted: True
+print(f"Steps: {result['steps']}")  # Steps: 8
+
+# Run with custom tape
+from turing import TuringMachine
+base = BUILTIN_PROGRAMS["unary_subtract"]
+machine = TuringMachine(
+    name=base.name, description=base.description,
+    states=base.states, alphabet=base.alphabet,
+    blank_symbol=base.blank_symbol, initial_state=base.initial_state,
+    accept_states=base.accept_states, reject_states=base.reject_states,
+    transitions=base.transitions, initial_tape="111-1",
+)
+result = run_batch(machine)
+
+# Get detailed machine info
+info = machine_info(BUILTIN_PROGRAMS["busy_beaver_3"])
+print(f"States: {info['num_states']}, Transitions: {info['num_transitions']}")
+
+# Export state diagram
+dot = export_dot(BUILTIN_PROGRAMS["binary_increment"], "binary_increment.dot")
+
+# Compare tapes
+t1, t2 = Tape(), Tape()
+t1.write(0, "1"); t1.write(1, "0")
+t2.write(0, "0"); t2.write(1, "1")
+comparison = compare_tapes(t1, t2)
+print(f"Match: {comparison['match']}")  # False
+print(f"Differences: {comparison['diff_positions']}")
+
+# Save and load machines
+save_machine(BUILTIN_PROGRAMS["busy_beaver_3"], "my_machine.json")
+loaded = load_machine("my_machine.json")
 ```
 
-### Creating a Custom Machine
+## Architecture
 
-```bash
-$ python3 turing.py --create
+- **`Tape`** — Infinite tape using a sparse dictionary representation (only non-blank cells are stored)
+- **`TuringMachine`** — Machine definition with states, alphabet, transitions, and validation
+- **`Transition`** — Named tuple for `(next_state, write_symbol, direction)` transition rules
+- **`ExecutionStats`** — Tracks step count, cells written, tape span, and unique cells visited
+- **`ExecutionStep`** — Captures full state at each step for tracing
+- **`BUILTIN_PROGRAMS`** — Dictionary of 12 pre-defined machines
 
-╔══════════════════════════════════════════╗
-║     Custom Turing Machine Creator       ║
-╚══════════════════════════════════════════╝
+### Key Design Decisions
 
-Machine name (snake_case): doubler
-Description: Doubles the input by replacing each 1 with 11
-Initial tape contents: 101
-States (comma-separated): q0,q1,q_accept
-Alphabet (comma-separated): 0,1,_
-Blank symbol [default='_']: _
-Initial state [default='q0']: q0
-Accept states: q_accept
-Reject states:
-Now enter transitions. Format: state,read -> next_state,write,direction
-Enter empty line to finish.
+- Transitions use `(state, symbol)` tuples as keys for O(1) lookup
+- Tape positions can be negative (machine starts at position 0)
+- Blank symbol is configurable per machine
+- Direction codes: `L` (left), `R` (right), `S` (stay)
+- Reaching an undefined transition causes the machine to halt (not reject)
 
-  Rule: q0,0 -> q0,0,R
-  Rule: q0,1 -> q1,1,R
-  Rule: q0,_ -> q_accept,_,S
-  Rule: q1,0 -> q0,0,R
-  Rule: q1,_ -> q_accept,_,S
-```
+## Testing
 
-## What It Does
-
-This simulator implements a complete Turing machine — the mathematical model of computation that Alan Turing described in 1936. Each machine consists of:
-
-1. **Tape**: An infinite sequence of cells, each holding one symbol from the alphabet
-2. **Head**: A read/write cursor that moves left or right along the tape
-3. **State Register**: Tracks the machine's current state
-4. **Transition Table**: Rules that determine what to write, which direction to move, and what state to enter next, based on the current state and symbol under the head
-
-The simulator supports multiple execution modes (visual, text, batch, trace), machine validation with helpful warnings, execution statistics tracking, custom machine creation interactively or via JSON files, and ten carefully verified built-in programs that demonstrate different computational tasks — from simple bit-flipping and arithmetic to the famous Busy Beaver problem, bitwise AND operations, and string reversal.
-
-## Running Tests
+64 tests covering all core functionality:
 
 ```bash
 python3 test_turing.py
 ```
 
-The test suite (51 tests) covers tape operations, transitions, machine validation, all 10 built-in programs (including edge cases), batch execution, execution trace, save/load functionality, and the version string.
+Test categories:
+- **Tape operations** — read, write, blank handling, non-blank segment
+- **Machine construction** — transitions, validation
+- **Built-in programs** — all 12 programs produce correct output
+- **New built-ins** — unary_subtract and unary_multiplier with multiple test cases
+- **Export functions** — DOT export, tape comparison, machine info
+- **Trace & batch** — execution tracing and result formatting
+- **Save/Load** — JSON round-trip and error handling
 
-## Changelog
+## File Structure
 
-### v1.2.1 — Bug Fixes
+```
+turing.py           — Main simulator (single file, ~1800 lines)
+test_turing.py      — Test suite (64 tests)
+machines/           — Exported machine JSON files
+README.md           — This file
+```
 
-- **Fixed palindrome checker** for single-character and two-character palindromes: inputs like `0`, `1`, `00`, and `11` were incorrectly rejected because the machine lacked transitions for `q0` reading `X` (all chars marked) and `q_left0`/`q_left1` reading `X` (single remaining character). Added three transitions:
-  - `(q0, X)` → accept (all characters processed → palindrome)
-  - `(q_left0, X)` → accept (single character matches itself)
-  - `(q_left1, X)` → accept (single character matches itself)
+## License
 
-- **Fixed binary decrement** leaving `Z` markers in output: the `q_strip` state wrote `Z` to mark stripped leading zeros, but these markers were never cleaned up. Changed to write `_` (blank) instead, which is automatically erased from the sparse tape representation. Also removed `Z` from the alphabet since it's no longer needed.
-
-- **Fixed string reverser** for empty input: an empty tape caused the machine to get stuck because `q0` had no transition for `_` after the `=` separator was placed. Added `(q0, _)` → cleanup to handle empty and degenerate inputs gracefully.
-
-- **Added 7 new tests** for edge cases:
-  - `test_palindrome_single_char`: single-character palindromes (`0`, `1`)
-  - `test_palindrome_two_same_chars`: two-character palindromes (`00`, `11`)
-  - `test_palindrome_two_diff_chars`: two-character non-palindromes (`01`, `10`)
-  - `test_binary_decrement_no_z_markers`: verifies no `Z` in output for power-of-two decrements
-  - `test_binary_decrement_underflow`: verifies `0` is correctly rejected
-  - `test_string_reverser_empty_input`: empty string reverses to empty string
-  - `test_string_reverser_single_char`: single characters reverse to themselves
+MIT

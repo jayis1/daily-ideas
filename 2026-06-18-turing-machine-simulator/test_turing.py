@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from turing import (
     Transition, TuringMachine, Tape, ExecutionStats,
     BUILTIN_PROGRAMS, run_batch, run_trace, save_machine, load_machine,
+    export_dot, compare_tapes, machine_info,
     __version__,
 )
 
@@ -587,14 +588,170 @@ class TestVersion:
     """Test that version is accessible."""
 
     def test_version_string(self):
-        assert __version__ == "1.2.1"
+        assert __version__ == "2.0.0"
+
+
+class TestNewBuiltins:
+    """Test the new built-in programs: unary_subtract and unary_multiplier."""
+
+    def test_unary_subtract(self):
+        result = run_batch(BUILTIN_PROGRAMS["unary_subtract"])
+        assert result["accepted"], f"Expected accept, got output: {result['output']}"
+        assert result["output"] == "111", f"Expected '111', got '{result['output']}'"
+
+    def test_unary_subtract_custom_tape(self):
+        m = TuringMachine(
+            name="unary_subtract",
+            description=BUILTIN_PROGRAMS["unary_subtract"].description,
+            states=BUILTIN_PROGRAMS["unary_subtract"].states,
+            alphabet=BUILTIN_PROGRAMS["unary_subtract"].alphabet,
+            blank_symbol=BUILTIN_PROGRAMS["unary_subtract"].blank_symbol,
+            initial_state=BUILTIN_PROGRAMS["unary_subtract"].initial_state,
+            accept_states=BUILTIN_PROGRAMS["unary_subtract"].accept_states,
+            reject_states=BUILTIN_PROGRAMS["unary_subtract"].reject_states,
+            transitions=BUILTIN_PROGRAMS["unary_subtract"].transitions,
+            initial_tape="111-1",
+        )
+        result = run_batch(m)
+        assert result["accepted"], f"Expected accept, got output: {result['output']}"
+        assert result["output"] == "11", f"Expected '11', got '{result['output']}'"
+
+    def test_unary_subtract_equal_numbers(self):
+        m = TuringMachine(
+            name="unary_subtract",
+            description=BUILTIN_PROGRAMS["unary_subtract"].description,
+            states=BUILTIN_PROGRAMS["unary_subtract"].states,
+            alphabet=BUILTIN_PROGRAMS["unary_subtract"].alphabet,
+            blank_symbol=BUILTIN_PROGRAMS["unary_subtract"].blank_symbol,
+            initial_state=BUILTIN_PROGRAMS["unary_subtract"].initial_state,
+            accept_states=BUILTIN_PROGRAMS["unary_subtract"].accept_states,
+            reject_states=BUILTIN_PROGRAMS["unary_subtract"].reject_states,
+            transitions=BUILTIN_PROGRAMS["unary_subtract"].transitions,
+            initial_tape="11-11",
+        )
+        result = run_batch(m)
+        assert result["accepted"], f"Expected accept, got output: {result['output']}"
+        # 2 - 2 = 0, represented as empty tape
+        assert result["output"] == "", f"Expected empty string, got '{result['output']}'"
+
+    def test_unary_multiplier(self):
+        result = run_batch(BUILTIN_PROGRAMS["unary_multiplier"])
+        assert result["accepted"], f"Expected accept, got output: {result['output']}"
+        assert "111111" in result["output"], f"Expected result containing '111111', got '{result['output']}'"
+
+    def test_unary_multiplier_custom_tape(self):
+        m = TuringMachine(
+            name="unary_multiplier",
+            description=BUILTIN_PROGRAMS["unary_multiplier"].description,
+            states=BUILTIN_PROGRAMS["unary_multiplier"].states,
+            alphabet=BUILTIN_PROGRAMS["unary_multiplier"].alphabet,
+            blank_symbol=BUILTIN_PROGRAMS["unary_multiplier"].blank_symbol,
+            initial_state=BUILTIN_PROGRAMS["unary_multiplier"].initial_state,
+            accept_states=BUILTIN_PROGRAMS["unary_multiplier"].accept_states,
+            reject_states=BUILTIN_PROGRAMS["unary_multiplier"].reject_states,
+            transitions=BUILTIN_PROGRAMS["unary_multiplier"].transitions,
+            initial_tape="1x1",
+        )
+        result = run_batch(m)
+        assert result["accepted"], f"Expected accept, got output: {result['output']}"
+        assert "1=1" in result["output"], f"Expected result containing '1=1', got '{result['output']}'"
+
+
+class TestExportDot:
+    """Test the export_dot utility function."""
+
+    def test_export_dot_returns_string(self):
+        m = BUILTIN_PROGRAMS["busy_beaver_3"]
+        dot = export_dot(m)
+        assert isinstance(dot, str), "export_dot should return a string"
+        assert "digraph" in dot, "DOT output should contain 'digraph'"
+        assert m.initial_state in dot, "DOT output should contain the initial state"
+        assert "->" in dot, "DOT output should contain edges"
+
+    def test_export_dot_writes_file(self):
+        import tempfile
+        m = BUILTIN_PROGRAMS["busy_beaver_3"]
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".dot", delete=False) as f:
+            filepath = f.name
+        try:
+            dot = export_dot(m, filepath)
+            assert os.path.exists(filepath), "DOT file should be created"
+            with open(filepath) as f:
+                content = f.read()
+            assert content == dot, "File content should match returned string"
+        finally:
+            os.unlink(filepath)
+
+    def test_export_dot_contains_accept_states(self):
+        m = BUILTIN_PROGRAMS["binary_increment"]
+        dot = export_dot(m)
+        assert "doublecircle" in dot, "DOT output should mark accept states"
+
+
+class TestCompareTapes:
+    """Test the compare_tapes utility function."""
+
+    def test_identical_tapes(self):
+        t1 = Tape()
+        t2 = Tape()
+        for i, c in enumerate("1010"):
+            t1.write(i, c)
+            t2.write(i, c)
+        result = compare_tapes(t1, t2)
+        assert result["match"] is True
+        assert result["contents1"] == result["contents2"]
+
+    def test_different_tapes(self):
+        t1 = Tape()
+        t2 = Tape()
+        for i, c in enumerate("1010"):
+            t1.write(i, c)
+        for i, c in enumerate("1100"):
+            t2.write(i, c)
+        result = compare_tapes(t1, t2)
+        assert result["match"] is False
+        assert len(result["diff_positions"]) > 0
+
+    def test_empty_tapes(self):
+        t1 = Tape()
+        t2 = Tape()
+        result = compare_tapes(t1, t2)
+        assert result["match"] is True
+        assert result["contents1"] == ""
+        assert result["contents2"] == ""
+
+
+class TestMachineInfo:
+    """Test the machine_info utility function."""
+
+    def test_machine_info_keys(self):
+        m = BUILTIN_PROGRAMS["busy_beaver_3"]
+        info = machine_info(m)
+        assert "name" in info
+        assert "description" in info
+        assert "num_states" in info
+        assert "num_transitions" in info
+        assert "alphabet" in info
+        assert "accept_states" in info
+        assert "reject_states" in info
+        assert "initial_state" in info
+        assert "initial_tape" in info
+
+    def test_machine_info_values(self):
+        m = BUILTIN_PROGRAMS["busy_beaver_3"]
+        info = machine_info(m)
+        assert info["name"] == "busy_beaver_3"
+        assert info["num_states"] == len(m.states)
+        assert info["num_transitions"] == len(m.transitions)
+        assert info["initial_state"] == m.initial_state
 
 
 def run_all_tests():
     """Simple test runner for when pytest is not available."""
     classes = [
         TestTape, TestTransition, TestExecutionStats, TestTuringMachine,
-        TestBuiltinPrograms, TestTraceFeature, TestRunBatch, TestSaveLoadMachine, TestVersion,
+        TestBuiltinPrograms, TestTraceFeature, TestRunBatch, TestSaveLoadMachine,
+        TestVersion, TestNewBuiltins, TestExportDot, TestCompareTapes, TestMachineInfo,
     ]
     total = 0
     passed = 0
