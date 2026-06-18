@@ -2,7 +2,7 @@
 
 A terminal-based Voronoi diagram generator that produces beautiful, colorful tessellations using Unicode block characters and ANSI 256-color mode. A Voronoi diagram partitions a plane into regions based on distance to a set of "seed" points — each region contains all points closer to its seed than to any other.
 
-![Python 3](https://img.shields.io/badge/python-3.11+-blue.svg)
+![Python 3](https://img.shields.io/badge/python-3.7+-blue.svg)
 
 ## Features
 
@@ -15,6 +15,8 @@ A terminal-based Voronoi diagram generator that produces beautiful, colorful tes
 - **Real-time animation**: Watch seeds bounce and Voronoi cells morph in real time
 - **Double vertical resolution**: Uses Unicode half-block characters (▀) for sub-pixel rendering — each terminal row represents 2 pixel rows
 - **Reproducible output**: Seed the RNG for deterministic results
+- **Input validation**: Rejects invalid inputs (zero/negative seeds, invalid dimensions) with clear error messages
+- **Robust edge handling**: Gracefully handles degenerate cases like cosine distance at the origin and empty grids
 - **Zero dependencies**: Pure Python 3 standard library — no pip installs needed
 
 ## How It Works
@@ -35,7 +37,7 @@ For rendering, each terminal character cell represents two vertical pixels using
 
 ## Installation
 
-No installation needed beyond Python 3.11+:
+No installation needed beyond Python 3.7+:
 
 ```bash
 # Just run it directly
@@ -60,25 +62,26 @@ python3 voronoi.py
 
 ### All Options
 
-```bash
+```
 python3 voronoi.py [OPTIONS]
 
 Options:
-  -n, --seeds SEEDS     Number of seed points (default: 15)
-  -w, --width WIDTH     Terminal width in columns (default: auto-detect)
-  -H, --height HEIGHT   Pixel height (default: 2x terminal rows)
-  -d, --distance METRIC Distance metric: euclidean, manhattan, chebyshev,
-                         minkowski3, cosine (default: euclidean)
-  -s, --seed-type TYPE  Seed pattern: random, grid, circular, spiral,
-                         clusters (default: random)
-  -p, --palette PALETTE Color palette: rainbow, pastel, neon, earth,
-                         ocean, fire (default: rainbow)
-  -m, --mode MODE       Rendering mode: filled, outline (default: filled)
-  -b, --borders         Highlight cell borders with bright edges
-  --seeds-visible        Show seed point markers
-  -a, --animate         Animate seeds moving in real time
-  --delay DELAY         Animation frame delay in seconds (default: 0.08)
-  --seed SEED           Random seed for reproducibility
+  -n, --seeds SEEDS       Number of seed points, must be ≥ 1 (default: 15)
+  -w, --width WIDTH       Terminal width in columns (default: auto-detect)
+  -H, --height HEIGHT     Pixel height (default: 2x terminal rows)
+  -d, --distance METRIC   Distance metric: euclidean, manhattan, chebyshev,
+                           minkowski3, cosine (default: euclidean)
+  -s, --seed-type TYPE    Seed pattern: random, grid, circular, spiral,
+                           clusters (default: random)
+  -p, --palette PALETTE   Color palette: rainbow, pastel, neon, earth,
+                           ocean, fire (default: rainbow)
+  -m, --mode MODE         Rendering mode: filled, outline (default: filled)
+  -b, --borders           Highlight cell borders with bright edges
+  --seeds-visible          Show seed point markers
+  -a, --animate           Animate seeds moving in real time
+  --delay DELAY           Animation frame delay in seconds, must be > 0 (default: 0.08)
+  --seed SEED             Random seed for reproducibility
+  --version               Show version and exit
 ```
 
 ### Examples
@@ -107,15 +110,57 @@ python3 voronoi.py --seeds 40 --seed-type clusters --palette fire --borders
 
 # Cosine distance creates angular wedge cells from the origin
 python3 voronoi.py --seeds 20 --distance cosine --palette rainbow
+
+# Check version
+python3 voronoi.py --version
 ```
 
-## What It Does
+## Input Validation
 
-1. **Generates seed points** using one of five placement strategies (random, grid+jitter, circular, spiral, clusters)
-2. **Assigns colors** from the chosen palette to each seed
-3. **Computes the Voronoi tessellation** using the selected distance metric — for every pixel, finds the closest seed
-4. **Detects cell borders** by checking if adjacent pixels belong to different cells
-5. **Renders to terminal** using ANSI 256-color codes and Unicode half-block characters for double vertical resolution
-6. In **animation mode**, seeds bounce off walls with drift and damping, and the diagram is recomputed each frame
+The tool validates all inputs and provides clear error messages:
 
-The result is a colorful, dynamically partitioned view of the terminal that looks like a stained glass window, a geographic territory map, or an abstract geometric artwork — depending on your choice of distance metric, palette, and seed pattern.
+```bash
+$ python3 voronoi.py --seeds 0
+error: Number of seeds must be at least 1, got 0
+
+$ python3 voronoi.py --seeds -5
+error: Number of seeds must be at least 1, got -5
+
+$ python3 voronoi.py --delay -0.1 --seeds 5
+error: Frame delay must be positive, got -0.1
+```
+
+## Testing
+
+Run the built-in test suite:
+
+```bash
+python3 test_voronoi.py
+```
+
+This runs 116 tests covering:
+- All seed generators (random, grid, circular, spiral, clusters) with edge cases
+- All palette generators with boundary values
+- All 5 distance metrics including symmetry and edge cases
+- Cosine distance degenerate cases (origin, identical points, opposite directions)
+- Voronoi computation (empty seeds, single seed, small grids)
+- Rendering (filled, outline, with/without borders, with/without dist_grid)
+- CLI input validation (zero/negative seeds, invalid delays)
+- All CLI flag combinations (every distance, palette, seed type, mode)
+- Color math (HSV conversion, RGB-to-ANSI mapping)
+- Seed marker filtering
+
+## Changelog
+
+### v1.1.0 — Bug Fixes
+
+- **Fixed: ZeroDivisionError crash with `--seeds 0`** — Empty colors list caused `idx % len(colors)` division by zero in `render_block`. Now validates seeds ≥ 1 and handles empty grids gracefully.
+- **Fixed: Crash with negative seed count** — `--seeds -1` was accepted and caused crashes. Now rejected with a clear error message.
+- **Fixed: Empty seeds produced invalid grid** — `compute_voronoi([], w, h)` created a grid where every cell referenced non-existent seed index 0. Now returns an empty list for empty seeds.
+- **Fixed: Zero-dimension grids not handled** — `compute_voronoi(seeds, 0, h)` returned a non-empty grid. Now returns an empty list for zero dimensions.
+- **Fixed: Cosine distance degenerate at origin** — `dist_cosine(0,0, x,y)` returned 1.0 for all points because zero-magnitude vectors make cosine undefined. Now falls back to Euclidean distance for zero-magnitude vectors, and clamps cosine similarity to [-1, 1] to handle floating-point drift.
+- **Fixed: No `--version` flag** — Added `--version` flag showing `voronoi 1.1.0`.
+- **Fixed: No validation of `--delay`** — Negative or zero delay values were accepted. Now requires delay > 0.
+- **Added: Input validation for dimensions** — Width and height < 1 are now rejected with clear error messages.
+- **Added: Guard clauses in `render_block`** — Returns empty list when colors or grid are empty, preventing crashes.
+- **Added: Guard clauses in `compute_voronoi_with_distance`** — Returns `([], [])` for empty seeds or zero dimensions.

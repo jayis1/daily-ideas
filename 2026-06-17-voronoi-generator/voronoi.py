@@ -11,6 +11,8 @@ a set of "seed" points — each region contains all points closer to its
 seed than to any other.
 """
 
+__version__ = "1.1.0"
+
 import argparse
 import math
 import os
@@ -157,11 +159,21 @@ def dist_minkowski3(x1, y1, x2, y2):
     return (abs(x1-x2)**3 + abs(y1-y2)**3) ** (1/3)
 
 def dist_cosine(x1, y1, x2, y2):
-    """Angle-based distance — treats points as vectors from origin."""
+    """Angle-based distance — treats points as vectors from origin.
+
+    For zero-magnitude vectors (origin point), falls back to Euclidean
+    distance to avoid degenerate cosine values.
+    """
+    m1_sq = x1*x1 + y1*y1
+    m2_sq = x2*x2 + y2*y2
+    # If either vector has zero magnitude, cosine similarity is undefined;
+    # fall back to Euclidean distance (normalized) to give a sensible result.
+    if m1_sq < 1e-20 or m2_sq < 1e-20:
+        return math.sqrt((x1-x2)**2 + (y1-y2)**2)
     dot = x1*x2 + y1*y2
-    m1 = math.sqrt(x1*x1 + y1*y1) + 1e-10
-    m2 = math.sqrt(x2*x2 + y2*y2) + 1e-10
-    cos_sim = dot / (m1 * m2)
+    cos_sim = dot / (math.sqrt(m1_sq) * math.sqrt(m2_sq))
+    # Clamp to [-1, 1] to handle floating-point drift
+    cos_sim = max(-1.0, min(1.0, cos_sim))
     return 1 - cos_sim  # cosine distance
 
 DISTANCES = {
@@ -246,7 +258,10 @@ def compute_voronoi(seeds, width, height, dist_fn, metric="euclidean"):
     """
     Compute Voronoi cell indices for each pixel position.
     Returns a 2D list where each element is the index of the closest seed.
+    Returns an empty list if there are no seeds or dimensions are zero.
     """
+    if not seeds or width <= 0 or height <= 0:
+        return []
     grid = []
     for y in range(height):
         row = []
@@ -266,7 +281,10 @@ def compute_voronoi_with_distance(seeds, width, height, dist_fn):
     """
     Compute Voronoi cell indices AND distance to nearest seed for each pixel.
     Returns (grid, dist_grid) — both are 2D lists.
+    Returns ([], []) if there are no seeds or dimensions are zero.
     """
+    if not seeds or width <= 0 or height <= 0:
+        return [], []
     grid = []
     dist_grid = []
     for y in range(height):
@@ -294,7 +312,11 @@ def render_block(colors, grid, dist_grid, width, height, mode="filled",
     Render the Voronoi diagram using Unicode half-block characters.
     Each terminal character cell represents 2 vertical pixels (upper + lower),
     giving us double vertical resolution.
+
+    Returns an empty list if there are no colors or no grid data.
     """
+    if not colors or not grid or width <= 0 or height <= 0:
+        return []
     lines = []
     # Determine number of terminal rows (half the pixel rows)
     term_rows = (height + 1) // 2
@@ -535,8 +557,15 @@ Examples:
                         help="Animation frame delay in seconds (default: 0.08)")
     parser.add_argument("--seed", type=int, default=None,
                         help="Random seed for reproducibility")
+    parser.add_argument("--version", action="version", version=f"voronoi {__version__}")
 
     args = parser.parse_args()
+
+    # Validate inputs
+    if args.seeds < 1:
+        parser.error(f"Number of seeds must be at least 1, got {args.seeds}")
+    if args.delay <= 0:
+        parser.error(f"Frame delay must be positive, got {args.delay}")
 
     if args.seed is not None:
         random.seed(args.seed)
@@ -545,6 +574,12 @@ Examples:
     term_w, term_h = get_terminal_size()
     width = args.width or (term_w - 1)
     height = args.height or ((term_h - 2) * 2)  # double resolution via half-blocks
+
+    # Validate dimensions
+    if width < 1:
+        parser.error(f"Width must be at least 1, got {width}")
+    if height < 1:
+        parser.error(f"Height must be at least 1, got {height}")
 
     # Generate seeds
     seed_gen = SEED_TYPES[args.seed_type]
