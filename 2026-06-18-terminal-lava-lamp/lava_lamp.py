@@ -3,37 +3,68 @@
 Terminal Lava Lamp — A mesmerizing ASCII lava lamp simulation with ANSI colors.
 
 Blobs of wax rise and fall inside a lamp-shaped container, rendered in the terminal
-using colored characters and simple physics simulation.
+using colored characters and simple physics simulation. Features multiple color themes,
+interactive controls, bubble particles, heat glow effects, and smooth animation.
+
+Usage:
+    python3 lava_lamp.py [OPTIONS]
+    python3 lava_lamp.py classic
+    python3 lava_lamp.py --theme ocean --speed 1.5
+    python3 lava_lamp.py --help
 """
 
 import sys
+import os
 import time
 import random
 import math
 import signal
+import argparse
+
+# ── Version ────────────────────────────────────────────────────────────────
+
+VERSION = "2.0.0"
 
 # ── ANSI helpers ──────────────────────────────────────────────────────────
 
 def esc(code):
+    """Return an ANSI escape sequence for the given code."""
     return f"\033[{code}m"
 
 def clear_screen():
+    """Clear the terminal screen and move cursor to top-left."""
     sys.stdout.write("\033[2J\033[H")
-
-def hide_cursor():
-    sys.stdout.write("\033[?25l")
-
-def show_cursor():
-    sys.stdout.write("\033[?25h")
+    sys.stdout.flush()
 
 def move_cursor(row, col):
+    """Move the terminal cursor to (row, col)."""
     sys.stdout.write(f"\033[{row};{col}H")
+    sys.stdout.flush()
+
+def hide_cursor():
+    """Hide the terminal cursor for cleaner animation."""
+    sys.stdout.write("\033[?25l")
+    sys.stdout.flush()
+
+def show_cursor():
+    """Show the terminal cursor (restore after hiding)."""
+    sys.stdout.write("\033[?25h")
+    sys.stdout.flush()
+
+def rgb_to_ansi(r, g, b, fg=True):
+    """Convert RGB values (0-255) to a 24-bit ANSI color escape code."""
+    r = max(0, min(255, int(r)))
+    g = max(0, min(255, int(g)))
+    b = max(0, min(255, int(b)))
+    code = 38 if fg else 48
+    return f"\033[{code};2;{r};{g};{b}m"
 
 # ── Color palette ─────────────────────────────────────────────────────────
 
 # Lava lamp color themes
 THEMES = {
     "classic": {
+        "name": "Classic",
         "bg": (20, 10, 40),       # dark purple background
         "lamp": (60, 40, 80),     # lamp body outline
         "wax": [                   # wax blob colors (red/orange/yellow)
@@ -45,8 +76,10 @@ THEMES = {
             (240, 80, 30),
         ],
         "glow": (80, 30, 15),     # glow behind wax
+        "heat": (255, 80, 20),     # heat source glow color
     },
     "ocean": {
+        "name": "Ocean",
         "bg": (5, 15, 40),
         "lamp": (20, 50, 90),
         "wax": [
@@ -58,8 +91,10 @@ THEMES = {
             (40, 160, 220),
         ],
         "glow": (10, 40, 80),
+        "heat": (40, 120, 200),
     },
     "toxic": {
+        "name": "Toxic",
         "bg": (10, 25, 10),
         "lamp": (30, 60, 30),
         "wax": [
@@ -71,8 +106,10 @@ THEMES = {
             (40, 200, 20),
         ],
         "glow": (15, 50, 15),
+        "heat": (40, 200, 40),
     },
     "sunset": {
+        "name": "Sunset",
         "bg": (30, 10, 20),
         "lamp": (70, 30, 50),
         "wax": [
@@ -84,6 +121,37 @@ THEMES = {
             (230, 40, 90),
         ],
         "glow": (60, 15, 35),
+        "heat": (255, 60, 80),
+    },
+    "neon": {
+        "name": "Neon",
+        "bg": (5, 5, 15),
+        "lamp": (30, 10, 50),
+        "wax": [
+            (255, 0, 255),
+            (0, 255, 255),
+            (255, 255, 0),
+            (0, 255, 128),
+            (255, 128, 0),
+            (128, 0, 255),
+        ],
+        "glow": (40, 10, 50),
+        "heat": (200, 0, 200),
+    },
+    "aurora": {
+        "name": "Aurora",
+        "bg": (5, 10, 20),
+        "lamp": (15, 35, 55),
+        "wax": [
+            (50, 200, 100),
+            (100, 255, 150),
+            (150, 200, 255),
+            (200, 100, 255),
+            (50, 255, 180),
+            (100, 150, 255),
+        ],
+        "glow": (15, 40, 60),
+        "heat": (40, 180, 120),
     },
 }
 
@@ -92,22 +160,54 @@ BG_CHARS = " .·:;░▒"
 WAX_CHARS = "●◉⬤◆▲★◉⬤●◆▲★"
 GLOW_CHARS = " .:;░"
 
-def rgb_to_ansi(r, g, b, fg=True):
-    """Convert RGB to 24-bit ANSI color code."""
-    code = 38 if fg else 48
-    return f"\033[{code};2;{int(r)};{int(g)};{int(b)}m"
+# ── Bubble class ──────────────────────────────────────────────────────────
+
+class Bubble:
+    """A small rising bubble particle for visual flair."""
+
+    def __init__(self, lamp_width, lamp_height):
+        """Create a bubble with random position near the base of the lamp.
+
+        Args:
+            lamp_width: Normalized lamp width (not used directly, kept for API).
+            lamp_height: Normalized lamp height (not used directly).
+        """
+        self.y = random.uniform(0.85, 0.98)  # start near bottom
+        self.x = random.uniform(0.3, 0.7)
+        self.speed = random.uniform(0.05, 0.15)
+        self.wobble_freq = random.uniform(2.0, 5.0)
+        self.wobble_amp = random.uniform(0.005, 0.02)
+        self.phase = random.uniform(0, 2 * math.pi)
+        self.life = 0.0
+        self.max_life = random.uniform(3.0, 8.0)  # seconds before popping
+        self.char = random.choice(["·", "∘", "○", "°", "•"])
+
+    def update(self, dt):
+        """Move the bubble upward with wobble. Returns True if still alive."""
+        self.life += dt
+        self.y -= self.speed * dt  # rise
+        self.x += self.wobble_amp * math.sin(self.life * self.wobble_freq + self.phase)
+        self.x = max(0.2, min(0.8, self.x))
+        return self.y > 0.05 and self.life < self.max_life
 
 # ── Blob class ────────────────────────────────────────────────────────────
 
 class Blob:
-    """A wax blob in the lava lamp."""
+    """A wax blob in the lava lamp with physics simulation."""
 
-    def __init__(self, lamp, theme_colors):
-        self.lamp = lamp
+    def __init__(self, theme_colors, heat_color):
+        """Initialize a blob with the given theme colors and heat color.
+
+        Args:
+            theme_colors: List of (r, g, b) tuples for wax colors.
+            heat_color: (r, g, b) tuple for heat source color.
+        """
         self.colors = theme_colors
+        self.heat_color = heat_color
         self.reset()
 
     def reset(self):
+        """Reset the blob to a random position near the bottom of the lamp."""
         self.y = random.uniform(0.7, 0.95)  # start near bottom
         self.x = random.uniform(0.3, 0.7)
         self.radius = random.uniform(0.04, 0.08)
@@ -117,68 +217,134 @@ class Blob:
         self.wobble_freq = random.uniform(1.5, 3.0)
         self.wobble_amp = random.uniform(0.01, 0.03)
         self.life = 0.0
+        self.base_radius = self.radius  # remember initial size
 
-    def update(self, dt, heat):
-        """Update blob physics. heat is 0-1 representing lamp heat at this position."""
-        self.life += dt
+    def update(self, dt, speed_multiplier=1.0):
+        """Update blob physics.
+
+        Heat is stronger at the bottom, causing wax to expand and rise.
+        At the top, wax cools, contracts, and sinks.
+
+        Args:
+            dt: Time delta in seconds.
+            speed_multiplier: Animation speed factor (1.0 = normal).
+        """
+        effective_dt = dt * speed_multiplier
+        self.life += effective_dt
 
         # Buoyancy: hotter wax rises, cooler wax sinks
         # At bottom, heat is high → blob expands and rises
         # At top, heat is low → blob contracts and sinks
         target_vy = -0.15 + 0.3 * (1.0 - self.y)  # rises when low, sinks when high
 
-        # Add some randomness
+        # Add some randomness for organic feel
         target_vy += random.uniform(-0.02, 0.02)
 
-        # Smooth velocity change
-        self.vy += (target_vy - self.vy) * dt * 2.0
-        self.y += self.vy * dt
+        # Smooth velocity change (inertia)
+        self.vy += (target_vy - self.vy) * effective_dt * 2.0
+        self.y += self.vy * effective_dt
 
         # Horizontal wobble
         self.x = 0.5 + self.wobble_amp * math.sin(self.life * self.wobble_freq + self.phase)
-        # Add small random drift
-        self.x += random.uniform(-0.005, 0.005)
+        # Small random drift for natural motion
+        self.x += random.uniform(-0.003, 0.003)
         self.x = max(0.15, min(0.85, self.x))
 
         # Radius changes: expand when rising (hot), contract when sinking (cool)
         if self.vy < -0.02:  # rising
-            self.radius = min(0.12, self.radius + dt * 0.02)
+            self.radius = min(0.12, self.radius + effective_dt * 0.02)
         elif self.vy > 0.02:  # sinking
-            self.radius = max(0.03, self.radius - dt * 0.01)
+            self.radius = max(0.03, self.radius - effective_dt * 0.01)
+
+        # Gentle pulsation for visual liveliness
+        pulse = 0.005 * math.sin(self.life * 2.5)
+        self.radius = max(0.03, min(0.12, self.radius + pulse))
 
         # Reset if out of bounds
         if self.y < -0.1 or self.y > 1.2:
             self.reset()
 
-        # Color shifts slowly
+        # Color shifts slowly over time
         self.color_idx = (self.color_idx + random.uniform(-0.1, 0.1)) % len(self.colors)
-
 
 # ── Lava Lamp ─────────────────────────────────────────────────────────────
 
 class LavaLamp:
-    """The main lava lamp simulation."""
+    """The main lava lamp simulation engine.
 
-    def __init__(self, width=40, height=30, theme="classic"):
+    Manages blobs, bubbles, and rendering. The lamp shape is defined by a
+    parametric width function that creates the classic lava lamp silhouette.
+
+    Attributes:
+        width: Terminal character width for rendering.
+        height: Terminal row height for rendering.
+        theme_name: Name of the current color theme.
+        blobs: List of Blob objects.
+        bubbles: List of Bubble objects.
+        time: Total elapsed simulation time.
+        paused: Whether the simulation is paused.
+        speed: Animation speed multiplier.
+    """
+
+    def __init__(self, width=40, height=30, theme="classic", num_blobs=8,
+                 num_bubbles=5, speed=1.0):
+        """Initialize the lava lamp.
+
+        Args:
+            width: Rendering width in terminal characters.
+            height: Rendering height in terminal rows.
+            theme: Theme name (key in THEMES dict).
+            num_blobs: Number of wax blobs to simulate.
+            num_bubbles: Number of rising bubbles.
+            speed: Animation speed multiplier (0.5 = slow, 2.0 = fast).
+
+        Raises:
+            ValueError: If theme is not found in THEMES.
+        """
+        if theme not in THEMES:
+            raise ValueError(f"Unknown theme '{theme}'. Available: {', '.join(THEMES.keys())}")
         self.width = width
         self.height = height
         self.theme_name = theme
         self.theme = THEMES[theme]
-        self.blobs = []
         self.time = 0.0
+        self.paused = False
+        self.speed = speed
 
         # Create initial blobs
-        for _ in range(8):
-            blob = Blob(self, self.theme["wax"])
-            self.blobs.append(blob)
+        self.blobs = []
+        for _ in range(num_blobs):
+            self.blobs.append(Blob(self.theme["wax"], self.theme["heat"]))
+
+        # Create rising bubbles
+        self.bubbles = []
+        for _ in range(num_bubbles):
+            self.bubbles.append(Bubble(width, height))
 
         # Pre-compute lamp shape
         self._compute_shape()
 
+    def switch_theme(self, theme_name):
+        """Switch to a new color theme.
+
+        Args:
+            theme_name: Name of the theme to switch to.
+
+        Raises:
+            ValueError: If theme is not found.
+        """
+        if theme_name not in THEMES:
+            raise ValueError(f"Unknown theme '{theme_name}'. Available: {', '.join(THEMES.keys())}")
+        self.theme_name = theme_name
+        self.theme = THEMES[theme_name]
+        # Update blob colors
+        for blob in self.blobs:
+            blob.colors = self.theme["wax"]
+            blob.heat_color = self.theme["heat"]
+            blob.color_idx = random.randint(0, len(blob.colors) - 1)
+
     def _compute_shape(self):
-        """Compute the lamp shape as a function of row (0=top, 1=bottom)."""
-        # The lamp shape: narrow top cap, widens to a bowl, narrows at bottom
-        # Returns width multiplier (0-1) for a given y position
+        """Pre-compute lamp shape widths for each row."""
         self.shape_points = []
         for i in range(self.height + 4):  # extra rows for cap and base
             y = i / (self.height + 3)
@@ -186,8 +352,12 @@ class LavaLamp:
             self.shape_points.append(w)
 
     def _shape_width(self, y):
-        """Return relative width (0-1) of the lamp at position y (0=top, 1=bottom)."""
-        # Cap (top): y=0..0.08
+        """Return relative width (0-1) of the lamp at position y (0=top, 1=bottom).
+
+        The shape creates a classic lava lamp silhouette with a narrow cap,
+        a wide body that tapers, and a solid base.
+        """
+        # Cap (top): y=0..0.05
         if y < 0.05:
             return 0.15 + 0.2 * (y / 0.05)
         # Neck transition: y=0.05..0.15
@@ -197,7 +367,7 @@ class LavaLamp:
         # Main body: y=0.15..0.75 (widest)
         elif y < 0.75:
             t = (y - 0.15) / 0.6
-            # Gentle curve
+            # Gentle curve with a bulge
             return 0.75 + 0.15 * math.sin(t * math.pi)
         # Lower body narrowing: y=0.75..0.88
         elif y < 0.88:
@@ -210,25 +380,44 @@ class LavaLamp:
 
     def _y_to_row(self, y):
         """Convert normalized y (0=top, 1=bottom) to screen row."""
-        # Reserve top 2 rows for cap, bottom 2 for base
         return int(2 + y * (self.height - 1))
 
     def _row_to_y(self, row):
-        """Convert screen row to normalized y."""
-        return (row - 2) / (self.height - 1)
+        """Convert screen row to normalized y (0=top, 1=bottom)."""
+        return (row - 2) / max(1, self.height - 1)
 
     def update(self, dt):
-        self.time += dt
+        """Advance the simulation by dt seconds.
+
+        Args:
+            dt: Time delta in seconds.
+        """
+        if self.paused:
+            return
+
+        effective_dt = min(dt, 0.1)  # cap to prevent large jumps
+        self.time += effective_dt
+
         for blob in self.blobs:
-            blob.update(dt, 1.0 - blob.y)  # heat is stronger at bottom
+            blob.update(effective_dt, self.speed)
+
+        # Update bubbles and respawn dead ones
+        for i, bubble in enumerate(self.bubbles):
+            if not bubble.update(effective_dt * self.speed):
+                self.bubbles[i] = Bubble(self.width, self.height)
 
     def render(self):
-        """Render the lava lamp to a string buffer."""
+        """Render the lava lamp to a list of ANSI-colored strings.
+
+        Returns a list of strings, one per row, containing the full rendered
+        lamp with background, blobs, glow effects, bubbles, and outline.
+        """
         lines = []
 
         bg = self.theme["bg"]
         lamp_c = self.theme["lamp"]
         glow_c = self.theme["glow"]
+        heat_c = self.theme["heat"]
 
         for row in range(self.height):
             y = self._row_to_y(row)
@@ -258,10 +447,10 @@ class LavaLamp:
                         blob_screen_x = blob.x  # 0..1 across lamp width
                         blob_screen_y = blob.y  # 0=top, 1=bottom
 
-                        # Distance from blob center
+                        # Distance from blob center (squish horizontally for oval shape)
                         dx = bx - blob_screen_x
                         dy = by - blob_screen_y
-                        dist = math.sqrt(dx * dx * 4 + dy * dy)  # squish horizontally
+                        dist = math.sqrt(dx * dx * 4 + dy * dy)
 
                         # Blob influence (smooth falloff)
                         r = blob.radius
@@ -278,9 +467,24 @@ class LavaLamp:
                             # Glow around blob
                             glow += max(0, 1.0 - dist / (r * 3)) * 0.5
 
-                    # Near edges: darken slightly
+                    # Check bubble influence at this pixel
+                    bubble_density = 0.0
+                    for bubble in self.bubbles:
+                        bub_dx = bx - bubble.x
+                        bub_dy = by - bubble.y
+                        bub_dist = math.sqrt(bub_dx * bub_dx * 4 + bub_dy * bub_dy)
+                        if bub_dist < 0.06:
+                            bub_core = max(0, 1.0 - bub_dist / 0.06)
+                            bubble_density += bub_core
+
+                    # Near edges: darken slightly for depth effect
                     edge_dist = min(bx - 0, 1 - bx)
                     edge_fade = min(1.0, edge_dist * 8)
+
+                    # Heat source glow at bottom
+                    heat_intensity = max(0, (y - 0.8) / 0.2) * 0.3  # glow in bottom 20%
+                    # Add subtle pulsing to heat
+                    heat_intensity *= (0.8 + 0.2 * math.sin(self.time * 3.0))
 
                     if density > 0.05:
                         # Wax color
@@ -292,7 +496,13 @@ class LavaLamp:
                         alpha = min(1.0, density)
                         alpha *= edge_fade
 
-                        # Blend
+                        # Add heat glow tint near bottom
+                        if heat_intensity > 0:
+                            fr = min(255, fr + heat_c[0] * heat_intensity)
+                            fg_c = min(255, fg_c + heat_c[1] * heat_intensity * 0.5)
+                            fb = min(255, fb + heat_c[2] * heat_intensity * 0.3)
+
+                        # Blend wax color with background
                         r = int(bg[0] * (1 - alpha) + fr * alpha)
                         g = int(bg[1] * (1 - alpha) + fg_c * alpha)
                         b = int(bg[2] * (1 - alpha) + fb * alpha)
@@ -302,6 +512,16 @@ class LavaLamp:
                         ch = WAX_CHARS[idx]
 
                         line += rgb_to_ansi(r, g, b) + rgb_to_ansi(r, g, b, fg=False) + ch + esc(0)
+
+                    elif bubble_density > 0.3:
+                        # Bubble rendering — small bright highlight
+                        b_alpha = min(1.0, bubble_density) * edge_fade
+                        br = int(min(255, bg[0] * (1 - b_alpha) + 220 * b_alpha))
+                        bg_c = int(min(255, bg[1] * (1 - b_alpha) + 230 * b_alpha))
+                        bb = int(min(255, bg[2] * (1 - b_alpha) + 240 * b_alpha))
+                        bub_char = random.choice(["·", "∘", "°"]) if bubble_density > 0.6 else "·"
+                        line += rgb_to_ansi(br, bg_c, bb) + bub_char + esc(0)
+
                     elif glow > 0.05:
                         # Glow around wax
                         alpha = min(1.0, glow) * edge_fade
@@ -309,47 +529,82 @@ class LavaLamp:
                         g = int(bg[1] * (1 - alpha) + glow_c[1] * alpha)
                         b = int(bg[2] * (1 - alpha) + glow_c[2] * alpha)
 
+                        # Add heat tint
+                        if heat_intensity > 0:
+                            r = int(min(255, r + heat_c[0] * heat_intensity * 0.4))
+                            g = int(min(255, g + heat_c[1] * heat_intensity * 0.2))
+
                         idx = min(len(GLOW_CHARS) - 1, int(glow * len(GLOW_CHARS)))
                         ch = GLOW_CHARS[idx]
 
                         line += rgb_to_ansi(r, g, b) + rgb_to_ansi(r, g, b, fg=False) + ch + esc(0)
+
+                    elif heat_intensity > 0.05:
+                        # Bottom heat glow (no blob or glow here, just heat)
+                        r = int(min(255, bg[0] * (1 - heat_intensity) + heat_c[0] * heat_intensity))
+                        g = int(min(255, bg[1] * (1 - heat_intensity) + heat_c[1] * heat_intensity * 0.5))
+                        b = int(min(255, bg[2] * (1 - heat_intensity) + heat_c[2] * heat_intensity * 0.3))
+                        line += rgb_to_ansi(r, g, b) + rgb_to_ansi(r, g, b, fg=False) + "░" + esc(0)
+
                     else:
-                        # Inside lamp, no blob
-                        # Slight color variation for depth
+                        # Inside lamp, no blob — subtle depth shading
                         depth = 0.5 + 0.5 * math.sin((bx - 0.5) * math.pi)
                         r = int(bg[0] * (1 - depth * 0.3) + lamp_c[0] * depth * 0.3)
                         g = int(bg[1] * (1 - depth * 0.3) + lamp_c[1] * depth * 0.3)
                         b = int(bg[2] * (1 - depth * 0.3) + lamp_c[2] * depth * 0.3)
 
                         line += rgb_to_ansi(r, g, b) + " " + esc(0)
+
                 elif col == left - 1 or col == right + 1:
                     # Lamp outline
-                    line += rgb_to_ansi(lamp_c[0] + 60, lamp_c[1] + 40, lamp_c[2] + 60) + "│" + esc(0)
+                    outline_r = min(255, lamp_c[0] + 60)
+                    outline_g = min(255, lamp_c[1] + 40)
+                    outline_b = min(255, lamp_c[2] + 60)
+                    line += rgb_to_ansi(outline_r, outline_g, outline_b) + "│" + esc(0)
                 else:
                     # Outside lamp — dark background
                     line += rgb_to_ansi(bg[0], bg[1], bg[2]) + " " + esc(0)
 
             lines.append(line)
 
-        # Add base
+        # Base with heat indicator
         base_line = ""
         center = self.width // 2
+        heat_pulse = 0.7 + 0.3 * math.sin(self.time * 2.0)
         for col in range(self.width):
-            if abs(col - center) < 8:
-                base_line += rgb_to_ansi(lamp_c[0] + 40, lamp_c[1] + 20, lamp_c[2] + 40) + "▀" + esc(0)
-            elif abs(col - center) < 10:
-                base_line += rgb_to_ansi(lamp_c[0] + 20, lamp_c[1] + 10, lamp_c[2] + 20) + "▀" + esc(0)
+            dist = abs(col - center)
+            if dist < 8:
+                # Heat glow at base center
+                intensity = max(0, (8 - dist) / 8) * heat_pulse
+                br = int(min(255, lamp_c[0] + 40 + heat_c[0] * intensity * 0.3))
+                bg_c = int(min(255, lamp_c[1] + 20 + heat_c[1] * intensity * 0.2))
+                bb = int(min(255, lamp_c[2] + 40 + heat_c[2] * intensity * 0.15))
+                base_line += rgb_to_ansi(br, bg_c, bb) + "▀" + esc(0)
+            elif dist < 10:
+                base_line += rgb_to_ansi(
+                    min(255, lamp_c[0] + 20),
+                    min(255, lamp_c[1] + 10),
+                    min(255, lamp_c[2] + 20)
+                ) + "▀" + esc(0)
             else:
                 base_line += rgb_to_ansi(bg[0], bg[1], bg[2]) + " " + esc(0)
         lines.append(base_line)
 
-        # Add cap
+        # Cap
         cap_line = ""
         for col in range(self.width):
             if abs(col - center) < 4:
-                cap_line += rgb_to_ansi(lamp_c[0] + 60, lamp_c[1] + 40, lamp_c[2] + 60) + "▄" + esc(0)
+                cap_line += rgb_to_ansi(
+                    min(255, lamp_c[0] + 60),
+                    min(255, lamp_c[1] + 40),
+                    min(255, lamp_c[2] + 60)
+                ) + "▄" + esc(0)
             elif abs(col - center) < 6:
-                cap_line += rgb_to_ansi(lamp_c[0] + 30, lamp_c[1] + 20, lamp_c[2] + 30) + "▄" + esc(0)
+                cap_line += rgb_to_ansi(
+                    min(255, lamp_c[0] + 30),
+                    min(255, lamp_c[1] + 20),
+                    min(255, lamp_c[2] + 30)
+                ) + "▄" + esc(0)
             else:
                 cap_line += rgb_to_ansi(bg[0], bg[1], bg[2]) + " " + esc(0)
 
@@ -357,41 +612,103 @@ class LavaLamp:
         lines.insert(0, cap_line)
 
         # Title
-        title = f"✦ {self.theme_name.upper()} LAVA LAMP ✦"
+        status = "PAUSED" if self.paused else ""
+        title = f"✦ {self.theme['name'].upper()} LAVA LAMP ✦"
+        if status:
+            title += f"  [{status}]"
         title_line = rgb_to_ansi(180, 180, 200) + title.center(self.width) + esc(0)
 
-        return "\n".join([title_line, ""] + lines)
+        return [title_line, ""] + lines
 
 
 # ── Main ──────────────────────────────────────────────────────────────────
 
+def parse_args():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Terminal Lava Lamp — A mesmerizing ASCII lava lamp simulation",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Themes: classic, ocean, toxic, sunset, neon, aurora
+
+Controls while running:
+  1-6      Switch theme
+  +/=      Increase speed
+  -/_      Decrease speed
+  p        Pause / Resume
+  b        Add a blob
+  r        Reset (new blobs)
+  q/Ctrl+C Quit
+
+Examples:
+  python3 lava_lamp.py                  # Classic theme, default size
+  python3 lava_lamp.py --theme ocean    # Ocean theme
+  python3 lava_lamp.py --speed 2        # Double speed
+  python3 lava_lamp.py --blobs 12       # More blobs for denser look
+"""
+    )
+    parser.add_argument("theme", nargs="?", default="classic",
+                        choices=list(THEMES.keys()),
+                        help="Color theme (default: classic)")
+    parser.add_argument("--theme", dest="theme_flag", choices=list(THEMES.keys()),
+                        help="Color theme (alternative to positional arg)")
+    parser.add_argument("-W", "--width", type=int, default=None,
+                        help="Terminal width (default: auto-detect)")
+    parser.add_argument("-H", "--height", type=int, default=None,
+                        help="Terminal height (default: auto-detect)")
+    parser.add_argument("--blobs", type=int, default=8,
+                        help="Number of wax blobs (default: 8)")
+    parser.add_argument("--bubbles", type=int, default=5,
+                        help="Number of rising bubbles (default: 5)")
+    parser.add_argument("--speed", type=float, default=1.0,
+                        help="Animation speed multiplier (default: 1.0)")
+    parser.add_argument("--fps", type=int, default=15,
+                        help="Target frames per second (default: 15)")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
+
+    args = parser.parse_args()
+
+    # Merge positional and flag theme
+    if args.theme_flag:
+        args.theme = args.theme_flag
+
+    # Validate ranges
+    if args.blobs < 1:
+        parser.error(f"Need at least 1 blob, got {args.blobs}")
+    if args.bubbles < 0:
+        parser.error(f"Bubbles must be non-negative, got {args.bubbles}")
+    if args.speed <= 0:
+        parser.error(f"Speed must be positive, got {args.speed}")
+    if not (1 <= args.fps <= 60):
+        parser.error(f"FPS must be between 1 and 60, got {args.fps}")
+
+    return args
+
+
 def main():
-    theme = "classic"
-    if len(sys.argv) > 1:
-        arg = sys.argv[1].lower()
-        if arg in THEMES:
-            theme = arg
-        elif arg in ("-h", "--help"):
-            print("Usage: lava_lamp.py [THEME]")
-            print(f"Themes: {', '.join(THEMES.keys())}")
-            print("\nControls:")
-            print("  Ctrl+C — Quit")
-            print("  1-4    — Switch theme (classic, ocean, toxic, sunset)")
-            sys.exit(0)
-        else:
-            print(f"Unknown theme '{arg}'. Available: {', '.join(THEMES.keys())}")
-            sys.exit(1)
+    """Run the lava lamp simulation."""
+    args = parse_args()
 
     # Detect terminal size
     try:
         cols, rows = os.get_terminal_size()
-    except:
+    except OSError:
         cols, rows = 44, 34
 
-    width = max(30, min(60, cols - 4))
-    height = max(20, min(40, rows - 6))
+    width = args.width if args.width else max(30, min(60, cols - 4))
+    height = args.height if args.height else max(20, min(40, rows - 6))
 
-    lamp = LavaLamp(width=width, height=height, theme=theme)
+    # Clamp to reasonable values
+    width = max(20, min(120, width))
+    height = max(15, min(60, height))
+
+    lamp = LavaLamp(
+        width=width, height=height,
+        theme=args.theme,
+        num_blobs=args.blobs,
+        num_bubbles=args.bubbles,
+        speed=args.speed,
+    )
 
     clear_screen()
     hide_cursor()
@@ -405,8 +722,9 @@ def main():
     signal.signal(signal.SIGINT, handle_sigint)
 
     last_time = time.time()
-    fps_target = 15
+    fps_target = args.fps
     frame_time = 1.0 / fps_target
+    theme_keys = list(THEMES.keys())
 
     try:
         while running:
@@ -415,44 +733,65 @@ def main():
             last_time = now
 
             # Update simulation
-            lamp.update(min(dt, 0.1))
+            lamp.update(dt)
 
             # Render
-            output = lamp.render()
+            output_lines = lamp.render()
             move_cursor(1, 1)
-            sys.stdout.write(output)
-            sys.stdout.write("\n" + rgb_to_ansi(120, 120, 140) + "  [1-4] themes  [q]uit".ljust(width) + esc(0))
+            for line in output_lines:
+                sys.stdout.write(line + "\n")
+
+            # Controls help bar
+            theme_nums = "  ".join(f"{i+1}:{k[:3]}" for i, k in enumerate(theme_keys))
+            speed_display = f"{lamp.speed:.1f}x"
+            status_parts = [f"Speed:{speed_display}", f"Blobs:{len(lamp.blobs)}"]
+            status_line = "  ".join(status_parts) + f"  │  [1-6]themes  [+/-]speed  [p]ause  [b]lob  [r]eset  [q]uit"
+            sys.stdout.write(rgb_to_ansi(120, 120, 140) + status_line.ljust(width) + esc(0) + "\n")
             sys.stdout.flush()
 
             # Check for keypress (non-blocking)
-            import select
-            if select.select([sys.stdin], [], [], 0)[0]:
-                key = sys.stdin.read(1)
-                if key == 'q':
-                    break
-                elif key == '1':
-                    lamp = LavaLamp(width=width, height=height, theme="classic")
-                elif key == '2':
-                    lamp = LavaLamp(width=width, height=height, theme="ocean")
-                elif key == '3':
-                    lamp = LavaLamp(width=width, height=height, theme="toxic")
-                elif key == '4':
-                    lamp = LavaLamp(width=width, height=height, theme="sunset")
+            try:
+                import select as _select
+                if _select.select([sys.stdin], [], [], 0)[0]:
+                    key = sys.stdin.read(1)
+                    if key in ('q', 'Q'):
+                        break
+                    elif key in '123456':
+                        idx = int(key) - 1
+                        if idx < len(theme_keys):
+                            try:
+                                lamp.switch_theme(theme_keys[idx])
+                            except ValueError:
+                                pass
+                    elif key in ('+', '='):
+                        lamp.speed = min(5.0, lamp.speed + 0.25)
+                    elif key in ('-', '_'):
+                        lamp.speed = max(0.25, lamp.speed - 0.25)
+                    elif key in ('p', 'P'):
+                        lamp.paused = not lamp.paused
+                    elif key in ('b', 'B'):
+                        lamp.blobs.append(Blob(lamp.theme["wax"], lamp.theme["heat"]))
+                    elif key in ('r', 'R'):
+                        # Reset all blobs
+                        lamp.blobs = [Blob(lamp.theme["wax"], lamp.theme["heat"])
+                                      for _ in range(args.blobs)]
+                        lamp.bubbles = [Bubble(width, height) for _ in range(args.bubbles)]
+                        lamp.time = 0.0
+            except (ImportError, OSError, ValueError):
+                pass
 
             # Frame rate limiting
             elapsed = time.time() - now
             if elapsed < frame_time:
                 time.sleep(frame_time - elapsed)
 
-    except Exception as e:
+    except Exception:
         pass
     finally:
         show_cursor()
-        move_cursor(height + 5, 1)
+        move_cursor(height + 6, 1)
         print(rgb_to_ansi(180, 180, 200) + "✦ Lava lamp powered off ✦" + esc(0))
 
-
-import os
 
 if __name__ == "__main__":
     main()
