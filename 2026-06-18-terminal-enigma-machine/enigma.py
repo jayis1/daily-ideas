@@ -64,11 +64,25 @@ class Plugboard:
         Args:
             pairs: List of 2-letter strings like ["AB", "CD"] meaning A↔B, C↔D.
                    Each letter can appear at most once.
+        Raises:
+            ValueError: If a pair is invalid, has duplicate letters, or a letter
+                        appears in multiple pairs.
         """
         self.mapping = list(range(26))  # identity mapping
         if pairs:
+            used = set()
             for pair in pairs:
+                if len(pair) != 2:
+                    raise ValueError(f"Invalid plugboard pair '{pair}': must be exactly 2 letters")
+                if not pair.isalpha():
+                    raise ValueError(f"Invalid plugboard pair '{pair}': must contain only letters")
+                if pair[0].upper() == pair[1].upper():
+                    raise ValueError(f"Invalid plugboard pair '{pair}': cannot swap a letter with itself")
                 a, b = char_to_index(pair[0]), char_to_index(pair[1])
+                if a in used or b in used:
+                    raise ValueError(f"Letter '{pair[0]}' or '{pair[1]}' appears in multiple plugboard pairs")
+                used.add(a)
+                used.add(b)
                 self.mapping[a] = b
                 self.mapping[b] = a
 
@@ -166,6 +180,9 @@ class EnigmaMachine:
             raise ValueError("Must specify exactly 3 rotor positions")
         if len(ring_settings) != 3:
             raise ValueError("Must specify exactly 3 ring settings")
+        for rs in ring_settings:
+            if not isinstance(rs, int) or rs < 1 or rs > 26:
+                raise ValueError(f"Ring setting must be 1-26, got {rs}")
 
         # Rightmost rotor is index 2 (closest to input), leftmost is index 0
         self.rotors = [
@@ -223,8 +240,8 @@ class EnigmaMachine:
         if trace:
             path.append(("Plugboard→", index_to_char(index), index))
 
-        # Through rotors right to left
-        for i, rotor in enumerate(self.rotors):
+        # Through rotors right to left (signal enters right/fast rotor first)
+        for rotor in reversed(self.rotors):
             index = rotor.encode_right_to_left(index)
             if trace:
                 path.append((f"Rotor {rotor.name}→", index_to_char(index), index))
@@ -234,8 +251,8 @@ class EnigmaMachine:
         if trace:
             path.append((f"Reflector {self.reflector.name}", index_to_char(index), index))
 
-        # Through rotors left to right
-        for rotor in reversed(self.rotors):
+        # Through rotors left to right (signal returns through left/slow rotor first)
+        for rotor in self.rotors:
             index = rotor.encode_left_to_right(index)
             if trace:
                 path.append((f"←Rotor {rotor.name}", index_to_char(index), index))
@@ -490,6 +507,7 @@ Examples:
                         help="List available rotors and reflectors")
     parser.add_argument("-v", "--visualize", action="store_true",
                         help="Show rotor visualization before output")
+    parser.add_argument("--version", action="version", version="Enigma Machine 1.1.0")
 
     args = parser.parse_args()
 
@@ -502,6 +520,9 @@ Examples:
     for pair in pairs:
         if len(pair) != 2 or not pair.isalpha():
             print(f"Error: Invalid plugboard pair '{pair}'. Use 2-letter pairs like AB CD.", file=sys.stderr)
+            sys.exit(1)
+        if pair[0] == pair[1]:
+            print(f"Error: Invalid plugboard pair '{pair}': cannot swap a letter with itself.", file=sys.stderr)
             sys.exit(1)
 
     # Check for duplicate letters in plugboard
@@ -545,9 +566,11 @@ Examples:
 
     if args.trace and machine.trace:
         # Show trace for the last character
-        last_char = args.text.upper()[-1] if args.text.upper()[-1].isalpha() else args.text.upper()[-1]
-        print()
-        print(format_trace(machine.trace, last_char, encrypted[-1] if encrypted else ""))
+        upper_text = args.text.upper()
+        if upper_text:
+            last_char = upper_text[-1]
+            print()
+            print(format_trace(machine.trace, last_char, encrypted[-1] if encrypted else ""))
 
 
 if __name__ == "__main__":

@@ -52,6 +52,28 @@ class TestPlugboard(unittest.TestCase):
         for i in range(26):
             self.assertEqual(pb.encode(pb.encode(i)), i)
 
+    def test_duplicate_letter_rejected(self):
+        """A letter appearing in multiple pairs should be rejected."""
+        with self.assertRaises(ValueError):
+            Plugboard(["AB", "AC"])  # A appears twice
+
+    def test_self_swap_rejected(self):
+        """A pair swapping a letter with itself should be rejected."""
+        with self.assertRaises(ValueError):
+            Plugboard(["AA"])
+
+    def test_invalid_pair_length_rejected(self):
+        """Pairs that are not exactly 2 letters should be rejected."""
+        with self.assertRaises(ValueError):
+            Plugboard(["A"])  # too short
+        with self.assertRaises(ValueError):
+            Plugboard(["ABC"])  # too long
+
+    def test_non_alpha_pair_rejected(self):
+        """Pairs with non-alpha characters should be rejected."""
+        with self.assertRaises(ValueError):
+            Plugboard(["12"])  # numeric
+
 
 class TestRotor(unittest.TestCase):
     def test_creation(self):
@@ -126,7 +148,7 @@ class TestReflector(unittest.TestCase):
             for i in range(26):
                 self.assertEqual(ref.encode(ref.encode(i)), i)
 
-    def test_no_self_mapping(self):
+    def test_no_self_mapping_b_c(self):
         """No letter should map to itself (for reflectors B and C)."""
         for name in ["B", "C"]:
             ref = Reflector(name)
@@ -134,8 +156,32 @@ class TestReflector(unittest.TestCase):
                 self.assertNotEqual(ref.encode(i), i, 
                     f"Reflector {name} maps {index_to_char(i)} to itself")
 
+    def test_reflector_a_no_self_mapping(self):
+        """Reflector A has no self-mappings either (all reflectors are involutions without self-maps)."""
+        ref = Reflector("A")
+        for i in range(26):
+            self.assertNotEqual(ref.encode(i), i,
+                f"Reflector A maps {index_to_char(i)} to itself")
+
 
 class TestEnigmaMachine(unittest.TestCase):
+    def test_known_test_vector_bdqzgo(self):
+        """
+        Known Enigma I test vector:
+        Settings: Rotors I II III (left to right), positions A A A, Ring 01 01 01, Reflector B, No plugboard
+        Input: AAAAA
+        Expected: BDZGO (widely-cited standard test vector)
+        """
+        machine = EnigmaMachine(
+            rotor_names=["I", "II", "III"],
+            rotor_positions=["A", "A", "A"],
+            ring_settings=[1, 1, 1],
+            reflector_name="B"
+        )
+        result = machine.encrypt("AAAAA")
+        self.assertEqual(result, "BDZGO",
+            f"Known test vector failed: expected BDZGO, got {result}")
+
     def test_reciprocal_property(self):
         """Encrypting twice with the same initial settings should return plaintext."""
         for rotors in [["I", "II", "III"], ["IV", "V", "I"], ["VI", "VII", "VIII"]]:
@@ -163,7 +209,7 @@ class TestEnigmaMachine(unittest.TestCase):
         self.assertEqual(decrypted, plaintext)
 
     def test_no_self_encryption(self):
-        """No letter should encrypt to itself (fundamental Enigma property)."""
+        """No letter should encrypt to itself (fundamental Enigma property for reflectors B and C)."""
         machine = EnigmaMachine(
             rotor_names=["I", "II", "III"],
             plugboard_pairs=["AB", "CD", "EF"]
@@ -173,23 +219,6 @@ class TestEnigmaMachine(unittest.TestCase):
         for i, (p, e) in enumerate(zip(plaintext, encrypted)):
             self.assertNotEqual(p, e, 
                 f"Letter {p} at position {i} encrypted to itself")
-
-    def test_known_test_vector(self):
-        """
-        Known Enigma test vector:
-        Settings: Rotors III II I, positions A A A, Ring 01 01 01, Reflector B, No plugboard
-        Encrypt 'A' → should produce a deterministic result.
-        We test that the output is consistent and not 'A'.
-        """
-        machine = EnigmaMachine(
-            rotor_names=["III", "II", "I"],
-            rotor_positions=["A", "A", "A"],
-            ring_settings=[1, 1, 1],
-            reflector_name="B"
-        )
-        result = machine.encrypt("A")
-        self.assertNotEqual(result, "A")
-        self.assertEqual(len(result), 1)
 
     def test_different_settings_different_output(self):
         """Different rotor settings should produce different output."""
@@ -256,6 +285,21 @@ class TestEnigmaMachine(unittest.TestCase):
         machine.encrypt("A")
         # Left rotor should step due to double stepping
         self.assertNotEqual(machine.rotors[0].position, initial_left)
+
+    def test_double_stepping_detailed(self):
+        """Detailed double-stepping test with specific position tracking."""
+        # Setup: positions A, D, V (middle one before notch E, right at notch V)
+        machine = EnigmaMachine(
+            rotor_names=["I", "II", "III"],
+            rotor_positions=["A", "D", "V"]
+        )
+        # After 1st char: right at notch -> middle steps D->E, right steps V->W
+        machine.encrypt_char("A")
+        self.assertEqual(machine.get_state_string(), "A E W")
+        # After 2nd char: middle at notch E -> double step: left steps A->B, middle steps E->F
+        # and right steps W->X
+        machine.encrypt_char("A")
+        self.assertEqual(machine.get_state_string(), "B F X")
 
     def test_ring_setting_affects_output(self):
         """Different ring settings should produce different output."""
@@ -327,6 +371,65 @@ class TestEnigmaMachine(unittest.TestCase):
             EnigmaMachine(rotor_names=["I", "II"])  # only 2 rotors
         with self.assertRaises(ValueError):
             EnigmaMachine(reflector_name="Z")  # invalid reflector
+
+    def test_ring_setting_validation(self):
+        """Ring settings outside 1-26 should raise ValueError."""
+        with self.assertRaises(ValueError):
+            EnigmaMachine(ring_settings=[0, 1, 1])
+        with self.assertRaises(ValueError):
+            EnigmaMachine(ring_settings=[27, 1, 1])
+        with self.assertRaises(ValueError):
+            EnigmaMachine(ring_settings=[1, -1, 1])
+        # Valid ring settings should work
+        machine = EnigmaMachine(ring_settings=[1, 13, 26])
+        self.assertIsNotNone(machine)
+
+    def test_plugboard_validation_in_machine(self):
+        """Plugboard validation should catch errors."""
+        with self.assertRaises(ValueError):
+            EnigmaMachine(plugboard_pairs=["AB", "AC"])  # duplicate A
+        with self.assertRaises(ValueError):
+            EnigmaMachine(plugboard_pairs=["AA"])  # self-swap
+        with self.assertRaises(ValueError):
+            EnigmaMachine(plugboard_pairs=["A"])  # too short
+        with self.assertRaises(ValueError):
+            EnigmaMachine(plugboard_pairs=["12"])  # non-alpha
+
+    def test_signal_path_order(self):
+        """
+        Verify the signal path goes through the RIGHT rotor first.
+        With rotors I II III (left to right), the forward path should be:
+        III (right) -> II (middle) -> I (left) -> reflector
+        This is verified by the BDZGO test vector.
+        """
+        machine = EnigmaMachine(
+            rotor_names=["I", "II", "III"],
+            rotor_positions=["A", "A", "A"],
+            ring_settings=[1, 1, 1],
+            reflector_name="B"
+        )
+        # The known test vector AAAAA -> BDZGO confirms correct signal path
+        result = machine.encrypt("AAAAA")
+        self.assertEqual(result, "BDZGO")
+
+    def test_encrypt_char_lowercase(self):
+        """encrypt_char should pass through lowercase letters unchanged."""
+        machine = EnigmaMachine()
+        result = machine.encrypt_char("a")
+        self.assertEqual(result, "a")
+
+    def test_encrypt_lowercase(self):
+        """encrypt should convert lowercase to uppercase."""
+        machine = EnigmaMachine()
+        result = machine.encrypt("hello")
+        self.assertTrue(result.isupper())
+
+    def test_position_wrapping(self):
+        """Rotor position should wrap from Z to A."""
+        machine = EnigmaMachine(rotor_positions=["Z", "Z", "Z"])
+        machine.encrypt_char("A")
+        # Right rotor wraps from Z to A
+        self.assertEqual(machine.rotors[2].get_position_char(), "A")
 
 
 class TestVisualization(unittest.TestCase):
