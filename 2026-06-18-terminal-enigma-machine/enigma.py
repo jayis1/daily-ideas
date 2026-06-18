@@ -106,15 +106,18 @@ def random_config():
     }
 
 
-def format_output(text, style="plain", group_size=5):
+def format_output(text, style="plain", group_size=5, original=None):
     """
     Format encrypted/decrypted text for display.
 
     Args:
-        text: The text to format.
+        text: The encrypted/decrypted text to format.
         style: 'plain' (as-is), 'grouped' (groups of letters separated by spaces),
-               or 'verbose' (each letter on its own line with index).
+               or 'verbose' (each letter on its own line showing input→output mapping).
         group_size: Number of letters per group when style='grouped'.
+        original: The original plaintext text (before encryption). Required for
+                  'verbose' style to show input→output mappings. If None, falls back
+                  to showing the text as-is for each letter.
 
     Returns:
         Formatted string.
@@ -126,9 +129,12 @@ def format_output(text, style="plain", group_size=5):
         return " ".join(groups)
     elif style == "verbose":
         lines = []
-        for i, (orig, enc) in enumerate(zip(text, text)):
-            if orig.isalpha():
-                lines.append(f"  {i+1:>4}: {orig} → {enc}")
+        # For verbose mode, show the mapping from original plaintext letters
+        # to their encrypted counterparts
+        alpha_orig = "".join(c for c in (original or text) if c.isalpha())
+        alpha_enc = "".join(c for c in text if c.isalpha())
+        for i, (orig, enc) in enumerate(zip(alpha_orig, alpha_enc)):
+            lines.append(f"  {i+1:>4}: {orig} → {enc}")
         return "\n".join(lines)
     else:  # plain
         return text
@@ -712,7 +718,7 @@ Examples:
   # Specify rotors and starting positions
   python enigma.py "SECRET MESSAGE" -r IV II I -p A A B
 
-  # Use plugboard pairs
+  # Use plugboard pairs (text must come BEFORE -P)
   python enigma.py "ATTACK AT DAWN" -P AB CD EF
 
   # Interactive mode with trace
@@ -759,7 +765,7 @@ Examples:
                         help="Reflector (default: B)")
     parser.add_argument("--plugboard", "-P", nargs="+", default=None,
                         metavar="PAIR",
-                        help="Plugboard pairs like AB CD EF (must come before text)")
+                        help="Plugboard pairs (e.g., AB CD EF). Text argument must come BEFORE --plugboard")
     parser.add_argument("-i", "--interactive", action="store_true",
                         help="Start interactive mode")
     parser.add_argument("-t", "--trace", action="store_true",
@@ -784,7 +790,7 @@ Examples:
     parser.add_argument("--load-config", metavar="FILEPATH",
                         help="Load machine configuration from a JSON file")
     parser.add_argument("--signal", action="store_true",
-                        help="Show signal path visualization for the first character")
+                        help="Show signal path visualization for the last character")
     parser.add_argument("--version", action="version", version=f"Enigma Machine {__version__}")
 
     args = parser.parse_args()
@@ -904,10 +910,14 @@ Examples:
         print(visualize_rotors(machine))
         print()
 
+    # --signal requires trace data, so enable tracing automatically when --signal is used
+    should_trace = args.trace or args.signal
+
     # Encrypt the text
-    encrypted = machine.encrypt(input_text, trace=args.trace)
+    encrypted = machine.encrypt(input_text, trace=should_trace)
     formatted = format_output(encrypted, style=args.output_format,
-                              group_size=args.group_size)
+                              group_size=args.group_size,
+                              original=input_text.upper())
 
     print(f"Input:     {input_text.upper()}")
     print(f"Encrypted: {formatted}")

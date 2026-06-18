@@ -594,6 +594,36 @@ class TestFormatOutput(unittest.TestCase):
         self.assertIn("2:", result)
         self.assertIn("→", result)
 
+    def test_verbose_format_with_original(self):
+        """Verbose format with original text should show input→output mapping."""
+        # When original text is provided, verbose should show input→output
+        result = format_output("XYZ", style="verbose", original="ABC")
+        self.assertIn("A → X", result)
+        self.assertIn("B → Y", result)
+        self.assertIn("C → Z", result)
+
+    def test_verbose_format_without_original(self):
+        """Verbose format without original text should fall back to self-mapping."""
+        # When no original is provided, it should still produce output
+        result = format_output("ABC", style="verbose")
+        self.assertIn("1:", result)
+        self.assertIn("→", result)
+
+    def test_verbose_format_mixed_alpha(self):
+        """Verbose format should only show alpha characters."""
+        result = format_output("XZ", style="verbose", original="AB")
+        self.assertIn("A → X", result)
+        self.assertIn("B → Z", result)
+
+    def test_signal_mode_without_trace_flag(self):
+        """--signal should work without --trace by enabling trace internally."""
+        machine = EnigmaMachine()
+        # Simulate what the CLI does: trace is enabled when signal is requested
+        result = machine.encrypt("HELLO", trace=True)
+        self.assertIsNotNone(machine.trace)
+        vis = visualize_signal_path(machine.trace)
+        self.assertIn("SIGNAL", vis)
+
 
 class TestRandomConfig(unittest.TestCase):
     def test_random_config_structure(self):

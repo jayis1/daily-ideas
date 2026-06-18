@@ -29,10 +29,16 @@ The Enigma is **reciprocal**: encrypting the ciphertext with the same settings r
 - **No self-encryption** — faithfully reproduces the Enigma's property that no letter ever encrypts to itself (with reflectors B and C)
 - **Known test vector verified** — encrypting `AAAAA` with rotors I-II-III, positions AAA, ring 01-01-01, reflector B produces `BDZGO`, matching the standard Enigma I reference
 
+### New in v2.1 (Bug Fixes)
+- **Fixed `--format verbose`** — verbose mode now correctly shows input→output letter mappings instead of each letter mapping to itself
+- **Fixed `--signal` standalone** — `--signal` now works without also requiring `--trace` (tracing is enabled automatically when signal visualization is requested)
+- **Fixed `--plugboard` argument order** — clarified in help text that the text argument must come before `--plugboard` to avoid argparse consuming the text as a plugboard pair
+- **Fixed `--signal` description** — now correctly documents that the visualization shows the last character's path (not the first)
+
 ### New in v2.0
 - **Random configuration** (`--random`) — generate a random machine setup for quick one-time-pad style encryption
 - **Config save/load** (`--save-config`/`--load-config`) — persist and share machine configurations as JSON files
-- **Output formatting** (`--format plain|grouped|verbose`) — display output in traditional 5-letter groups, verbose per-character mode, or plain text
+- **Output formatting** (`--format plain|grouped|verbose`) — display output in traditional 5-letter groups, verbose per-character mode (showing input→output mapping), or plain text
 - **Signal path visualization** (`--signal`) — see an ASCII bar chart showing how each letter's index transforms through the machine
 - **Full message tracing** — `get_all_traces()` API to trace every character's path through the machine
 - **File input** (`--file`) — encrypt text from a file
@@ -51,7 +57,7 @@ The Enigma is **reciprocal**: encrypting the ciphertext with the same settings r
 - **Component listing** (`--list`) — browse all available rotors, reflectors, and their wirings
 - **`--version` flag** — display version number
 - **Input validation** — plugboard pairs, ring settings, and rotor names are all validated with clear error messages
-- **85 unit tests** covering reciprocal property, known test vectors, no-self-encryption, double-stepping, plugboard validation, config round-trips, random config generation, and more
+- **85+ unit tests** covering reciprocal property, known test vectors, no-self-encryption, double-stepping, plugboard validation, config round-trips, random config generation, format output, signal path visualization, and more
 
 ## Installation
 
@@ -78,8 +84,8 @@ python3 enigma.py "ILBDA AMTAZ"
 # Specify custom rotors and positions
 python3 enigma.py "SECRET MESSAGE" -r IV II I -p A B C
 
-# Use plugboard pairs
-python3 enigma.py --plugboard AB SZ UJ MY "ATTACK AT DAWN"
+# Use plugboard pairs (NOTE: text must come BEFORE --plugboard/-P)
+python3 enigma.py "ATTACK AT DAWN" -P AB CD EF
 
 # Set ring settings
 python3 enigma.py --ring 5 3 7 "HELLO"
@@ -90,18 +96,16 @@ python3 enigma.py -f C "TESTING"
 # Show encryption path trace
 python3 enigma.py --trace "HELLO"
 
-# Show signal path visualization with ASCII bar chart
-python3 enigma.py --trace --signal "HELLO"
+# Show signal path visualization (works standalone, no --trace needed)
+python3 enigma.py --signal "HELLO"
 
 # Show rotor visualization
 python3 enigma.py --visualize "HELLO"
 
 # Output in traditional 5-letter groups
 python3 enigma.py --format grouped "HELLO WORLD"
-# Output: Input:     HELLO WORLD
-#         Encrypted: ILBDA AMTAZ
 
-# Verbose per-character output
+# Verbose per-character output (shows input→output mapping)
 python3 enigma.py --format verbose "ABC"
 
 # Generate a random configuration
@@ -138,11 +142,21 @@ python3 enigma.py --version
 python3 enigma.py [TEXT] [OPTIONS]
 ```
 
+**Important:** When using `--plugboard` / `-P`, the text argument must come *before* the plugboard pairs, because `--plugboard` accepts multiple values and will consume all following arguments.
+
+```bash
+# ✅ Correct: text before --plugboard
+python3 enigma.py "HELLO WORLD" -P AB CD EF
+
+# ❌ Wrong: text after --plugboard (text gets consumed as a plugboard pair)
+python3 enigma.py -P AB CD EF "HELLO WORLD"
+```
+
 ### Positional Arguments
 
 | Argument | Description |
 |----------|-------------|
-| `TEXT` | Text to encrypt/decrypt (uppercase recommended) |
+| `TEXT` | Text to encrypt/decrypt (must come before `--plugboard`) |
 
 ### Options
 
@@ -152,7 +166,7 @@ python3 enigma.py [TEXT] [OPTIONS]
 | `-p`, `--positions` | `A A A` | Starting rotor positions |
 | `--ring` | `1 1 1` | Ring settings (1–26 for each rotor) |
 | `-f`, `--reflector` | `B` | Reflector: A, B, or C |
-| `--plugboard`, `-P` | (none) | Plugboard pairs like `AB CD EF` |
+| `--plugboard`, `-P` | (none) | Plugboard pairs like `AB CD EF` (text must come before this flag) |
 | `-i`, `--interactive` | off | Start interactive mode |
 | `-t`, `--trace` | off | Show encryption path trace |
 | `-v`, `--visualize` | off | Show rotor state visualization before output |
@@ -163,7 +177,7 @@ python3 enigma.py [TEXT] [OPTIONS]
 | `--stdin` | off | Read plaintext from stdin |
 | `--save-config` | (none) | Save configuration to a JSON file |
 | `--load-config` | (none) | Load configuration from a JSON file |
-| `--signal` | off | Show signal path visualization |
+| `--signal` | off | Show signal path visualization for the last character |
 | `-l`, `--list` | off | List available rotors and reflectors |
 | `--version` | | Show version and exit |
 
@@ -367,6 +381,9 @@ random_machine = EnigmaMachine(
 from enigma import format_output
 formatted = format_output(ciphertext, style="grouped", group_size=5)
 
+# Format output with input→output mapping (verbose mode)
+formatted = format_output(ciphertext, style="verbose", original="HELLO WORLD")
+
 # Known test vector verification
 m = EnigmaMachine(
     rotor_names=["I", "II", "III"],
@@ -393,7 +410,16 @@ Encrypted: ILBDA AMTAZ
 Groups letters into blocks (default 5, customizable with `--group-size`), stripping non-alpha characters.
 
 ### Verbose
-Shows each character's position and mapping individually. Useful for detailed analysis.
+Shows each character's position and its input→output mapping. Useful for detailed analysis.
+```
+Input:     HELLO
+Encrypted:
+     1: H → I
+     2: E → L
+     3: L → B
+     4: L → D
+     5: O → A
+```
 
 ## Config Files
 
@@ -437,7 +463,26 @@ The `Plugboard` and `EnigmaMachine` constructors validate their inputs and raise
 python3 -m pytest test_enigma.py -v
 ```
 
-85 tests covering reciprocal property, known test vectors, no-self-encryption, double-stepping, plugboard validation, ring setting validation, lowercase handling, position wrapping, random config generation, format output, signal path visualization, config save/load round trips, and more.
+85+ tests covering reciprocal property, known test vectors, no-self-encryption, double-stepping, plugboard validation, ring setting validation, lowercase handling, position wrapping, random config generation, format output, signal path visualization, config save/load round trips, and more.
+
+## Changelog
+
+### v2.1 (Bug Fixes)
+- **Fixed verbose format** — `--format verbose` now correctly shows input→output letter mappings (previously showed each letter mapping to itself)
+- **Fixed `--signal` standalone** — `--signal` now works without `--trace`; tracing is automatically enabled internally when signal visualization is requested
+- **Fixed `--signal` description** — help text now correctly says "last character" instead of "first character"
+- **Clarified `--plugboard` argument order** — help text and README now clearly state that the text argument must come before `--plugboard`/`-P` to avoid argparse consuming it as a plugboard pair
+- **Updated README examples** — all plugboard examples now use the correct argument order
+
+### v2.0 (Feature Release)
+- Added random configuration generation (`--random`)
+- Added config save/load (`--save-config`/`--load-config`)
+- Added output formatting (`--format plain|grouped|verbose`)
+- Added signal path visualization (`--signal`)
+- Added file input (`--file`) and stdin input (`--stdin`)
+- Added interactive mode enhancements (`signal`, `config`, `save` commands)
+- Added `get_config()`, `reset_positions()`, `__version__`, `get_all_traces()` APIs
+- Expanded test suite from 53 to 85 tests
 
 ## License
 
