@@ -4,11 +4,29 @@ Terminal Enigma Machine — A full simulation of the WWII Enigma cipher machine.
 
 Supports configurable rotors, reflector, plugboard, and visual encryption path tracing.
 Encrypts and decrypts text from the command line or interactively.
+
+Features:
+  - 8 historical rotors (I–VIII) with authentic wirings and notch positions
+  - 3 reflectors (A, B, C)
+  - Configurable plugboard with validation
+  - Ring settings (Ringstellung)
+  - Double-stepping mechanism
+  - Encryption path tracing
+  - Interactive mode with on-the-fly configuration
+  - File/stdin encryption
+  - Random configuration generation
+  - Config save/load (JSON)
+  - Output formatting (grouped, plain, verbose)
 """
 
 import argparse
+import json
+import os
+import random
 import sys
 import string
+
+__version__ = "2.0.0"
 
 # ─── Historical Enigma Components ────────────────────────────────────────────
 
@@ -49,11 +67,71 @@ ALPHABET = string.ascii_uppercase
 
 
 def char_to_index(c):
+    """Convert a character to its 0-based alphabet index."""
     return ord(c.upper()) - ord('A')
 
 
 def index_to_char(i):
+    """Convert a 0-based alphabet index to its character, wrapping at 26."""
     return chr(i % 26 + ord('A'))
+
+
+def random_config():
+    """
+    Generate a random Enigma machine configuration.
+
+    Returns:
+        dict with keys: rotor_names, rotor_positions, ring_settings,
+                        reflector_name, plugboard_pairs
+    """
+    rotor_choices = list(ROTOR_WIRINGS.keys())
+    # Pick 3 distinct rotors (Enigma used 3 of the available rotors)
+    chosen = random.sample(rotor_choices, 3)
+    positions = [random.choice(ALPHABET) for _ in range(3)]
+    rings = [random.randint(1, 26) for _ in range(3)]
+    reflector = random.choice(list(REFLECTOR_WIRINGS.keys()))
+
+    # Pick 0–10 random plugboard pairs
+    num_pairs = random.randint(0, 10)
+    letters = list(ALPHABET)
+    random.shuffle(letters)
+    pairs = [letters[2*i] + letters[2*i+1] for i in range(num_pairs)]
+
+    return {
+        "rotor_names": chosen,
+        "rotor_positions": positions,
+        "ring_settings": rings,
+        "reflector_name": reflector,
+        "plugboard_pairs": pairs,
+    }
+
+
+def format_output(text, style="plain", group_size=5):
+    """
+    Format encrypted/decrypted text for display.
+
+    Args:
+        text: The text to format.
+        style: 'plain' (as-is), 'grouped' (groups of letters separated by spaces),
+               or 'verbose' (each letter on its own line with index).
+        group_size: Number of letters per group when style='grouped'.
+
+    Returns:
+        Formatted string.
+    """
+    alpha_only = "".join(c for c in text if c.isalpha())
+
+    if style == "grouped":
+        groups = [alpha_only[i:i+group_size] for i in range(0, len(alpha_only), group_size)]
+        return " ".join(groups)
+    elif style == "verbose":
+        lines = []
+        for i, (orig, enc) in enumerate(zip(text, text)):
+            if orig.isalpha():
+                lines.append(f"  {i+1:>4}: {orig} → {enc}")
+        return "\n".join(lines)
+    else:  # plain
+        return text
 
 
 class Plugboard:
@@ -69,14 +147,16 @@ class Plugboard:
                         appears in multiple pairs.
         """
         self.mapping = list(range(26))  # identity mapping
+        self.pairs = []  # store the pairs for display
         if pairs:
             used = set()
             for pair in pairs:
+                pair = pair.upper()
                 if len(pair) != 2:
                     raise ValueError(f"Invalid plugboard pair '{pair}': must be exactly 2 letters")
                 if not pair.isalpha():
                     raise ValueError(f"Invalid plugboard pair '{pair}': must contain only letters")
-                if pair[0].upper() == pair[1].upper():
+                if pair[0] == pair[1]:
                     raise ValueError(f"Invalid plugboard pair '{pair}': cannot swap a letter with itself")
                 a, b = char_to_index(pair[0]), char_to_index(pair[1])
                 if a in used or b in used:
@@ -85,10 +165,20 @@ class Plugboard:
                 used.add(b)
                 self.mapping[a] = b
                 self.mapping[b] = a
+                self.pairs.append(pair)
 
     def encode(self, index):
         """Apply plugboard substitution."""
         return self.mapping[index]
+
+    def is_identity(self):
+        """Return True if no plugboard pairs are set (identity mapping)."""
+        return self.mapping == list(range(26))
+
+    def __repr__(self):
+        if self.is_identity():
+            return "Plugboard(identity)"
+        return f"Plugboard(pairs={self.pairs})"
 
 
 class Rotor:
@@ -137,7 +227,15 @@ class Rotor:
         return at_notch
 
     def get_position_char(self):
+        """Return the current visible position as a letter."""
         return index_to_char(self.position)
+
+    def set_position(self, pos):
+        """Set rotor position from a letter (A-Z)."""
+        self.position = char_to_index(pos)
+
+    def __repr__(self):
+        return f"Rotor({self.name}, pos={self.get_position_char()}, ring={self.ring_setting + 1})"
 
 
 class Reflector:
@@ -151,7 +249,11 @@ class Reflector:
         self.mapping = [char_to_index(c) for c in self.wiring]
 
     def encode(self, index):
+        """Apply reflector mapping."""
         return self.mapping[index]
+
+    def __repr__(self):
+        return f"Reflector({self.name})"
 
 
 class EnigmaMachine:
@@ -192,6 +294,9 @@ class EnigmaMachine:
         self.reflector = Reflector(reflector_name)
         self.plugboard = Plugboard(plugboard_pairs or [])
         self.trace = None  # will hold last encryption path trace
+        self._all_traces = []  # holds per-character traces for full message tracing
+        self._initial_positions = list(rotor_positions)
+        self._initial_ring_settings = list(ring_settings)
 
     def _step_rotors(self):
         """
@@ -279,8 +384,12 @@ class EnigmaMachine:
         """
         text = text.upper()
         result = []
+        self._all_traces = []
         for char in text:
-            result.append(self.encrypt_char(char, trace=trace))
+            encrypted = self.encrypt_char(char, trace=trace)
+            result.append(encrypted)
+            if trace and char.isalpha():
+                self._all_traces.append(self.trace)
         return "".join(result)
 
     def get_rotor_positions(self):
@@ -292,6 +401,38 @@ class EnigmaMachine:
         positions = self.get_rotor_positions()
         return f"{positions[0]} {positions[1]} {positions[2]}"
 
+    def get_config(self):
+        """
+        Return the current machine configuration as a dictionary.
+        Useful for saving and recreating a machine.
+        """
+        return {
+            "rotor_names": [r.name for r in self.rotors],
+            "rotor_positions": self.get_rotor_positions(),
+            "ring_settings": [r.ring_setting + 1 for r in self.rotors],
+            "reflector_name": self.reflector.name,
+            "plugboard_pairs": self.plugboard.pairs,
+            "version": __version__,
+        }
+
+    def reset_positions(self, positions=None):
+        """
+        Reset rotor positions to the initial positions or specified positions.
+
+        Args:
+            positions: List of 3 position letters, or None to use initial positions.
+        """
+        if positions is None:
+            positions = self._initial_positions
+        if len(positions) != 3:
+            raise ValueError("Must specify exactly 3 rotor positions")
+        for i, pos in enumerate(positions):
+            self.rotors[i].set_position(pos)
+
+    def get_all_traces(self):
+        """Return all per-character traces from the last encrypt() call with trace=True."""
+        return self._all_traces
+
 
 def format_trace(trace, char, output_char):
     """Format a single character's encryption trace as a readable string."""
@@ -301,6 +442,36 @@ def format_trace(trace, char, output_char):
     lines.append(f"  {'─' * 34}")
     for step_name, letter, index in trace:
         lines.append(f"  {step_name:<20} {letter:<8} {index:<6}")
+    return "\n".join(lines)
+
+
+def format_full_trace(all_traces, plaintext, ciphertext):
+    """
+    Format a full message's encryption traces showing every character's path.
+
+    Args:
+        all_traces: List of per-character traces from get_all_traces().
+        plaintext: Original plaintext (uppercase, alpha only).
+        ciphertext: Resulting ciphertext (uppercase, alpha only).
+
+    Returns:
+        Formatted string with all traces.
+    """
+    lines = []
+    lines.append("╔══════════════════════════════════════════════════════════╗")
+    lines.append("║           ENIGMA MACHINE — Full Encryption Trace        ║")
+    lines.append("╚══════════════════════════════════════════════════════════╝")
+    lines.append("")
+    lines.append(f"  Plaintext:  {plaintext}")
+    lines.append(f"  Ciphertext: {ciphertext}")
+    lines.append("")
+
+    for i, (trace, p_char, c_char) in enumerate(zip(all_traces, plaintext, ciphertext)):
+        lines.append(f"  ── Character {i+1}: '{p_char}' → '{c_char}' ──")
+        for step_name, letter, index in trace:
+            lines.append(f"    {step_name:<20} {letter:<8} {index:<6}")
+        lines.append("")
+
     return "\n".join(lines)
 
 
@@ -339,7 +510,6 @@ def visualize_rotors(machine, width=60):
         for j in range(-2, 3):
             letters.append(index_to_char((pos + j) % 26))
         vis = "  ".join(letters)
-        highlight_pos = 2  # center letter index in the vis string
 
         if i == 0:
             line = f"  {rotor.name:>4}  │ {vis} │"
@@ -347,6 +517,42 @@ def visualize_rotors(machine, width=60):
             line = f"       │ {vis} │"
         lines.append("│" + line.ljust(width - 2) + "│")
 
+    lines.append("└" + "─" * (width - 2) + "┘")
+    return "\n".join(lines)
+
+
+def visualize_signal_path(trace, width=60):
+    """
+    Create an ASCII visualization of the signal path through the Enigma machine
+    for a single character encryption.
+
+    Args:
+        trace: A trace list from encrypt_char(trace=True).
+        width: Display width.
+
+    Returns:
+        Formatted string showing the signal path.
+    """
+    if not trace:
+        return "(No trace data)"
+
+    lines = []
+    lines.append("┌" + "─" * (width - 2) + "┐")
+    header = "  SIGNAL PATH VISUALIZATION"
+    lines.append("│" + header.center(width - 2) + "│")
+    lines.append("├" + "─" * (width - 2) + "┤")
+
+    input_char = trace[0][1]
+    output_char = trace[-1][1]
+
+    for step_name, letter, index in trace:
+        bar = "█" * min(index + 1, 30)
+        line = f"  {step_name:<18} {letter} ({index:>2})  {bar}"
+        lines.append("│" + line.ljust(width - 2) + "│")
+
+    lines.append("├" + "─" * (width - 2) + "┤")
+    summary = f"  {input_char} ──→ {output_char}"
+    lines.append("│" + summary.center(width - 2) + "│")
     lines.append("└" + "─" * (width - 2) + "┘")
     return "\n".join(lines)
 
@@ -362,25 +568,22 @@ def interactive_mode(machine, show_trace=False):
     positions = machine.get_rotor_positions()
     print(f"  Start positions: {positions[0]} {positions[1]} {positions[2]}")
     print(f"  Ring settings:   {machine.rotors[0].ring_setting+1} {machine.rotors[1].ring_setting+1} {machine.rotors[2].ring_setting+1}")
-    if machine.plugboard.mapping != list(range(26)):
-        swaps = []
-        used = set()
-        for i in range(26):
-            if machine.plugboard.mapping[i] != i and i not in used:
-                swaps.append(f"{index_to_char(i)}{index_to_char(machine.plugboard.mapping[i])}")
-                used.add(i)
-                used.add(machine.plugboard.mapping[i])
-        print(f"  Plugboard: {' '.join(swaps)}")
+    if not machine.plugboard.is_identity():
+        pairs_str = " ".join(machine.plugboard.pairs)
+        print(f"  Plugboard: {pairs_str}")
     else:
         print("  Plugboard: (none)")
     print()
     print("  Commands:")
-    print("    <text>     Encrypt the text")
-    print("    trace      Toggle trace mode")
-    print("    state      Show current machine state")
-    print("    reset      Reset rotor positions to starting positions")
-    print("    help       Show this help")
-    print("    quit       Exit")
+    print("    <text>       Encrypt the text")
+    print("    trace         Toggle trace mode")
+    print("    state         Show current machine state")
+    print("    signal        Show signal path visualization")
+    print("    config        Show current configuration")
+    print("    save <file>   Save configuration to JSON file")
+    print("    reset         Reset rotor positions to starting positions")
+    print("    help          Show this help")
+    print("    quit          Exit")
     print()
 
     initial_positions = [r.position for r in machine.rotors]
@@ -405,17 +608,57 @@ def interactive_mode(machine, show_trace=False):
             break
         elif cmd == "help":
             print("  Commands:")
-            print("    <text>     Encrypt the text")
-            print("    trace      Toggle trace mode")
-            print("    state      Show current machine state")
-            print("    reset      Reset rotor positions")
-            print("    help       Show this help")
-            print("    quit       Exit")
+            print("    <text>       Encrypt the text")
+            print("    trace         Toggle trace mode")
+            print("    state         Show current machine state")
+            print("    signal        Show signal path visualization")
+            print("    config        Show current configuration")
+            print("    save <file>   Save configuration to JSON file")
+            print("    reset         Reset rotor positions")
+            print("    help          Show this help")
+            print("    quit          Exit")
         elif cmd == "trace":
             local_trace = not local_trace
             print(f"  Trace mode: {'ON' if local_trace else 'OFF'}")
         elif cmd == "state":
             print(visualize_rotors(machine))
+        elif cmd == "signal":
+            # Encrypt a single character to show the signal path
+            print("  Enter a single letter to visualize its signal path:")
+            try:
+                letter = input("  Letter> ").strip().upper()
+            except (EOFError, KeyboardInterrupt):
+                continue
+            if letter and letter.isalpha() and len(letter) == 1:
+                result = machine.encrypt_char(letter, trace=True)
+                print(f"  {letter} → {result}")
+                if machine.trace:
+                    print(visualize_signal_path(machine.trace))
+            else:
+                print("  Please enter a single letter (A-Z).")
+        elif cmd == "config":
+            config = machine.get_config()
+            print("  Current configuration:")
+            print(f"    Rotors:   {' '.join(config['rotor_names'])}")
+            print(f"    Positions: {' '.join(config['rotor_positions'])}")
+            print(f"    Ring settings: {' '.join(str(r) for r in config['ring_settings'])}")
+            print(f"    Reflector: {config['reflector_name']}")
+            if config['plugboard_pairs']:
+                print(f"    Plugboard: {' '.join(config['plugboard_pairs'])}")
+            else:
+                print("    Plugboard: (none)")
+        elif cmd.startswith("save "):
+            filepath = user_input[5:].strip()
+            if not filepath:
+                print("  Usage: save <filename>")
+                continue
+            try:
+                config = machine.get_config()
+                with open(filepath, 'w') as f:
+                    json.dump(config, f, indent=2)
+                print(f"  Configuration saved to {filepath}")
+            except OSError as e:
+                print(f"  Error saving configuration: {e}")
         elif cmd == "reset":
             for i, rotor in enumerate(machine.rotors):
                 rotor.position = initial_positions[i]
@@ -470,7 +713,7 @@ Examples:
   python enigma.py "SECRET MESSAGE" -r IV II I -p A A B
 
   # Use plugboard pairs
-  python enigma.py "ATTACK AT DAWN" -p AB CD EF
+  python enigma.py "ATTACK AT DAWN" -P AB CD EF
 
   # Interactive mode with trace
   python enigma.py --interactive --trace
@@ -480,6 +723,24 @@ Examples:
 
   # Show encryption path for a single letter
   python enigma.py --trace "HELLO"
+
+  # Generate a random configuration
+  python enigma.py --random "HELLO"
+
+  # Group output in 5-letter blocks (traditional Enigma style)
+  python enigma.py --format grouped "HELLO WORLD"
+
+  # Encrypt from a file
+  python enigma.py --file message.txt
+
+  # Read from stdin
+  echo "HELLO" | python enigma.py --stdin
+
+  # Save current configuration to a file
+  python enigma.py --save-config my_config.json "HELLO"
+
+  # Load configuration from a file
+  python enigma.py --load-config my_config.json "HELLO"
 """
     )
 
@@ -506,14 +767,66 @@ Examples:
     parser.add_argument("-l", "--list", action="store_true",
                         help="List available rotors and reflectors")
     parser.add_argument("-v", "--visualize", action="store_true",
-                        help="Show rotor visualization before output")
-    parser.add_argument("--version", action="version", version="Enigma Machine 1.1.0")
+                        help="Show rotor state visualization before output")
+    parser.add_argument("--random", action="store_true",
+                        help="Generate a random machine configuration")
+    parser.add_argument("--format", choices=["plain", "grouped", "verbose"],
+                        default="plain", dest="output_format",
+                        help="Output format: plain, grouped (5-letter blocks), or verbose")
+    parser.add_argument("--group-size", type=int, default=5,
+                        help="Group size for 'grouped' format (default: 5)")
+    parser.add_argument("--file", metavar="FILEPATH",
+                        help="Read plaintext from a file")
+    parser.add_argument("--stdin", action="store_true",
+                        help="Read plaintext from stdin")
+    parser.add_argument("--save-config", metavar="FILEPATH",
+                        help="Save the current configuration to a JSON file")
+    parser.add_argument("--load-config", metavar="FILEPATH",
+                        help="Load machine configuration from a JSON file")
+    parser.add_argument("--signal", action="store_true",
+                        help="Show signal path visualization for the first character")
+    parser.add_argument("--version", action="version", version=f"Enigma Machine {__version__}")
 
     args = parser.parse_args()
 
     if args.list:
         list_components()
         return
+
+    # Handle config loading
+    config_from_file = None
+    if args.load_config:
+        try:
+            with open(args.load_config, 'r') as f:
+                config_from_file = json.load(f)
+        except FileNotFoundError:
+            print(f"Error: Config file '{args.load_config}' not found.", file=sys.stderr)
+            sys.exit(1)
+        except json.JSONDecodeError as e:
+            print(f"Error: Invalid JSON in config file '{args.load_config}': {e}", file=sys.stderr)
+            sys.exit(1)
+
+    # Apply config from file (overrides command-line defaults)
+    if config_from_file:
+        if "rotor_names" in config_from_file:
+            args.rotors = config_from_file["rotor_names"]
+        if "rotor_positions" in config_from_file:
+            args.positions = config_from_file["rotor_positions"]
+        if "ring_settings" in config_from_file:
+            args.ring = config_from_file["ring_settings"]
+        if "reflector_name" in config_from_file:
+            args.reflector = config_from_file["reflector_name"]
+        if "plugboard_pairs" in config_from_file:
+            args.plugboard = config_from_file["plugboard_pairs"]
+
+    # Handle random config
+    if args.random:
+        cfg = random_config()
+        args.rotors = cfg["rotor_names"]
+        args.positions = cfg["rotor_positions"]
+        args.ring = cfg["ring_settings"]
+        args.reflector = cfg["reflector_name"]
+        args.plugboard = cfg["plugboard_pairs"]
 
     # Validate plugboard pairs
     pairs = [p.upper() for p in (args.plugboard or [])]
@@ -547,11 +860,43 @@ Examples:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
+    # Save config if requested
+    if args.save_config:
+        config = machine.get_config()
+        try:
+            with open(args.save_config, 'w') as f:
+                json.dump(config, f, indent=2)
+            print(f"Configuration saved to {args.save_config}")
+        except OSError as e:
+            print(f"Error saving configuration: {e}", file=sys.stderr)
+            sys.exit(1)
+
     if args.interactive:
         interactive_mode(machine, show_trace=args.trace)
         return
 
-    if args.text is None:
+    # Determine input text
+    input_text = None
+    if args.text:
+        input_text = args.text
+    elif args.file:
+        try:
+            with open(args.file, 'r') as f:
+                input_text = f.read().strip()
+        except FileNotFoundError:
+            print(f"Error: File '{args.file}' not found.", file=sys.stderr)
+            sys.exit(1)
+        except OSError as e:
+            print(f"Error reading file '{args.file}': {e}", file=sys.stderr)
+            sys.exit(1)
+    elif args.stdin:
+        if not sys.stdin.isatty():
+            input_text = sys.stdin.read().strip()
+        else:
+            print("Error: No input on stdin.", file=sys.stderr)
+            sys.exit(1)
+
+    if input_text is None:
         parser.print_help()
         return
 
@@ -560,17 +905,37 @@ Examples:
         print()
 
     # Encrypt the text
-    encrypted = machine.encrypt(args.text, trace=args.trace)
-    print(f"Input:     {args.text.upper()}")
-    print(f"Encrypted: {encrypted}")
+    encrypted = machine.encrypt(input_text, trace=args.trace)
+    formatted = format_output(encrypted, style=args.output_format,
+                              group_size=args.group_size)
 
-    if args.trace and machine.trace:
-        # Show trace for the last character
-        upper_text = args.text.upper()
-        if upper_text:
-            last_char = upper_text[-1]
+    print(f"Input:     {input_text.upper()}")
+    print(f"Encrypted: {formatted}")
+
+    if args.trace and machine._all_traces:
+        # Show trace for the last character by default
+        upper_text = input_text.upper()
+        alpha_chars = [c for c in upper_text if c.isalpha()]
+        if alpha_chars:
+            last_char = alpha_chars[-1]
+            last_encrypted = [c for c in encrypted if c.isalpha()][-1]
             print()
-            print(format_trace(machine.trace, last_char, encrypted[-1] if encrypted else ""))
+            print(format_trace(machine.trace, last_char, last_encrypted))
+
+    if args.signal and machine.trace:
+        print()
+        print(visualize_signal_path(machine.trace))
+
+    # Show random config info if --random was used
+    if args.random:
+        print()
+        print("  Random configuration used:")
+        print(f"    Rotors:   {' '.join(args.rotors)}")
+        print(f"    Positions: {' '.join(args.positions)}")
+        print(f"    Rings:     {' '.join(str(r) for r in args.ring)}")
+        print(f"    Reflector: {args.reflector}")
+        if pairs:
+            print(f"    Plugboard: {' '.join(pairs)}")
 
 
 if __name__ == "__main__":
