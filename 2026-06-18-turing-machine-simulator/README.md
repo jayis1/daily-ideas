@@ -1,15 +1,18 @@
 # Turing Machine Simulator
 
-A visual, interactive Turing machine simulator with 6 built-in programs, curses-based visualization, text-mode stepping, and batch execution. Explore the fundamentals of computation through beautifully animated tape heads and state transitions.
+A visual, interactive Turing machine simulator with 8 built-in programs, curses-based visualization, text-mode stepping, batch execution, machine validation, execution statistics, and JSON import/export. Explore the fundamentals of computation through animated tape heads and state transitions.
 
 ## Features
 
-- **6 Built-in Programs**: Binary increment, unary addition, palindrome checker, 3-state Busy Beaver, binary NOT, and 1-counter
+- **8 Built-in Programs**: Binary increment, unary addition, palindrome checker, 3-state Busy Beaver, binary NOT, 1-counter, binary decrement, and unary doubler
 - **Curses Visualization**: Real-time animated tape display with state highlighting, transition rules, and keyboard controls
 - **Text-Mode Stepping**: Step-by-step execution with colored terminal output (no curses dependency)
-- **Batch Execution**: Run all programs at once and compare results
+- **Batch Execution**: Run all programs at once and compare results with execution statistics
 - **Custom Machines**: Interactive creator for defining your own Turing machines
+- **Machine Validation**: Detects unused states, undefined transitions, and orphan states
 - **JSON Persistence**: Save and load machine definitions as JSON files
+- **Execution Statistics**: Track steps, cells written, tape span, and unique cells visited
+- **CLI Flags**: `--version`, `--tape`, `--export`, `--list`, `--create`, `--visual`, `--text`, `--run`
 - **Keyboard Controls**: Pause (Space), Step (S), Reset (R), Speed (±), Quit (Q)
 
 ## Built-in Programs
@@ -17,24 +20,31 @@ A visual, interactive Turing machine simulator with 6 built-in programs, curses-
 | Program | Description | Input | Output |
 |---------|-------------|-------|--------|
 | `binary_increment` | Increment a binary number by 1 | `1011` (11) | `1100` (12) |
-| `unary_addition` | Add two unary numbers with '+' | `111+11` | `11111` (5 ones) |
+| `unary_addition` | Add two unary numbers with `+` | `111+11` | `11111` (5 ones) |
 | `palindrome_checker` | Check if a binary string is a palindrome | `10101` | ACCEPTED |
 | `busy_beaver_3` | The champion 3-state Busy Beaver | (blank) | 6 ones in 13 steps |
 | `binary_not` | Flip all bits (NOT operation) | `10110011` | `01001100` |
-| `count_ones` | Count 1s in binary, write unary after '=' | `10110=` | `10110=\|\|\|` |
+| `count_ones` | Count 1s in binary, write unary tally after `=` | `10110=` | `10110=\|\|\|` |
+| `binary_decrement` | Decrement a binary number by 1 | `1100` (12) | `1011` (11) |
+| `unary_doubler` | Double a unary number | `111` (3) | `111111` (6) |
 
 ## How to Install
 
 No external dependencies needed — uses only Python 3 standard library:
 
 ```bash
-# Just clone and run
-cd ~/daily-ideas
-git clone <repo-url>  # or it's already here
-cd 2026-06-18-turing-machine-simulator
+cd ~/daily-ideas/2026-06-18-turing-machine-simulator
 ```
 
+Requires Python 3.6+ (tested with 3.11+). The curses module is part of the standard library on most systems.
+
 ## How to Run
+
+### Show Version
+
+```bash
+python3 turing.py --version
+```
 
 ### Visual Mode (Interactive, requires a terminal)
 
@@ -52,11 +62,25 @@ python3 turing.py --text --run palindrome_checker
 python3 turing.py --text --speed 0.1           # Faster stepping
 ```
 
-### Batch Mode (Run all programs, show results)
+### Batch Mode (Run all programs, show results with statistics)
 
 ```bash
 python3 turing.py --run all
 python3 turing.py --run all --max-steps 500
+```
+
+### Override Tape Input
+
+```bash
+python3 turing.py --tape 1010 --run binary_increment   # Custom input
+python3 turing.py --tape 1111 --run unary_doubler       # Double four ones
+```
+
+### Export a Machine to JSON
+
+```bash
+python3 turing.py --export busy_beaver_3    # Saves to machines/busy_beaver_3.json
+python3 turing.py --export unary_doubler    # Saves to machines/unary_doubler.json
 ```
 
 ### List Available Programs
@@ -110,21 +134,47 @@ $ python3 turing.py --text --run binary_increment
 
   Step    1  State: q0
   ...______________0[0]11_________...
-  ...
 
   ✓ ACCEPTED after 9 steps
-
   Final tape: 1100
+  Stats: Steps: 9  Cells written: 9  Tape span: [0, 4]  Unique cells: 5
 ```
 
-### Example: Busy Beaver 3-State
-
-The 3-state Busy Beaver is a famous problem in computability theory. This particular machine (the champion) writes 6 ones on an initially blank tape before halting in exactly 13 steps:
+### Example: Unary Doubler
 
 ```
-$ python3 turing.py --run busy_beaver_3
+$ python3 turing.py --text --run unary_doubler --tape 111
 
-  busy_beaver_3              Input: (blank)          Output: 1111101          Steps:    13  ✓ ACCEPTED
+  Machine: Unary Doubler
+  Double a unary number (e.g., 111 → 111111)
+  Input: 111
+
+  ✓ ACCEPTED after 58 steps
+  Final tape: 111111
+```
+
+### Example: Count Ones
+
+```
+$ python3 turing.py --text --run count_ones
+
+  Machine: Count Ones
+  Count the 1s in a binary string and write unary result after '='
+  Input: 10110=
+
+  ✓ ACCEPTED after 42 steps
+  Final tape: 10110=|||
+```
+
+### Example: Machine Validation
+
+```python
+from turing import TuringMachine, BUILTIN_PROGRAMS
+
+# Validate any machine
+warnings = machine.validate()
+for w in warnings:
+    print(f"  ⚠ {w}")
 ```
 
 ### Creating a Custom Machine
@@ -164,4 +214,12 @@ This simulator implements a complete Turing machine — the mathematical model o
 3. **State Register**: Tracks the machine's current state
 4. **Transition Table**: Rules that determine what to write, which direction to move, and what state to enter next, based on the current state and symbol under the head
 
-The simulator supports multiple running modes (visual, text, batch), allows creating custom machines interactively or via JSON files, and includes six carefully verified built-in programs that demonstrate different computational tasks from simple bit-flipping to the famous Busy Beaver problem.
+The simulator supports multiple execution modes (visual, text, batch), machine validation with helpful warnings, execution statistics tracking, custom machine creation interactively or via JSON files, and eight carefully verified built-in programs that demonstrate different computational tasks — from simple bit-flipping and arithmetic to the famous Busy Beaver problem and unary doubling with separator-based tape manipulation.
+
+## Running Tests
+
+```bash
+python3 test_turing.py
+```
+
+The test suite covers tape operations, transitions, machine validation, all built-in programs, batch execution, save/load functionality, and the version string.

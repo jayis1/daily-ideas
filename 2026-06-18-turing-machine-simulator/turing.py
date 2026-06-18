@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
 Turing Machine Simulator — A visual, interactive simulator for Turing machines
-with built-in example programs and a custom program mode.
+with built-in example programs, custom machine creation, validation, and
+multiple execution modes (visual, text, batch).
+
+Version: 1.1.0
 """
 
 import os
@@ -12,17 +15,38 @@ import json
 from dataclasses import dataclass, field
 from typing import Dict, Tuple, Optional, List
 
+__version__ = "1.1.0"
+
 # ─── Data structures ────────────────────────────────────────────────
 
 @dataclass
 class Transition:
-    """A single transition rule: (state, read_symbol) -> (next_state, write_symbol, direction)"""
+    """A single transition rule: (state, read_symbol) -> (next_state, write_symbol, direction)."""
     next_state: str
     write_symbol: str
     direction: str  # 'L', 'R', 'S' (stay)
 
     def __repr__(self):
         return f"→ ({self.next_state}, {self.write_symbol}, {self.direction})"
+
+
+@dataclass
+class ExecutionStats:
+    """Statistics collected during machine execution."""
+    total_steps: int = 0
+    cells_written: int = 0
+    leftmost_visited: int = 0
+    rightmost_visited: int = 0
+    unique_cells_visited: int = 0
+
+    def summary(self) -> str:
+        """Return a human-readable summary of the execution statistics."""
+        return (
+            f"Steps: {self.total_steps}  "
+            f"Cells written: {self.cells_written}  "
+            f"Tape span: [{self.leftmost_visited}, {self.rightmost_visited}]  "
+            f"Unique cells: {self.unique_cells_visited}"
+        )
 
 
 @dataclass
@@ -40,20 +64,70 @@ class TuringMachine:
     initial_tape: str = ""
 
     def step(self, state: str, symbol: str) -> Optional[Transition]:
+        """Look up the transition for (state, symbol), or None if undefined."""
         return self.transitions.get((state, symbol))
+
+    def validate(self) -> List[str]:
+        """Validate the machine definition and return a list of warnings (empty if valid)."""
+        warnings = []
+
+        # Check initial state is in states list
+        if self.initial_state not in self.states:
+            warnings.append(f"Initial state '{self.initial_state}' not in states list")
+
+        # Check accept/reject states are in states list
+        for s in self.accept_states:
+            if s not in self.states:
+                warnings.append(f"Accept state '{s}' not in states list")
+        for s in self.reject_states:
+            if s not in self.states:
+                warnings.append(f"Reject state '{s}' not in states list")
+
+        # Check that all transition states are known
+        for (state, symbol), trans in self.transitions.items():
+            if state not in self.states:
+                warnings.append(f"Transition references unknown state '{state}'")
+            if symbol not in self.alphabet and symbol != self.blank_symbol:
+                warnings.append(f"Transition references unknown symbol '{symbol}'")
+            if trans.next_state not in self.states:
+                warnings.append(f"Transition targets unknown state '{trans.next_state}'")
+            if trans.write_symbol not in self.alphabet and trans.write_symbol != self.blank_symbol:
+                warnings.append(f"Transition writes unknown symbol '{trans.write_symbol}'")
+            if trans.direction not in ("L", "R", "S"):
+                warnings.append(f"Transition has invalid direction '{trans.direction}'")
+
+        # Check for unreachable states (states never appearing as a transition target)
+        reachable = {self.initial_state}
+        for (s, _), trans in self.transitions.items():
+            reachable.add(trans.next_state)
+        unreachable = set(self.states) - reachable
+        # Accept/reject states may be unreachable by design (they're targets)
+        unreachable -= set(self.accept_states)
+        unreachable -= set(self.reject_states)
+        if unreachable:
+            warnings.append(f"Potentially unreachable states: {', '.join(sorted(unreachable))}")
+
+        # Check initial tape symbols are in alphabet
+        for ch in self.initial_tape:
+            if ch not in self.alphabet:
+                warnings.append(f"Initial tape contains symbol '{ch}' not in alphabet")
+
+        return warnings
 
 
 class Tape:
-    """An infinite tape implemented with a dict (sparse)."""
+    """An infinite tape implemented with a dict (sparse representation)."""
 
     def __init__(self, blank: str = "_"):
         self.cells: Dict[int, str] = {}
         self.blank = blank
 
     def read(self, pos: int) -> str:
+        """Read the symbol at the given position."""
         return self.cells.get(pos, self.blank)
 
     def write(self, pos: int, symbol: str):
+        """Write a symbol at the given position. Blank symbols are erased."""
         if symbol == self.blank:
             self.cells.pop(pos, None)
         else:
@@ -74,12 +148,20 @@ class Tape:
             return (0, 0)
         return (min(self.cells.keys()), max(self.cells.keys()))
 
+    def get_contents(self) -> str:
+        """Return the full non-blank tape contents as a string."""
+        if not self.cells:
+            return ""
+        lo, hi = self.non_blank_segment()
+        return "".join(self.read(i) for i in range(lo, hi + 1))
+
 
 # ─── Built-in programs ──────────────────────────────────────────────
 
 BUILTIN_PROGRAMS = {}
 
 def _register(name, desc, states, alphabet, blank, initial, accept, reject, transitions, tape):
+    """Register a built-in Turing machine program."""
     BUILTIN_PROGRAMS[name] = TuringMachine(
         name=name, description=desc, states=states, alphabet=alphabet,
         blank_symbol=blank, initial_state=initial, accept_states=accept,
@@ -118,7 +200,6 @@ _register(
 )
 
 # 2. Unary addition — adds two unary numbers separated by '+'
-# Strategy: replace '+' with '1', then erase the last '1' to compensate
 _register(
     "unary_addition",
     "Add two unary numbers separated by '+' (e.g., 111+11=11111)",
@@ -148,7 +229,7 @@ _register(
     "palindrome_checker",
     "Check if a binary string is a palindrome",
     states=["q0", "q_left0", "q_left1", "q_right0", "q_right1",
-            "q_back", "q_done0", "q_done1", "q_accept", "q_reject"],
+            "q_back", "q_accept", "q_reject"],
     alphabet=["0", "1", "_", "X"],
     blank="_",
     initial="q0",
@@ -227,40 +308,148 @@ _register(
 _register(
     "count_ones",
     "Count the 1s in a binary string and write unary result after '='",
-    states=["q0", "q1", "q2", "q3", "q4", "q_accept"],
-    alphabet=["0", "1", "_", "=", "|"],
+    states=["q0", "q1", "q2", "q3", "q5", "q_cleanup", "q_accept"],
+    alphabet=["0", "1", "_", "=", "|", "Y"],
     blank="_",
     initial="q0",
     accept=["q_accept"],
     reject=[],
     transitions={
-        # Find a 1
+        # Mark a 1 by changing it to Y, then go right to end and add a |
         ("q0", "0"): ("q0", "0", "R"),
-        ("q0", "1"): ("q1", "1", "R"),
-        ("q0", "="): ("q4", "=", "R"),
-        # Remember we saw a 1, go to the end
+        ("q0", "1"): ("q1", "Y", "R"),
+        ("q0", "Y"): ("q0", "Y", "R"),     # skip already-counted 1s
+        ("q0", "="): ("q_cleanup", "=", "L"),  # all 1s counted, clean up Ys
+        # Scan right to end past 0s, 1s, =, and existing |s
         ("q1", "0"): ("q1", "0", "R"),
         ("q1", "1"): ("q1", "1", "R"),
         ("q1", "="): ("q1", "=", "R"),
         ("q1", "|"): ("q1", "|", "R"),
+        ("q1", "Y"): ("q1", "Y", "R"),
         ("q1", "_"): ("q2", "|", "L"),
-        # Go back to find next 1
+        # Go back left to find next unmarked 1
         ("q2", "|"): ("q2", "|", "L"),
         ("q2", "="): ("q2", "=", "L"),
         ("q2", "0"): ("q2", "0", "L"),
-        ("q2", "1"): ("q0", "1", "R"),
+        ("q2", "1"): ("q2", "1", "L"),
+        ("q2", "Y"): ("q0", "Y", "R"),
         ("q2", "_"): ("q3", "_", "R"),
-        # If we reached = without finding 1, we're done
-        ("q0", "_"): ("q4", "=", "R"),
-        # Move right to end and accept
-        ("q4", "|"): ("q4", "|", "R"),
-        ("q4", "_"): ("q_accept", "_", "S"),
-        # Handle start of second pass
-        ("q3", "0"): ("q0", "0", "R"),
-        ("q3", "1"): ("q0", "1", "R"),
-        ("q3", "="): ("q_accept", "=", "S"),
+        # No more Ys left of =, we're done scanning left — clean up Ys
+        ("q3", "Y"): ("q3", "1", "R"),     # convert Y back to 1
+        ("q3", "0"): ("q3", "0", "R"),
+        ("q3", "1"): ("q3", "1", "R"),
+        ("q3", "="): ("q3", "=", "R"),
+        ("q3", "|"): ("q_accept", "|", "S"),
+
+        # Cleanup state: go left converting Y→1 (reached via q0 on =)
+        ("q_cleanup", "Y"): ("q_cleanup", "1", "L"),
+        ("q_cleanup", "0"): ("q_cleanup", "0", "L"),
+        ("q_cleanup", "1"): ("q_cleanup", "1", "L"),
+        ("q_cleanup", "="): ("q_cleanup", "=", "L"),
+        ("q_cleanup", "_"): ("q_accept", "_", "R"),  # reached start, done
+
+        # No 1s found at all — just skip past = to accept
+        ("q5", "|"): ("q5", "|", "R"),
+        ("q5", "Y"): ("q5", "1", "R"),     # clean up Y markers
+        ("q5", "="): ("q5", "=", "R"),
+        ("q5", "_"): ("q_accept", "_", "S"),
     },
     tape="10110=",  # 3 ones → |||
+)
+
+# 7. Binary decrement — decrements a binary number by 1 (new!)
+# Strategy: scan right to end, then borrow left, then strip leading zeros.
+_register(
+    "binary_decrement",
+    "Decrement a binary number by 1 (e.g., 1100 → 1011, 1000 → 111)",
+    states=["q0", "q_carry", "q_done", "q_strip", "q_accept", "q_reject"],
+    alphabet=["0", "1", "_", "Z"],
+    blank="_",
+    initial="q0",
+    accept=["q_accept"],
+    reject=["q_reject"],
+    transitions={
+        # Move right to find the end
+        ("q0", "0"): ("q0", "0", "R"),
+        ("q0", "1"): ("q0", "1", "R"),
+        ("q0", "_"): ("q_carry", "_", "L"),
+        # Borrow: turn 1→0 with borrow, 0→1 continue borrowing
+        ("q_carry", "1"): ("q_done", "0", "L"),
+        ("q_carry", "0"): ("q_carry", "1", "L"),
+        ("q_carry", "_"): ("q_reject", "_", "S"),  # underflow (was 0)
+        # Move back to start, then strip leading zeros
+        ("q_done", "0"): ("q_done", "0", "L"),
+        ("q_done", "1"): ("q_accept", "1", "S"),
+        ("q_done", "_"): ("q_strip", "Z", "R"),
+        # Strip leading zeros (mark them with Z, skip past)
+        ("q_strip", "0"): ("q_strip", "Z", "R"),
+        ("q_strip", "1"): ("q_accept", "1", "S"),
+        ("q_strip", "_"): ("q_reject", "_", "S"),  # was 1 → now 0, edge case
+    },
+    tape="1100",  # 12 → 1011 (11)
+)
+
+# 8. Unary doubler — doubles a unary number (e.g., 111 → 111111)
+# Strategy: Mark original 1s as X, use = as separator between originals and copies.
+# After all originals are Xs, convert X→1, then shift copies left over the = position.
+# The shift: erase =, then for each cell after it, move it one position left.
+# This creates a "bubble" of blank that travels right until it reaches the end.
+_register(
+    "unary_doubler",
+    "Double a unary number (e.g., 111 → 111111)",
+    states=["q0", "q1", "q2", "q_back", "q_cleanup", "q_find_eq", "q_shift", "q_shift_back", "q_shift_next", "q_accept"],
+    alphabet=["1", "_", "X", "="],
+    blank="_",
+    initial="q0",
+    accept=["q_accept"],
+    reject=[],
+    transitions={
+        # q0: find leftmost unmarked 1 among originals (before =)
+        ("q0", "1"): ("q1", "X", "R"),
+        ("q0", "X"): ("q0", "X", "R"),
+        ("q0", "="): ("q_cleanup", "=", "L"),  # all originals marked, start cleanup
+        ("q0", "_"): ("q_accept", "_", "S"),     # empty input
+
+        # q1: scan to find end, placing = on first pass
+        ("q1", "1"): ("q1", "1", "R"),
+        ("q1", "X"): ("q1", "X", "R"),
+        ("q1", "="): ("q2", "=", "R"),
+        ("q1", "_"): ("q2", "=", "R"),     # first time: place = separator, go right past it
+
+        # q2: go past copies (and Xs) to find end and append a 1
+        ("q2", "1"): ("q2", "1", "R"),
+        ("q2", "="): ("q2", "=", "R"),
+        ("q2", "X"): ("q2", "X", "R"),       # skip marked originals (e.g., single 1 input)
+        ("q2", "_"): ("q_back", "1", "L"),
+
+        # q_back: go all the way back to start
+        ("q_back", "1"): ("q_back", "1", "L"),
+        ("q_back", "="): ("q_back", "=", "L"),
+        ("q_back", "X"): ("q_back", "X", "L"),
+        ("q_back", "_"): ("q0", "_", "R"),
+
+        # q_cleanup: convert Xs to 1s (going left from = position)
+        ("q_cleanup", "X"): ("q_cleanup", "1", "L"),
+        ("q_cleanup", "_"): ("q_find_eq", "_", "R"),
+
+        # q_find_eq: scan right to find = separator
+        ("q_find_eq", "1"): ("q_find_eq", "1", "R"),
+        ("q_find_eq", "="): ("q_shift", "_", "R"),  # erase =, begin shifting
+
+        # q_shift: move each 1 one position left to fill the gap.
+        # We just erased = (wrote _). We're at the cell right of it.
+        # The "gap" (blank) travels right as we swap each 1 left.
+        ("q_shift", "1"): ("q_shift_back", "_", "L"),   # swap this 1 into the gap
+        ("q_shift", "_"): ("q_shift_next", "_", "R"),    # skip gap, look for next 1
+
+        # q_shift_next: we're past the gap, find next 1 to shift
+        ("q_shift_next", "1"): ("q_shift_back", "_", "L"),  # found 1, swap it into gap
+        ("q_shift_next", "_"): ("q_accept", "_", "S"),      # no more 1s, done
+
+        # q_shift_back: write 1 at the gap position, then go right to the next cell
+        ("q_shift_back", "_"): ("q_shift", "1", "R"),    # filled gap, continue
+    },
+    tape="111",  # 3 → 6 ones
 )
 
 
@@ -285,6 +474,7 @@ def run_visual(stdscr: curses.window, machine: TuringMachine, speed: float = 0.3
     paused = False
     step_mode = False
     history = []  # List of (state, head_pos, tape_snapshot) for rewind
+    stats = ExecutionStats()
 
     TAPE_WINDOW = 40
     MAX_DISPLAY_STEPS = 5000
@@ -317,7 +507,7 @@ def run_visual(stdscr: curses.window, machine: TuringMachine, speed: float = 0.3
         cells = tape.to_string(head_pos, TAPE_WINDOW)
         start = head_pos - TAPE_WINDOW // 2
 
-        # Tape indices
+        # Tape indices (head marker)
         idx_line = "  "
         for i, pos in enumerate(range(start, start + len(cells))):
             if pos == head_pos:
@@ -341,25 +531,13 @@ def run_visual(stdscr: curses.window, machine: TuringMachine, speed: float = 0.3
         except curses.error:
             pass
 
-        # Head indicator
-        head_marker = "  " + " " * 0
-        for i, pos in enumerate(range(start, start + len(cells))):
-            if pos == head_pos:
-                break
-            if pos == head_pos:
-                head_marker += "   "
-            else:
-                head_marker += "   "
-
         # Position numbers
         pos_line = "  "
-        for i, pos in enumerate(zip(range(start, start + len(cells)))):
-            p = pos[0]
-            mod = abs(p) % 5
-            if p == 0:
+        for i, pos in enumerate(range(start, start + len(cells))):
+            if pos == 0:
                 pos_line += " 0 "
-            elif mod == 0:
-                pos_line += f"{p:+d}"[-3:]
+            elif abs(pos) % 5 == 0:
+                pos_line += f"{pos:+d}"[-3:]
             else:
                 pos_line += " · "
         try:
@@ -374,12 +552,22 @@ def run_visual(stdscr: curses.window, machine: TuringMachine, speed: float = 0.3
         stdscr.addstr(10, 2, "Transition Rules:", curses.A_BOLD | curses.color_pair(3))
         y = 11
         displayed = 0
+        current_symbol = tape.read(head_pos)
         for (s, r), t in sorted(machine.transitions.items()):
             if y >= h - 6:
-                stdscr.addstr(y, 4, f"  ... and {len(machine.transitions) - displayed} more rules", curses.color_pair(4))
+                remaining = len(machine.transitions) - displayed
+                stdscr.addstr(y, 4, f"  ... and {remaining} more rules", curses.color_pair(4))
                 break
-            marker = "►" if s == state else " "
-            color = curses.color_pair(6) if s == state else curses.color_pair(4)
+            # Highlight active state; extra highlight for the currently applicable transition
+            if s == state and r == current_symbol:
+                marker = "▶"
+                color = curses.color_pair(2) | curses.A_BOLD
+            elif s == state:
+                marker = "►"
+                color = curses.color_pair(6)
+            else:
+                marker = " "
+                color = curses.color_pair(4)
             rule = f"{marker} ({s}, {r}) → ({t.next_state}, {t.write_symbol}, {t.direction})"
             try:
                 stdscr.addstr(y, 4, rule, color)
@@ -388,11 +576,11 @@ def run_visual(stdscr: curses.window, machine: TuringMachine, speed: float = 0.3
             y += 1
             displayed += 1
 
-        # Status bar
+        # Status bar with stats
         stdscr.addstr(h - 3, 0, "─" * w, curses.color_pair(4))
         status = "PAUSED" if paused else ("STEP MODE" if step_mode else "RUNNING")
         status_color = curses.color_pair(5) if paused else (curses.color_pair(3) if step_mode else curses.color_pair(2))
-        stdscr.addstr(h - 2, 2, f"Status: {status}", status_color)
+        stdscr.addstr(h - 2, 2, f"Status: {status}  |  {stats.summary()}", status_color)
 
         controls = "SPACE=Pause  S=Step  R=Reset  Q=Quit  +/-=Speed"
         stdscr.addstr(h - 1, 2, controls, curses.color_pair(4))
@@ -437,6 +625,13 @@ def run_visual(stdscr: curses.window, machine: TuringMachine, speed: float = 0.3
             tape.write(head_pos, transition.write_symbol)
             state = transition.next_state
 
+            # Update stats
+            stats.total_steps = steps + 1
+            stats.cells_written += 1
+            stats.leftmost_visited = min(stats.leftmost_visited, head_pos)
+            stats.rightmost_visited = max(stats.rightmost_visited, head_pos)
+            stats.unique_cells_visited = len(tape.cells) if tape.cells else 0
+
             if transition.direction == "R":
                 head_pos += 1
             elif transition.direction == "L":
@@ -476,6 +671,11 @@ def run_visual(stdscr: curses.window, machine: TuringMachine, speed: float = 0.3
                             history.append((state, head_pos, dict(tape.cells)))
                         tape.write(head_pos, transition.write_symbol)
                         state = transition.next_state
+                        stats.total_steps = steps + 1
+                        stats.cells_written += 1
+                        stats.leftmost_visited = min(stats.leftmost_visited, head_pos)
+                        stats.rightmost_visited = max(stats.rightmost_visited, head_pos)
+                        stats.unique_cells_visited = len(tape.cells) if tape.cells else 0
                         if transition.direction == "R":
                             head_pos += 1
                         elif transition.direction == "L":
@@ -491,6 +691,7 @@ def run_visual(stdscr: curses.window, machine: TuringMachine, speed: float = 0.3
                 head_pos = 0
                 steps = 0
                 history.clear()
+                stats = ExecutionStats()
                 paused = False
                 step_mode = False
             elif key == ord('+') or key == ord('='):
@@ -511,6 +712,7 @@ def run_batch(machine: TuringMachine, max_steps: int = 10000) -> dict:
     state = machine.initial_state
     head_pos = 0
     steps = 0
+    stats = ExecutionStats()
 
     while steps < max_steps:
         current_symbol = tape.read(head_pos)
@@ -521,6 +723,12 @@ def run_batch(machine: TuringMachine, max_steps: int = 10000) -> dict:
 
         tape.write(head_pos, transition.write_symbol)
         state = transition.next_state
+
+        # Update stats
+        stats.cells_written += 1
+        stats.leftmost_visited = min(stats.leftmost_visited, head_pos)
+        stats.rightmost_visited = max(stats.rightmost_visited, head_pos)
+        stats.unique_cells_visited = len(tape.cells) if tape.cells else 0
 
         if transition.direction == "R":
             head_pos += 1
@@ -533,8 +741,9 @@ def run_batch(machine: TuringMachine, max_steps: int = 10000) -> dict:
             break
 
     # Collect tape contents
-    lo, hi = tape.non_blank_segment()
-    tape_str = "".join(tape.read(i) for i in range(lo, hi + 1))
+    tape_str = tape.get_contents()
+
+    stats.total_steps = steps
 
     return {
         "machine": machine.name,
@@ -543,6 +752,7 @@ def run_batch(machine: TuringMachine, max_steps: int = 10000) -> dict:
         "final_state": state,
         "steps": steps,
         "accepted": state in machine.accept_states,
+        "stats": stats,
     }
 
 
@@ -558,6 +768,7 @@ def run_text(machine: TuringMachine, max_steps: int = 200, delay: float = 0.15):
     state = machine.initial_state
     head_pos = 0
     steps = 0
+    stats = ExecutionStats()
 
     WINDOW = 30
 
@@ -601,6 +812,12 @@ def run_text(machine: TuringMachine, max_steps: int = 200, delay: float = 0.15):
         tape.write(head_pos, transition.write_symbol)
         state = transition.next_state
 
+        # Update stats
+        stats.cells_written += 1
+        stats.leftmost_visited = min(stats.leftmost_visited, head_pos)
+        stats.rightmost_visited = max(stats.rightmost_visited, head_pos)
+        stats.unique_cells_visited = len(tape.cells) if tape.cells else 0
+
         if transition.direction == "R":
             head_pos += 1
         elif transition.direction == "L":
@@ -609,10 +826,11 @@ def run_text(machine: TuringMachine, max_steps: int = 200, delay: float = 0.15):
         steps += 1
         time.sleep(delay)
 
-    lo, hi = tape.non_blank_segment()
-    final_tape = "".join(tape.read(i) for i in range(lo, hi + 1))
+    final_tape = tape.get_contents()
+    stats.total_steps = steps
     print(f"\n  Final tape: {final_tape}")
-    return {"steps": steps, "final_state": state, "output": final_tape}
+    print(f"  {stats.summary()}")
+    return {"steps": steps, "final_state": state, "output": final_tape, "stats": stats}
 
 
 # ─── Program editor (simple JSON-based) ──────────────────────────────
@@ -624,6 +842,8 @@ def create_custom_machine():
     print("╚══════════════════════════════════════════╝\n")
 
     name = input("Machine name (snake_case): ").strip() or "custom_machine"
+    # Sanitize name for use as filename
+    safe_name = "".join(c if c.isalnum() or c == "_" else "_" for c in name)
     description = input("Description: ").strip() or "A custom Turing machine"
     initial_tape = input("Initial tape contents: ").strip()
 
@@ -654,19 +874,31 @@ def create_custom_machine():
             lhs, rhs = rule.split("->")
             s, r = [x.strip() for x in lhs.split(",")]
             ns, w, d = [x.strip() for x in rhs.split(",")]
+            if d not in ("L", "R", "S"):
+                print(f"  ⚠ Invalid direction '{d}'. Use L, R, or S.")
+                continue
             transitions[(s, r)] = Transition(next_state=ns, write_symbol=w, direction=d)
         except (ValueError, IndexError):
             print("  Invalid format. Use: state,read -> next_state,write,direction")
             continue
 
     machine = TuringMachine(
-        name=name, description=description, states=states, alphabet=alphabet,
+        name=safe_name, description=description, states=states, alphabet=alphabet,
         blank_symbol=blank, initial_state=initial_state, accept_states=accept_states,
         reject_states=reject_states, transitions=transitions, initial_tape=initial_tape
     )
 
+    # Validate the machine
+    warnings = machine.validate()
+    if warnings:
+        print(f"\n  ⚠ Validation warnings:")
+        for w in warnings:
+            print(f"    - {w}")
+    else:
+        print(f"\n  ✓ Machine definition looks valid!")
+
     # Save to file
-    filepath = os.path.expanduser(f"~/daily-ideas/2026-06-18-turing-machine-simulator/machines/{name}.json")
+    filepath = os.path.expanduser(f"~/daily-ideas/2026-06-18-turing-machine-simulator/machines/{safe_name}.json")
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     save_machine(machine, filepath)
     print(f"\n  Saved to {filepath}")
@@ -732,8 +964,11 @@ Examples:
   python3 turing.py --run all          # Run all programs in batch
   python3 turing.py --text             # Text-mode step display
   python3 turing.py --load machine.json # Load and run custom machine
+  python3 turing.py --tape 1010 --run binary_increment  # Override tape input
+  python3 turing.py --validate --run binary_increment    # Validate before running
         """
     )
+    parser.add_argument("--version", "-V", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("--visual", "-v", action="store_true", help="Launch visual (curses) mode")
     parser.add_argument("--list", "-l", action="store_true", help="List built-in programs")
     parser.add_argument("--run", "-r", metavar="NAME", help="Run a specific built-in program")
@@ -742,6 +977,9 @@ Examples:
     parser.add_argument("--max-steps", type=int, default=10000, help="Max steps for batch mode")
     parser.add_argument("--load", metavar="FILE", help="Load a machine from JSON file")
     parser.add_argument("--create", action="store_true", help="Interactively create a custom machine")
+    parser.add_argument("--tape", metavar="TAPE", help="Override initial tape contents for built-in programs")
+    parser.add_argument("--validate", action="store_true", help="Validate machine definition before running")
+    parser.add_argument("--export", metavar="NAME", help="Export a built-in machine to JSON (e.g., 'busy_beaver_3')")
 
     args = parser.parse_args()
 
@@ -757,31 +995,98 @@ Examples:
             print()
         return
 
+    if args.export:
+        name = args.export
+        if name not in BUILTIN_PROGRAMS:
+            print(f"Unknown program: {name}")
+            print(f"Available: {', '.join(BUILTIN_PROGRAMS.keys())}")
+            sys.exit(1)
+        machine = BUILTIN_PROGRAMS[name]
+        out_dir = os.path.expanduser("~/daily-ideas/2026-06-18-turing-machine-simulator/machines")
+        os.makedirs(out_dir, exist_ok=True)
+        filepath = os.path.join(out_dir, f"{name}.json")
+        save_machine(machine, filepath)
+        print(f"Exported '{name}' to {filepath}")
+        return
+
     if args.create:
         machine = create_custom_machine()
         print(f"\nCreated machine: {machine.name}")
         # Ask if they want to run it
-        run_choice = input("Run it now? (v=visual, t=text, n=no) [n]: ").strip().lower()
+        try:
+            run_choice = input("Run it now? (v=visual, t=text, n=no) [n]: ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
         if run_choice == "v":
-            curses.wrapper(lambda stdscr: run_visual(stdscr, machine, args.speed))
+            try:
+                curses.wrapper(lambda stdscr: run_visual(stdscr, machine, args.speed))
+            except (KeyboardInterrupt, curses.error):
+                pass
         elif run_choice == "t":
             run_text(machine, delay=args.speed)
         return
 
     if args.load:
-        machine = load_machine(args.load)
+        try:
+            machine = load_machine(args.load)
+        except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
+            print(f"Error loading machine from '{args.load}': {e}")
+            sys.exit(1)
+
         print(f"Loaded: {machine.name} — {machine.description}")
+
+        if args.validate:
+            warnings = machine.validate()
+            if warnings:
+                print("Validation warnings:")
+                for w in warnings:
+                    print(f"  ⚠ {w}")
+            else:
+                print("✓ Machine definition is valid.")
+
         if args.visual:
-            curses.wrapper(lambda stdscr: run_visual(stdscr, machine, args.speed))
+            try:
+                curses.wrapper(lambda stdscr: run_visual(stdscr, machine, args.speed))
+            except (KeyboardInterrupt, curses.error):
+                pass
         elif args.text:
             run_text(machine, delay=args.speed)
         else:
             result = run_batch(machine, args.max_steps)
-            print(f"\nResult: {result}")
+            status = "✓ ACCEPTED" if result["accepted"] else "✗ REJECTED"
+            print(f"\nResult: {result['machine']} | Steps: {result['steps']} | {status}")
+            print(f"Output: {result['output']}")
+            print(result["stats"].summary())
         return
 
     # Select a machine
     machine_name = args.run
+
+    # Override tape if specified
+    if args.tape and machine_name and machine_name in BUILTIN_PROGRAMS:
+        # Create a copy with the new tape
+        orig = BUILTIN_PROGRAMS[machine_name]
+        machine = TuringMachine(
+            name=orig.name, description=orig.description, states=orig.states,
+            alphabet=orig.alphabet, blank_symbol=orig.blank_symbol,
+            initial_state=orig.initial_state, accept_states=orig.accept_states,
+            reject_states=orig.reject_states, transitions=orig.transitions,
+            initial_tape=args.tape
+        )
+    elif machine_name and machine_name in BUILTIN_PROGRAMS:
+        machine = BUILTIN_PROGRAMS[machine_name]
+    else:
+        machine = None
+
+    if args.validate and machine:
+        warnings = machine.validate()
+        if warnings:
+            print("Validation warnings:")
+            for w in warnings:
+                print(f"  ⚠ {w}")
+        else:
+            print("✓ Machine definition is valid.")
 
     if args.visual or (not args.run and not args.text):
         # Default: show menu then run visual
@@ -797,7 +1102,11 @@ Examples:
             print(f"  {len(keys)+1}. {'custom':25s} — Create your own machine")
             print()
 
-            choice = input("Enter number (or name): ").strip()
+            try:
+                choice = input("Enter number (or name): ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                return
             try:
                 idx = int(choice) - 1
                 if 0 <= idx < len(keys):
@@ -806,7 +1115,10 @@ Examples:
                     # Launch interactive creator
                     machine = create_custom_machine()
                     print(f"\nLaunching visual mode with {machine.name}...")
-                    curses.wrapper(lambda stdscr: run_visual(stdscr, machine, args.speed))
+                    try:
+                        curses.wrapper(lambda stdscr: run_visual(stdscr, machine, args.speed))
+                    except (KeyboardInterrupt, curses.error):
+                        pass
                     return
                 else:
                     print("Invalid choice.")
@@ -814,13 +1126,25 @@ Examples:
             except ValueError:
                 machine_name = choice
 
-        if machine_name not in BUILTIN_PROGRAMS:
+        if machine_name and machine_name not in BUILTIN_PROGRAMS:
             print(f"Unknown program: {machine_name}")
             print(f"Available: {', '.join(BUILTIN_PROGRAMS.keys())}")
             return
 
         machine = BUILTIN_PROGRAMS[machine_name]
-        curses.wrapper(lambda stdscr: run_visual(stdscr, machine, args.speed))
+        if args.tape:
+            machine = TuringMachine(
+                name=machine.name, description=machine.description, states=machine.states,
+                alphabet=machine.alphabet, blank_symbol=machine.blank_symbol,
+                initial_state=machine.initial_state, accept_states=machine.accept_states,
+                reject_states=machine.reject_states, transitions=machine.transitions,
+                initial_tape=args.tape
+            )
+
+        try:
+            curses.wrapper(lambda stdscr: run_visual(stdscr, machine, args.speed))
+        except (KeyboardInterrupt, curses.error):
+            pass
 
     elif args.run == "all":
         print("\n╔══════════════════════════════════════════╗")
@@ -833,6 +1157,7 @@ Examples:
             status = "✓ ACCEPTED" if result["accepted"] else "✗ REJECTED"
             print(f"  {result['machine']:25s}  Input: {result['input']:15s}  "
                   f"Output: {result['output']:15s}  Steps: {result['steps']:5d}  {status}")
+            print(f"  {'':25s}  {result['stats'].summary()}")
         print()
 
     elif args.text:
@@ -840,17 +1165,38 @@ Examples:
             machine_name = "binary_increment"
         if machine_name not in BUILTIN_PROGRAMS:
             print(f"Unknown program: {machine_name}")
+            print(f"Available: {', '.join(BUILTIN_PROGRAMS.keys())}")
             return
         machine = BUILTIN_PROGRAMS[machine_name]
+        if args.tape:
+            machine = TuringMachine(
+                name=machine.name, description=machine.description, states=machine.states,
+                alphabet=machine.alphabet, blank_symbol=machine.blank_symbol,
+                initial_state=machine.initial_state, accept_states=machine.accept_states,
+                reject_states=machine.reject_states, transitions=machine.transitions,
+                initial_tape=args.tape
+            )
         run_text(machine, delay=args.speed)
 
     elif args.run:
         if machine_name not in BUILTIN_PROGRAMS:
             print(f"Unknown program: {machine_name}")
+            print(f"Available: {', '.join(BUILTIN_PROGRAMS.keys())}")
             return
         machine = BUILTIN_PROGRAMS[machine_name]
+        if args.tape:
+            machine = TuringMachine(
+                name=machine.name, description=machine.description, states=machine.states,
+                alphabet=machine.alphabet, blank_symbol=machine.blank_symbol,
+                initial_state=machine.initial_state, accept_states=machine.accept_states,
+                reject_states=machine.reject_states, transitions=machine.transitions,
+                initial_tape=args.tape
+            )
         result = run_batch(machine, args.max_steps)
-        print(f"\nResult: {result}")
+        status = "✓ ACCEPTED" if result["accepted"] else "✗ REJECTED"
+        print(f"\nResult: {result['machine']} | Steps: {result['steps']} | {status}")
+        print(f"Output: {result['output']}")
+        print(result["stats"].summary())
 
 
 if __name__ == "__main__":
