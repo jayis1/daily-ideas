@@ -296,19 +296,108 @@ def test_walker_position_in_render():
 
 def test_growth_history_tracking():
     """Test that growth history is tracked for analytics."""
-    sim = DLASimulator(width=30, height=20, seed_pos="center",
+    sim = DLASimulator(width=30, height=20, seed_pos='center',
                        num_walkers=5, seed=42)
     sim.step(count=1000)
     assert len(sim.growth_history) > 0, "Growth history should be recorded"
-    # Each entry should be (step, particle_count)
+    # Each entry should be (step, grid_count)
     for step, count in sim.growth_history:
         assert isinstance(step, int), "Step should be int"
         assert isinstance(count, int), "Count should be int"
-        assert count > 0, "Particle count should be positive"
-    # History should be monotonically increasing in particle count
+        assert count > 0, "Grid count should be positive"
+    # History should be monotonically increasing in grid count
     counts = [c for _, c in sim.growth_history]
-    assert counts == sorted(counts), "Particle counts should increase over time"
+    assert counts == sorted(counts), "Grid counts should increase over time"
     print(f"✓ test_growth_history_tracking passed ({len(sim.growth_history)} entries)")
+
+
+def test_max_particles_enforced_in_step():
+    """Test that max_particles is enforced inside step(), not just CLI loops."""
+    sim = DLASimulator(width=30, height=20, seed_pos='center',
+                       max_particles=20, num_walkers=3, seed=42)
+    sim.step(count=5000)
+    assert sim.grid_count <= 22, (
+        f"grid_count should be near max_particles=20, got {sim.grid_count}"
+    )
+    print(f"✓ test_max_particles_enforced_in_step passed (grid_count={sim.grid_count})")
+
+
+def test_reproducibility_with_seed():
+    """Test that same seed produces identical results."""
+    sims = []
+    for _ in range(3):
+        sim = DLASimulator(width=30, height=20, seed_pos='center',
+                           seed=12345, num_walkers=3)
+        sim.step(count=300)
+        sims.append(sim)
+    assert sims[0].grid_count == sims[1].grid_count == sims[2].grid_count, (
+        f"Same seed should give same results: {[s.grid_count for s in sims]}"
+    )
+    print(f"✓ test_reproducibility_with_seed passed (all runs: {sims[0].grid_count})")
+
+
+def test_corners_seed_on_small_grid():
+    """Test that corners seed works on grids smaller than 10x10."""
+    sim = DLASimulator(width=5, height=5, seed_pos='corners', num_walkers=1)
+    assert sim.grid_count >= 4, (
+        f"Corners seed should place at least 4 particles on 5x5 grid, got {sim.grid_count}"
+    )
+    print(f"✓ test_corners_seed_on_small_grid passed (grid_count={sim.grid_count})")
+
+
+def test_grid_count_matches_actual_cells():
+    """Test that grid_count matches actual occupied grid cells."""
+    # Without symmetry
+    sim = DLASimulator(width=30, height=20, seed_pos='center',
+                       num_walkers=3, seed=42)
+    sim.step(count=500)
+    actual = sum(1 for r in range(sim.height) for c in range(sim.width) if sim.grid[r][c] > 0)
+    assert sim.grid_count == actual, (
+        f"grid_count ({sim.grid_count}) != actual cells ({actual}) without symmetry"
+    )
+    # With both symmetry
+    sim2 = DLASimulator(width=30, height=20, seed_pos='center',
+                        symmetry='both', num_walkers=3, seed=42)
+    sim2.step(count=500)
+    actual2 = sum(1 for r in range(sim2.height) for c in range(sim2.width) if sim2.grid[r][c] > 0)
+    assert sim2.grid_count == actual2, (
+        f"grid_count ({sim2.grid_count}) != actual cells ({actual2}) with symmetry=both"
+    )
+    print(f"✓ test_grid_count_matches_actual_cells passed "
+          f"(none={sim.grid_count}, both={sim2.grid_count})")
+
+
+def test_density_accuracy():
+    """Test that density calculation is accurate using grid_count."""
+    sim = DLASimulator(width=30, height=20, seed_pos='center',
+                       symmetry='horizontal', num_walkers=3, seed=42)
+    sim.step(count=500)
+    stats = sim.get_stats_dict()
+    actual_density = sim.grid_count / (sim.width * sim.height) * 100
+    assert abs(stats['density_percent'] - actual_density) < 0.1, (
+        f"Reported density ({stats['density_percent']:.1f}%) != "
+        f"actual density ({actual_density:.1f}%)"
+    )
+    print(f"✓ test_density_accuracy passed (density={stats['density_percent']:.1f}%)")
+
+
+def test_symmetry_seed_placement():
+    """Test that seed placement respects symmetry mode."""
+    sim = DLASimulator(width=30, height=20, seed_pos='center',
+                       symmetry='horizontal', num_walkers=1)
+    # Center seed should be mirrored horizontally
+    # Check that the grid is symmetric around the vertical center line
+    mismatches = 0
+    for r in range(sim.height):
+        for c in range(sim.width // 2):
+            left = sim.grid[r][c] > 0
+            right = sim.grid[r][sim.width - 1 - c] > 0
+            if left != right:
+                mismatches += 1
+    assert mismatches == 0, (
+        f"Seed placement should be symmetric, got {mismatches} mismatches"
+    )
+    print(f"✓ test_symmetry_seed_placement passed (0 mismatches)")
 
 
 # ─── Run all tests ───────────────────────────────────────────────────────────
@@ -340,6 +429,12 @@ if __name__ == "__main__":
         test_no_color_mode,
         test_walker_position_in_render,
         test_growth_history_tracking,
+        test_max_particles_enforced_in_step,
+        test_reproducibility_with_seed,
+        test_corners_seed_on_small_grid,
+        test_grid_count_matches_actual_cells,
+        test_density_accuracy,
+        test_symmetry_seed_placement,
     ]
 
     passed = 0

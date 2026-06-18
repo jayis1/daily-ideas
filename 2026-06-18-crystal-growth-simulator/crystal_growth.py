@@ -39,7 +39,7 @@ COLOR_PALETTE = [
     (255, 220, 140),  # gold
 ]
 
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 
 
 # ─── Core DLA Engine ─────────────────────────────────────────────────────────
@@ -112,7 +112,8 @@ class DLASimulator:
 
         # Grid: 0 = empty, >0 = age when particle attached (for coloring)
         self.grid = [[0] * width for _ in range(height)]
-        self.particle_count = 0
+        self.particle_count = 0  # Number of stick events (used as age value for coloring)
+        self.grid_count = 0      # Actual number of occupied grid cells (for stats/limits)
         self.step_count = 0
         self.max_radius = 0
         self.center = (height // 2, width // 2)
@@ -132,13 +133,14 @@ class DLASimulator:
                     if dist > self.max_radius:
                         self.max_radius = dist
 
+        # Set random seed BEFORE walker creation for reproducibility
+        if seed is not None:
+            random.seed(seed)
+
         # Active walkers
         self.walkers = []
         for _ in range(num_walkers):
             self.walkers.append(self._new_walker())
-
-        if seed is not None:
-            random.seed(seed)
 
     def _place_seeds(self, seed_pos):
         """Place seed particles according to the selected configuration."""
@@ -149,7 +151,8 @@ class DLASimulator:
             for r in range(self.height // 4, 3 * self.height // 4):
                 self._add_seed(r, mid)
         elif seed_pos == "corners":
-            margin = min(3, self.height // 10, self.width // 10)
+            # Ensure at least 1x1 block per corner even on small grids
+            margin = max(1, min(3, self.height // 10, self.width // 10))
             corners = [
                 (0, 0),
                 (0, self.width - 1),
@@ -171,10 +174,18 @@ class DLASimulator:
                     self._add_seed(r, c)
 
     def _add_seed(self, r, c):
-        """Place a seed particle. Only adds if position is in bounds and empty."""
-        if 0 <= r < self.height and 0 <= c < self.width and self.grid[r][c] == 0:
-            self.grid[r][c] = 1
-            self.particle_count += 1
+        """Place a seed particle, applying symmetry if configured.
+
+        Only adds if position is in bounds and empty. Also places
+        symmetry mirrors of the seed position.
+        """
+        # Apply symmetry to seed positions too
+        positions = self._mirror_positions(r, c)
+        for mr, mc in positions:
+            if 0 <= mr < self.height and 0 <= mc < self.width and self.grid[mr][mc] == 0:
+                self.particle_count += 1
+                self.grid[mr][mc] = self.particle_count
+                self.grid_count += 1
 
     def _mirror_positions(self, r, c):
         """Generate symmetry-mirrored positions for a given coordinate.
@@ -254,9 +265,13 @@ class DLASimulator:
 
         Each step moves all active walkers one position. When a walker
         touches the aggregate, it sticks (with probability = stickiness)
-        and a new walker is spawned.
+        and a new walker is spawned. Stops early if max_particles is reached.
         """
         for _ in range(count):
+            # Check max_particles limit (using actual grid occupancy)
+            if self.max_particles > 0 and self.grid_count >= self.max_particles:
+                return
+
             self.step_count += 1
             for i, walker in enumerate(self.walkers):
                 if walker is None:
@@ -284,6 +299,7 @@ class DLASimulator:
                             if (0 <= mr < self.height and 0 <= mc < self.width
                                     and self.grid[mr][mc] == 0):
                                 self.grid[mr][mc] = self.particle_count
+                                self.grid_count += 1
                                 # Update max radius
                                 dist = math.sqrt(
                                     (mr - self.center[0])**2 + (mc - self.center[1])**2
@@ -293,7 +309,7 @@ class DLASimulator:
 
                         # Record growth history for analytics
                         self.growth_history.append(
-                            (self.step_count, self.particle_count)
+                            (self.step_count, self.grid_count)
                         )
 
                         # Respawn
@@ -408,9 +424,9 @@ class DLASimulator:
     def render_stats(self):
         """Return stats string with particle count, steps, radius, and density."""
         elapsed = time.time() - self.start_time
-        # Calculate grid density (% of cells occupied)
+        # Calculate grid density (% of cells occupied) using actual grid count
         total_cells = self.width * self.height
-        density = (self.particle_count / total_cells * 100) if total_cells > 0 else 0
+        density = (self.grid_count / total_cells * 100) if total_cells > 0 else 0
 
         # Calculate growth rate (particles per 1000 steps)
         growth_rate = 0.0
@@ -423,7 +439,7 @@ class DLASimulator:
                     growth_rate = (particle_diff / step_diff) * 1000
 
         return (
-            f" Particles: {self.particle_count:5d} │"
+            f" Particles: {self.grid_count:5d} │"
             f" Steps: {self.step_count:8d} │"
             f" Radius: {self.max_radius:5.1f} │"
             f" Density: {density:4.1f}% │"
@@ -438,13 +454,13 @@ class DLASimulator:
         """
         elapsed = time.time() - self.start_time
         total_cells = self.width * self.height
-        density = (self.particle_count / total_cells * 100) if total_cells > 0 else 0
+        density = (self.grid_count / total_cells * 100) if total_cells > 0 else 0
 
         return {
             "version": VERSION,
             "width": self.width,
             "height": self.height,
-            "particle_count": self.particle_count,
+            "particle_count": self.grid_count,
             "step_count": self.step_count,
             "max_radius": round(self.max_radius, 2),
             "density_percent": round(density, 2),
@@ -616,15 +632,15 @@ def main():
     def check_snapshot(sim_state):
         """Check if we should auto-save a snapshot based on particle count."""
         nonlocal last_snapshot_count
-        if args.snapshot > 0 and sim_state.particle_count >= last_snapshot_count + args.snapshot:
+        if args.snapshot > 0 and sim_state.grid_count >= last_snapshot_count + args.snapshot:
             ts = int(time.time())
-            fname = f"crystal_snapshot_{sim_state.particle_count}p_{ts}.txt"
+            fname = f"crystal_snapshot_{sim_state.grid_count}p_{ts}.txt"
             try:
                 lines = sim_state.render_plain()
                 with open(fname, "w") as f:
                     for line in lines:
                         f.write(line + "\n")
-                last_snapshot_count = sim_state.particle_count
+                last_snapshot_count = sim_state.grid_count
             except OSError:
                 pass  # Silently skip if snapshot fails (e.g., disk full)
 
@@ -632,11 +648,11 @@ def main():
     if args.output:
         target = args.max_particles if args.max_particles > 0 else 500
         print(f"Growing crystal to {target} particles...")
-        while sim.particle_count < target:
+        while sim.grid_count < target:
             sim.step(count=args.speed)
             check_snapshot(sim)
-            if sim.particle_count % 50 == 0:
-                print(f"  {sim.particle_count}/{target} particles grown...", end="\r")
+            if sim.grid_count % 50 < args.speed:  # Approximate check for progress display
+                print(f"  {sim.grid_count}/{target} particles grown...", end="\r")
         lines = sim.render_plain()
         with open(args.output, "w") as f:
             for line in lines:
@@ -653,7 +669,7 @@ def main():
     # ─── Non-animated mode: print to terminal ────────────────────────────
     if args.no_animate:
         target = args.max_particles if args.max_particles > 0 else 300
-        while sim.particle_count < target:
+        while sim.grid_count < target:
             sim.step(count=args.speed)
             check_snapshot(sim)
         lines = sim.render_plain()
@@ -678,7 +694,7 @@ def main():
         while running:
             if not paused:
                 # Check if we've hit particle limit
-                if args.max_particles > 0 and sim.particle_count >= args.max_particles:
+                if args.max_particles > 0 and sim.grid_count >= args.max_particles:
                     paused = True
 
                 sim.step(count=args.speed)
@@ -771,9 +787,9 @@ def main():
         show_cursor()
         move_cursor(args.height + 5, 1)
         elapsed = time.time() - sim.start_time
-        print(f"\nCrystal complete! {sim.particle_count} particles in "
+        print(f"\nCrystal complete! {sim.grid_count} particles in "
               f"{sim.step_count} steps ({elapsed:.1f}s)")
-        print(f"Final density: {sim.particle_count / (args.width * args.height) * 100:.1f}%")
+        print(f"Final density: {sim.grid_count / (args.width * args.height) * 100:.1f}%")
         print("Goodbye! ✦")
 
 
