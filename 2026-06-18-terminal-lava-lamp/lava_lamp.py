@@ -4,7 +4,8 @@ Terminal Lava Lamp — A mesmerizing ASCII lava lamp simulation with ANSI colors
 
 Blobs of wax rise and fall inside a lamp-shaped container, rendered in the terminal
 using colored characters and simple physics simulation. Features multiple color themes,
-interactive controls, bubble particles, heat glow effects, and smooth animation.
+interactive controls, bubble particles, heat glow effects, blob merging/splitting,
+screenshot export, and smooth animation.
 
 Usage:
     python3 lava_lamp.py [OPTIONS]
@@ -20,10 +21,15 @@ import random
 import math
 import signal
 import argparse
+import json
+import select
+import tty
+import termios
+from typing import List, Tuple, Optional, Dict, Any
 
 # ── Version ────────────────────────────────────────────────────────────────
 
-VERSION = "2.0.0"
+VERSION = "3.0.0"
 
 # ── ANSI helpers ──────────────────────────────────────────────────────────
 
@@ -52,17 +58,41 @@ def show_cursor():
     sys.stdout.flush()
 
 def rgb_to_ansi(r, g, b, fg=True):
-    """Convert RGB values (0-255) to a 24-bit ANSI color escape code."""
+    """Convert RGB values (0-255) to a 24-bit ANSI color escape code.
+
+    Values are clamped to 0-255 to prevent out-of-range errors.
+
+    Args:
+        r: Red component (0-255, clamped).
+        g: Green component (0-255, clamped).
+        b: Blue component (0-255, clamped).
+        fg: If True, produce foreground color; else background color.
+
+    Returns:
+        ANSI escape string like \\033[38;2;R;G;Bm or \\033[48;2;R;G;Bm.
+    """
     r = max(0, min(255, int(r)))
     g = max(0, min(255, int(g)))
     b = max(0, min(255, int(b)))
     code = 38 if fg else 48
     return f"\033[{code};2;{r};{g};{b}m"
 
+def strip_ansi(text: str) -> str:
+    """Strip ANSI escape sequences from a string.
+
+    Args:
+        text: String potentially containing ANSI escape codes.
+
+    Returns:
+        Plain text with all ANSI sequences removed.
+    """
+    import re
+    return re.sub(r'\033\[[0-9;]*m', '', text)
+
 # ── Color palette ─────────────────────────────────────────────────────────
 
 # Lava lamp color themes
-THEMES = {
+THEMES: Dict[str, Dict[str, Any]] = {
     "classic": {
         "name": "Classic",
         "bg": (20, 10, 40),       # dark purple background
@@ -153,6 +183,36 @@ THEMES = {
         "glow": (15, 40, 60),
         "heat": (40, 180, 120),
     },
+    "ember": {
+        "name": "Ember",
+        "bg": (25, 8, 5),
+        "lamp": (70, 30, 20),
+        "wax": [
+            (255, 40, 10),
+            (255, 80, 0),
+            (255, 140, 20),
+            (255, 200, 60),
+            (200, 30, 0),
+            (180, 50, 10),
+        ],
+        "glow": (50, 15, 5),
+        "heat": (255, 60, 10),
+    },
+    "frost": {
+        "name": "Frost",
+        "bg": (8, 12, 25),
+        "lamp": (30, 50, 70),
+        "wax": [
+            (180, 220, 255),
+            (220, 240, 255),
+            (150, 200, 255),
+            (255, 255, 255),
+            (100, 170, 240),
+            (140, 190, 250),
+        ],
+        "glow": (15, 25, 50),
+        "heat": (80, 150, 220),
+    },
 }
 
 # Characters for rendering
@@ -160,17 +220,24 @@ BG_CHARS = " .·:;░▒"
 WAX_CHARS = "●◉⬤◆▲★◉⬤●◆▲★"
 GLOW_CHARS = " .:;░"
 
+# ── Merge/Split constants ─────────────────────────────────────────────────
+
+MERGE_DISTANCE = 0.08       # Blobs closer than this may merge
+SPLIT_RADIUS_THRESHOLD = 0.10  # Blobs larger than this may split
+MERGE_COOLDOWN = 2.0       # Seconds after merge before another merge
+SPLIT_COOLDOWN = 3.0       # Seconds after split before another split
+
 # ── Bubble class ──────────────────────────────────────────────────────────
 
 class Bubble:
     """A small rising bubble particle for visual flair."""
 
-    def __init__(self, lamp_width, lamp_height):
+    def __init__(self, lamp_width: int, lamp_height: int):
         """Create a bubble with random position near the base of the lamp.
 
         Args:
-            lamp_width: Normalized lamp width (not used directly, kept for API).
-            lamp_height: Normalized lamp height (not used directly).
+            lamp_width: Terminal character width (for reference).
+            lamp_height: Terminal row height (for reference).
         """
         self.y = random.uniform(0.85, 0.98)  # start near bottom
         self.x = random.uniform(0.3, 0.7)
@@ -182,8 +249,15 @@ class Bubble:
         self.max_life = random.uniform(3.0, 8.0)  # seconds before popping
         self.char = random.choice(["·", "∘", "○", "°", "•"])
 
-    def update(self, dt):
-        """Move the bubble upward with wobble. Returns True if still alive."""
+    def update(self, dt: float) -> bool:
+        """Move the bubble upward with wobble.
+
+        Args:
+            dt: Time delta in seconds.
+
+        Returns:
+            True if the bubble is still alive, False if it should be removed.
+        """
         self.life += dt
         self.y -= self.speed * dt  # rise
         self.x += self.wobble_amp * math.sin(self.life * self.wobble_freq + self.phase)
@@ -193,9 +267,14 @@ class Bubble:
 # ── Blob class ────────────────────────────────────────────────────────────
 
 class Blob:
-    """A wax blob in the lava lamp with physics simulation."""
+    """A wax blob in the lava lamp with physics simulation.
 
-    def __init__(self, theme_colors, heat_color):
+    Blobs expand when heated (rising) and contract when cooled (sinking).
+    They can merge with nearby blobs and large blobs can spontaneously split.
+    """
+
+    def __init__(self, theme_colors: List[Tuple[int, int, int]],
+                 heat_color: Tuple[int, int, int]):
         """Initialize a blob with the given theme colors and heat color.
 
         Args:
@@ -204,6 +283,8 @@ class Blob:
         """
         self.colors = theme_colors
         self.heat_color = heat_color
+        self.merge_cooldown = 0.0   # Seconds until this blob can merge again
+        self.split_cooldown = 0.0   # Seconds until this blob can split again
         self.reset()
 
     def reset(self):
@@ -218,8 +299,10 @@ class Blob:
         self.wobble_amp = random.uniform(0.01, 0.03)
         self.life = 0.0
         self.base_radius = self.radius  # remember initial size
+        self.merge_cooldown = 0.0
+        self.split_cooldown = 0.0
 
-    def update(self, dt, speed_multiplier=1.0):
+    def update(self, dt: float, speed_multiplier: float = 1.0):
         """Update blob physics.
 
         Heat is stronger at the bottom, causing wax to expand and rise.
@@ -231,6 +314,10 @@ class Blob:
         """
         effective_dt = dt * speed_multiplier
         self.life += effective_dt
+
+        # Reduce cooldowns
+        self.merge_cooldown = max(0, self.merge_cooldown - effective_dt)
+        self.split_cooldown = max(0, self.split_cooldown - effective_dt)
 
         # Buoyancy: hotter wax rises, cooler wax sinks
         # At bottom, heat is high → blob expands and rises
@@ -267,6 +354,108 @@ class Blob:
         # Color shifts slowly over time
         self.color_idx = (self.color_idx + random.uniform(-0.1, 0.1)) % len(self.colors)
 
+# ── Screenshot ────────────────────────────────────────────────────────────
+
+class Screenshot:
+    """Handles saving screenshots of the lava lamp to files."""
+
+    @staticmethod
+    def save_ansi(lines: List[str], filepath: str) -> bool:
+        """Save rendered lines with ANSI codes to a file.
+
+        Args:
+            lines: List of ANSI-colored strings from render().
+            filepath: Path to save the screenshot.
+
+        Returns:
+            True if saved successfully, False otherwise.
+        """
+        try:
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write("\n".join(lines) + "\n")
+            return True
+        except (OSError, IOError) as e:
+            print(f"Error saving screenshot: {e}", file=sys.stderr)
+            return False
+
+    @staticmethod
+    def save_plain(lines: List[str], filepath: str) -> bool:
+        """Save rendered lines as plain text (ANSI stripped) to a file.
+
+        Args:
+            lines: List of ANSI-colored strings from render().
+            filepath: Path to save the plain text screenshot.
+
+        Returns:
+            True if saved successfully, False otherwise.
+        """
+        try:
+            with open(filepath, 'w', encoding='utf-8') as f:
+                for line in lines:
+                    f.write(strip_ansi(line) + "\n")
+            return True
+        except (OSError, IOError) as e:
+            print(f"Error saving plain screenshot: {e}", file=sys.stderr)
+            return False
+
+# ── Theme loader ──────────────────────────────────────────────────────────
+
+def load_themes_from_file(filepath: str) -> Dict[str, Dict[str, Any]]:
+    """Load additional color themes from a JSON file.
+
+    The JSON file should contain a dictionary mapping theme names to theme
+    definitions. Each theme must have: name, bg, lamp, wax (list of 6 colors),
+    glow, and heat. Colors are [r, g, b] arrays.
+
+    Args:
+        filepath: Path to the JSON theme file.
+
+    Returns:
+        Dictionary of theme definitions that can be merged into THEMES.
+
+    Raises:
+        FileNotFoundError: If the file doesn't exist.
+        ValueError: If a theme definition is missing required keys or has
+                    invalid color values.
+    """
+    required_keys = {"name", "bg", "lamp", "wax", "glow", "heat"}
+
+    with open(filepath, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    themes = {}
+    for theme_name, theme_def in data.items():
+        # Validate required keys
+        missing = required_keys - set(theme_def.keys())
+        if missing:
+            raise ValueError(f"Theme '{theme_name}' missing keys: {missing}")
+
+        # Convert color arrays to tuples
+        def to_tuple(color):
+            if isinstance(color, (list, tuple)) and len(color) == 3:
+                t = tuple(int(c) for c in color)
+                for v in t:
+                    if not (0 <= v <= 255):
+                        raise ValueError(
+                            f"Theme '{theme_name}' has out-of-range color value: {t}")
+                return t
+            raise ValueError(f"Theme '{theme_name}' has invalid color: {color}")
+
+        themes[theme_name] = {
+            "name": str(theme_def["name"]),
+            "bg": to_tuple(theme_def["bg"]),
+            "lamp": to_tuple(theme_def["lamp"]),
+            "wax": [to_tuple(c) for c in theme_def["wax"]],
+            "glow": to_tuple(theme_def["glow"]),
+            "heat": to_tuple(theme_def["heat"]),
+        }
+
+        # Validate wax has enough colors
+        if len(themes[theme_name]["wax"]) < 4:
+            raise ValueError(f"Theme '{theme_name}' needs at least 4 wax colors")
+
+    return themes
+
 # ── Lava Lamp ─────────────────────────────────────────────────────────────
 
 class LavaLamp:
@@ -274,6 +463,8 @@ class LavaLamp:
 
     Manages blobs, bubbles, and rendering. The lamp shape is defined by a
     parametric width function that creates the classic lava lamp silhouette.
+    Blobs can merge when close together and large blobs can split apart,
+    creating dynamic, organic-looking motion.
 
     Attributes:
         width: Terminal character width for rendering.
@@ -284,10 +475,13 @@ class LavaLamp:
         time: Total elapsed simulation time.
         paused: Whether the simulation is paused.
         speed: Animation speed multiplier.
+        fps: Measured frames per second (updated each frame).
+        merge_count: Total number of merges that have occurred.
+        split_count: Total number of splits that have occurred.
     """
 
-    def __init__(self, width=40, height=30, theme="classic", num_blobs=8,
-                 num_bubbles=5, speed=1.0):
+    def __init__(self, width: int = 40, height: int = 30, theme: str = "classic",
+                 num_blobs: int = 8, num_bubbles: int = 5, speed: float = 1.0):
         """Initialize the lava lamp.
 
         Args:
@@ -302,7 +496,8 @@ class LavaLamp:
             ValueError: If theme is not found in THEMES.
         """
         if theme not in THEMES:
-            raise ValueError(f"Unknown theme '{theme}'. Available: {', '.join(THEMES.keys())}")
+            raise ValueError(
+                f"Unknown theme '{theme}'. Available: {', '.join(THEMES.keys())}")
         self.width = width
         self.height = height
         self.theme_name = theme
@@ -310,21 +505,24 @@ class LavaLamp:
         self.time = 0.0
         self.paused = False
         self.speed = speed
+        self.fps = 0.0
+        self.merge_count = 0
+        self.split_count = 0
 
         # Create initial blobs
-        self.blobs = []
+        self.blobs: List[Blob] = []
         for _ in range(num_blobs):
             self.blobs.append(Blob(self.theme["wax"], self.theme["heat"]))
 
         # Create rising bubbles
-        self.bubbles = []
+        self.bubbles: List[Bubble] = []
         for _ in range(num_bubbles):
             self.bubbles.append(Bubble(width, height))
 
         # Pre-compute lamp shape
         self._compute_shape()
 
-    def switch_theme(self, theme_name):
+    def switch_theme(self, theme_name: str):
         """Switch to a new color theme.
 
         Args:
@@ -334,7 +532,8 @@ class LavaLamp:
             ValueError: If theme is not found.
         """
         if theme_name not in THEMES:
-            raise ValueError(f"Unknown theme '{theme_name}'. Available: {', '.join(THEMES.keys())}")
+            raise ValueError(
+                f"Unknown theme '{theme_name}'. Available: {', '.join(THEMES.keys())}")
         self.theme_name = theme_name
         self.theme = THEMES[theme_name]
         # Update blob colors
@@ -351,12 +550,20 @@ class LavaLamp:
             w = self._shape_width(y)
             self.shape_points.append(w)
 
-    def _shape_width(self, y):
+    def _shape_width(self, y: float) -> float:
         """Return relative width (0-1) of the lamp at position y (0=top, 1=bottom).
 
         The shape creates a classic lava lamp silhouette with a narrow cap,
-        a wide body that tapers, and a solid base.
+        a wide body that tapers, and a solid base. Values of y outside [0, 1]
+        are clamped to avoid negative widths.
+
+        Args:
+            y: Vertical position (0=top, 1=bottom).
+
+        Returns:
+            Relative width between 0 and 1.
         """
+        y = max(0.0, min(1.0, y))  # clamp to valid range
         # Cap (top): y=0..0.05
         if y < 0.05:
             return 0.15 + 0.2 * (y / 0.05)
@@ -378,22 +585,144 @@ class LavaLamp:
             t = (y - 0.88) / 0.12
             return 0.4 + 0.1 * t
 
-    def _y_to_row(self, y):
+    def _y_to_row(self, y: float) -> int:
         """Convert normalized y (0=top, 1=bottom) to screen row."""
         return int(2 + y * (self.height - 1))
 
-    def _row_to_y(self, row):
-        """Convert screen row to normalized y (0=top, 1=bottom)."""
-        return (row - 2) / max(1, self.height - 1)
+    def _row_to_y(self, row: int) -> float:
+        """Convert screen row to normalized y (0=top, 1=bottom).
 
-    def update(self, dt):
+        Clamped to [0, 1] to avoid negative y values that would cause
+        negative shape widths and broken rendering at the top of the lamp.
+        """
+        y = (row - 2) / max(1, self.height - 1)
+        return max(0.0, min(1.0, y))
+
+    def _try_merge_blobs(self):
+        """Attempt to merge nearby blobs into larger ones.
+
+        When two blobs are within MERGE_DISTANCE of each other and neither is
+        on merge cooldown, they combine: the larger absorbs the smaller, gaining
+        its area (radius increases), and the smaller is removed.
+
+        This creates the satisfying "blobs joining together" effect seen in
+        real lava lamps.
+        """
+        if len(self.blobs) < 2:
+            return
+
+        merged = set()
+        new_blobs = []
+
+        for i in range(len(self.blobs)):
+            if i in merged:
+                continue
+            for j in range(i + 1, len(self.blobs)):
+                if j in merged:
+                    continue
+                bi = self.blobs[i]
+                bj = self.blobs[j]
+
+                # Skip if on cooldown
+                if bi.merge_cooldown > 0 or bj.merge_cooldown > 0:
+                    continue
+
+                dx = bi.x - bj.x
+                dy = bi.y - bj.y
+                dist = math.sqrt(dx * dx + dy * dy)
+
+                if dist < MERGE_DISTANCE:
+                    # Merge: keep the larger blob, absorb the smaller
+                    if bi.radius >= bj.radius:
+                        # bi absorbs bj
+                        # Conserve area: π*r1² + π*r2² = π*r_new²
+                        new_r = math.sqrt(bi.radius ** 2 + bj.radius ** 2)
+                        bi.radius = min(0.12, new_r)
+                        bi.base_radius = bi.radius
+                        bi.merge_cooldown = MERGE_COOLDOWN
+                        bi.vy = (bi.vy + bj.vy) / 2  # average velocity
+                        merged.add(j)
+                    else:
+                        # bj absorbs bi
+                        new_r = math.sqrt(bi.radius ** 2 + bj.radius ** 2)
+                        bj.radius = min(0.12, new_r)
+                        bj.base_radius = bj.radius
+                        bj.merge_cooldown = MERGE_COOLDOWN
+                        bj.vy = (bi.vy + bj.vy) / 2
+                        merged.add(i)
+                        break  # bi is gone, stop checking for it
+
+        self.blobs = [b for idx, b in enumerate(self.blobs) if idx not in merged]
+        self.merge_count += len(merged)
+
+    def _try_split_blobs(self):
+        """Attempt to split large blobs into two smaller ones.
+
+        When a blob's radius exceeds SPLIT_RADIUS_THRESHOLD and it's not on
+        split cooldown, it may spontaneously split into two blobs with smaller
+        radii, simulating a large wax mass breaking apart.
+        """
+        new_blobs = []
+        to_remove = set()
+
+        for i, blob in enumerate(self.blobs):
+            if blob.split_cooldown > 0:
+                continue
+            if blob.radius < SPLIT_RADIUS_THRESHOLD:
+                continue
+            # Random chance to split (makes it feel organic, not deterministic)
+            if random.random() > 0.005:
+                continue
+
+            # Split: conserve area → each new blob has radius r/sqrt(2)
+            new_r = blob.radius / math.sqrt(2)
+            new_r = max(0.03, min(0.08, new_r))  # clamp
+
+            # Create two daughter blobs
+            b1 = Blob(self.theme["wax"], self.theme["heat"])
+            b1.x = blob.x - 0.03
+            b1.y = blob.y
+            b1.radius = new_r
+            b1.base_radius = new_r
+            b1.vy = blob.vy - 0.02  # one goes slightly up
+            b1.merge_cooldown = MERGE_COOLDOWN  # don't immediately re-merge
+            b1.split_cooldown = SPLIT_COOLDOWN
+            b1.life = blob.life
+            b1.color_idx = blob.color_idx
+
+            b2 = Blob(self.theme["wax"], self.theme["heat"])
+            b2.x = blob.x + 0.03
+            b2.y = blob.y
+            b2.radius = new_r
+            b2.base_radius = new_r
+            b2.vy = blob.vy + 0.02  # one goes slightly down
+            b2.merge_cooldown = MERGE_COOLDOWN
+            b2.split_cooldown = SPLIT_COOLDOWN
+            b2.life = blob.life
+            b2.color_idx = (blob.color_idx + 1) % len(self.theme["wax"])
+
+            new_blobs.extend([b1, b2])
+            to_remove.add(i)
+
+        # Remove split blobs and add new ones
+        self.blobs = [b for idx, b in enumerate(self.blobs) if idx not in to_remove]
+        self.blobs.extend(new_blobs)
+        self.split_count += len(to_remove)
+
+    def update(self, dt: float):
         """Advance the simulation by dt seconds.
 
+        Updates all blob and bubble physics, then attempts merges and splits.
+        Negative or zero dt values are safely ignored.
+
         Args:
-            dt: Time delta in seconds.
+            dt: Time delta in seconds. Negative values are clamped to 0.
         """
         if self.paused:
             return
+
+        if dt <= 0:
+            return  # Ignore zero or negative time deltas
 
         effective_dt = min(dt, 0.1)  # cap to prevent large jumps
         self.time += effective_dt
@@ -406,11 +735,16 @@ class LavaLamp:
             if not bubble.update(effective_dt * self.speed):
                 self.bubbles[i] = Bubble(self.width, self.height)
 
-    def render(self):
+        # Try merge and split (dynamic blob count)
+        self._try_merge_blobs()
+        self._try_split_blobs()
+
+    def render(self) -> List[str]:
         """Render the lava lamp to a list of ANSI-colored strings.
 
         Returns a list of strings, one per row, containing the full rendered
-        lamp with background, blobs, glow effects, bubbles, and outline.
+        lamp with background, blobs, glow effects, bubbles, outline, and
+        a status bar with theme info.
         """
         lines = []
 
@@ -429,7 +763,7 @@ class LavaLamp:
             left = center - half_w
             right = center + half_w
 
-            line = ""
+            line_parts = []  # Use list for faster string building
             for col in range(self.width):
                 # Check if inside lamp
                 if left <= col <= right:
@@ -503,15 +837,17 @@ class LavaLamp:
                             fb = min(255, fb + heat_c[2] * heat_intensity * 0.3)
 
                         # Blend wax color with background
-                        r = int(bg[0] * (1 - alpha) + fr * alpha)
-                        g = int(bg[1] * (1 - alpha) + fg_c * alpha)
-                        b = int(bg[2] * (1 - alpha) + fb * alpha)
+                        r_val = int(bg[0] * (1 - alpha) + fr * alpha)
+                        g_val = int(bg[1] * (1 - alpha) + fg_c * alpha)
+                        b_val = int(bg[2] * (1 - alpha) + fb * alpha)
 
                         # Pick character based on density
                         idx = min(len(WAX_CHARS) - 1, int(density * len(WAX_CHARS)))
                         ch = WAX_CHARS[idx]
 
-                        line += rgb_to_ansi(r, g, b) + rgb_to_ansi(r, g, b, fg=False) + ch + esc(0)
+                        line_parts.append(
+                            rgb_to_ansi(r_val, g_val, b_val) +
+                            rgb_to_ansi(r_val, g_val, b_val, fg=False) + ch + esc(0))
 
                     elif bubble_density > 0.3:
                         # Bubble rendering — small bright highlight
@@ -520,55 +856,59 @@ class LavaLamp:
                         bg_c = int(min(255, bg[1] * (1 - b_alpha) + 230 * b_alpha))
                         bb = int(min(255, bg[2] * (1 - b_alpha) + 240 * b_alpha))
                         bub_char = random.choice(["·", "∘", "°"]) if bubble_density > 0.6 else "·"
-                        line += rgb_to_ansi(br, bg_c, bb) + bub_char + esc(0)
+                        line_parts.append(rgb_to_ansi(br, bg_c, bb) + bub_char + esc(0))
 
                     elif glow > 0.05:
                         # Glow around wax
                         alpha = min(1.0, glow) * edge_fade
-                        r = int(bg[0] * (1 - alpha) + glow_c[0] * alpha)
-                        g = int(bg[1] * (1 - alpha) + glow_c[1] * alpha)
-                        b = int(bg[2] * (1 - alpha) + glow_c[2] * alpha)
+                        r_val = int(bg[0] * (1 - alpha) + glow_c[0] * alpha)
+                        g_val = int(bg[1] * (1 - alpha) + glow_c[1] * alpha)
+                        b_val = int(bg[2] * (1 - alpha) + glow_c[2] * alpha)
 
                         # Add heat tint
                         if heat_intensity > 0:
-                            r = int(min(255, r + heat_c[0] * heat_intensity * 0.4))
-                            g = int(min(255, g + heat_c[1] * heat_intensity * 0.2))
+                            r_val = int(min(255, r_val + heat_c[0] * heat_intensity * 0.4))
+                            g_val = int(min(255, g_val + heat_c[1] * heat_intensity * 0.2))
 
                         idx = min(len(GLOW_CHARS) - 1, int(glow * len(GLOW_CHARS)))
                         ch = GLOW_CHARS[idx]
 
-                        line += rgb_to_ansi(r, g, b) + rgb_to_ansi(r, g, b, fg=False) + ch + esc(0)
+                        line_parts.append(
+                            rgb_to_ansi(r_val, g_val, b_val) +
+                            rgb_to_ansi(r_val, g_val, b_val, fg=False) + ch + esc(0))
 
                     elif heat_intensity > 0.05:
                         # Bottom heat glow (no blob or glow here, just heat)
-                        r = int(min(255, bg[0] * (1 - heat_intensity) + heat_c[0] * heat_intensity))
-                        g = int(min(255, bg[1] * (1 - heat_intensity) + heat_c[1] * heat_intensity * 0.5))
-                        b = int(min(255, bg[2] * (1 - heat_intensity) + heat_c[2] * heat_intensity * 0.3))
-                        line += rgb_to_ansi(r, g, b) + rgb_to_ansi(r, g, b, fg=False) + "░" + esc(0)
+                        r_val = int(min(255, bg[0] * (1 - heat_intensity) + heat_c[0] * heat_intensity))
+                        g_val = int(min(255, bg[1] * (1 - heat_intensity) + heat_c[1] * heat_intensity * 0.5))
+                        b_val = int(min(255, bg[2] * (1 - heat_intensity) + heat_c[2] * heat_intensity * 0.3))
+                        line_parts.append(
+                            rgb_to_ansi(r_val, g_val, b_val) +
+                            rgb_to_ansi(r_val, g_val, b_val, fg=False) + "░" + esc(0))
 
                     else:
                         # Inside lamp, no blob — subtle depth shading
                         depth = 0.5 + 0.5 * math.sin((bx - 0.5) * math.pi)
-                        r = int(bg[0] * (1 - depth * 0.3) + lamp_c[0] * depth * 0.3)
-                        g = int(bg[1] * (1 - depth * 0.3) + lamp_c[1] * depth * 0.3)
-                        b = int(bg[2] * (1 - depth * 0.3) + lamp_c[2] * depth * 0.3)
+                        r_val = int(bg[0] * (1 - depth * 0.3) + lamp_c[0] * depth * 0.3)
+                        g_val = int(bg[1] * (1 - depth * 0.3) + lamp_c[1] * depth * 0.3)
+                        b_val = int(bg[2] * (1 - depth * 0.3) + lamp_c[2] * depth * 0.3)
 
-                        line += rgb_to_ansi(r, g, b) + " " + esc(0)
+                        line_parts.append(rgb_to_ansi(r_val, g_val, b_val) + " " + esc(0))
 
                 elif col == left - 1 or col == right + 1:
                     # Lamp outline
                     outline_r = min(255, lamp_c[0] + 60)
                     outline_g = min(255, lamp_c[1] + 40)
                     outline_b = min(255, lamp_c[2] + 60)
-                    line += rgb_to_ansi(outline_r, outline_g, outline_b) + "│" + esc(0)
+                    line_parts.append(rgb_to_ansi(outline_r, outline_g, outline_b) + "│" + esc(0))
                 else:
                     # Outside lamp — dark background
-                    line += rgb_to_ansi(bg[0], bg[1], bg[2]) + " " + esc(0)
+                    line_parts.append(rgb_to_ansi(bg[0], bg[1], bg[2]) + " " + esc(0))
 
-            lines.append(line)
+            lines.append("".join(line_parts))
 
         # Base with heat indicator
-        base_line = ""
+        base_parts = []
         center = self.width // 2
         heat_pulse = 0.7 + 0.3 * math.sin(self.time * 2.0)
         for col in range(self.width):
@@ -579,37 +919,37 @@ class LavaLamp:
                 br = int(min(255, lamp_c[0] + 40 + heat_c[0] * intensity * 0.3))
                 bg_c = int(min(255, lamp_c[1] + 20 + heat_c[1] * intensity * 0.2))
                 bb = int(min(255, lamp_c[2] + 40 + heat_c[2] * intensity * 0.15))
-                base_line += rgb_to_ansi(br, bg_c, bb) + "▀" + esc(0)
+                base_parts.append(rgb_to_ansi(br, bg_c, bb) + "▀" + esc(0))
             elif dist < 10:
-                base_line += rgb_to_ansi(
+                base_parts.append(rgb_to_ansi(
                     min(255, lamp_c[0] + 20),
                     min(255, lamp_c[1] + 10),
                     min(255, lamp_c[2] + 20)
-                ) + "▀" + esc(0)
+                ) + "▀" + esc(0))
             else:
-                base_line += rgb_to_ansi(bg[0], bg[1], bg[2]) + " " + esc(0)
-        lines.append(base_line)
+                base_parts.append(rgb_to_ansi(bg[0], bg[1], bg[2]) + " " + esc(0))
+        lines.append("".join(base_parts))
 
         # Cap
-        cap_line = ""
+        cap_parts = []
         for col in range(self.width):
             if abs(col - center) < 4:
-                cap_line += rgb_to_ansi(
+                cap_parts.append(rgb_to_ansi(
                     min(255, lamp_c[0] + 60),
                     min(255, lamp_c[1] + 40),
                     min(255, lamp_c[2] + 60)
-                ) + "▄" + esc(0)
+                ) + "▄" + esc(0))
             elif abs(col - center) < 6:
-                cap_line += rgb_to_ansi(
+                cap_parts.append(rgb_to_ansi(
                     min(255, lamp_c[0] + 30),
                     min(255, lamp_c[1] + 20),
                     min(255, lamp_c[2] + 30)
-                ) + "▄" + esc(0)
+                ) + "▄" + esc(0))
             else:
-                cap_line += rgb_to_ansi(bg[0], bg[1], bg[2]) + " " + esc(0)
+                cap_parts.append(rgb_to_ansi(bg[0], bg[1], bg[2]) + " " + esc(0))
 
         # Insert cap at top
-        lines.insert(0, cap_line)
+        lines.insert(0, "".join(cap_parts))
 
         # Title
         status = "PAUSED" if self.paused else ""
@@ -624,20 +964,26 @@ class LavaLamp:
 # ── Main ──────────────────────────────────────────────────────────────────
 
 def parse_args():
-    """Parse command-line arguments."""
+    """Parse command-line arguments.
+
+    Returns:
+        Parsed argparse.Namespace object with all options.
+    """
     parser = argparse.ArgumentParser(
         description="Terminal Lava Lamp — A mesmerizing ASCII lava lamp simulation",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
-Themes: classic, ocean, toxic, sunset, neon, aurora
+Themes: classic, ocean, toxic, sunset, neon, aurora, ember, frost
 
 Controls while running:
-  1-6      Switch theme
+  1-8      Switch theme
   +/=      Increase speed
   -/_      Decrease speed
   p        Pause / Resume
   b        Add a blob
+  d        Remove a blob
   r        Reset (new blobs)
+  s        Save screenshot
   q/Ctrl+C Quit
 
 Examples:
@@ -645,6 +991,7 @@ Examples:
   python3 lava_lamp.py --theme ocean    # Ocean theme
   python3 lava_lamp.py --speed 2        # Double speed
   python3 lava_lamp.py --blobs 12       # More blobs for denser look
+  python3 lava_lamp.py --theme-file my_themes.json
 """
     )
     parser.add_argument("theme", nargs="?", default="classic",
@@ -652,12 +999,14 @@ Examples:
                         help="Color theme (default: classic)")
     parser.add_argument("--theme", dest="theme_flag", choices=list(THEMES.keys()),
                         help="Color theme (alternative to positional arg)")
+    parser.add_argument("--theme-file", dest="theme_file", default=None,
+                        help="Load additional themes from a JSON file")
     parser.add_argument("-W", "--width", type=int, default=None,
                         help="Terminal width (default: auto-detect)")
     parser.add_argument("-H", "--height", type=int, default=None,
                         help="Terminal height (default: auto-detect)")
     parser.add_argument("--blobs", type=int, default=8,
-                        help="Number of wax blobs (default: 8)")
+                        help="Number of wax blobs (default: 8, min: 1)")
     parser.add_argument("--bubbles", type=int, default=5,
                         help="Number of rising bubbles (default: 5)")
     parser.add_argument("--speed", type=float, default=1.0,
@@ -681,6 +1030,22 @@ Examples:
         parser.error(f"Speed must be positive, got {args.speed}")
     if not (1 <= args.fps <= 60):
         parser.error(f"FPS must be between 1 and 60, got {args.fps}")
+
+    # Load custom themes if provided
+    if args.theme_file:
+        try:
+            custom_themes = load_themes_from_file(args.theme_file)
+            THEMES.update(custom_themes)
+            # Update theme choices for argparse (for future validation)
+            print(f"Loaded {len(custom_themes)} custom theme(s): "
+                  f"{', '.join(custom_themes.keys())}")
+            # If the selected theme is one of the new ones, it's valid now
+        except (FileNotFoundError, ValueError, json.JSONDecodeError) as e:
+            parser.error(f"Error loading theme file: {e}")
+
+    # Validate theme exists (after potentially loading custom themes)
+    if args.theme not in THEMES:
+        parser.error(f"Unknown theme '{args.theme}'. Available: {', '.join(THEMES.keys())}")
 
     return args
 
@@ -713,6 +1078,15 @@ def main():
     clear_screen()
     hide_cursor()
 
+    # Set terminal to cbreak mode for single-character key input
+    old_term_settings = None
+    try:
+        old_term_settings = termios.tcgetattr(sys.stdin.fileno())
+        tty.setcbreak(sys.stdin.fileno())
+    except (termios.error, OSError, AttributeError):
+        # Not a real terminal (e.g., piped input) — skip terminal mode setup
+        pass
+
     running = True
 
     def handle_sigint(sig, frame):
@@ -725,12 +1099,24 @@ def main():
     fps_target = args.fps
     frame_time = 1.0 / fps_target
     theme_keys = list(THEMES.keys())
+    frame_count = 0
+    fps_update_time = last_time
+
+    # Screenshot counter for unique filenames
+    screenshot_count = 0
 
     try:
         while running:
             now = time.time()
             dt = now - last_time
             last_time = now
+
+            # FPS tracking (update every 0.5s for smooth display)
+            frame_count += 1
+            if now - fps_update_time >= 0.5:
+                lamp.fps = frame_count / max(0.001, now - fps_update_time)
+                frame_count = 0
+                fps_update_time = now
 
             # Update simulation
             lamp.update(dt)
@@ -741,12 +1127,27 @@ def main():
             for line in output_lines:
                 sys.stdout.write(line + "\n")
 
-            # Controls help bar
-            theme_nums = "  ".join(f"{i+1}:{k[:3]}" for i, k in enumerate(theme_keys))
-            speed_display = f"{lamp.speed:.1f}x"
-            status_parts = [f"Speed:{speed_display}", f"Blobs:{len(lamp.blobs)}"]
-            status_line = "  ".join(status_parts) + f"  │  [1-6]themes  [+/-]speed  [p]ause  [b]lob  [r]eset  [q]uit"
-            sys.stdout.write(rgb_to_ansi(120, 120, 140) + status_line.ljust(width) + esc(0) + "\n")
+            # Status bar with FPS, time, blob count, and controls
+            elapsed = int(lamp.time)
+            mins, secs = divmod(elapsed, 60)
+            speed_display = f"{lamp.speed:.2f}x"
+            status_parts = [
+                f"Speed:{speed_display}",
+                f"Blobs:{len(lamp.blobs)}",
+                f"Time:{mins}:{secs:02d}",
+                f"FPS:{lamp.fps:.0f}",
+            ]
+            if lamp.merge_count > 0:
+                status_parts.append(f"Merges:{lamp.merge_count}")
+            if lamp.split_count > 0:
+                status_parts.append(f"Splits:{lamp.split_count}")
+            status_line = "  ".join(status_parts)
+            controls = "│ [1-8]themes [+/-]speed [p]ause [b]add [d]el [r]eset [s]ave [q]uit"
+            sys.stdout.write(
+                rgb_to_ansi(120, 120, 140) +
+                status_line.ljust(width) + "\n" +
+                rgb_to_ansi(100, 100, 120) +
+                controls.ljust(width) + esc(0) + "\n")
             sys.stdout.flush()
 
             # Check for keypress (non-blocking)
@@ -756,7 +1157,7 @@ def main():
                     key = sys.stdin.read(1)
                     if key in ('q', 'Q'):
                         break
-                    elif key in '123456':
+                    elif key in '12345678':
                         idx = int(key) - 1
                         if idx < len(theme_keys):
                             try:
@@ -771,25 +1172,47 @@ def main():
                         lamp.paused = not lamp.paused
                     elif key in ('b', 'B'):
                         lamp.blobs.append(Blob(lamp.theme["wax"], lamp.theme["heat"]))
+                    elif key in ('d', 'D'):
+                        # Remove a random blob (if any exist)
+                        if len(lamp.blobs) > 1:
+                            idx = random.randint(0, len(lamp.blobs) - 1)
+                            lamp.blobs.pop(idx)
                     elif key in ('r', 'R'):
                         # Reset all blobs
                         lamp.blobs = [Blob(lamp.theme["wax"], lamp.theme["heat"])
                                       for _ in range(args.blobs)]
                         lamp.bubbles = [Bubble(width, height) for _ in range(args.bubbles)]
                         lamp.time = 0.0
+                        lamp.merge_count = 0
+                        lamp.split_count = 0
+                    elif key in ('s', 'S'):
+                        # Save screenshot
+                        screenshot_count += 1
+                        filename = f"lava_lamp_screenshot_{screenshot_count}.txt"
+                        plain_filename = f"lava_lamp_screenshot_{screenshot_count}_plain.txt"
+                        Screenshot.save_ansi(output_lines, filename)
+                        Screenshot.save_plain(output_lines, plain_filename)
             except (ImportError, OSError, ValueError):
                 pass
 
             # Frame rate limiting
-            elapsed = time.time() - now
-            if elapsed < frame_time:
-                time.sleep(frame_time - elapsed)
+            elapsed_frame = time.time() - now
+            if elapsed_frame < frame_time:
+                time.sleep(frame_time - elapsed_frame)
 
-    except Exception:
-        pass
+    except Exception as e:
+        # Log error but don't crash silently — print traceback to stderr
+        import traceback
+        traceback.print_exception(type(e), e, e.__traceback__, file=sys.stderr)
     finally:
+        # Restore terminal settings
+        if old_term_settings is not None:
+            try:
+                termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, old_term_settings)
+            except (termios.error, OSError):
+                pass
         show_cursor()
-        move_cursor(height + 6, 1)
+        move_cursor(height + 8, 1)
         print(rgb_to_ansi(180, 180, 200) + "✦ Lava lamp powered off ✦" + esc(0))
 
 

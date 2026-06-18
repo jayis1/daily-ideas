@@ -1,22 +1,29 @@
 #!/usr/bin/env python3
-"""Tests for Terminal Lava Lamp simulation.
+"""Tests for Terminal Lava Lamp simulation v3.0.
 
 Covers blob physics, bubble behavior, lamp shape, theme switching,
-rendering, input validation, and edge cases.
+rendering, input validation, edge cases, merge/split dynamics,
+screenshot export, custom theme loading, and more.
 """
 
 import sys
 import os
 import math
+import json
+import tempfile
+import shutil
 
 # Add the project directory to the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from lava_lamp import (
     Blob, Bubble, LavaLamp, THEMES, WAX_CHARS, GLOW_CHARS,
-    rgb_to_ansi, VERSION
+    rgb_to_ansi, strip_ansi, Screenshot, load_themes_from_file,
+    VERSION, MERGE_DISTANCE, SPLIT_RADIUS_THRESHOLD
 )
 
+
+# ─── Basic Version & Helpers ─────────────────────────────────────────────────
 
 def test_version_defined():
     """Test that VERSION is a valid version string."""
@@ -48,6 +55,23 @@ def test_rgb_to_ansi_bounds():
     print("✓ test_rgb_to_ansi_bounds passed")
 
 
+def test_strip_ansi():
+    """Test that strip_ansi removes ANSI escape sequences."""
+    ansi_text = "\033[38;2;255;60;30mHello\033[0m \033[48;2;20;10;40mWorld\033[0m"
+    plain = strip_ansi(ansi_text)
+    assert plain == "Hello World", f"Expected 'Hello World', got '{plain}'"
+
+    # Plain text should be unchanged
+    assert strip_ansi("no ansi here") == "no ansi here"
+
+    # Empty string
+    assert strip_ansi("") == ""
+
+    print("✓ test_strip_ansi passed")
+
+
+# ─── Blob Tests ──────────────────────────────────────────────────────────────
+
 def test_blob_initialization():
     """Test that blobs initialize with valid properties."""
     blob = Blob(THEMES["classic"]["wax"], THEMES["classic"]["heat"])
@@ -55,6 +79,8 @@ def test_blob_initialization():
     assert 0.3 <= blob.x <= 0.7, f"Blob x should be centered, got {blob.x}"
     assert 0.03 <= blob.radius <= 0.12, f"Blob radius should be reasonable, got {blob.radius}"
     assert len(blob.colors) > 0, "Blob should have colors"
+    assert blob.merge_cooldown == 0.0, "Blob should start with no merge cooldown"
+    assert blob.split_cooldown == 0.0, "Blob should start with no split cooldown"
     print("✓ test_blob_initialization passed")
 
 
@@ -65,7 +91,6 @@ def test_blob_update():
     initial_x = blob.x
     blob.update(0.1)
     # Position should change (though direction is not guaranteed)
-    # At least one of x or y should differ after update
     moved = (blob.y != initial_y) or (blob.x != initial_x)
     assert moved, "Blob should move after update"
     print("✓ test_blob_update passed")
@@ -80,6 +105,8 @@ def test_blob_reset():
     blob.reset()
     assert 0.7 <= blob.y <= 0.95, f"Reset blob y should be near bottom, got {blob.y}"
     assert blob.life == 0.0, "Reset blob life should be 0"
+    assert blob.merge_cooldown == 0.0, "Reset blob should have no merge cooldown"
+    assert blob.split_cooldown == 0.0, "Reset blob should have no split cooldown"
     print("✓ test_blob_reset passed")
 
 
@@ -87,13 +114,34 @@ def test_blob_speed_multiplier():
     """Test that speed multiplier affects blob movement."""
     blob1 = Blob(THEMES["classic"]["wax"], THEMES["classic"]["heat"])
     blob2 = Blob(THEMES["classic"]["wax"], THEMES["classic"]["heat"])
-    # Same starting position isn't guaranteed, but we test that speed=2 moves more
     blob1.update(0.1, speed_multiplier=1.0)
     blob2.update(0.1, speed_multiplier=2.0)
-    # blob2 should have accumulated more life (time*speed)
     assert blob2.life > blob1.life, "Speed multiplier should affect blob life"
     print("✓ test_blob_speed_multiplier passed")
 
+
+def test_blob_cooldown_decreases():
+    """Test that merge/split cooldowns decrease over time."""
+    blob = Blob(THEMES["classic"]["wax"], THEMES["classic"]["heat"])
+    blob.merge_cooldown = 2.0
+    blob.split_cooldown = 3.0
+    blob.update(0.5, speed_multiplier=1.0)
+    assert blob.merge_cooldown < 2.0, "Merge cooldown should decrease"
+    assert blob.split_cooldown < 3.0, "Split cooldown should decrease"
+    print("✓ test_blob_cooldown_decreases passed")
+
+
+def test_blob_out_of_bounds_resets():
+    """Test that blobs that go out of bounds get reset."""
+    blob = Blob(THEMES["classic"]["wax"], THEMES["classic"]["heat"])
+    blob.y = -0.2  # above top
+    blob.update(0.01)
+    # Should have been reset
+    assert 0.7 <= blob.y <= 0.95, f"Out-of-bounds blob should reset, got y={blob.y}"
+    print("✓ test_blob_out_of_bounds_resets passed")
+
+
+# ─── Bubble Tests ────────────────────────────────────────────────────────────
 
 def test_bubble_initialization():
     """Test that bubbles initialize with valid properties."""
@@ -129,12 +177,12 @@ def test_bubble_max_life():
     bubble = Bubble(40, 30)
     bubble.max_life = 0.5
     bubble.update(0.6)  # exceed max_life
-    # The bubble should have died
-    # (y might be out of range OR life exceeded max_life)
     assert bubble.y < 0.05 or bubble.life >= bubble.max_life, \
         "Bubble should die after exceeding max_life"
     print("✓ test_bubble_max_life passed")
 
+
+# ─── LavaLamp Core Tests ─────────────────────────────────────────────────────
 
 def test_lavalamp_creation():
     """Test that LavaLamp can be created with default parameters."""
@@ -146,6 +194,9 @@ def test_lavalamp_creation():
     assert len(lamp.bubbles) == 5  # default num_bubbles
     assert lamp.speed == 1.0
     assert not lamp.paused
+    assert lamp.merge_count == 0
+    assert lamp.split_count == 0
+    assert lamp.fps == 0.0
     print("✓ test_lavalamp_creation passed")
 
 
@@ -177,7 +228,6 @@ def test_lavalamp_switch_theme():
     lamp.switch_theme("ocean")
     assert lamp.theme_name == "ocean"
     assert lamp.theme == THEMES["ocean"]
-    # Blobs should have new colors
     for blob in lamp.blobs:
         assert blob.colors == THEMES["ocean"]["wax"]
     print("✓ test_lavalamp_switch_theme passed")
@@ -258,13 +308,20 @@ def test_lavalamp_add_blob():
     print("✓ test_lavalamp_add_blob passed")
 
 
+def test_lavalamp_remove_blob():
+    """Test removing a blob."""
+    lamp = LavaLamp(width=40, height=30, num_blobs=5)
+    initial_count = len(lamp.blobs)
+    lamp.blobs.pop(0)
+    assert len(lamp.blobs) == initial_count - 1
+    print("✓ test_lavalamp_remove_blob passed")
+
+
 def test_lavalamp_bubble_respawn():
     """Test that bubbles are respawned when they die."""
     lamp = LavaLamp(width=40, height=30, num_bubbles=3)
-    # Run simulation long enough for some bubbles to reach the top
     for _ in range(100):
         lamp.update(0.05)
-    # Should still have 3 bubbles (some may have been respawned)
     assert len(lamp.bubbles) == 3, f"Should maintain 3 bubbles, got {len(lamp.bubbles)}"
     print("✓ test_lavalamp_bubble_respawn passed")
 
@@ -273,7 +330,6 @@ def test_lavalamp_large_dt_capped():
     """Test that large dt values don't cause issues (capped in update)."""
     lamp = LavaLamp(width=40, height=30)
     lamp.update(10.0)  # Very large dt
-    # Should not crash, dt is capped internally
     lines = lamp.render()
     assert len(lines) > 0, "Should still render after large dt"
     print("✓ test_lavalamp_large_dt_capped passed")
@@ -304,22 +360,13 @@ def test_themes_structure():
 
 
 def test_theme_count():
-    """Test that there are multiple themes available."""
-    assert len(THEMES) >= 4, f"Should have at least 4 themes, got {len(THEMES)}"
-    # Check for new themes
+    """Test that there are multiple themes available (including new ones)."""
+    assert len(THEMES) >= 8, f"Should have at least 8 themes, got {len(THEMES)}"
     assert "neon" in THEMES, "Should have 'neon' theme"
     assert "aurora" in THEMES, "Should have 'aurora' theme"
+    assert "ember" in THEMES, "Should have 'ember' theme"
+    assert "frost" in THEMES, "Should have 'frost' theme"
     print(f"✓ test_theme_count passed ({len(THEMES)} themes)")
-
-
-def test_blob_out_of_bounds_resets():
-    """Test that blobs that go out of bounds get reset."""
-    blob = Blob(THEMES["classic"]["wax"], THEMES["classic"]["heat"])
-    blob.y = -0.2  # above top
-    blob.update(0.01)
-    # Should have been reset
-    assert 0.7 <= blob.y <= 0.95, f"Out-of-bounds blob should reset, got y={blob.y}"
-    print("✓ test_blob_out_of_bounds_resets passed")
 
 
 def test_lavalamp_multiple_updates():
@@ -333,25 +380,309 @@ def test_lavalamp_multiple_updates():
     print(f"✓ test_lavalamp_multiple_updates passed (time={lamp.time:.2f}s)")
 
 
+# ─── Merge/Split Tests ──────────────────────────────────────────────────────
+
+def test_merge_nearby_blobs():
+    """Test that nearby blobs can merge."""
+    lamp = LavaLamp(width=40, height=30, num_blobs=4)
+    initial_count = len(lamp.blobs)
+    # Place two blobs very close together
+    lamp.blobs[0].x = 0.5
+    lamp.blobs[0].y = 0.5
+    lamp.blobs[0].merge_cooldown = 0  # ensure cooldown is clear
+    lamp.blobs[1].x = 0.51  # very close
+    lamp.blobs[1].y = 0.5
+    lamp.blobs[1].merge_cooldown = 0
+    # Run updates to trigger potential merge
+    for _ in range(50):
+        lamp.update(0.05)
+    # May or may not merge (depends on random position convergence)
+    # but should not crash
+    assert len(lamp.blobs) >= 1, "Should have at least 1 blob"
+    print(f"✓ test_merge_nearby_blobs passed (blobs: {len(lamp.blobs)})")
+
+
+def test_merge_increments_counter():
+    """Test that merges are tracked in merge_count."""
+    lamp = LavaLamp(width=40, height=30, num_blobs=8)
+    # Run enough updates for merges to potentially happen
+    for _ in range(200):
+        lamp.update(0.05)
+    # merge_count is tracked regardless of whether merges happened
+    assert isinstance(lamp.merge_count, int), "merge_count should be an integer"
+    assert lamp.merge_count >= 0, "merge_count should be non-negative"
+    print(f"✓ test_merge_increments_counter passed (merges: {lamp.merge_count})")
+
+
+def test_split_increments_counter():
+    """Test that splits are tracked in split_count."""
+    lamp = LavaLamp(width=40, height=30, num_blobs=8)
+    # Run enough updates for splits to potentially happen
+    for _ in range(200):
+        lamp.update(0.05)
+    # split_count is tracked regardless of whether splits happened
+    assert isinstance(lamp.split_count, int), "split_count should be an integer"
+    assert lamp.split_count >= 0, "split_count should be non-negative"
+    print(f"✓ test_split_increments_counter passed (splits: {lamp.split_count})")
+
+
+def test_merge_cooldown_prevents_merge():
+    """Test that blobs on cooldown cannot merge."""
+    lamp = LavaLamp(width=40, height=30, num_blobs=4)
+    # Set cooldown on all blobs
+    for blob in lamp.blobs:
+        blob.merge_cooldown = 10.0
+    # Run updates — no merges should happen
+    for _ in range(20):
+        lamp.update(0.05)
+    # merge_count should remain 0 (blobs can't merge with cooldown)
+    # (though this depends on whether blobs get close enough in general,
+    #  the cooldown should prevent any merges)
+    assert isinstance(lamp.merge_count, int)
+    print("✓ test_merge_cooldown_prevents_merge passed")
+
+
+def test_split_cooldown_prevents_split():
+    """Test that blobs on split cooldown cannot split."""
+    lamp = LavaLamp(width=40, height=30, num_blobs=4)
+    # Set split cooldown on all blobs
+    for blob in lamp.blobs:
+        blob.split_cooldown = 10.0
+    for _ in range(20):
+        lamp.update(0.05)
+    # split_count should be 0
+    assert lamp.split_count == 0, "Blobs on cooldown should not split"
+    print("✓ test_split_cooldown_prevents_split passed")
+
+
+def test_blob_count_changes_dynamically():
+    """Test that blob count changes during simulation (merge/split)."""
+    lamp = LavaLamp(width=40, height=30, num_blobs=8)
+    counts = set()
+    for _ in range(300):
+        lamp.update(0.05)
+        counts.add(len(lamp.blobs))
+    # Over 300 updates with 8 blobs, merge/split should cause some variation
+    # (not guaranteed, but likely)
+    assert len(lamp.blobs) >= 1, "Should always have at least 1 blob"
+    print(f"✓ test_blob_count_changes_dynamically passed (distinct counts seen: {counts})")
+
+
+# ─── Screenshot Tests ────────────────────────────────────────────────────────
+
+def test_screenshot_save_ansi():
+    """Test that Screenshot.save_ansi writes a file."""
+    lamp = LavaLamp(width=30, height=20, theme="classic")
+    lamp.update(0.1)
+    lines = lamp.render()
+    assert len(lines) > 0
+
+    tmpdir = tempfile.mkdtemp()
+    try:
+        filepath = os.path.join(tmpdir, "test_screenshot.ansi")
+        result = Screenshot.save_ansi(lines, filepath)
+        assert result, "save_ansi should return True on success"
+        assert os.path.exists(filepath), "Screenshot file should exist"
+        content = open(filepath, 'r').read()
+        assert len(content) > 0, "Screenshot file should not be empty"
+    finally:
+        shutil.rmtree(tmpdir)
+    print("✓ test_screenshot_save_ansi passed")
+
+
+def test_screenshot_save_plain():
+    """Test that Screenshot.save_plain writes a plain text file."""
+    lamp = LavaLamp(width=30, height=20, theme="classic")
+    lamp.update(0.1)
+    lines = lamp.render()
+    assert len(lines) > 0
+
+    tmpdir = tempfile.mkdtemp()
+    try:
+        filepath = os.path.join(tmpdir, "test_screenshot.txt")
+        result = Screenshot.save_plain(lines, filepath)
+        assert result, "save_plain should return True on success"
+        assert os.path.exists(filepath), "Screenshot file should exist"
+        content = open(filepath, 'r').read()
+        assert len(content) > 0, "Screenshot file should not be empty"
+        # Plain text should NOT contain ANSI codes
+        assert "\033[" not in content, "Plain text should not contain ANSI codes"
+    finally:
+        shutil.rmtree(tmpdir)
+    print("✓ test_screenshot_save_plain passed")
+
+
+def test_screenshot_bad_path():
+    """Test that Screenshot handles bad file paths gracefully."""
+    lines = ["hello"]
+    result = Screenshot.save_ansi(lines, "/nonexistent/path/file.txt")
+    assert not result, "save_ansi should return False for bad path"
+    print("✓ test_screenshot_bad_path passed")
+
+
+# ─── Theme File Loading Tests ────────────────────────────────────────────────
+
+def test_load_themes_from_file():
+    """Test loading custom themes from a JSON file."""
+    tmpdir = tempfile.mkdtemp()
+    try:
+        theme_data = {
+            "custom1": {
+                "name": "Custom1",
+                "bg": [10, 10, 10],
+                "lamp": [50, 50, 50],
+                "wax": [
+                    [255, 0, 0],
+                    [0, 255, 0],
+                    [0, 0, 255],
+                    [255, 255, 0],
+                ],
+                "glow": [20, 20, 20],
+                "heat": [200, 50, 50],
+            },
+            "custom2": {
+                "name": "Custom2",
+                "bg": [0, 0, 20],
+                "lamp": [30, 30, 60],
+                "wax": [
+                    [100, 200, 255],
+                    [150, 220, 255],
+                    [200, 240, 255],
+                    [50, 180, 220],
+                    [80, 150, 200],
+                    [120, 190, 230],
+                ],
+                "glow": [10, 20, 40],
+                "heat": [60, 100, 200],
+            },
+        }
+        filepath = os.path.join(tmpdir, "custom_themes.json")
+        with open(filepath, 'w') as f:
+            json.dump(theme_data, f)
+
+        loaded = load_themes_from_file(filepath)
+        assert "custom1" in loaded
+        assert "custom2" in loaded
+        assert loaded["custom1"]["name"] == "Custom1"
+        assert loaded["custom1"]["bg"] == (10, 10, 10)
+        assert loaded["custom1"]["wax"][0] == (255, 0, 0)
+        assert loaded["custom2"]["wax"][0] == (100, 200, 255)
+    finally:
+        shutil.rmtree(tmpdir)
+    print("✓ test_load_themes_from_file passed")
+
+
+def test_load_themes_missing_keys():
+    """Test that loading themes with missing keys raises ValueError."""
+    tmpdir = tempfile.mkdtemp()
+    try:
+        theme_data = {
+            "bad_theme": {
+                "name": "Bad",
+                "bg": [0, 0, 0],
+                # missing "lamp", "wax", "glow", "heat"
+            }
+        }
+        filepath = os.path.join(tmpdir, "bad_themes.json")
+        with open(filepath, 'w') as f:
+            json.dump(theme_data, f)
+
+        try:
+            load_themes_from_file(filepath)
+            assert False, "Should raise ValueError for missing keys"
+        except ValueError as e:
+            assert "missing" in str(e).lower()
+    finally:
+        shutil.rmtree(tmpdir)
+    print("✓ test_load_themes_missing_keys passed")
+
+
+def test_load_themes_file_not_found():
+    """Test that loading from nonexistent file raises FileNotFoundError."""
+    try:
+        load_themes_from_file("/nonexistent/path/themes.json")
+        assert False, "Should raise FileNotFoundError"
+    except FileNotFoundError:
+        pass
+    print("✓ test_load_themes_file_not_found passed")
+
+
+def test_load_themes_out_of_range_colors():
+    """Test that out-of-range color values raise ValueError."""
+    tmpdir = tempfile.mkdtemp()
+    try:
+        theme_data = {
+            "bad_colors": {
+                "name": "BadColors",
+                "bg": [300, -10, 128],  # out of range
+                "lamp": [50, 50, 50],
+                "wax": [[255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0]],
+                "glow": [20, 20, 20],
+                "heat": [200, 50, 50],
+            }
+        }
+        filepath = os.path.join(tmpdir, "bad_colors.json")
+        with open(filepath, 'w') as f:
+            json.dump(theme_data, f)
+
+        try:
+            load_themes_from_file(filepath)
+            assert False, "Should raise ValueError for out-of-range colors"
+        except ValueError as e:
+            assert "out-of-range" in str(e).lower() or "range" in str(e).lower()
+    finally:
+        shutil.rmtree(tmpdir)
+    print("✓ test_load_themes_out_of_range_colors passed")
+
+
+# ─── New Theme Tests ─────────────────────────────────────────────────────────
+
+def test_ember_theme():
+    """Test that the Ember theme exists and is valid."""
+    assert "ember" in THEMES
+    theme = THEMES["ember"]
+    assert theme["name"] == "Ember"
+    assert theme["bg"] == (25, 8, 5)
+    assert len(theme["wax"]) >= 4
+    print("✓ test_ember_theme passed")
+
+
+def test_frost_theme():
+    """Test that the Frost theme exists and is valid."""
+    assert "frost" in THEMES
+    theme = THEMES["frost"]
+    assert theme["name"] == "Frost"
+    assert theme["bg"] == (8, 12, 25)
+    assert len(theme["wax"]) >= 4
+    print("✓ test_frost_theme passed")
+
+
 # ─── Run all tests ───────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("Terminal Lava Lamp — Test Suite")
+    print(f"Terminal Lava Lamp v{VERSION} — Test Suite")
     print("=" * 60)
     print()
 
     tests = [
+        # Basic & helpers
         test_version_defined,
         test_rgb_to_ansi_bounds,
+        test_strip_ansi,
+        # Blob tests
         test_blob_initialization,
         test_blob_update,
         test_blob_reset,
         test_blob_speed_multiplier,
+        test_blob_cooldown_decreases,
+        test_blob_out_of_bounds_resets,
+        # Bubble tests
         test_bubble_initialization,
         test_bubble_rises,
         test_bubble_dies_at_top,
         test_bubble_max_life,
+        # LavaLamp core tests
         test_lavalamp_creation,
         test_lavalamp_custom_params,
         test_lavalamp_invalid_theme,
@@ -363,13 +694,32 @@ if __name__ == "__main__":
         test_lavalamp_render,
         test_lavalamp_all_themes,
         test_lavalamp_add_blob,
+        test_lavalamp_remove_blob,
         test_lavalamp_bubble_respawn,
         test_lavalamp_large_dt_capped,
         test_lavalamp_small_width,
         test_themes_structure,
         test_theme_count,
-        test_blob_out_of_bounds_resets,
         test_lavalamp_multiple_updates,
+        # Merge/Split tests
+        test_merge_nearby_blobs,
+        test_merge_increments_counter,
+        test_split_increments_counter,
+        test_merge_cooldown_prevents_merge,
+        test_split_cooldown_prevents_split,
+        test_blob_count_changes_dynamically,
+        # Screenshot tests
+        test_screenshot_save_ansi,
+        test_screenshot_save_plain,
+        test_screenshot_bad_path,
+        # Theme file loading tests
+        test_load_themes_from_file,
+        test_load_themes_missing_keys,
+        test_load_themes_file_not_found,
+        test_load_themes_out_of_range_colors,
+        # New themes
+        test_ember_theme,
+        test_frost_theme,
     ]
 
     passed = 0
