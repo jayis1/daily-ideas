@@ -14,7 +14,7 @@ import tempfile
 sys.path.insert(0, os.path.dirname(__file__))
 from turing import (
     Transition, TuringMachine, Tape, ExecutionStats,
-    BUILTIN_PROGRAMS, run_batch, save_machine, load_machine,
+    BUILTIN_PROGRAMS, run_batch, run_trace, save_machine, load_machine,
     __version__,
 )
 
@@ -307,6 +307,57 @@ class TestBuiltinPrograms:
             warnings = machine.validate()
             assert warnings == [], f"Built-in '{name}' has validation warnings: {warnings}"
 
+    def test_binary_and(self):
+        """Binary AND: 1100 & 1010 = 1000."""
+        result = run_batch(BUILTIN_PROGRAMS["binary_and"])
+        assert result["accepted"] is True
+        # The output should contain & with the result on the right side
+        assert "&" in result["output"]
+        parts = result["output"].split("&")
+        # Left side preserved: 1100, right side is the AND result: 1000
+        result_right = parts[1].replace("_", "")
+        assert result_right == "1000"
+
+    def test_string_reverser(self):
+        """String reverser: 110 reversed = 011."""
+        result = run_batch(BUILTIN_PROGRAMS["string_reverser"])
+        assert result["accepted"] is True
+        assert result["output"] == "011"
+
+
+class TestTraceFeature:
+    """Tests for the execution trace feature."""
+
+    def test_run_trace_basic(self):
+        """run_trace should return a list of ExecutionStep objects."""
+        machine = BUILTIN_PROGRAMS["binary_not"]
+        steps = run_trace(machine)
+        assert len(steps) > 0
+        # Each step should have required fields
+        for step in steps:
+            assert hasattr(step, "state")
+            assert hasattr(step, "head_position")
+            assert hasattr(step, "symbol_read")
+            assert hasattr(step, "symbol_written")
+            assert hasattr(step, "direction")
+            assert hasattr(step, "next_state")
+            assert hasattr(step, "step_number")
+            assert hasattr(step, "tape_snapshot")
+
+    def test_run_trace_step_count(self):
+        """run_trace should produce the same number of steps as run_batch."""
+        machine = BUILTIN_PROGRAMS["binary_not"]
+        result = run_batch(machine)
+        steps = run_trace(machine)
+        assert len(steps) == result["steps"]
+
+    def test_run_trace_final_state(self):
+        """The last step of the trace should end in an accept state."""
+        machine = BUILTIN_PROGRAMS["binary_increment"]
+        steps = run_trace(machine)
+        final_state = steps[-1].next_state
+        assert final_state in machine.accept_states
+
 
 class TestRunBatch:
     """Tests for the batch runner."""
@@ -411,14 +462,14 @@ class TestVersion:
     """Test that version is accessible."""
 
     def test_version_string(self):
-        assert __version__ == "1.1.0"
+        assert __version__ == "1.2.0"
 
 
 def run_all_tests():
     """Simple test runner for when pytest is not available."""
     classes = [
         TestTape, TestTransition, TestExecutionStats, TestTuringMachine,
-        TestBuiltinPrograms, TestRunBatch, TestSaveLoadMachine, TestVersion,
+        TestBuiltinPrograms, TestTraceFeature, TestRunBatch, TestSaveLoadMachine, TestVersion,
     ]
     total = 0
     passed = 0

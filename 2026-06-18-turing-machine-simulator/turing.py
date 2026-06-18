@@ -2,9 +2,9 @@
 """
 Turing Machine Simulator — A visual, interactive simulator for Turing machines
 with built-in example programs, custom machine creation, validation, and
-multiple execution modes (visual, text, batch).
+multiple execution modes (visual, text, batch, trace).
 
-Version: 1.1.0
+Version: 1.2.0
 """
 
 import os
@@ -15,7 +15,13 @@ import json
 from dataclasses import dataclass, field
 from typing import Dict, Tuple, Optional, List
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
+
+__all__ = [
+    "Transition", "Tape", "TuringMachine", "ExecutionStats", "ExecutionStep",
+    "BUILTIN_PROGRAMS", "run_batch", "run_text", "run_visual", "run_trace",
+    "save_machine", "load_machine", "create_custom_machine",
+]
 
 # ─── Data structures ────────────────────────────────────────────────
 
@@ -47,6 +53,19 @@ class ExecutionStats:
             f"Tape span: [{self.leftmost_visited}, {self.rightmost_visited}]  "
             f"Unique cells: {self.unique_cells_visited}"
         )
+
+
+@dataclass
+class ExecutionStep:
+    """A single recorded step in an execution trace."""
+    step_number: int
+    state: str
+    head_position: int
+    symbol_read: str
+    symbol_written: str
+    direction: str
+    next_state: str
+    tape_snapshot: str
 
 
 @dataclass
@@ -452,6 +471,165 @@ _register(
     tape="111",  # 3 → 6 ones
 )
 
+# 9. Binary AND — bitwise AND of two equal-length binary strings separated by '&'
+# Strategy: Process bit by bit from left to right. For each position:
+#   1. Read leftmost unprocessed left bit, mark it (X=was0, Y=was1)
+#   2. Go right past &, skip already-processed markers on right
+#   3. Process the right bit: if left was 0, write X (result=0); if left was 1, keep right bit as-is (mark X for 0, Y for 1)
+#   4. Go back left and repeat
+#   5. When all done, convert X→0 and Y→1
+_register(
+    "binary_and",
+    "Bitwise AND of two equal-length binary strings separated by '&' (e.g., 1100&1010=1000)",
+    states=["q0", "q_left0", "q_left1", "q_right0", "q_right1", "q_back", "q_left_cleanup", "q_done", "q_accept"],
+    alphabet=["0", "1", "&", "_", "X", "Y"],
+    blank="_",
+    initial="q0",
+    accept=["q_accept"],
+    reject=[],
+    transitions={
+        # q0: find leftmost unprocessed bit on left side
+        ("q0", "0"): ("q_left0", "X", "R"),     # left bit is 0, mark it
+        ("q0", "1"): ("q_left1", "Y", "R"),     # left bit is 1, mark it
+        ("q0", "X"): ("q0", "X", "R"),           # skip processed 0 on left
+        ("q0", "Y"): ("q0", "Y", "R"),           # skip processed 1 on left
+        ("q0", "&"): ("q_left_cleanup", "&", "L"),      # all left bits processed, clean left markers
+
+        # q_left0: left bit was 0 — go right to find & then the right operand
+        ("q_left0", "0"): ("q_left0", "0", "R"),
+        ("q_left0", "1"): ("q_left0", "1", "R"),
+        ("q_left0", "X"): ("q_left0", "X", "R"),
+        ("q_left0", "Y"): ("q_left0", "Y", "R"),
+        ("q_left0", "&"): ("q_right0", "&", "R"),
+
+        # q_right0: in right operand, skip processed markers, result is always 0
+        ("q_right0", "X"): ("q_right0", "X", "R"),   # skip processed 0 on right
+        ("q_right0", "Y"): ("q_right0", "Y", "R"),   # skip processed 1 on right
+        ("q_right0", "0"): ("q_back", "X", "L"),     # 0 AND 0 = 0, write X
+        ("q_right0", "1"): ("q_back", "X", "L"),     # 0 AND 1 = 0, write X
+        ("q_right0", "_"): ("q_accept", "_", "S"),    # right side shorter — done
+
+        # q_left1: left bit was 1 — go right to find & then the right operand
+        ("q_left1", "0"): ("q_left1", "0", "R"),
+        ("q_left1", "1"): ("q_left1", "1", "R"),
+        ("q_left1", "X"): ("q_left1", "X", "R"),
+        ("q_left1", "Y"): ("q_left1", "Y", "R"),
+        ("q_left1", "&"): ("q_right1", "&", "R"),
+
+        # q_right1: in right operand, skip processed markers, result = right bit
+        ("q_right1", "X"): ("q_right1", "X", "R"),   # skip processed 0 on right
+        ("q_right1", "Y"): ("q_right1", "Y", "R"),   # skip processed 1 on right
+        ("q_right1", "0"): ("q_back", "X", "L"),     # 1 AND 0 = 0, write X
+        ("q_right1", "1"): ("q_back", "Y", "L"),     # 1 AND 1 = 1, write Y
+        ("q_right1", "_"): ("q_accept", "_", "S"),    # right side shorter — done
+
+        # q_back: go all the way back to start
+        ("q_back", "0"): ("q_back", "0", "L"),
+        ("q_back", "1"): ("q_back", "1", "L"),
+        ("q_back", "&"): ("q_back", "&", "L"),
+        ("q_back", "X"): ("q_back", "X", "L"),
+        ("q_back", "Y"): ("q_back", "Y", "L"),
+        ("q_back", "_"): ("q0", "_", "R"),
+
+        # q_left_cleanup: convert X→0 and Y→1 on left side, then go right to clean right side
+        ("q_left_cleanup", "X"): ("q_left_cleanup", "0", "L"),
+        ("q_left_cleanup", "Y"): ("q_left_cleanup", "1", "L"),
+        ("q_left_cleanup", "_"): ("q_done", "_", "R"),
+
+        # q_done: convert X→0 and Y→1 on right side
+        ("q_done", "X"): ("q_done", "0", "R"),
+        ("q_done", "Y"): ("q_done", "1", "R"),
+        ("q_done", "&"): ("q_done", "&", "R"),
+        ("q_done", "0"): ("q_done", "0", "R"),
+        ("q_done", "1"): ("q_done", "1", "R"),
+        ("q_done", "_"): ("q_accept", "_", "S"),
+    },
+    tape="1100&1010",  # 12 AND 10 = 8 → after &: 1000
+)
+
+# 10. String reverser — reverses a binary string
+# Strategy: Use = as a separator between input and output areas.
+# 1. First, place = at the end of the input string.
+# 2. Repeatedly: find the rightmost unprocessed char (just left of = or markers),
+#    erase it (write X), remember it, go right past = to the end, write the char.
+# 3. When all input chars are processed, clean up X markers and =.
+_register(
+    "string_reverser",
+    "Reverse a binary string (e.g., 110 → 011)",
+    states=[
+        "q_init",       # initial state: scan right, place = at end
+        "q0",           # scan right to find = separator
+        "q_left",       # go left from = to find rightmost input char
+        "q_found0",     # found a 0 on input side, go right past =
+        "q_found1",     # found a 1 on input side, go right past =
+        "q_seek_end0",  # scan right past = and output to write 0
+        "q_seek_end1",  # scan right past = and output to write 1
+        "q_back",       # go back left to start next iteration
+        "q_cleanup",    # erase X markers and =
+        "q_accept",
+    ],
+    alphabet=["0", "1", "_", "X", "="],
+    blank="_",
+    initial="q_init",
+    accept=["q_accept"],
+    reject=[],
+    transitions={
+        # q_init: scan right to end of input, place = separator
+        ("q_init", "0"): ("q_init", "0", "R"),
+        ("q_init", "1"): ("q_init", "1", "R"),
+        ("q_init", "_"): ("q0", "=", "L"),   # place = at end, go back left
+
+        # q0: scan right to find = separator, then go left to find input char
+        ("q0", "0"): ("q0", "0", "R"),
+        ("q0", "1"): ("q0", "1", "R"),
+        ("q0", "X"): ("q0", "X", "R"),
+        ("q0", "="): ("q_left", "=", "L"),     # found separator, go left
+
+        # q_left: find the rightmost unprocessed input char (left of =)
+        ("q_left", "0"): ("q_found0", "X", "L"),  # erase it, remember 0
+        ("q_left", "1"): ("q_found1", "X", "L"),  # erase it, remember 1
+        ("q_left", "X"): ("q_left", "X", "L"),     # skip erased positions
+        ("q_left", "_"): ("q_cleanup", "_", "R"),  # no more input, go to cleanup
+
+        # q_found0: we erased a 0, go right to find = and then the output area
+        ("q_found0", "0"): ("q_found0", "0", "R"),
+        ("q_found0", "1"): ("q_found0", "1", "R"),
+        ("q_found0", "X"): ("q_found0", "X", "R"),
+        ("q_found0", "="): ("q_seek_end0", "=", "R"),  # past separator
+        ("q_found0", "_"): ("q_found0", "_", "R"),     # past left edge, go right
+
+        # q_found1: we erased a 1, go right to find = and then the output area
+        ("q_found1", "0"): ("q_found1", "0", "R"),
+        ("q_found1", "1"): ("q_found1", "1", "R"),
+        ("q_found1", "X"): ("q_found1", "X", "R"),
+        ("q_found1", "="): ("q_seek_end1", "=", "R"),  # past separator
+        ("q_found1", "_"): ("q_found1", "_", "R"),     # past left edge, go right
+
+        # q_seek_end0: scan past existing output to write 0
+        ("q_seek_end0", "0"): ("q_seek_end0", "0", "R"),
+        ("q_seek_end0", "1"): ("q_seek_end0", "1", "R"),
+        ("q_seek_end0", "_"): ("q_back", "0", "L"),    # write 0 at end
+
+        # q_seek_end1: scan past existing output to write 1
+        ("q_seek_end1", "0"): ("q_seek_end1", "0", "R"),
+        ("q_seek_end1", "1"): ("q_seek_end1", "1", "R"),
+        ("q_seek_end1", "_"): ("q_back", "1", "L"),    # write 1 at end
+
+        # q_back: go back left to find = and restart
+        ("q_back", "0"): ("q_back", "0", "L"),
+        ("q_back", "1"): ("q_back", "1", "L"),
+        ("q_back", "="): ("q0", "=", "L"),    # restart: go left from =
+
+        # q_cleanup: erase X markers and = separator
+        ("q_cleanup", "X"): ("q_cleanup", "_", "R"),
+        ("q_cleanup", "="): ("q_cleanup", "_", "R"),
+        ("q_cleanup", "0"): ("q_cleanup", "0", "R"),
+        ("q_cleanup", "1"): ("q_cleanup", "1", "R"),
+        ("q_cleanup", "_"): ("q_accept", "_", "S"),
+    },
+    tape="110",  # 110 reversed = 011
+)
+
 
 # ─── Visual simulator using curses ──────────────────────────────────
 
@@ -756,6 +934,60 @@ def run_batch(machine: TuringMachine, max_steps: int = 10000) -> dict:
     }
 
 
+# ─── Execution trace (detailed step log) ──────────────────────────────
+
+def run_trace(machine: TuringMachine, max_steps: int = 10000) -> List[ExecutionStep]:
+    """Run machine and return a detailed trace of every step.
+
+    Each step records the state, head position, symbol read/written,
+    direction, next state, and a tape snapshot. Useful for debugging,
+    analysis, and educational purposes.
+    """
+    tape = Tape(blank=machine.blank_symbol)
+    if machine.initial_tape:
+        for i, ch in enumerate(machine.initial_tape):
+            tape.write(i, ch)
+
+    state = machine.initial_state
+    head_pos = 0
+    steps = 0
+    trace: List[ExecutionStep] = []
+
+    while steps < max_steps:
+        current_symbol = tape.read(head_pos)
+        transition = machine.step(state, current_symbol)
+
+        if transition is None:
+            break
+
+        tape.write(head_pos, transition.write_symbol)
+
+        trace.append(ExecutionStep(
+            step_number=steps,
+            state=state,
+            head_position=head_pos,
+            symbol_read=current_symbol,
+            symbol_written=transition.write_symbol,
+            direction=transition.direction,
+            next_state=transition.next_state,
+            tape_snapshot=tape.get_contents(),
+        ))
+
+        state = transition.next_state
+
+        if transition.direction == "R":
+            head_pos += 1
+        elif transition.direction == "L":
+            head_pos -= 1
+
+        steps += 1
+
+        if state in machine.accept_states or state in machine.reject_states:
+            break
+
+    return trace
+
+
 # ─── Text-mode step display (no curses) ──────────────────────────────
 
 def run_text(machine: TuringMachine, max_steps: int = 200, delay: float = 0.15):
@@ -963,6 +1195,7 @@ Examples:
   python3 turing.py --run busy_beaver_3   # Run specific program
   python3 turing.py --run all          # Run all programs in batch
   python3 turing.py --text             # Text-mode step display
+  python3 turing.py --trace --run binary_increment  # Detailed step-by-step trace
   python3 turing.py --load machine.json # Load and run custom machine
   python3 turing.py --tape 1010 --run binary_increment  # Override tape input
   python3 turing.py --validate --run binary_increment    # Validate before running
@@ -979,6 +1212,7 @@ Examples:
     parser.add_argument("--create", action="store_true", help="Interactively create a custom machine")
     parser.add_argument("--tape", metavar="TAPE", help="Override initial tape contents for built-in programs")
     parser.add_argument("--validate", action="store_true", help="Validate machine definition before running")
+    parser.add_argument("--trace", action="store_true", help="Print a detailed execution trace (each step)")
     parser.add_argument("--export", metavar="NAME", help="Export a built-in machine to JSON (e.g., 'busy_beaver_3')")
 
     args = parser.parse_args()
@@ -1052,6 +1286,24 @@ Examples:
                 pass
         elif args.text:
             run_text(machine, delay=args.speed)
+        elif args.trace:
+            trace = run_trace(machine, max_steps=args.max_steps)
+            print(f"\n{'='*70}")
+            print(f"  Execution Trace: {machine.name}")
+            print(f"  {machine.description}")
+            print(f"  Input: {machine.initial_tape or '(blank)'}")
+            print(f"  Steps: {len(trace)}")
+            print(f"{'='*70}\n")
+            for step in trace:
+                print(f"  Step {step.step_number:4d} | "
+                      f"State: {step.state:12s} | "
+                      f"Read: {step.symbol_read} → Write: {step.symbol_written} {step.direction} → {step.next_state} | "
+                      f"Head: {step.head_position} | "
+                      f"Tape: {step.tape_snapshot}")
+            final_state = trace[-1].next_state if trace else machine.initial_state
+            accepted = final_state in machine.accept_states
+            print(f"\n  {'✓ ACCEPTED' if accepted else '✗ REJECTED'} after {len(trace)} steps")
+            print(f"  Final tape: {trace[-1].tape_snapshot if trace else '(blank)'}")
         else:
             result = run_batch(machine, args.max_steps)
             status = "✓ ACCEPTED" if result["accepted"] else "✗ REJECTED"
@@ -1177,6 +1429,40 @@ Examples:
                 initial_tape=args.tape
             )
         run_text(machine, delay=args.speed)
+
+    elif args.trace:
+        if not machine_name:
+            machine_name = "binary_increment"
+        if machine_name not in BUILTIN_PROGRAMS:
+            print(f"Unknown program: {machine_name}")
+            print(f"Available: {', '.join(BUILTIN_PROGRAMS.keys())}")
+            return
+        machine = BUILTIN_PROGRAMS[machine_name]
+        if args.tape:
+            machine = TuringMachine(
+                name=machine.name, description=machine.description, states=machine.states,
+                alphabet=machine.alphabet, blank_symbol=machine.blank_symbol,
+                initial_state=machine.initial_state, accept_states=machine.accept_states,
+                reject_states=machine.reject_states, transitions=machine.transitions,
+                initial_tape=args.tape
+            )
+        trace = run_trace(machine, max_steps=args.max_steps)
+        print(f"\n{'='*70}")
+        print(f"  Execution Trace: {machine.name}")
+        print(f"  {machine.description}")
+        print(f"  Input: {machine.initial_tape or '(blank)'}")
+        print(f"  Steps: {len(trace)}")
+        print(f"{'='*70}\n")
+        for step in trace:
+            print(f"  Step {step.step_number:4d} | "
+                  f"State: {step.state:12s} | "
+                  f"Read: {step.symbol_read} → Write: {step.symbol_written} {step.direction} → {step.next_state} | "
+                  f"Head: {step.head_position} | "
+                  f"Tape: {step.tape_snapshot}")
+        final_state = trace[-1].next_state if trace else machine.initial_state
+        accepted = final_state in machine.accept_states
+        print(f"\n  {'✓ ACCEPTED' if accepted else '✗ REJECTED'} after {len(trace)} steps")
+        print(f"  Final tape: {trace[-1].tape_snapshot if trace else '(blank)'}")
 
     elif args.run:
         if machine_name not in BUILTIN_PROGRAMS:
