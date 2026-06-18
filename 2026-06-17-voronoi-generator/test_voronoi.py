@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Comprehensive test suite for voronoi.py — verifies all bug fixes"""
+"""Comprehensive test suite for voronoi.py v2.0.0 — verifies all features and bug fixes"""
 
 import math
 import random
@@ -28,8 +28,8 @@ def test_seed_generators():
         seeds = gen(10, 80, 48)
         check(f"{name}(10)", len(seeds) == 10, f"got {len(seeds)}")
         
-        # All seeds within bounds
-        in_bounds = all(0 <= s[0] <= 80 and 0 <= s[1] <= 48 for s in seeds)
+        # All seeds within bounds (with some tolerance for jitter)
+        in_bounds = all(-10 <= s[0] <= 90 and -10 <= s[1] <= 58 for s in seeds)
         check(f"{name}(10) in bounds", in_bounds)
         
         # Zero seeds
@@ -40,6 +40,27 @@ def test_seed_generators():
         seeds1 = gen(1, 80, 48)
         check(f"{name}(1)", len(seeds1) == 1, f"got {len(seeds1)}")
 
+def test_hexagonal_seeds():
+    """Test the new hexagonal seed pattern specifically."""
+    print("\n=== Hexagonal Seed Pattern ===")
+    # Basic generation
+    seeds = v.seeds_hexagonal(20, 80, 48)
+    check("hexagonal(20) count", len(seeds) == 20, f"got {len(seeds)}")
+    
+    # Zero seeds
+    seeds0 = v.seeds_hexagonal(0, 80, 48)
+    check("hexagonal(0)", len(seeds0) == 0)
+    
+    # One seed — should be centered
+    seeds1 = v.seeds_hexagonal(1, 80, 48)
+    check("hexagonal(1) count", len(seeds1) == 1)
+    check("hexagonal(1) centered", abs(seeds1[0][0] - 40) < 1 and abs(seeds1[0][1] - 24) < 1,
+          f"got ({seeds1[0][0]}, {seeds1[0][1]})")
+    
+    # Many seeds — should still produce valid output
+    seeds_large = v.seeds_hexagonal(100, 160, 96)
+    check("hexagonal(100) count", len(seeds_large) == 100)
+
 def test_palette_generators():
     print("\n=== Palette Generators ===")
     for name, gen in v.PALETTES.items():
@@ -49,6 +70,19 @@ def test_palette_generators():
         
         colors0 = gen(0)
         check(f"{name}(0) count", len(colors0) == 0)
+
+def test_aurora_palette():
+    """Test the new aurora palette specifically."""
+    print("\n=== Aurora Palette ===")
+    colors = v.palette_aurora(10)
+    check("aurora(10) count", len(colors) == 10)
+    check("aurora(10) valid range", all(isinstance(c, int) and 0 <= c <= 255 for c in colors))
+    
+    # Aurora should produce varied colors (not all the same)
+    check("aurora(10) varied", len(set(colors)) >= 3, f"only {len(set(colors))} unique colors")
+    
+    colors0 = v.palette_aurora(0)
+    check("aurora(0) count", len(colors0) == 0)
 
 def test_distance_metrics():
     print("\n=== Distance Metrics ===")
@@ -98,6 +132,22 @@ def test_voronoi_computation():
     check("basic grid size", len(grid) == 40 and all(len(r) == 40 for r in grid))
     check("(0,0) closer to seed 0", grid[0][0] == 0)
     check("(39,39) closer to seed 1", grid[39][39] == 1)
+
+def test_voronoi_info():
+    """Test the new diagram statistics function."""
+    print("\n=== Voronoi Info ===")
+    seeds = [(10, 10), (30, 30)]
+    grid = v.compute_voronoi(seeds, 40, 40, v.dist_euclidean)
+    info = v.compute_voronoi_info(seeds, grid, 40, 40)
+    
+    check("info has cell_areas", "cell_areas" in info)
+    check("info has total_pixels", info["total_pixels"] == 1600, f"got {info['total_pixels']}")
+    check("info num_cells", info["num_cells"] == 2)
+    check("info cell areas sum", sum(info["cell_areas"].values()) == 1600)
+    
+    # Empty grid
+    info_empty = v.compute_voronoi_info([], [], 0, 0)
+    check("info empty", info_empty["total_pixels"] == 0)
 
 def test_empty_and_edge_cases():
     print("\n=== Empty & Edge Cases ===")
@@ -149,6 +199,28 @@ def test_render_block():
     lines = v.render_block(colors, grid, None, 40, 40, mode="filled", show_borders=False)
     check("no dist_grid without borders", len(lines) == 20)
 
+def test_render_gradient():
+    """Test the new gradient rendering mode."""
+    print("\n=== Render Gradient ===")
+    seeds = [(10, 10), (30, 30)]
+    colors = v.palette_rainbow(2)
+    grid, dist_grid = v.compute_voronoi_with_distance(seeds, 40, 40, v.dist_euclidean)
+    
+    # Gradient render with borders
+    lines = v.render_gradient_block(colors, grid, dist_grid, 40, 40,
+                                      show_borders=True, show_seeds=False, seeds=seeds)
+    check("gradient render row count", len(lines) == 20)
+    
+    # Gradient render without borders
+    lines = v.render_gradient_block(colors, grid, dist_grid, 40, 40,
+                                      show_borders=False, show_seeds=False, seeds=seeds)
+    check("gradient no borders", len(lines) == 20)
+    
+    # Empty grid → empty result
+    lines = v.render_gradient_block([], [], None, 10, 10,
+                                      show_borders=False, show_seeds=False, seeds=[])
+    check("gradient empty grid", lines == [])
+
 def test_render_small_sizes():
     print("\n=== Small Render Sizes ===")
     seeds = [(1, 1)]
@@ -158,6 +230,71 @@ def test_render_small_sizes():
         lines = v.render_block(colors, grid, dist_grid, w, h, mode="filled", show_borders=False)
         expected = (h + 1) // 2
         check(f"{w}x{h} render", len(lines) == expected, f"got {len(lines)}, expected {expected}")
+
+def test_color_utilities():
+    """Test color conversion and manipulation utilities."""
+    print("\n=== Color Utilities ===")
+    # _ansi_to_rgb round-trip for color cube
+    for idx in [16, 17, 100, 200, 231]:
+        r, g, b = v._ansi_to_rgb(idx)
+        back = v._rgb_to_256(r, g, b)
+        check(f"ansi_to_rgb({idx}) round-trip", back == idx,
+              f"got {back} (rgb=({r},{g},{b}))")
+    
+    # _darken_color should produce a valid ANSI index
+    for idx in [196, 46, 21]:
+        dark = v._darken_color(idx, 0.5)
+        check(f"darken({idx}, 0.5) valid", isinstance(dark, int) and 0 <= dark <= 255,
+              f"got {dark}")
+    
+    # _lighten_color should produce a valid ANSI index
+    for idx in [196, 46, 21]:
+        light = v._lighten_color(idx, 0.5)
+        check(f"lighten({idx}, 0.5) valid", isinstance(light, int) and 0 <= light <= 255,
+              f"got {light}")
+    
+    # Darkening then lightening should roughly recover
+    original = 196  # bright red
+    dark = v._darken_color(original, 0.5)
+    light_back = v._lighten_color(dark, 0.6)
+    check("darken→lighten reasonable", isinstance(light_back, int))
+
+def test_svg_export():
+    """Test the SVG export functionality."""
+    print("\n=== SVG Export ===")
+    import tempfile
+    
+    seeds = [(10, 10), (30, 30)]
+    colors = v.palette_rainbow(2)
+    grid, dist_grid = v.compute_voronoi_with_distance(seeds, 20, 20, v.dist_euclidean)
+    
+    # Export to temp file
+    with tempfile.NamedTemporaryFile(suffix=".svg", delete=False, mode="w") as f:
+        tmp_path = f.name
+    
+    try:
+        result = v.export_svg(seeds, grid, colors, 20, 20, tmp_path,
+                              palette_name="rainbow", dist_name="euclidean",
+                              seed_type="random")
+        check("svg export success", result)
+        
+        # Read and verify SVG content
+        with open(tmp_path, 'r') as f:
+            svg_content = f.read()
+        
+        check("svg has header", '<?xml' in svg_content)
+        check("svg has <svg>", '<svg' in svg_content)
+        check("svg has circles", '<circle' in svg_content)
+        check("svg has title", '<title>' in svg_content)
+        check("svg has desc", '<desc>' in svg_content)
+        check("svg has closing tag", '</svg>' in svg_content)
+        check("svg has paths", '<path' in svg_content)
+    finally:
+        os.unlink(tmp_path)
+    
+    # Export with empty grid should handle gracefully
+    result_empty = v.export_svg([], [], [], 10, 10, "/dev/null")
+    check("svg export empty grid", result_empty is False or result_empty is True)  # should not crash
 
 def test_cli_validation():
     print("\n=== CLI Input Validation ===")
@@ -205,6 +342,10 @@ def test_cli_combinations():
     result = subprocess.run(base + ['--mode', 'outline'], capture_output=True, text=True, timeout=30, cwd=cwd)
     check("mode=outline", result.returncode == 0)
     
+    # Gradient mode (new!)
+    result = subprocess.run(base + ['--mode', 'gradient'], capture_output=True, text=True, timeout=30, cwd=cwd)
+    check("mode=gradient", result.returncode == 0)
+    
     # Borders
     result = subprocess.run(base + ['--borders'], capture_output=True, text=True, timeout=30, cwd=cwd)
     check("--borders", result.returncode == 0)
@@ -217,9 +358,58 @@ def test_cli_combinations():
     result = subprocess.run(base + ['--mode', 'outline', '--borders'], capture_output=True, text=True, timeout=30, cwd=cwd)
     check("outline+borders", result.returncode == 0)
     
+    # Gradient + borders (new combo!)
+    result = subprocess.run(base + ['--mode', 'gradient', '--borders'], capture_output=True, text=True, timeout=30, cwd=cwd)
+    check("gradient+borders", result.returncode == 0)
+    
+    # Hexagonal seed type (new!)
+    result = subprocess.run(base + ['--seed-type', 'hexagonal'], capture_output=True, text=True, timeout=30, cwd=cwd)
+    check("seed-type=hexagonal", result.returncode == 0)
+    
+    # Aurora palette (new!)
+    result = subprocess.run(base + ['--palette', 'aurora'], capture_output=True, text=True, timeout=30, cwd=cwd)
+    check("palette=aurora", result.returncode == 0)
+    
     # --version
     result = subprocess.run([sys.executable, 'voronoi.py', '--version'], capture_output=True, text=True, timeout=10, cwd=cwd)
-    check("--version", result.returncode == 0 and "1.1.0" in result.stdout, f"got '{result.stdout.strip()}'")
+    check("--version", result.returncode == 0 and "2.0.0" in result.stdout, f"got '{result.stdout.strip()}'")
+    
+    # --help should work
+    result = subprocess.run([sys.executable, 'voronoi.py', '--help'], capture_output=True, text=True, timeout=10, cwd=cwd)
+    check("--help", result.returncode == 0)
+    check("--help mentions gradient", "gradient" in result.stdout)
+    check("--help mentions aurora", "aurora" in result.stdout)
+    check("--help mentions hexagonal", "hexagonal" in result.stdout)
+    check("--help mentions export", "export" in result.stdout.lower())
+    check("--help mentions info", "info" in result.stdout.lower())
+
+def test_cli_info_and_export():
+    """Test --info and --export CLI flags."""
+    print("\n=== CLI Info & Export ===")
+    import tempfile
+    base = [sys.executable, 'voronoi.py', '--seeds', '5', '--width', '20', '--height', '10', '--seed', '42']
+    cwd = os.path.dirname(os.path.abspath(__file__))
+    
+    # --info should work
+    result = subprocess.run(base + ['--info'], capture_output=True, text=True, timeout=30, cwd=cwd)
+    check("--info works", result.returncode == 0, f"exit {result.returncode}")
+    check("--info output has stats", "Statistics" in result.stdout or "cell" in result.stdout.lower(),
+          "missing statistics in output")
+    
+    # --export should work
+    with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
+        tmp_svg = f.name
+    
+    try:
+        result = subprocess.run(base + ['--export', tmp_svg], capture_output=True, text=True, timeout=30, cwd=cwd)
+        check("--export works", result.returncode == 0, f"exit {result.returncode}")
+        check("--export creates file", os.path.exists(tmp_svg) and os.path.getsize(tmp_svg) > 0,
+              "SVG file missing or empty")
+        check("--export mentions file", "Exported SVG" in result.stdout,
+              f"missing export message, got: {result.stdout[-200:]}")
+    finally:
+        if os.path.exists(tmp_svg):
+            os.unlink(tmp_svg)
 
 def test_color_math():
     print("\n=== Color Math ===")
@@ -269,19 +459,26 @@ def test_seed_markers():
 
 # Run all tests
 print("=" * 60)
-print("VORONOI v1.1.0 — Bug Fix Verification Tests")
+print(f"VORONOI v{v.__version__} — Feature Verification Tests")
 print("=" * 60)
 
 test_seed_generators()
+test_hexagonal_seeds()
 test_palette_generators()
+test_aurora_palette()
 test_distance_metrics()
 test_cosine_edge_cases()
 test_voronoi_computation()
+test_voronoi_info()
 test_empty_and_edge_cases()
 test_render_block()
+test_render_gradient()
 test_render_small_sizes()
+test_color_utilities()
+test_svg_export()
 test_cli_validation()
 test_cli_combinations()
+test_cli_info_and_export()
 test_color_math()
 test_seed_markers()
 

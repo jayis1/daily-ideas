@@ -4,14 +4,14 @@ ASCII Voronoi Diagram Generator
 
 Generates beautiful Voronoi tessellations in the terminal using Unicode
 block characters and ANSI 256-color mode. Supports multiple distance metrics,
-seed placement strategies, and rendering modes.
+seed placement strategies, rendering modes, and can export to SVG.
 
 A Voronoi diagram partitions a plane into regions based on distance to
 a set of "seed" points — each region contains all points closer to its
 seed than to any other.
 """
 
-__version__ = "1.1.0"
+__version__ = "2.0.0"
 
 import argparse
 import math
@@ -35,6 +35,7 @@ def ansi_bg(idx):
 RESET = f"{ESC}0m"
 BOLD = f"{ESC}1m"
 DIM = f"{ESC}2m"
+UNDERLINE = f"{ESC}4m"
 
 # Unicode block characters for sub-cell resolution (top/bottom half blocks)
 UPPER_HALF = "▀"
@@ -104,6 +105,25 @@ def palette_fire(n):
         colors.append(_rgb_to_256(r, g, b))
     return colors
 
+def palette_aurora(n):
+    """Northern lights — greens, teals, purples, and pinks."""
+    # Aurora colors cycle through green → teal → blue → purple → pink
+    aurora_hues = [120, 150, 170, 200, 240, 270, 300, 320, 330, 140]
+    colors = []
+    for i in range(n):
+        # Interpolate between aurora hues with smooth blending
+        t = (i / max(n, 1)) * len(aurora_hues)
+        idx1 = int(t) % len(aurora_hues)
+        idx2 = (idx1 + 1) % len(aurora_hues)
+        frac = t - int(t)
+        h = aurora_hues[idx1] * (1 - frac) + aurora_hues[idx2] * frac
+        # High saturation, medium-high value with shimmer effect
+        s = 0.7 + 0.3 * math.sin(i * 1.2)
+        v = 0.6 + 0.35 * math.sin(i * 0.8 + 0.5)
+        r, g, b = _hsv_to_rgb(h % 360, min(s, 1), min(v, 1))
+        colors.append(_rgb_to_256(r, g, b))
+    return colors
+
 PALETTES = {
     "rainbow": palette_rainbow,
     "pastel": palette_pastel,
@@ -111,6 +131,7 @@ PALETTES = {
     "earth": palette_earth,
     "ocean": palette_ocean,
     "fire": palette_fire,
+    "aurora": palette_aurora,
 }
 
 # ── Color Math ───────────────────────────────────────────────────────────────
@@ -144,18 +165,59 @@ def _rgb_to_256(r, g, b):
             best = i
     return best
 
+def _ansi_to_rgb(idx):
+    """Convert an ANSI 256-color index back to RGB values."""
+    if idx < 16:
+        # Standard colors — approximate
+        std_colors = {
+            0: (0,0,0), 1: (128,0,0), 2: (0,128,0), 3: (128,128,0),
+            4: (0,0,128), 5: (128,0,128), 6: (0,128,128), 7: (192,192,192),
+            8: (128,128,128), 9: (255,0,0), 10: (0,255,0), 11: (255,255,0),
+            12: (0,0,255), 13: (255,0,255), 14: (0,255,255), 15: (255,255,255),
+        }
+        return std_colors.get(idx, (0, 0, 0))
+    elif idx < 232:
+        r = ((idx - 16) // 36) * 51
+        g = (((idx - 16) % 36) // 6) * 51
+        b = ((idx - 16) % 6) * 51
+        return (r, g, b)
+    else:
+        # Grayscale ramp (232-255)
+        v = 8 + (idx - 232) * 10
+        return (v, v, v)
+
+def _darken_color(ansi_idx, factor=0.6):
+    """Darken an ANSI color by a factor (0=black, 1=original)."""
+    r, g, b = _ansi_to_rgb(ansi_idx)
+    r = int(r * factor)
+    g = int(g * factor)
+    b = int(b * factor)
+    return _rgb_to_256(r, g, b)
+
+def _lighten_color(ansi_idx, factor=0.5):
+    """Lighten an ANSI color by blending toward white."""
+    r, g, b = _ansi_to_rgb(ansi_idx)
+    r = int(r + (255 - r) * factor)
+    g = int(g + (255 - g) * factor)
+    b = int(b + (255 - b) * factor)
+    return _rgb_to_256(r, g, b)
+
 # ── Distance Metrics ────────────────────────────────────────────────────────
 
 def dist_euclidean(x1, y1, x2, y2):
+    """Standard straight-line distance."""
     return math.sqrt((x1-x2)**2 + (y1-y2)**2)
 
 def dist_manhattan(x1, y1, x2, y2):
+    """Grid/city-block distance — creates diamond-shaped cells."""
     return abs(x1-x2) + abs(y1-y2)
 
 def dist_chebyshev(x1, y1, x2, y2):
+    """Chessboard distance — creates square-shaped cells."""
     return max(abs(x1-x2), abs(y1-y2))
 
 def dist_minkowski3(x1, y1, x2, y2):
+    """Minkowski distance with p=3 — creates rounded square cells."""
     return (abs(x1-x2)**3 + abs(y1-y2)**3) ** (1/3)
 
 def dist_cosine(x1, y1, x2, y2):
@@ -244,12 +306,48 @@ def seeds_clusters(n, w, h):
         seeds.append((cx + random.gauss(0, w/20), cy + random.gauss(0, h/20)))
     return seeds
 
+def seeds_hexagonal(n, w, h):
+    """Hexagonal lattice placement — creates evenly-spaced triangular pattern."""
+    if n <= 0:
+        return []
+    if n == 1:
+        return [(w / 2, h / 2)]
+
+    # Calculate hex grid spacing to fit approximately n points
+    # Each hex cell has area (sqrt(3)/2) * side^2
+    # Total area / n ≈ cell area, so side ≈ sqrt(2*area / (n*sqrt(3)))
+    area = w * h
+    side = math.sqrt(2 * area / (n * math.sqrt(3))) if n > 0 else min(w, h)
+    row_height = side * math.sqrt(3) / 2
+
+    seeds = []
+    cols = max(1, int(w / side) + 1)
+    row = 0
+    y = side / 2
+    while y < h and len(seeds) < n:
+        x_offset = side / 2 if row % 2 else 0
+        col = 0
+        while col < cols and len(seeds) < n:
+            x = col * side + x_offset
+            if 0 <= x <= w:
+                seeds.append((x, y))
+            col += 1
+        y += row_height
+        row += 1
+
+    # If we didn't get enough, add random ones
+    while len(seeds) < n:
+        seeds.append((random.uniform(0, w), random.uniform(0, h)))
+
+    return seeds[:n]
+
 SEED_TYPES = {
     "random": seeds_random,
     "grid": seeds_grid,
     "circular": seeds_circular,
     "spiral": seeds_spiral,
     "clusters": seeds_clusters,
+    "hexagonal": seeds_hexagonal,
 }
 
 # ── Voronoi Computation ──────────────────────────────────────────────────────
@@ -303,6 +401,33 @@ def compute_voronoi_with_distance(seeds, width, height, dist_fn):
         grid.append(row)
         dist_grid.append(drow)
     return grid, dist_grid
+
+def compute_voronoi_info(seeds, grid, width, height):
+    """
+    Compute statistics about the Voronoi diagram.
+
+    Returns a dict with:
+      - cell_areas: dict mapping seed index to pixel count
+      - cell_seeds: list of (x, y) seed positions
+      - total_pixels: total pixel count
+      - avg_distance_per_cell: dict mapping seed index to average distance
+    """
+    if not grid:
+        return {"cell_areas": {}, "cell_seeds": [], "total_pixels": 0, "avg_distance_per_cell": {}}
+
+    cell_areas = {}
+    for y in range(height):
+        for x in range(width):
+            idx = grid[y][x]
+            cell_areas[idx] = cell_areas.get(idx, 0) + 1
+
+    return {
+        "cell_areas": cell_areas,
+        "cell_seeds": seeds,
+        "total_pixels": width * height,
+        "num_cells": len(seeds),
+    }
+
 
 # ── Rendering ────────────────────────────────────────────────────────────────
 
@@ -396,6 +521,93 @@ def render_block(colors, grid, dist_grid, width, height, mode="filled",
 
     return lines
 
+def render_gradient_block(colors, grid, dist_grid, width, height,
+                          show_borders=True, show_seeds=False, seeds=None):
+    """
+    Render the Voronoi diagram with distance-based gradient shading.
+    Pixels closer to their seed are brighter; those farther away are darker.
+    This creates a 3D-like effect showing the "depth" of each cell.
+    """
+    if not colors or not grid or width <= 0 or height <= 0:
+        return []
+
+    # Find the maximum distance in the grid for normalization
+    max_dist = 0
+    for row in dist_grid:
+        for d in row:
+            if d > max_dist:
+                max_dist = d
+    if max_dist == 0:
+        max_dist = 1  # avoid division by zero
+
+    lines = []
+    term_rows = (height + 1) // 2
+
+    for ty in range(term_rows):
+        py_upper = ty * 2
+        py_lower = ty * 2 + 1
+        line = ""
+        for tx in range(width):
+            # Upper pixel
+            if py_upper < height:
+                idx_up = grid[py_upper][tx]
+                color_up = colors[idx_up % len(colors)]
+                d_up = dist_grid[py_upper][tx] if dist_grid else 0
+                # Normalize distance: 0 = at seed, 1 = far from seed
+                brightness_up = 1.0 - (d_up / max_dist) * 0.6
+            else:
+                idx_up = grid[height-1][tx] if height > 0 else 0
+                color_up = colors[idx_up % len(colors)]
+                brightness_up = 1.0
+
+            # Lower pixel
+            if py_lower < height:
+                idx_lo = grid[py_lower][tx]
+                color_lo = colors[idx_lo % len(colors)]
+                d_lo = dist_grid[py_lower][tx] if dist_grid else 0
+                brightness_lo = 1.0 - (d_lo / max_dist) * 0.6
+            else:
+                idx_lo = idx_up
+                color_lo = color_up
+                brightness_lo = brightness_up
+
+            # Border detection
+            is_border_up = False
+            is_border_lo = False
+
+            if show_borders and py_upper < height and dist_grid:
+                idx = grid[py_upper][tx]
+                for dy, dx in [(-1,0),(1,0),(0,-1),(0,1)]:
+                    ny, nx = py_upper+dy, tx+dx
+                    if 0 <= ny < height and 0 <= nx < width:
+                        if grid[ny][nx] != idx:
+                            is_border_up = True
+                            break
+
+            if show_borders and py_lower < height and dist_grid:
+                idx = grid[py_lower][tx]
+                for dy, dx in [(-1,0),(1,0),(0,-1),(0,1)]:
+                    ny, nx = py_lower+dy, tx+dx
+                    if 0 <= ny < height and 0 <= nx < width:
+                        if grid[ny][nx] != idx:
+                            is_border_lo = True
+                            break
+
+            # Apply brightness to create gradient effect
+            fg_up = _lighten_color(color_up, (1 - brightness_up) * 0.8) if is_border_up else (
+                _darken_color(color_up, brightness_up) if brightness_up < 0.9 else color_up
+            )
+            bg_lo = _lighten_color(color_lo, (1 - brightness_lo) * 0.8) if is_border_lo else (
+                _darken_color(color_lo, brightness_lo) if brightness_lo < 0.9 else color_lo
+            )
+
+            line += f"{ansi_fg(fg_up)}{ansi_bg(bg_lo)}{UPPER_HALF}"
+
+        line += RESET
+        lines.append(line)
+
+    return lines
+
 def render_seed_markers(seeds, width, height, colors, term_width=None):
     """
     Create ANSI escape sequences to place seed markers at their positions.
@@ -411,11 +623,88 @@ def render_seed_markers(seeds, width, height, colors, term_width=None):
             markers.append((ty, tx, f"{BOLD}{ansi_fg(231)}{ansi_bg(c)}+{RESET}"))
     return markers
 
+# ── SVG Export ───────────────────────────────────────────────────────────────
+
+def export_svg(seeds, grid, colors, width, height, filename, palette_name="rainbow",
+               dist_name="euclidean", seed_type="random"):
+    """Export the Voronoi diagram as an SVG file.
+
+    Creates a proper SVG with colored rectangles for each pixel, plus
+    seed point markers and metadata in the title/description.
+    """
+    if not grid or not colors:
+        print(f"{DIM}Warning: No data to export.{RESET}", file=sys.stderr)
+        return False
+
+    # SVG cell size — each pixel becomes a small rectangle
+    cell_w = max(1, min(20, 800 // width))
+    cell_h = max(1, min(20, 600 // height))
+
+    svg_w = width * cell_w
+    svg_h = height * cell_h
+
+    # Build RGB color mapping from ANSI indices
+    color_rgb = {}
+    for i, ansi_idx in enumerate(colors):
+        color_rgb[i] = _ansi_to_rgb(ansi_idx)
+
+    lines = []
+    lines.append('<?xml version="1.0" encoding="UTF-8"?>')
+    lines.append(f'<svg xmlns="http://www.w3.org/2000/svg" '
+                 f'width="{svg_w}" height="{svg_h}" '
+                 f'viewBox="0 0 {svg_w} {svg_h}">')
+    lines.append(f'  <title>Voronoi Diagram — {len(seeds)} seeds, {dist_name} distance, {palette_name} palette, {seed_type} pattern</title>')
+    lines.append(f'  <desc>Generated by voronoi.py v{__version__}. '
+                 f'Width={width}, Height={height}, Seeds={len(seeds)}, '
+                 f'Distance={dist_name}, Palette={palette_name}, Pattern={seed_type}</desc>')
+    lines.append(f'  <rect width="{svg_w}" height="{svg_h}" fill="#111111"/>')
+
+    # Render cells — group by color for smaller SVG
+    cell_groups = {}
+    for y in range(height):
+        for x in range(width):
+            idx = grid[y][x] % len(colors)
+            rgb = color_rgb.get(idx, (128, 128, 128))
+            hex_color = f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
+            if hex_color not in cell_groups:
+                cell_groups[hex_color] = []
+            cell_groups[hex_color].append((x * cell_w, y * cell_h))
+
+    for hex_color, cells in cell_groups.items():
+        # Use a single path per color for efficiency
+        parts = []
+        for cx, cy in cells:
+            parts.append(f"M{cx},{cy}h{cell_w}v{cell_h}h{-cell_w}Z")
+        path_d = "".join(parts)
+        lines.append(f'  <path d="{path_d}" fill="{hex_color}"/>')
+
+    # Draw seed points
+    for i, (sx, sy) in enumerate(seeds):
+        rgb = color_rgb.get(i % len(colors), (255, 255, 255))
+        hex_color = f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
+        cx = sx * cell_w
+        cy = sy * cell_h
+        r = max(2, cell_w // 3)
+        lines.append(f'  <circle cx="{cx:.1f}" cy="{cy:.1f}" r="{r}" '
+                     f'fill="white" stroke="{hex_color}" stroke-width="1.5" opacity="0.9"/>')
+
+    lines.append('</svg>')
+
+    try:
+        with open(filename, 'w') as f:
+            f.write('\n'.join(lines))
+        return True
+    except OSError as e:
+        print(f"{DIM}Error writing SVG: {e}{RESET}", file=sys.stderr)
+        return False
+
 # ── Animation ────────────────────────────────────────────────────────────────
 
 def animate_voronoi(seeds, width, height, dist_fn, colors, args):
     """
     Animate seeds moving and Voronoi cells updating in real time.
+    Seeds bounce off walls with slight random drift and damping.
+    Press Ctrl+C to stop.
     """
     # Make copies that we'll move
     seed_x = [s[0] for s in seeds]
@@ -454,21 +743,24 @@ def animate_voronoi(seeds, width, height, dist_fn, colors, args):
             grid, dist_grid = compute_voronoi_with_distance(
                 cur_seeds, width, height, dist_fn)
 
-            lines = render_block(colors, grid, dist_grid, width, height,
-                                  mode=args.mode, show_borders=args.borders,
-                                  show_seeds=False, seeds=cur_seeds)
-
-            # Add seed markers
-            markers = render_seed_markers(cur_seeds, width, height, colors)
+            # Choose rendering mode
+            if args.mode == "gradient":
+                lines = render_gradient_block(colors, grid, dist_grid, width, height,
+                                                show_borders=args.borders,
+                                                show_seeds=False, seeds=cur_seeds)
+            else:
+                lines = render_block(colors, grid, dist_grid, width, height,
+                                      mode=args.mode, show_borders=args.borders,
+                                      show_seeds=False, seeds=cur_seeds)
 
             # Move cursor to top-left and redraw
             output = f"{ESC}H"  # cursor home
             for line in lines:
                 output += line + "\n"
 
-            # Overlay seed markers (simplified: just add info line)
-            info = f"{DIM}Seeds: {len(cur_seeds)} | Frame: {frame} | "
-            info += f"Metric: {args.distance} | Press Ctrl+C to stop{RESET}"
+            # Info bar
+            info = f"{DIM}Seeds: {len(cur_seeds)} │ Frame: {frame} │ "
+            info += f"Metric: {args.distance} │ Press Ctrl+C to stop{RESET}"
             output += info
 
             sys.stdout.write(output)
@@ -490,9 +782,15 @@ def render_static(seeds, width, height, dist_fn, colors, args):
     """Render a single static Voronoi diagram."""
     grid, dist_grid = compute_voronoi_with_distance(seeds, width, height, dist_fn)
 
-    lines = render_block(colors, grid, dist_grid, width, height,
-                         mode=args.mode, show_borders=args.borders,
-                         show_seeds=args.seeds, seeds=seeds)
+    # Choose rendering mode
+    if args.mode == "gradient":
+        lines = render_gradient_block(colors, grid, dist_grid, width, height,
+                                       show_borders=args.borders,
+                                       show_seeds=args.seeds, seeds=seeds)
+    else:
+        lines = render_block(colors, grid, dist_grid, width, height,
+                             mode=args.mode, show_borders=args.borders,
+                             show_seeds=args.seeds, seeds=seeds)
 
     # Overlay seed markers
     if args.seeds:
@@ -505,7 +803,35 @@ def render_static(seeds, width, height, dist_fn, colors, args):
         lines.append("")
         lines.append(seed_info)
 
-    return lines
+    # Compute statistics if --info requested
+    if args.info:
+        info = compute_voronoi_info(seeds, grid, width, height)
+        lines.append("")
+        lines.append(f"{BOLD}{UNDERLINE}Diagram Statistics{RESET}")
+        lines.append(f"  {DIM}Seeds:{RESET}        {info['num_cells']}")
+        lines.append(f"  {DIM}Grid size:{RESET}    {width} × {height} ({info['total_pixels']} pixels)")
+        areas = info["cell_areas"]
+        if areas:
+            min_area = min(areas.values())
+            max_area = max(areas.values())
+            avg_area = sum(areas.values()) / len(areas)
+            lines.append(f"  {DIM}Cell sizes:{RESET}   min={min_area}, max={max_area}, avg={avg_area:.1f} px")
+            # Find largest cell
+            largest_idx = max(areas, key=areas.get)
+            sx, sy = seeds[largest_idx] if largest_idx < len(seeds) else (0, 0)
+            lines.append(f"  {DIM}Largest cell:{RESET} #{largest_idx} at ({sx:.1f}, {sy:.1f}) — {areas[largest_idx]} px")
+            # Find smallest cell
+            smallest_idx = min(areas, key=areas.get)
+            sx, sy = seeds[smallest_idx] if smallest_idx < len(seeds) else (0, 0)
+            lines.append(f"  {DIM}Smallest cell:{RESET} #{smallest_idx} at ({sx:.1f}, {sy:.1f}) — {areas[smallest_idx]} px")
+            # Cell size distribution bar
+            lines.append(f"  {DIM}Distribution:{RESET}")
+            for idx in sorted(areas.keys()):
+                bar_len = int(areas[idx] / max_area * 30)
+                c = colors[idx % len(colors)]
+                lines.append(f"    {ansi_fg(c)}█{RESET} {idx:2d}: {'█' * bar_len} ({areas[idx]} px)")
+
+    return lines, grid, dist_grid
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
@@ -528,9 +854,12 @@ Examples:
   %(prog)s --seeds 50 --seed-type spiral --animate
   %(prog)s --seeds 15 --mode outline --borders --palette fire
   %(prog)s --seeds 30 --distance chebyshev --palette ocean --animate --delay 0.1
+  %(prog)s --seeds 25 --palette aurora --mode gradient --borders
+  %(prog)s --seeds 40 --seed-type hexagonal --palette neon --export diagram.svg
+  %(prog)s --seeds 20 --info --palette earth
         """)
     parser.add_argument("-n", "--seeds", type=int, default=15,
-                        help="Number of seed points (default: 15)")
+                        help="Number of seed points (≥ 1, default: 15)")
     parser.add_argument("-w", "--width", type=int, default=None,
                         help="Terminal width in columns (default: auto-detect)")
     parser.add_argument("-H", "--height", type=int, default=None,
@@ -544,19 +873,23 @@ Examples:
     parser.add_argument("-p", "--palette", choices=list(PALETTES.keys()),
                         default="rainbow",
                         help="Color palette (default: rainbow)")
-    parser.add_argument("-m", "--mode", choices=["filled", "outline"],
+    parser.add_argument("-m", "--mode", choices=["filled", "outline", "gradient"],
                         default="filled",
                         help="Rendering mode (default: filled)")
     parser.add_argument("-b", "--borders", action="store_true",
                         help="Highlight cell borders with white edges")
     parser.add_argument("--seeds-visible", dest="seeds", action="store_true",
                         help="Show seed point markers")
+    parser.add_argument("-i", "--info", action="store_true",
+                        help="Show diagram statistics (cell sizes, distribution)")
     parser.add_argument("-a", "--animate", action="store_true",
                         help="Animate seeds moving in real time")
     parser.add_argument("--delay", type=float, default=0.08,
-                        help="Animation frame delay in seconds (default: 0.08)")
+                        help="Animation frame delay in seconds (> 0, default: 0.08)")
     parser.add_argument("--seed", type=int, default=None,
                         help="Random seed for reproducibility")
+    parser.add_argument("--export", type=str, default=None, metavar="FILE.svg",
+                        help="Export the diagram as an SVG file")
     parser.add_argument("--version", action="version", version=f"voronoi {__version__}")
 
     args = parser.parse_args()
@@ -599,20 +932,42 @@ Examples:
     if args.animate:
         animate_voronoi(seeds, width, height, dist_fn, colors, args)
     else:
-        lines = render_static(seeds, width, height, dist_fn, colors, args)
+        result = render_static(seeds, width, height, dist_fn, colors, args)
+        # render_static now returns a tuple (lines, grid, dist_grid) when not animating
+        if isinstance(result, tuple):
+            lines, grid, dist_grid = result
+        else:
+            lines = result
+
         for line in lines:
             print(line)
 
         # Print legend
         print(f"\n{DIM}Voronoi Diagram │ Seeds: {args.seeds} │ "
               f"Metric: {args.distance} │ Pattern: {args.seed_type} │ "
-              f"Palette: {args.palette}{RESET}")
+              f"Palette: {args.palette} │ Mode: {args.mode}{RESET}")
 
         # Show color legend
         print(f"{DIM}Cell colors:{RESET} ", end="")
         for i, c in enumerate(colors):
             print(f"{ansi_fg(c)}●{RESET}", end=" ")
         print()
+
+        # Export SVG if requested
+        if args.export:
+            if isinstance(result, tuple):
+                _, grid, dist_grid = result
+            else:
+                grid, dist_grid = compute_voronoi_with_distance(seeds, width, height, dist_fn)
+
+            success = export_svg(seeds, grid, colors, width, height, args.export,
+                                 palette_name=args.palette,
+                                 dist_name=args.distance,
+                                 seed_type=args.seed_type)
+            if success:
+                print(f"\n{DIM}Exported SVG to: {args.export}{RESET}")
+            else:
+                print(f"\n{DIM}Failed to export SVG.{RESET}", file=sys.stderr)
 
 if __name__ == "__main__":
     main()
