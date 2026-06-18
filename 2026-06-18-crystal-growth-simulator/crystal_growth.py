@@ -13,6 +13,7 @@ import os
 import time
 import math
 import argparse
+import re
 from collections import defaultdict
 
 
@@ -35,6 +36,8 @@ COLOR_PALETTE = [
     (255, 220, 140),  # gold
 ]
 
+VERSION = "1.1.0"
+
 
 # ─── Core DLA Engine ─────────────────────────────────────────────────────────
 
@@ -45,6 +48,14 @@ class DLASimulator:
                  num_walkers=3, stickiness=1.0, charset="fancy",
                  diagonal=True, color=True, seed=None, animate=True,
                  max_particles=0, speed=1):
+
+        # Validate inputs
+        if width < 3 or height < 3:
+            raise ValueError(f"Grid must be at least 3x3, got {width}x{height}")
+        if num_walkers < 1:
+            raise ValueError(f"Need at least 1 walker, got {num_walkers}")
+        if not (0.0 < stickiness <= 1.0):
+            raise ValueError(f"Stickiness must be in (0.0, 1.0], got {stickiness}")
 
         self.width = width
         self.height = height
@@ -80,12 +91,18 @@ class DLASimulator:
             for r in range(height // 4, 3 * height // 4):
                 self._add_seed(r, mid)
         elif seed_pos == "corners":
+            # Place small seed clusters at the four corners
             margin = min(3, height // 10, width // 10)
-            for dr, dc in [(0, 0), (0, width - 1), (height - 1, 0), (height - 1, width - 1)]:
+            corners = [
+                (0, 0),                    # top-left
+                (0, width - 1),            # top-right
+                (height - 1, 0),           # bottom-left
+                (height - 1, width - 1),   # bottom-right
+            ]
+            for cr, cc in corners:
                 for ddr in range(margin):
                     for ddc in range(margin):
-                        self._add_seed(self.center[0] + dr - self.center[0] + ddr,
-                                       self.center[1] + dc - self.center[1] + ddc)
+                        self._add_seed(cr + ddr, cc + ddc)
         elif seed_pos == "ring":
             cr, cc = self.center
             radius = min(height, width) // 4
@@ -96,6 +113,14 @@ class DLASimulator:
                 if 0 <= r < height and 0 <= c < width:
                     self._add_seed(r, c)
 
+        # Update max_radius based on initial seed positions
+        for r in range(self.height):
+            for c in range(self.width):
+                if self.grid[r][c] > 0:
+                    dist = math.sqrt((r - self.center[0])**2 + (c - self.center[1])**2)
+                    if dist > self.max_radius:
+                        self.max_radius = dist
+
         # Active walkers
         self.walkers = []
         for _ in range(num_walkers):
@@ -105,22 +130,49 @@ class DLASimulator:
             random.seed(seed)
 
     def _add_seed(self, r, c):
+        """Place a seed particle. Only adds if position is in bounds and empty."""
         if 0 <= r < self.height and 0 <= c < self.width and self.grid[r][c] == 0:
             self.grid[r][c] = 1
             self.particle_count += 1
 
     def _new_walker(self):
         """Spawn a walker at a random position on the perimeter of a circle
-        around the aggregate, far enough to not immediately stick."""
+        around the aggregate, far enough to not immediately stick.
+        Ensures the walker doesn't spawn on an occupied cell."""
         r, c = self.center
         spawn_radius = max(self.max_radius + 5, min(self.height, self.width) // 3)
-        angle = random.uniform(0, 2 * math.pi)
-        wr = int(r + spawn_radius * math.sin(angle))
-        wc = int(c + spawn_radius * math.cos(angle))
-        # Clamp to grid bounds
-        wr = max(0, min(self.height - 1, wr))
-        wc = max(0, min(self.width - 1, wc))
-        return [wr, wc]
+
+        # Try up to 50 times to find an empty cell for spawning
+        for _ in range(50):
+            angle = random.uniform(0, 2 * math.pi)
+            wr = int(r + spawn_radius * math.sin(angle))
+            wc = int(c + spawn_radius * math.cos(angle))
+            # Clamp to grid bounds
+            wr = max(0, min(self.height - 1, wr))
+            wc = max(0, min(self.width - 1, wc))
+            # Only use this position if it's empty
+            if self.grid[wr][wc] == 0:
+                return [wr, wc]
+
+        # Fallback: find any empty cell near the spawn radius
+        for attempt_radius in range(int(spawn_radius), max(int(spawn_radius) - 10, 0), -1):
+            for angle_deg in range(0, 360, 15):
+                rad = math.radians(angle_deg)
+                wr = int(r + attempt_radius * math.sin(rad))
+                wc = int(c + attempt_radius * math.cos(rad))
+                wr = max(0, min(self.height - 1, wr))
+                wc = max(0, min(self.width - 1, wc))
+                if self.grid[wr][wc] == 0:
+                    return [wr, wc]
+
+        # Ultimate fallback: scan the entire grid for an empty cell
+        for r2 in range(self.height):
+            for c2 in range(self.width):
+                if self.grid[r2][c2] == 0:
+                    return [r2, c2]
+
+        # Grid is completely full (shouldn't happen normally)
+        return None
 
     def _has_neighbor(self, r, c):
         """Check if position has an adjacent aggregate particle."""
@@ -137,9 +189,19 @@ class DLASimulator:
             self.step_count += 1
             for i, walker in enumerate(self.walkers):
                 if walker is None:
-                    continue
+                    # Respawn dead walkers
+                    self.walkers[i] = self._new_walker()
+                    if self.walkers[i] is None:
+                        # Grid is full, nothing to do
+                        continue
+                    walker = self.walkers[i]
 
                 wr, wc = walker
+
+                # If walker is on an occupied cell, respawn it
+                if self.grid[wr][wc] > 0:
+                    self.walkers[i] = self._new_walker()
+                    continue
 
                 # Check if walker should stick
                 if self._has_neighbor(wr, wc):
@@ -162,11 +224,32 @@ class DLASimulator:
                 dist_from_center = math.sqrt(
                     (nr - self.center[0])**2 + (nc - self.center[1])**2
                 )
-                max_dist = min(self.height, self.width) * 0.6
+                # Use a generous max distance that accommodates all seed types
+                max_dist = max(self.height, self.width) * 0.7
 
                 if 0 <= nr < self.height and 0 <= nc < self.width and dist_from_center < max_dist:
                     if self.grid[nr][nc] == 0:
                         self.walkers[i] = [nr, nc]
+                    else:
+                        # Target cell is occupied; try a different random direction
+                        # Instead of getting stuck, try all directions
+                        moved = False
+                        directions_copy = list(self.directions)
+                        random.shuffle(directions_copy)
+                        for dr2, dc2 in directions_copy:
+                            nr2, nc2 = wr + dr2, wc + dc2
+                            dist2 = math.sqrt(
+                                (nr2 - self.center[0])**2 + (nc2 - self.center[1])**2
+                            )
+                            if (0 <= nr2 < self.height and 0 <= nc2 < self.width
+                                    and dist2 < max_dist
+                                    and self.grid[nr2][nc2] == 0):
+                                self.walkers[i] = [nr2, nc2]
+                                moved = True
+                                break
+                        if not moved:
+                            # Surrounded — respawn
+                            self.walkers[i] = self._new_walker()
                 else:
                     self.walkers[i] = self._new_walker()
 
@@ -259,6 +342,22 @@ def show_cursor():
 
 # ─── Main ────────────────────────────────────────────────────────────────────
 
+def validate_output_path(path):
+    """Validate that an output path is safe to write to."""
+    # Resolve to absolute path and ensure it's not writing to system directories
+    abs_path = os.path.abspath(path)
+    # Block writing to system directories
+    blocked_prefixes = ["/etc", "/usr", "/bin", "/sbin", "/lib", "/boot", "/dev", "/proc", "/sys", "/var"]
+    for prefix in blocked_prefixes:
+        if abs_path.startswith(prefix + "/") or abs_path == prefix:
+            raise ValueError(f"Cannot write to system directory: {abs_path}")
+    # Ensure the parent directory exists
+    parent = os.path.dirname(abs_path)
+    if parent and not os.path.exists(parent):
+        raise ValueError(f"Parent directory does not exist: {parent}")
+    return abs_path
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Crystal Growth Simulator — Diffusion-Limited Aggregation in the terminal"
@@ -283,7 +382,29 @@ def main():
                        help="Simulation steps per frame (default: 5)")
     parser.add_argument("-o", "--output", type=str, default=None,
                        help="Save final result to file instead of displaying")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
     args = parser.parse_args()
+
+    # Validate inputs
+    if args.width < 3:
+        parser.error(f"Width must be at least 3, got {args.width}")
+    if args.height < 3:
+        parser.error(f"Height must be at least 3, got {args.height}")
+    if args.walkers < 1:
+        parser.error(f"Need at least 1 walker, got {args.walkers}")
+    if not (0.0 < args.stickiness <= 1.0):
+        parser.error(f"Stickiness must be in (0.0, 1.0], got {args.stickiness}")
+    if args.max_particles < 0:
+        parser.error(f"Max particles must be non-negative, got {args.max_particles}")
+    if args.speed < 1:
+        parser.error(f"Speed must be at least 1, got {args.speed}")
+
+    # Validate output path
+    if args.output:
+        try:
+            args.output = validate_output_path(args.output)
+        except ValueError as e:
+            parser.error(str(e))
 
     # Auto-detect terminal size if not specified
     try:
@@ -294,6 +415,10 @@ def main():
             args.height = min(args.height, term_size.lines - 4)
     except OSError:
         pass
+
+    # Ensure minimum dimensions after auto-detect
+    args.width = max(args.width, 3)
+    args.height = max(args.height, 3)
 
     sim = DLASimulator(
         width=args.width,
@@ -320,8 +445,6 @@ def main():
                 print(f"  {sim.particle_count}/{target} particles grown...", end="\r")
         lines = sim.render()
         with open(args.output, "w") as f:
-            # Strip ANSI codes for file output
-            import re
             for line in lines:
                 clean = re.sub(r'\033\[[0-9;]*m', '', line)
                 f.write(clean.rstrip() + "\n")
@@ -334,7 +457,6 @@ def main():
         while sim.particle_count < target:
             sim.step(count=args.speed)
         lines = sim.render()
-        import re
         for line in lines:
             clean = re.sub(r'\033\[[0-9;]*m', '', line)
             print(clean.rstrip())
@@ -406,7 +528,6 @@ def main():
                         paused = False
                     elif key == "s" or key == "S":
                         # Quick save
-                        import re
                         ts = int(time.time())
                         fname = f"crystal_{ts}.txt"
                         with open(fname, "w") as f:
