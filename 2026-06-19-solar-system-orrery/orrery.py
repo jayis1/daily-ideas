@@ -2,7 +2,7 @@
 """
 Solar System Orrery — An animated terminal-based orrery showing planets
 orbiting the Sun with real orbital data, zoom, speed controls, conjunction
-alerts, Earth's Moon, an asteroid belt, and a "go to date" feature.
+alerts, Earth's Moon, an asteroid belt, Halley's Comet, and a "go to date" feature.
 
 Enhancements from v1.0:
 - generate_stars() no longer crashes on zero/negative-dimension terminals
@@ -41,6 +41,17 @@ Bug fixes from v2.1:
 - Removed unused height/width parameters from generate_asteroids()
 - Added underscore key '_' as alias for '-' (slow down) for keyboard
   convenience
+
+Enhancements from v2.2:
+- Halley's Comet with a visible tail pointing away from the Sun (toggle C)
+- Distance from Earth shown in info panel
+- Elongation angle (Sun-Earth-Planet) shown in info panel, with
+  visibility status (Evening Star / Morning Star / Superior Conjunction / etc.)
+- Perihelion and aphelion distances shown in info panel
+- Retrograde motion indicator based on heliocentric longitude change
+- Comet orbit path drawn with a distinct style (dim dots)
+- Comet tail: series of trailing dots pointing radially away from the Sun
+- --comet CLI flag to start with comet visible
 """
 
 import argparse
@@ -51,7 +62,7 @@ import time
 from datetime import datetime, timedelta
 import sys
 
-__version__ = "2.1.0"
+__version__ = "2.2.0"
 
 # J2000 epoch reference date
 J2000_EPOCH = datetime(2000, 1, 1)
@@ -95,6 +106,20 @@ ASTEROID_BELT_COUNT = 60        # Number of asteroid dots
 
 # Conjunction detection threshold in degrees
 CONJUNCTION_THRESHOLD_DEG = 5.0
+
+# Halley's Comet orbital parameters
+# Semi-major axis: ~17.834 AU, Period: ~75.32 years, Eccentricity: ~0.967
+# Perihelion: ~0.586 AU, Aphelion: ~35.08 AU
+HALLEY_A = 17.834
+HALLEY_PERIOD = 75.32
+HALLEY_ECCENTRICITY = 0.967
+# Halley's comet argument of perihelion offset (simplified — places perihelion
+# at a realistic angle rather than along the X-axis)
+HALLEY_OMEGA = math.radians(111.33)  # Argument of perihelion
+HALLEY_TAIL_LENGTH = 8  # Number of tail segments
+
+# AU to km conversion
+AU_KM = 1.496e8  # km per AU
 
 
 def solve_kepler(M: float, e: float, tol: float = 1e-8) -> float:
@@ -164,6 +189,61 @@ def planet_position(a: float, period: float, e: float, years_since_epoch: float)
     return x, y
 
 
+def halley_position(years_since_epoch: float) -> tuple:
+    """Calculate (x, y) position in AU for Halley's Comet at a given time.
+
+    Unlike planets, Halley's orbit is rotated by its argument of perihelion
+    (111.33°), which places perihelion in the correct direction.
+
+    Args:
+        years_since_epoch: Time since J2000 epoch in years
+
+    Returns:
+        Tuple (x, y) in AU
+    """
+    x_unrot, y_unrot = planet_position(HALLEY_A, HALLEY_PERIOD, HALLEY_ECCENTRICITY,
+                                        years_since_epoch)
+    # Rotate by argument of perihelion
+    cos_w = math.cos(HALLEY_OMEGA)
+    sin_w = math.sin(HALLEY_OMEGA)
+    x = x_unrot * cos_w - y_unrot * sin_w
+    y = x_unrot * sin_w + y_unrot * cos_w
+    return x, y
+
+
+def halley_tail_segments(x: float, y: float, n_segments: int = HALLEY_TAIL_LENGTH) -> list:
+    """Calculate tail segment positions for Halley's Comet.
+
+    The comet tail always points away from the Sun. Each segment is placed
+    along the radial direction away from the Sun, with decreasing density
+    further from the comet.
+
+    Args:
+        x, y: Current position of Halley's Comet in AU
+        n_segments: Number of tail segments to generate
+
+    Returns:
+        List of (tx, ty) tuples in AU for each tail segment
+    """
+    r = math.sqrt(x * x + y * y)
+    if r < 1e-10:
+        return []
+    # Direction away from Sun
+    dx = x / r
+    dy = y / r
+    # Tail length scales with 1/r — brighter (longer tail) when closer to Sun
+    # At perihelion (~0.586 AU), tail is very long; at aphelion (~35 AU), essentially none
+    tail_base_length = 2.0 / max(r, 0.3)  # AU per segment unit, capped
+    segments = []
+    for i in range(1, n_segments + 1):
+        # Each segment is progressively further from the comet along the anti-solar direction
+        offset = tail_base_length * (i * 0.4)  # Spread segments out
+        tx = x + dx * offset
+        ty = y + dy * offset
+        segments.append((tx, ty))
+    return segments
+
+
 def orbital_velocity_km_s(a: float, period: float, r: float) -> float:
     """Calculate orbital velocity at a given distance from the Sun.
 
@@ -179,7 +259,6 @@ def orbital_velocity_km_s(a: float, period: float, r: float) -> float:
         Velocity in km/s
     """
     GM_SUN = 1.32712440018e11  # km³/s²
-    AU_KM = 1.496e8  # km per AU
     a_km = a * AU_KM
     r_km = r * AU_KM
     if r_km <= 0 or a_km <= 0:
@@ -188,6 +267,83 @@ def orbital_velocity_km_s(a: float, period: float, r: float) -> float:
     if v2 < 0:
         return 0.0
     return math.sqrt(v2)
+
+
+def compute_elongation(planet_x: float, planet_y: float,
+                       earth_x: float, earth_y: float) -> float:
+    """Compute the elongation angle of a planet as seen from Earth.
+
+    Elongation is the angle Sun-Earth-Planet. It determines whether
+    the planet is visible in the evening sky, morning sky, or hidden
+    near the Sun.
+
+    Args:
+        planet_x, planet_y: Planet position in AU
+        earth_x, earth_y: Earth position in AU
+
+    Returns:
+        Elongation angle in degrees (0-180)
+    """
+    # Vector from Earth to Sun: (-earth_x, -earth_y)
+    # Vector from Earth to Planet: (planet_x - earth_x, planet_y - earth_y)
+    sun_angle = math.atan2(-earth_y, -earth_x)
+    planet_angle = math.atan2(planet_y - earth_y, planet_x - earth_x)
+    diff = abs(sun_angle - planet_angle)
+    if diff > math.pi:
+        diff = 2 * math.pi - diff
+    return math.degrees(diff)
+
+
+def elongation_status(elongation_deg: float, planet_x: float, planet_y: float,
+                       earth_x: float, earth_y: float) -> str:
+    """Determine visibility status from elongation angle.
+
+    Args:
+        elongation_deg: The elongation angle in degrees
+        planet_x, planet_y: Planet position in AU
+        earth_x, earth_y: Earth position in AU
+
+    Returns:
+        Status string like "Evening Star", "Morning Star", etc.
+    """
+    if elongation_deg < 10:
+        return "Near Sun"
+    # Cross product to determine which side of the Sun the planet is on
+    # Positive = east of Sun (evening), negative = west (morning)
+    cross = (-earth_x) * (planet_y - earth_y) - (-earth_y) * (planet_x - earth_x)
+    if cross > 0:
+        return "Evening Star"
+    elif cross < 0:
+        return "Morning Star"
+    else:
+        if elongation_deg > 170:
+            return "Opposition"
+        return "Near Sun"
+
+
+def compute_retrograde(prev_x: float, prev_y: float,
+                        curr_x: float, curr_y: float) -> str:
+    """Determine if a planet is in retrograde motion.
+
+    Retrograde motion occurs when the planet's heliocentric longitude
+    is decreasing rather than increasing.
+
+    Args:
+        prev_x, prev_y: Previous position in AU
+        curr_x, curr_y: Current position in AU
+
+    Returns:
+        "Retrograde" or "Prograde"
+    """
+    prev_angle = math.atan2(prev_y, prev_x)
+    curr_angle = math.atan2(curr_y, curr_x)
+    # Normalize the difference to [-π, π]
+    diff = curr_angle - prev_angle
+    while diff > math.pi:
+        diff -= 2 * math.pi
+    while diff < -math.pi:
+        diff += 2 * math.pi
+    return "Retrograde" if diff < 0 else "Prograde"
 
 
 def detect_conjunctions(planet_positions: list, threshold_deg: float = CONJUNCTION_THRESHOLD_DEG) -> list:
@@ -296,8 +452,60 @@ def draw_orbit(stdscr, a: float, e: float, cx: int, cy: int,
                     pass
 
 
+def draw_halley_orbit(stdscr, cx: int, cy: int, scale: float, max_r: int,
+                      height: int, width: int):
+    """Draw the orbital path of Halley's Comet.
+
+    The comet's orbit is rotated by its argument of perihelion, so we
+    compute the rotated positions for each point.
+
+    Args:
+        stdscr: Curses window
+        cx, cy: Center coordinates
+        scale, max_r: Scaling parameters
+        height, width: Terminal dimensions for bounds checking
+    """
+    steps = 200  # More steps for the highly eccentric orbit
+    points = []
+    cos_w = math.cos(HALLEY_OMEGA)
+    sin_w = math.sin(HALLEY_OMEGA)
+    for i in range(steps + 1):
+        nu = 2 * math.pi * i / steps
+        r_au = HALLEY_A * (1 - HALLEY_ECCENTRICITY**2) / (1 + HALLEY_ECCENTRICITY * math.cos(nu))
+        # Rotate by argument of perihelion
+        x_unrot = r_au * math.cos(nu)
+        y_unrot = r_au * math.sin(nu)
+        x_au = x_unrot * cos_w - y_unrot * sin_w
+        y_au = x_unrot * sin_w + y_unrot * cos_w
+        sx, sy = au_to_screen(x_au, y_au, cx, cy, scale, max_r)
+        if 0 <= sy < height and 0 <= sx < width:
+            points.append((sx, sy))
+        elif points:
+            points.append((max(0, min(width - 1, sx)), max(0, min(height - 1, sy))))
+
+    # Draw comet orbit as scattered dots (less dense than planet orbits)
+    for i in range(len(points) - 1):
+        x1, y1 = points[i]
+        x2, y2 = points[i + 1]
+        dx = x2 - x1
+        dy = y2 - y1
+        steps_seg = max(abs(dx), abs(dy), 1)
+        # Only draw every 4th point for a sparse look
+        count = 0
+        for s in range(steps_seg + 1):
+            px = int(x1 + dx * s / steps_seg)
+            py = int(y1 + dy * s / steps_seg)
+            if 0 <= py < height and 0 <= px < width:
+                count += 1
+                if count % 4 == 0:
+                    try:
+                        stdscr.addch(py, px, ord('·'), curses.color_pair(14) | curses.A_DIM)
+                    except curses.error:
+                        pass
+
+
 def generate_asteroids(seed: int = 12345) -> list:
-    """Generate asteroid belt positions as (angle_fraction, radius_fraction, size_char).
+    """Generate asteroid belt positions as (angle_fraction, radius_fraction, angular_speed, char).
 
     Each asteroid is stored as a fraction of its orbital position so it can be
     animated. The angle_fraction is [0, 1) representing position around the orbit,
@@ -405,6 +613,24 @@ def format_date(dt: datetime) -> str:
     return dt.strftime("%Y-%m-%d")
 
 
+def format_distance_km(au: float) -> str:
+    """Format a distance in AU as a human-readable string.
+
+    Args:
+        au: Distance in AU
+
+    Returns:
+        Formatted string like "0.387 AU (57.9M km)" or "30.1 AU (4.50B km)"
+    """
+    km = au * AU_KM
+    if km >= 1e9:
+        return f"{au:.3f} AU ({km/1e9:.2f}B km)"
+    elif km >= 1e6:
+        return f"{au:.3f} AU ({km/1e6:.1f}M km)"
+    else:
+        return f"{au:.3f} AU ({km/1e3:.0f}K km)"
+
+
 class OrreryState:
     """Tracks the current state of the orrery simulation."""
 
@@ -417,13 +643,16 @@ class OrreryState:
         self.show_orbits = True
         self.show_labels = True
         self.show_trails = True
-        self.show_asteroids = False  # New: asteroid belt toggle
-        self.show_moon = True  # New: show Earth's Moon
+        self.show_asteroids = False  # Toggle with A
+        self.show_moon = True  # Toggle with M
+        self.show_comet = False  # Toggle with C — Halley's Comet
         self.input_mode = None  # None, 'date', 'speed'
         self.input_buffer = ""
         self.trail_positions = {i: [] for i in range(len(PLANETS))}
         self.max_trail = 200
         self.conjunctions = []  # Current conjunction alerts
+        # Previous planet positions for retrograde detection
+        self.prev_positions = None
 
     @property
     def speed(self):
@@ -485,6 +714,8 @@ def main(stdscr):
     curses.init_pair(12, curses.COLOR_BLACK, curses.COLOR_WHITE)
     # Pair 13 = conjunction alert (bright red)
     curses.init_pair(13, curses.COLOR_RED, -1)
+    # Pair 14 = comet (bright cyan)
+    curses.init_pair(14, curses.COLOR_CYAN, -1)
 
     # Build runtime planet data with color pairs assigned
     planet_data = []
@@ -579,6 +810,9 @@ def main(stdscr):
             elif key == ord('m') or key == ord('M'):
                 # Toggle Moon
                 state.show_moon = not state.show_moon
+            elif key == ord('c') or key == ord('C'):
+                # Toggle Halley's Comet
+                state.show_comet = not state.show_comet
             elif key == ord('d') or key == ord('D'):
                 state.input_mode = 'date'
                 state.input_buffer = ""
@@ -602,6 +836,7 @@ def main(stdscr):
                 state.speed = 1.0
                 state.trail_positions = {i: [] for i in range(len(PLANETS))}
                 state.show_trails = True
+                state.prev_positions = None
 
         # Update time
         if not state.paused:
@@ -637,6 +872,9 @@ def main(stdscr):
         if state.show_orbits and max_r > 0:
             for i, (name, a, period, e, sym, cp, usym) in enumerate(planet_data):
                 draw_orbit(stdscr, a, e, cx, cy, state.scale, max_r, cp, height, width)
+            # Draw Halley's comet orbit if enabled
+            if state.show_comet:
+                draw_halley_orbit(stdscr, cx, cy, state.scale, max_r, height, width)
 
         # Draw asteroid belt
         if state.show_asteroids and max_r > 0:
@@ -662,6 +900,7 @@ def main(stdscr):
         # Draw planets
         planet_info = []
         all_positions = []
+        earth_x, earth_y = 0.0, 0.0  # Track Earth position for distance calculations
         for i, (name, a, period, e, sym, cp, usym) in enumerate(planet_data):
             x, y = planet_position(a, period, e, years_since_epoch)
             sx, sy = au_to_screen(x, y, cx, cy, state.scale, max_r)
@@ -669,7 +908,30 @@ def main(stdscr):
             r_current = math.sqrt(x**2 + y**2)
             # Compute orbital velocity
             v_km_s = orbital_velocity_km_s(a, period, r_current)
-            planet_info.append((name, a, period, e, sym, cp, usym, x, y, sx, sy, r_current, v_km_s))
+            # Track Earth position
+            if name == "Earth":
+                earth_x, earth_y = x, y
+            # Distance from Earth
+            dist_from_earth = math.sqrt((x - earth_x)**2 + (y - earth_y)**2)
+            # Elongation angle
+            if name != "Earth":
+                elongation = compute_elongation(x, y, earth_x, earth_y)
+                e_status = elongation_status(elongation, x, y, earth_x, earth_y)
+            else:
+                elongation = 0.0
+                e_status = "(self)"
+            # Perihelion and aphelion distances
+            perihelion = a * (1 - e)
+            aphelion = a * (1 + e)
+            # Retrograde/prograde status
+            retro_status = "—"
+            if state.prev_positions is not None and i < len(state.prev_positions):
+                prev_x, prev_y = state.prev_positions[i]
+                retro_status = compute_retrograde(prev_x, prev_y, x, y)
+
+            planet_info.append((name, a, period, e, sym, cp, usym, x, y, sx, sy,
+                               r_current, v_km_s, dist_from_earth, elongation, e_status,
+                               perihelion, aphelion, retro_status))
             all_positions.append((x, y))
 
             # Draw trail
@@ -729,6 +991,43 @@ def main(stdscr):
                     except curses.error:
                         pass
 
+        # Draw Halley's Comet
+        if state.show_comet:
+            try:
+                hx, hy = halley_position(years_since_epoch)
+                hsx, hsy = au_to_screen(hx, hy, cx, cy, state.scale, max_r)
+                # Draw comet tail (anti-solar direction)
+                tail_segs = halley_tail_segments(hx, hy)
+                for idx, (tx, ty) in enumerate(tail_segs):
+                    tsx, tsy = au_to_screen(tx, ty, cx, cy, state.scale, max_r)
+                    if 0 <= tsy < height and 0 <= tsx < width:
+                        # Tail fades — use dim attribute for later segments
+                        try:
+                            if idx < 3:
+                                stdscr.addch(tsy, tsx, ord('~'), curses.color_pair(14) | curses.A_BOLD)
+                            else:
+                                stdscr.addch(tsy, tsx, ord('.'), curses.color_pair(14) | curses.A_DIM)
+                        except curses.error:
+                            pass
+                # Draw comet body
+                if 0 <= hsy < height and 0 <= hsx < width:
+                    try:
+                        if hsx + 1 < width:
+                            stdscr.addstr(hsy, hsx, "☄", curses.color_pair(14) | curses.A_BOLD)
+                        else:
+                            stdscr.addch(hsy, hsx, ord('C'), curses.color_pair(14) | curses.A_BOLD)
+                    except (curses.error, UnicodeEncodeError):
+                        try:
+                            stdscr.addch(hsy, hsx, ord('C'), curses.color_pair(14) | curses.A_BOLD)
+                        except curses.error:
+                            pass
+            except ValueError:
+                # Halley's comet orbit may produce numerical issues at extreme eccentricity
+                pass
+
+        # Store current positions for retrograde detection on next frame
+        state.prev_positions = [(x, y) for (x, y) in all_positions]
+
         # Detect conjunctions
         state.conjunctions = detect_conjunctions(all_positions)
 
@@ -738,26 +1037,32 @@ def main(stdscr):
 
         sel = state.selected_planet
         sel_name, sel_a, sel_period, sel_e, sel_sym, sel_cp, sel_usym, \
-            sel_x, sel_y, _, _, sel_r, sel_v = planet_info[sel]
+            sel_x, sel_y, _, _, sel_r, sel_v, sel_dist_earth, sel_elongation, \
+            sel_e_status, sel_perihelion, sel_aphelion, sel_retro = planet_info[sel]
 
         trail_status = "ON" if state.show_trails else "OFF"
         moon_status = "ON" if state.show_moon else "OFF"
         belt_status = "ON" if state.show_asteroids else "OFF"
+        comet_status = "ON" if state.show_comet else "OFF"
 
         lines = [
             f"╔══ Solar System Orrery ══╗",
             f"  Date: {format_date(state.current_date)}",
             f"  Speed: {state.speed:.2f} days/sec",
             f"  {'PAUSED' if state.paused else 'RUNNING'}  Trails: {trail_status}",
-            f"  Moon: {moon_status}  Belt: {belt_status}",
+            f"  Moon: {moon_status}  Belt: {belt_status}  ☄:{comet_status}",
             f"╠════════════════════════╣",
             f"  Planet: {sel_name}",
             f"  Semi-major: {sel_a:.3f} AU",
-            f"  Distance: {sel_r:.3f} AU",
+            f"  Perihelion: {sel_perihelion:.3f} AU",
+            f"  Aphelion: {sel_aphelion:.3f} AU",
+            f"  Distance☀: {sel_r:.3f} AU",
+            f"  Distance⊕: {sel_dist_earth:.3f} AU",
             f"  Velocity: {sel_v:.1f} km/s",
             f"  Period: {sel_period:.3f} years",
             f"  Eccentricity: {sel_e:.3f}",
-            f"  Position: ({sel_x:+.2f}, {sel_y:+.2f}) AU",
+            f"  Elongation: {sel_elongation:.1f}° {sel_e_status}",
+            f"  Motion: {sel_retro}",
             f"╚════════════════════════╝",
         ]
 
@@ -768,6 +1073,18 @@ def main(stdscr):
             for i, j, sep in state.conjunctions[:3]:  # Show max 3
                 lines.append(f"    {PLANETS[i][0]}-{PLANETS[j][0]}: {sep:.1f}°")
 
+        # Add Halley's Comet info if visible
+        if state.show_comet:
+            try:
+                hx, hy = halley_position(years_since_epoch)
+                h_r = math.sqrt(hx * hx + hy * hy)
+                h_v = orbital_velocity_km_s(HALLEY_A, HALLEY_PERIOD, h_r)
+                lines.append("")
+                lines.append(f"  ☄ Halley's Comet:")
+                lines.append(f"    Dist☀: {h_r:.2f} AU  V: {h_v:.1f} km/s")
+            except ValueError:
+                pass
+
         for idx, line in enumerate(lines):
             row = panel_y + idx
             if 0 <= row < height - 1:
@@ -775,7 +1092,7 @@ def main(stdscr):
 
         # --- Controls ---
         controls_y = height - 2
-        controls = "SPC:Pause +/-:Speed ↑↓:Zoom ←→:Planet O:Orbits L:Labels T:Trails A:Belt M:Moon D:Date S:Speed H:Today R:Reset Q:Quit"
+        controls = "SPC:Pause +/-:Speed ↑↓:Zoom ←→:Planet O:Orbits L:Labels T:Trails A:Belt M:Moon C:Comet D:Date S:Speed H:Today R:Reset Q:Quit"
         if controls_y > 0:
             safe_addstr(stdscr, controls_y, 1, controls, curses.color_pair(10) | curses.A_DIM, height, width)
 
@@ -808,7 +1125,7 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Solar System Orrery — An animated terminal-based orrery with real orbital mechanics",
         epilog="Controls: SPC=Pause  +/-=Speed  ↑↓=Zoom  ←→=Select  O=Orbits  L=Labels  "
-               "T=Trails  A=Asteroid belt  M=Moon  D=Date  S=Speed  H=Today  R=Reset  Q=Quit"
+               "T=Trails  A=Asteroid belt  M=Moon  C=Comet  D=Date  S=Speed  H=Today  R=Reset  Q=Quit"
     )
     parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}')
     parser.add_argument('--date', '-d', type=str, default=None,
@@ -821,6 +1138,8 @@ def parse_args():
                        help='Start with Moon hidden')
     parser.add_argument('--asteroids', action='store_true',
                        help='Start with asteroid belt visible')
+    parser.add_argument('--comet', action='store_true',
+                       help='Start with Halley\'s Comet visible')
     return parser.parse_args()
 
 
@@ -854,6 +1173,8 @@ if __name__ == "__main__":
                 self.show_moon = False
             if args.asteroids:
                 self.show_asteroids = True
+            if args.comet:
+                self.show_comet = True
 
         OrreryState.__init__ = patched_init
         try:
