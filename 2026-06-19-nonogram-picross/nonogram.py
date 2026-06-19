@@ -16,7 +16,7 @@ A terminal-based Nonogram puzzle game with:
 - No-color mode (--no-color)
 - --help and --version flags
 
-Version: 3.0.0
+Version: 3.1.0
 """
 
 import random
@@ -27,7 +27,7 @@ import os
 import copy
 from collections import defaultdict
 
-__version__ = "3.0.0"
+__version__ = "3.1.0"
 
 # ─── ANSI Helpers ────────────────────────────────────────────────────────────
 
@@ -35,51 +35,101 @@ __version__ = "3.0.0"
 _NO_COLOR = False
 
 
-class Style:
-    """ANSI escape code constants for terminal formatting."""
-    RESET = "\033[0m"
-    BOLD = "\033[1m"
-    DIM = "\033[2m"
-    UNDERLINE = "\033[4m"
-    RED = "\033[91m"
-    GREEN = "\033[92m"
-    YELLOW = "\033[93m"
-    BLUE = "\033[94m"
-    MAGENTA = "\033[95m"
-    CYAN = "\033[96m"
-    WHITE = "\033[97m"
-    BG_WHITE = "\033[47m"
-    BG_BLACK = "\033[40m"
-    BG_RED = "\033[41m"
-    BG_GREEN = "\033[42m"
-    BG_YELLOW = "\033[43m"
-    BG_BLUE = "\033[44m"
-    BG_MAGENTA = "\033[45m"
-    BG_CYAN = "\033[46m"
-    BG_GRAY = "\033[100m"
+class _StyleMeta(type):
+    """Metaclass that makes Style attributes respect _NO_COLOR.
+    
+    When _NO_COLOR is True, all ANSI codes are replaced with empty strings.
+    When _NO_COLOR is False (default), the real ANSI codes are returned.
+    
+    RESET is always available even in no-color mode so that code that
+    uses it for cleanup doesn't break.
+    """
+    _ANSI_CODES = {
+        "RESET": "\033[0m",
+        "BOLD": "\033[1m",
+        "DIM": "\033[2m",
+        "UNDERLINE": "\033[4m",
+        "RED": "\033[91m",
+        "GREEN": "\033[92m",
+        "YELLOW": "\033[93m",
+        "BLUE": "\033[94m",
+        "MAGENTA": "\033[95m",
+        "CYAN": "\033[96m",
+        "WHITE": "\033[97m",
+        "BG_WHITE": "\033[47m",
+        "BG_BLACK": "\033[40m",
+        "BG_RED": "\033[41m",
+        "BG_GREEN": "\033[42m",
+        "BG_YELLOW": "\033[43m",
+        "BG_BLUE": "\033[44m",
+        "BG_MAGENTA": "\033[45m",
+        "BG_CYAN": "\033[46m",
+        "BG_GRAY": "\033[100m",
+    }
+
+    def __getattr__(cls, name):
+        if name in cls._ANSI_CODES:
+            if _NO_COLOR:
+                return ""  # Suppress all ANSI codes in no-color mode
+            return cls._ANSI_CODES[name]
+        raise AttributeError(f"type object '{cls.__name__}' has no attribute '{name}'")
+
+
+class Style(metaclass=_StyleMeta):
+    """ANSI escape code constants for terminal formatting.
+
+    Accessing any attribute (e.g. Style.RED) returns the real ANSI
+    escape sequence when _NO_COLOR is False, or an empty string when
+    _NO_COLOR is True. This makes --no-color / NO_COLOR fully
+    effective without changing any display code.
+    """
+    pass
+
+
+def s(text, *codes):
+    """Apply ANSI style codes to text, respecting _NO_COLOR flag.
+    
+    When _NO_COLOR is True, returns text without any ANSI codes.
+    When _NO_COLOR is False (default), wraps text with the given
+    ANSI codes and a trailing RESET.
+    
+    Args:
+        text: The string to style.
+        *codes: ANSI escape code strings from the Style class.
+    
+    Returns:
+        Styled string.
+    """
+    if _NO_COLOR:
+        return text
+    return "".join(codes) + text + Style.RESET
 
 
 def clear_screen():
-    """Clear the terminal screen (cross-platform)."""
-    os.system("cls" if os.name == "nt" else "clear")
+    """Clear the terminal screen (cross-platform). Skipped in no-color mode."""
+    if not _NO_COLOR:
+        os.system("cls" if os.name == "nt" else "clear")
 
 
 def move_cursor(row, col):
-    """Move the terminal cursor to (row, col)."""
-    sys.stdout.write(f"\033[{row};{col}H")
-    sys.stdout.flush()
+    """Move the terminal cursor to (row, col). Skipped in no-color mode."""
+    if not _NO_COLOR:
+        sys.stdout.write(f"\033[{row};{col}H")
+        sys.stdout.flush()
 
 
 def hide_cursor():
-    """Hide the terminal cursor."""
-    sys.stdout.write("\033[?25l")
-    sys.stdout.flush()
+    """Hide the terminal cursor. Skipped in no-color mode."""
+    if not _NO_COLOR:
+        sys.stdout.write("\033[?25l")
+        sys.stdout.flush()
 
 
 def show_cursor():
-    """Show the terminal cursor."""
-    sys.stdout.write("\033[?25h")
-    sys.stdout.flush()
+    """Show the terminal cursor. Skipped in no-color mode."""
+    if not _NO_COLOR:
+        sys.stdout.write("\033[?25h")
+        sys.stdout.flush()
 
 
 # ─── Nonogram Logic ──────────────────────────────────────────────────────────
@@ -587,15 +637,25 @@ def generate_puzzle(rows, cols, difficulty="medium", seed=None):
     from the original seed and keeps trying.
 
     Args:
-        rows: Number of rows
-        cols: Number of columns
+        rows: Number of rows (must be >= 2)
+        cols: Number of columns (must be >= 2)
         difficulty: 'easy', 'medium', or 'hard'
         seed: Optional random seed for reproducibility
 
     Returns:
         Tuple of (grid, row_clues, col_clues) where grid is the solver's
         canonical solution (guaranteed unique for easy/medium).
+
+    Raises:
+        ValueError: If rows or cols < 2, or difficulty is invalid.
     """
+    if not isinstance(rows, int) or rows < 2:
+        raise ValueError(f"rows must be an integer >= 2, got {rows}")
+    if not isinstance(cols, int) or cols < 2:
+        raise ValueError(f"cols must be an integer >= 2, got {cols}")
+    if difficulty not in ("easy", "medium", "hard"):
+        raise ValueError(f"difficulty must be 'easy', 'medium', or 'hard', got '{difficulty}'")
+
     if seed is not None:
         rng = random.Random(seed)
     else:
@@ -660,18 +720,32 @@ def generate_pattern(rows, cols, difficulty, rng=None):
     Generate a random pattern with structure appropriate to the difficulty.
 
     Args:
-        rows: Grid height
-        cols: Grid width
+        rows: Grid height (must be >= 1)
+        cols: Grid width (must be >= 1)
         difficulty: 'easy', 'medium', or 'hard'
         rng: Random.Random instance for reproducibility (optional)
 
     Returns:
         2D list of 0s and 1s
+
+    Raises:
+        ValueError: If rows or cols < 1.
     """
+    if rows < 1 or cols < 1:
+        raise ValueError(f"Pattern dimensions must be >= 1, got {rows}x{cols}")
+
     if rng is None:
         rng = random.Random()
 
     grid = [[0] * cols for _ in range(rows)]
+
+    # Handle 1-row or 1-column grids: just use random fill
+    if rows == 1 or cols == 1:
+        for r in range(rows):
+            for c in range(cols):
+                if rng.random() < 0.5:
+                    grid[r][c] = 1
+        return grid
 
     if difficulty == "easy":
         # Simple shapes - rectangles and crosses with some random fill
@@ -737,13 +811,20 @@ def check_solution(player_grid, solution):
         solution: The correct solution grid
 
     Returns:
-        True if all cells match the solution
+        True if all cells match the solution, False if dimensions
+        don't match, cells are unknown, or values differ.
     """
+    # Validate dimensions match
+    if len(player_grid) != len(solution):
+        return False
+    for r in range(len(solution)):
+        if len(player_grid[r]) != len(solution[r]):
+            return False
     for r in range(len(solution)):
         for c in range(len(solution[0])):
             pv = player_grid[r][c]
             sv = solution[r][c]
-            if pv == -1:
+            if pv is None or pv == -1:
                 return False
             if pv == 1 and sv != 1:
                 return False
@@ -924,6 +1005,22 @@ def load_game_state(json_str):
     if not isinstance(cols, int) or cols <= 0:
         raise ValueError(f"Invalid cols: {cols}")
 
+    # Validate player_grid dimensions match rows and cols
+    player_grid = data["player_grid"]
+    if not isinstance(player_grid, list) or len(player_grid) != rows:
+        raise ValueError(f"player_grid must have {rows} rows, got {len(player_grid) if isinstance(player_grid, list) else 'non-list'}")
+    for i, row in enumerate(player_grid):
+        if not isinstance(row, list) or len(row) != cols:
+            raise ValueError(f"player_grid row {i} must have {cols} columns, got {len(row) if isinstance(row, list) else 'non-list'}")
+
+    # Validate cursor position is within bounds
+    cursor_r = data["cursor_r"]
+    cursor_c = data["cursor_c"]
+    if not isinstance(cursor_r, int) or cursor_r < 0 or cursor_r >= rows:
+        raise ValueError(f"Invalid cursor_r: {cursor_r}")
+    if not isinstance(cursor_c, int) or cursor_c < 0 or cursor_c >= cols:
+        raise ValueError(f"Invalid cursor_c: {cursor_c}")
+
     # Create game from imported puzzle
     game = NonogramGame.__new__(NonogramGame)
     game.difficulty = data["difficulty"]
@@ -967,16 +1064,23 @@ def compute_progress(player_grid, solution):
         solution: The solution grid
 
     Returns:
-        Float between 0.0 and 1.0
+        Float between 0.0 and 1.0. Returns 0.0 if dimensions
+        don't match or grids are empty.
     """
-    if not solution:
+    if not solution or not player_grid:
+        return 0.0
+    if len(player_grid) != len(solution):
         return 0.0
     total = len(solution) * len(solution[0])
     if total == 0:
         return 0.0
     correct = 0
     for r in range(len(solution)):
+        if r >= len(player_grid):
+            break
         for c in range(len(solution[0])):
+            if c >= len(player_grid[r]):
+                break
             if player_grid[r][c] != -1 and player_grid[r][c] == solution[r][c]:
                 correct += 1
     return correct / total
@@ -993,6 +1097,10 @@ class NonogramGame:
     EMPTY = 0     # Marked as empty (X-mark)
 
     def __init__(self, size=10, difficulty="medium", seed=None):
+        if not isinstance(size, int) or size < 2:
+            raise ValueError(f"Puzzle size must be an integer >= 2, got {size}")
+        if difficulty not in ("easy", "medium", "hard"):
+            raise ValueError(f"Difficulty must be 'easy', 'medium', or 'hard', got '{difficulty}'")
         self.difficulty = difficulty
         self.rows = size
         self.cols = size

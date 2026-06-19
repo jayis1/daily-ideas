@@ -9,17 +9,32 @@ Each dinosaur gets:
   - A procedurally generated binomial name
   - An era, period, and habitat
   - Body type, diet, size, weight
-  - Attack and defense stats
+  - Attack, defense, speed, intelligence stats
   - Special abilities
   - An ASCII art silhouette
   - A formatted "trading card" display
+
+Features:
+  - Interactive REPL with generation, battle, and collection tracking
+  - Battle system with weighted stat calculation and randomness
+  - DinoDex collection tracker with summaries and Wall of Fame
+  - Tournament mode: bracket-style elimination
+  - Side-by-side comparison of two dinosaurs
+  - JSON export for each dinosaur
+  - Seeded generation for reproducibility
+  - --version and --help CLI flags
+
+Version: 2.0.0
 """
 
 import random
 import math
 import sys
-from dataclasses import dataclass, field
-from typing import Optional
+import json
+from dataclasses import dataclass, field, asdict
+from typing import Optional, List
+
+__version__ = "2.0.0"
 
 
 # === Name Generation ==========================================================
@@ -64,7 +79,19 @@ HABITAT_ADJECTIVES = {
 }
 
 
-def generate_name(habitat: str):
+def generate_name(habitat: str) -> tuple:
+    """Generate a random binomial dinosaur name.
+
+    Combines Greek/Latin genus prefixes with taxonomic suffixes, and picks
+    a species epithet that may reference the habitat, be purely descriptive,
+    or form a compound name.
+
+    Args:
+        habitat: The dinosaur's habitat type (used to influence species name).
+
+    Returns:
+        A tuple of (genus, species) strings.
+    """
     genus = random.choice(GENUS_PREFIXES) + random.choice(GENUS_SUFFIXES)
     style = random.random()
     if style < 0.4:
@@ -245,196 +272,203 @@ EGG_TYPES = [
     "soft-shelled, 12cm, in communal pit",
 ]
 
+# Personality adjectives that add flavor
+PERSONALITY_TRAITS = [
+    "territorial", "curious", "aggressive", "docile", "nocturnal",
+    "migratory", "solitary", "social", "cautious", "fearless",
+    "ambush-oriented", "opportunistic", "pack-hunting", "nest-protective",
+]
+
 
 # === ASCII Art Templates ======================================================
 
-ART_THEROPOD_LARGE = """
+ART_THEROPOD_LARGE = r"""
                           .-^^^^^-.
                          /        \\
                         /          \\
                   __   /    _   _   \\
-                 /  \\_/    / \\ / \\   \\
-                /    |     \\_/ \\_/    \\
+                 /  \_/    / \ / \   \\
+                /    |     \_/ \_/    \\
           ____ |  O  |      _   _      |
-         /    \\|     /     / \\ / \\     |
-        |   O  \\____/      \\_/ \\_/     |
+         /    \|     /     / \ / \     |
+        |   O  \____/      \_/ \_/     |
         |      /              |        /
-         \\____/               |       /
+         \____/               |       /
             |               __|__    /
             |              |    |  /
             |              | O  | /
-            \\              |    |/
-             \\_____________|    |
+            \              |    |/
+             \_____________|    |
                           |    |
                          _|    |_
                         |________|
 """.strip()
 
-ART_THEROPOD_SMALL = """
-                       /\\____/\\
-                      /        \\
+ART_THEROPOD_SMALL = r"""
+                       /\____/\
+                      /        \
                      |  O    O |
-                      \\   __   /
-                       | /  \\ |
-                      /| \\__/ |\\
-                     / |      | \\
-                       /      \\
-                      /        \\
+                      \   __   /
+                       | /  \ |
+                      /| \__/ |\
+                     / |      | \
+                       /      \
+                      /        \
                      |  |    |  |
                      |  |    |  |
-                     /  /    \\  \\
+                     /  /    \  \
 """.strip()
 
-ART_SAUROPOD = """
+ART_SAUROPOD = r"""
                                  ____
                           _..--^v    ^v--.._
                        .-'                  '-.
-                      /                        \\
-                     /        __         __      \\
-                    |       /    \\     /    \\     |
+                      /                        \
+                     /        __         __      \
+                    |       /    \     /    \     |
                     |      | O  O|   | O  O|     |
-                     \\      \\____/     \\____/    /
+                     \      \____/     \____/    /
                       '-._                _.-'
                           '-..        ..-'
                               |      |
-                             /|      |\\
-                            / |      | \\
+                             /|      |\
+                            / |      | \
                               |      |
                               |      |
-                             /        \\
-                            /          \\
-                           /|          |\\
-                          / |          | \\
+                             /        \
+                            /          \
+                           /|          |\
+                          / |          | \
                             |          |
                             |          |
-                           /            \\
-                          /              \\
+                           /            \
+                          /              \
 """.strip()
 
-ART_CERATOPSIA = """
+ART_CERATOPSIA = r"""
                            __
                      _..--^  ^--.._
                   .-'    ____     '-.
-                 /    .-'    '-.     \\
-                /    /   O  O  \\     \\
+                 /    .-'    '-.     \
+                /    /   O  O  \     \
                |    |     __     |     |
-               |     \\   \\/    /      |
-                \\     '.______.'      /
+               |     \   \/    /      |
+                \     '.______.'      /
                  '._              _.'
                     '-..______..-'
-                   /    |    |    \\
+                   /    |    |    \
                   |     |    |     |
                   |   O |    |  O  |
                   |     |____|     |
-                   \\    /    \\    /
+                   \    /    \    /
                     |  |      |  |
                     |  |      |  |
-                   /   /      \\   \\
+                   /   /      \   \
 """.strip()
 
-ART_ANKYLOSAUR = """
+ART_ANKYLOSAUR = r"""
                         _..---^^---.._
                     .-'              '-.
-                   /                    \\
+                   /                    \
                   |  []  []  []  []  []  |
                   |   __    __    __    |
-                   \\ /  \\ /  \\ /  \\  /
+                   \ /  \ /  \ /  \  /
                    |____|____|____|____|
-                  /                    \\
+                  /                    \
                  |  O              O    |
                  |                      |
-                  \\                    /
+                  \                    /
                    '.              ,-'
                      '-..______..-'
                        |  |  |
                        |  |  |
-                      /   /   \\
-                     /___/ \\___\\
+                      /   /   \
+                     /___/ \___\
 """.strip()
 
-ART_STEGOSAUR = """
+ART_STEGOSAUR = r"""
                         ___
-                      //||\\\\
-                     // || \\\\
-                    //  ||  \\\\
-                   //   ||   \\\\
-                  //    ||    \\\\
-                 //_____||______\\\\
+                      //||\\
+                     // || \\
+                    //  ||  \\
+                   //   ||   \\
+                  //    ||    \\
+                 //_____||______\\
                  |______||_______|
                      |  ____  |
-                     | /    \\ |
-                     |/ O  O \\|
-                      |\\____/ |
+                     | /    \ |
+                     |/ O  O \|
+                      |\____/ |
                       |       |
-                       \\     /
-                      __\\   /__
-                     /  |   |  \\
-                    /   |   |   \\
-                   /____|___|____\\
+                       \     /
+                      __\   /__
+                     /  |   |  \
+                    /   |   |   \
+                   /____|___|____\
                          |   |
-                        /    \\
-                       /      \\
+                        /    \
+                       /      \
 """.strip()
 
-ART_ORNITHOPOD = """
+ART_ORNITHOPOD = r"""
                        ___
-                     /     \\
+                     /     \
                     |  O  O |
-                     \\  __  /
-                     /|    |\\
-                    / |    | \\
-                   /  |____|  \\
-                  /            \\
-                 /    _    _    \\
-                |    / \\  / \\    |
-                |    \\_/  \\_/    |
-                 \\              /
+                     \  __  /
+                     /|    |\
+                    / |    | \
+                   /  |____|  \
+                  /            \
+                 /    _    _    \
+                |    / \  / \    |
+                |    \_/  \_/    |
+                 \              /
                   '.__        _.'
                      |        |
                      |   ||   |
                      |   ||   |
                      |   ||   |
-                    /    ||    \\
-                   /_____||____\\
+                    /    ||    \
+                   /_____||____\
 """.strip()
 
-ART_PTEROSAUR = """
+ART_PTEROSAUR = r"""
                            _
-                         /   \\
-                        / O   O\\
-                       /  ___   \\
-                      / /     \\  \\
-                 ___/ /         \\ \\___
-            ___/     /           \\     \\___
-           /________/             \\________\\
-                   /               \\
-                  /_________________\\
+                         /   \
+                        / O   O\
+                       /  ___   \
+                      / /     \  \
+                 ___/ /         \ \___
+            ___/     /           \     \___
+           /________/             \________\
+                   /               \
+                  /_________________\
                         |   |
                         |___|
-                         / \\
-                        /   \\
+                         / \
+                        /   \
 """.strip()
 
-ART_THERIZINOSAUR = """
+ART_THERIZINOSAUR = r"""
                           _..--^^--.._
-                        /    ____    \\
-                       /    /    \\    \\
+                        /    ____    \
+                       /    /    \    \
                       |    | O  O |    |
-                      |     \\____/     |
-                       \\    /    \\    /
-                        '--/      \\--'
-                     ___/ /|      |\\ \\___
-                    /    / |      | \\    \\
-                   /    /  |      |  \\    \\
+                      |     \____/     |
+                       \    /    \    /
+                        '--/      \--'
+                     ___/ /|      |\ \___
+                    /    / |      | \    \
+                   /    /  |      |  \    \
                   |    |   |______|   |    |
-                  |    |   /      \\   |    |
-                  |     \\ /   __   \\ /     |
-                   \\     |   /  \\   |     /
-                    \\    |  /    \\  |    /
-                     \\   |  \\____/  |   /
-                      \\  |          |  /
-                       \\ |          | /
-                        \\|          |/
+                  |    |   /      \   |    |
+                  |     \ /   __   \ /     |
+                   \     |   /  \   |     /
+                    \    |  /    \  |    /
+                     \   |  \____/  |   /
+                      \  |          |  /
+                       \ |          | /
+                        \|          |/
 """.strip()
 
 BODY_ART_MAP = {
@@ -453,6 +487,7 @@ BODY_ART_MAP = {
 
 @dataclass
 class Dinosaur:
+    """A procedurally generated dinosaur with stats, appearance, and abilities."""
     genus: str
     species: str
     era: str
@@ -473,30 +508,61 @@ class Dinosaur:
     speed: int
     intelligence: int
     rarity: str
+    personality: str = ""
     art: str = ""
 
     @property
     def full_name(self) -> str:
+        """Return the binomial name of the dinosaur."""
         return f"{self.genus} {self.species}"
 
     @property
     def stat_total(self) -> int:
+        """Return the sum of all combat stats."""
         return self.attack + self.defense + self.speed + self.intelligence
 
+    def to_dict(self) -> dict:
+        """Convert dinosaur to a JSON-serializable dictionary."""
+        d = {}
+        d["full_name"] = self.full_name
+        d["stat_total"] = self.stat_total
+        d.update(asdict(self))
+        return d
 
-def generate_dinosaur(seed=None) -> Dinosaur:
-    """Generate a random dinosaur with procedurally determined attributes."""
+    def to_json(self) -> str:
+        """Serialize dinosaur to a formatted JSON string."""
+        return json.dumps(self.to_dict(), indent=2)
+
+
+def generate_dinosaur(seed=None, body_type=None) -> Dinosaur:
+    """Generate a random dinosaur with procedurally determined attributes.
+
+    Args:
+        seed: Optional random seed for reproducible generation.
+        body_type: Optional specific body type to generate. If provided,
+                   the dinosaur will be of this type rather than random.
+
+    Returns:
+        A fully populated Dinosaur instance.
+    """
     if seed is not None:
         random.seed(seed)
 
     era_name, (era_start, era_end) = random.choice(ERAS)
     period = random.choice(PERIODS_BY_ERA[era_name])
-    mya = random.randint(era_end, era_start)
 
     habitat = random.choice(HABITATS)
 
-    body_type = random.choice(list(BODY_TYPES.keys()))
-    bt_data = BODY_TYPES[body_type]
+    # Use specified body_type if provided, otherwise random
+    if body_type is not None:
+        if body_type not in BODY_TYPES:
+            raise ValueError(f"Unknown body type: {body_type!r}. "
+                             f"Valid types: {list(BODY_TYPES.keys())}")
+        chosen_type = body_type
+    else:
+        chosen_type = random.choice(list(BODY_TYPES.keys()))
+
+    bt_data = BODY_TYPES[chosen_type]
 
     genus, species = generate_name(habitat)
 
@@ -516,28 +582,29 @@ def generate_dinosaur(seed=None) -> Dinosaur:
     weight_kg = min_w + (max_w - min_w) * (weight_ratio ** 2.5)
     weight_kg = round(max(min_w, min(max_w, weight_kg * random.uniform(0.8, 1.2))), 0)
 
-    if body_type == "pterosaur":
+    if chosen_type == "pterosaur":
         diet = random.choice(["carnivore", "piscivore"])
-    elif body_type == "therizinosaur":
+    elif chosen_type == "therizinosaur":
         diet = "herbivore"
-    elif body_type == "theropod":
+    elif chosen_type == "theropod":
         diet = random.choice(["carnivore", "carnivore", "omnivore"])
-    elif body_type == "ornithopod":
+    elif chosen_type == "ornithopod":
         diet = random.choice(["herbivore", "herbivore", "omnivore"])
     else:
         diet = bt_data["diet"]
 
     skin_pattern = random.choice(SKIN_PATTERNS)
 
-    if body_type in ("theropod", "therizinosaur", "ornithopod"):
+    if chosen_type in ("theropod", "therizinosaur", "ornithopod"):
         feathers = random.choice(FEATHER_TYPES)
-    elif body_type == "pterosaur":
+    elif chosen_type == "pterosaur":
         feathers = random.choice(["pycnofibers (hair-like filaments)", "dense pycnofiber coat"])
     else:
         feathers = random.choice(FEATHER_TYPES[:2])
 
-    ability = random.choice(SPECIAL_ABILITIES.get(body_type, ["Tenacious survival instinct"]))
+    ability = random.choice(SPECIAL_ABILITIES.get(chosen_type, ["Tenacious survival instinct"]))
     egg = random.choice(EGG_TYPES)
+    personality = random.choice(PERSONALITY_TRAITS)
 
     # Stats based on body type
     stat_ranges = {
@@ -551,7 +618,7 @@ def generate_dinosaur(seed=None) -> Dinosaur:
         "therizinosaur": {"attack": (55, 80), "defense": (40, 65), "speed": (20, 50), "intelligence": (45, 75)},
     }
 
-    sr = stat_ranges.get(body_type, {"attack": (30, 70), "defense": (30, 70), "speed": (30, 70), "intelligence": (30, 70)})
+    sr = stat_ranges.get(chosen_type, {"attack": (30, 70), "defense": (30, 70), "speed": (30, 70), "intelligence": (30, 70)})
     attack = random.randint(*sr["attack"])
     defense = random.randint(*sr["defense"])
     speed = random.randint(*sr["speed"])
@@ -567,17 +634,17 @@ def generate_dinosaur(seed=None) -> Dinosaur:
     else:
         rarity = "common"
 
-    art_options = BODY_ART_MAP.get(body_type, [ART_THEROPOD_LARGE])
+    art_options = BODY_ART_MAP.get(chosen_type, [ART_THEROPOD_LARGE])
     art = random.choice(art_options)
 
     return Dinosaur(
         genus=genus, species=species, era=era_name, period=period,
-        habitat=habitat, body_type=body_type, diet=diet, posture=bt_data["posture"],
+        habitat=habitat, body_type=chosen_type, diet=diet, posture=bt_data["posture"],
         length_m=length_m, height_m=height_m, weight_kg=weight_kg,
         skin_pattern=skin_pattern, feathers=feathers,
         special_ability=ability, egg_type=egg,
         attack=attack, defense=defense, speed=speed, intelligence=intelligence,
-        rarity=rarity, art=art,
+        rarity=rarity, personality=personality, art=art,
     )
 
 
@@ -613,12 +680,31 @@ HABITAT_ICONS = {
 
 
 def stat_bar(value: int, max_val: int = 100, width: int = 20) -> str:
+    """Render a visual stat bar.
+
+    Args:
+        value: The stat value (0-100).
+        max_val: The maximum value for the bar scale.
+        width: The width in characters of the bar.
+
+    Returns:
+        A formatted string like '[########............]  42'
+    """
     filled = int(round(value / max_val * width))
     empty = width - filled
-    return f"[{'#' * filled}{ '.' * empty}] {value:>3d}"
+    return f"[{'#' * filled}{'.' * empty}] {value:>3d}"
 
 
 def render_card(dino: Dinosaur, use_color: bool = True) -> str:
+    """Render a dinosaur's trading card as a formatted string.
+
+    Args:
+        dino: The Dinosaur instance to render.
+        use_color: Whether to include ANSI color codes.
+
+    Returns:
+        A multi-line string containing the formatted card.
+    """
     c_open, c_close = RARITY_COLORS.get(dino.rarity, ("", "")) if use_color else ("", "")
     stars = RARITY_STARS[dino.rarity]
     rarity_label = dino.rarity.upper()
@@ -630,8 +716,6 @@ def render_card(dino: Dinosaur, use_color: bool = True) -> str:
     lines.append("+" + "=" * (W - 2) + "+")
     name_line = f" {c_open}{name_display}{c_close}"
     rarity_str = f"{c_open}{stars} {rarity_label}{c_close}"
-    # Simple layout: name on left, rarity on right
-    # Use plain length for padding
     plain_name_len = len(name_display)
     plain_rarity_len = len(stars) + 1 + len(rarity_label)
     pad = W - 2 - plain_name_len - plain_rarity_len - 2
@@ -671,6 +755,10 @@ def render_card(dino: Dinosaur, use_color: bool = True) -> str:
     feather_line = f"  Feathers: {dino.feathers}"
     lines.append(f"|{feather_line}{' ' * max(0, W - 2 - len(feather_line))}|")
 
+    # Personality trait (new field)
+    pers_line = f"  Temper: {dino.personality}"
+    lines.append(f"|{pers_line}{' ' * max(0, W - 2 - len(pers_line))}|")
+
     lines.append("+" + "-" * (W - 2) + "+")
 
     # Special ability
@@ -687,10 +775,20 @@ def render_card(dino: Dinosaur, use_color: bool = True) -> str:
 
 
 def render_art(dino: Dinosaur) -> str:
+    """Return the ASCII art for a dinosaur."""
     return dino.art
 
 
 def render_full(dino: Dinosaur, use_color: bool = True) -> str:
+    """Render the full display: ASCII art + trading card.
+
+    Args:
+        dino: The Dinosaur instance to render.
+        use_color: Whether to include ANSI color codes.
+
+    Returns:
+        A multi-line string with art and card.
+    """
     art = render_art(dino)
     card = render_card(dino, use_color=use_color)
     return f"{art}\n\n{card}"
@@ -699,13 +797,17 @@ def render_full(dino: Dinosaur, use_color: bool = True) -> str:
 # === Collection Tracker =======================================================
 
 class DinoDex:
+    """Tracks a collection of generated dinosaurs with summary statistics."""
+
     def __init__(self):
-        self.collection = []
+        self.collection: List[Dinosaur] = []
 
     def add(self, dino: Dinosaur):
+        """Add a dinosaur to the collection."""
         self.collection.append(dino)
 
-    def summary(self) -> str:
+    def summary(self, use_color: bool = True) -> str:
+        """Generate a summary of the collection grouped by rarity, type, and diet."""
         if not self.collection:
             return "Your DinoDex is empty! Generate some dinosaurs."
 
@@ -744,7 +846,8 @@ class DinoDex:
 
         return "\n".join(lines)
 
-    def wall_of_fame(self) -> str:
+    def wall_of_fame(self, use_color: bool = True) -> str:
+        """Show the top 10 dinosaurs by total stat points."""
         if not self.collection:
             return "No dinosaurs in collection yet."
 
@@ -767,6 +870,18 @@ class DinoDex:
 # === Battle System ============================================================
 
 def battle(dino1: Dinosaur, dino2: Dinosaur) -> str:
+    """Simulate a battle between two dinosaurs.
+
+    Uses weighted stat calculation (ATK×0.35 + DEF×0.25 + SPD×0.25 + INT×0.15)
+    with ±15% randomness for exciting upsets.
+
+    Args:
+        dino1: First combatant.
+        dino2: Second combatant.
+
+    Returns:
+        A multi-line string describing the battle and outcome.
+    """
     score1 = dino1.attack * 0.35 + dino1.defense * 0.25 + dino1.speed * 0.25 + dino1.intelligence * 0.15
     score2 = dino2.attack * 0.35 + dino2.defense * 0.25 + dino2.speed * 0.25 + dino2.intelligence * 0.15
     score1 *= random.uniform(0.85, 1.15)
@@ -799,12 +914,136 @@ def battle(dino1: Dinosaur, dino2: Dinosaur) -> str:
     return "\n".join(lines)
 
 
+def compare(dino1: Dinosaur, dino2: Dinosaur) -> str:
+    """Compare two dinosaurs side by side.
+
+    Args:
+        dino1: First dinosaur.
+        dino2: Second dinosaur.
+
+    Returns:
+        A formatted comparison string.
+    """
+    def advantage(val1, val2):
+        if val1 > val2:
+            return " <<<"
+        elif val2 > val1:
+            return ">>>"
+        return ""
+
+    lines = [
+        "",
+        "  COMPARISON",
+        "  " + "=" * 60,
+        f"  {'Attribute':<14s} | {'Dino 1':>30s} | {'Dino 2':>30s}",
+        "  " + "-" * 60,
+        f"  {'Name':<14s} | {dino1.full_name:>30s} | {dino2.full_name:>30s}",
+        f"  {'Body Type':<14s} | {dino1.body_type:>30s} | {dino2.body_type:>30s}",
+        f"  {'Rarity':<14s} | {dino1.rarity.upper():>30s} | {dino2.rarity.upper():>30s}",
+        f"  {'Era':<14s} | {dino1.period:>30s} | {dino2.period:>30s}",
+        f"  {'Habitat':<14s} | {dino1.habitat:>30s} | {dino2.habitat:>30s}",
+        f"  {'Diet':<14s} | {dino1.diet:>30s} | {dino2.diet:>30s}",
+        f"  {'Length':<14s} | {str(dino1.length_m) + 'm':>30s} | {str(dino2.length_m) + 'm':>30s}",
+        f"  {'Weight':<14s} | {str(dino1.weight_kg) + 'kg':>30s} | {str(dino2.weight_kg) + 'kg':>30s}",
+        "  " + "-" * 60,
+        f"  {'ATK':<14s} | {dino1.attack:>27d}{advantage(dino1.attack, dino2.attack):4s} | {dino2.attack:>27d}{advantage(dino2.attack, dino1.attack):4s}",
+        f"  {'DEF':<14s} | {dino1.defense:>27d}{advantage(dino1.defense, dino2.defense):4s} | {dino2.defense:>27d}{advantage(dino2.defense, dino1.defense):4s}",
+        f"  {'SPD':<14s} | {dino1.speed:>27d}{advantage(dino1.speed, dino2.speed):4s} | {dino2.speed:>27d}{advantage(dino2.speed, dino1.speed):4s}",
+        f"  {'INT':<14s} | {dino1.intelligence:>27d}{advantage(dino1.intelligence, dino2.intelligence):4s} | {dino2.intelligence:>27d}{advantage(dino2.intelligence, dino1.intelligence):4s}",
+        "  " + "-" * 60,
+        f"  {'TOTAL':<14s} | {dino1.stat_total:>27d}{advantage(dino1.stat_total, dino2.stat_total):4s} | {dino2.stat_total:>27d}{advantage(dino2.stat_total, dino1.stat_total):4s}",
+        "  " + "=" * 60,
+    ]
+    return "\n".join(lines)
+
+
+# === Tournament System ========================================================
+
+def tournament(dinosaurs: List[Dinosaur], use_color: bool = True) -> Dinosaur:
+    """Run a single-elimination tournament among dinosaurs.
+
+    Dinosaurs are paired up, battles are fought, and winners advance
+    to the next round. If the number is not a power of 2, some
+    dinosaurs get byes in the first round.
+
+    Args:
+        dinosaurs: List of Dinosaur instances to compete.
+        use_color: Whether to use ANSI colors in output.
+
+    Returns:
+        The champion Dinosaur.
+    """
+    if len(dinosaurs) < 2:
+        raise ValueError("Need at least 2 dinosaurs for a tournament.")
+
+    contestants = list(dinosaurs)
+    round_num = 1
+
+    print(f"\n  TOURNAMENT: {len(contestants)} dinosaurs enter!")
+    print("  " + "=" * 50)
+
+    while len(contestants) > 1:
+        # Pad to power of 2 with byes
+        next_power = 1
+        while next_power < len(contestants):
+            next_power *= 2
+
+        winners = []
+        i = 0
+        while i < len(contestants):
+            if i + 1 >= len(contestants):
+                # Bye: this dinosaur advances automatically
+                print(f"\n  Round {round_num}: {contestants[i].full_name} gets a bye")
+                winners.append(contestants[i])
+                break
+
+            d1 = contestants[i]
+            d2 = contestants[i + 1]
+
+            # Battle
+            score1 = d1.attack * 0.35 + d1.defense * 0.25 + d1.speed * 0.25 + d1.intelligence * 0.15
+            score2 = d2.attack * 0.35 + d2.defense * 0.25 + d2.speed * 0.25 + d2.intelligence * 0.15
+            score1 *= random.uniform(0.85, 1.15)
+            score2 *= random.uniform(0.85, 1.15)
+
+            if score1 > score2:
+                winner, loser = d1, d2
+                margin = (score1 - score2) / max(score2, 1) * 100
+            elif score2 > score1:
+                winner, loser = d2, d1
+                margin = (score2 - score1) / max(score1, 1) * 100
+            else:
+                # Draw: pick random winner
+                winner = random.choice([d1, d2])
+                loser = d2 if winner is d1 else d1
+                margin = 0.0
+
+            result = "DRAW (random)" if margin == 0.0 else f"{margin:.1f}%"
+            print(f"\n  Round {round_num}: {d1.full_name} vs {d2.full_name}")
+            print(f"    >> {winner.full_name} advances! ({result})")
+
+            winners.append(winner)
+            i += 2
+
+        contestants = winners
+        round_num += 1
+
+    champion = contestants[0]
+    print(f"\n  {'*' * 50}")
+    print(f"  CHAMPION: {champion.full_name} [{champion.body_type}] ({champion.rarity.upper()})")
+    print(f"  Stats: ATK={champion.attack} DEF={champion.defense} SPD={champion.speed} INT={champion.intelligence}")
+    print(f"  {'*' * 50}\n")
+
+    return champion
+
+
 # === Interactive Mode =========================================================
 
 def interactive():
+    """Run the interactive REPL for generating and managing dinosaurs."""
     print("")
     print("  +==========================================================+")
-    print("  |          PROCEDURAL DINOSAUR GENERATOR                   |")
+    print("  |          PROCEDURAL DINOSAUR GENERATOR  v{}           |".format(__version__))
     print("  |                                                          |")
     print("  |   Generate random dinosaurs with stats, ASCII art,      |")
     print("  |   and collectible trading cards!                          |")
@@ -818,9 +1057,12 @@ def interactive():
         print("Commands:")
         print("  [g] Generate a random dinosaur")
         print("  [b] Battle two dinosaurs from your collection")
+        print("  [c] Compare two dinosaurs side-by-side")
+        print("  [t] Tournament (all dinosaurs compete)")
         print("  [l] List your collection")
         print("  [w] Wall of Fame (top stats)")
         print("  [s] Generate with specific seed")
+        print("  [j] Export last dinosaur as JSON")
         print("  [q] Quit")
         print("")
 
@@ -868,6 +1110,37 @@ def interactive():
             except (ValueError, EOFError):
                 print("  Invalid input.")
 
+        elif cmd in ("c", "compare"):
+            if len(dex.collection) < 2:
+                print("")
+                print("  You need at least 2 dinosaurs to compare! Generate more first.")
+                continue
+
+            print("")
+            print("  Your collection:")
+            for i, d in enumerate(dex.collection):
+                print("    {:3d}. {} {} [{}] (Total: {})".format(
+                    i + 1, d.genus, d.species, d.body_type, d.stat_total))
+
+            try:
+                idx1 = int(input("\n  Select first dinosaur (#): ")) - 1
+                idx2 = int(input("  Select second dinosaur (#): ")) - 1
+                if 0 <= idx1 < len(dex.collection) and 0 <= idx2 < len(dex.collection):
+                    print(compare(dex.collection[idx1], dex.collection[idx2]))
+                else:
+                    print("  Invalid selection.")
+            except (ValueError, EOFError):
+                print("  Invalid input.")
+
+        elif cmd in ("t", "tournament"):
+            if len(dex.collection) < 2:
+                print("")
+                print("  You need at least 2 dinosaurs for a tournament! Generate more first.")
+                continue
+
+            champion = tournament(dex.collection)
+            print(render_card(champion))
+
         elif cmd in ("l", "list"):
             print(dex.summary())
 
@@ -886,6 +1159,14 @@ def interactive():
                 print(render_full(dino))
             except (ValueError, EOFError):
                 print("  Invalid seed.")
+
+        elif cmd in ("j", "json"):
+            if not dex.collection:
+                print("")
+                print("  No dinosaurs in collection yet! Generate one first.")
+                continue
+            print("")
+            print(dex.collection[-1].to_json())
 
         else:
             print("  Unknown command: {}".format(cmd))
@@ -906,19 +1187,29 @@ Examples:
   python dinosaur_generator.py --generate 5       # Generate 5 dinosaurs
   python dinosaur_generator.py --seed 42          # Generate with seed 42
   python dinosaur_generator.py --battle           # Battle random dinosaurs
-  python dinosaur_generator.py --type theropod    # Generate specific type
+  python dinosaur_generator.py --type theropod   # Generate specific type
+  python dinosaur_generator.py --tournament 8     # 8-dino tournament
+  python dinosaur_generator.py --json             # Output as JSON
+  python dinosaur_generator.py --compare           # Compare two random dinos
   python dinosaur_generator.py --no-color          # No ANSI colors
         """,
     )
 
+    parser.add_argument("--version", "-v", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("--generate", "-g", nargs="?", const=1, type=int, default=None,
                         help="Generate N dinosaurs (default: 1)")
     parser.add_argument("--seed", "-s", type=int, default=None,
                         help="Random seed for reproducible generation")
     parser.add_argument("--battle", "-b", action="store_true",
                         help="Battle two random dinosaurs")
-    parser.add_argument("--type", "-t", choices=list(BODY_TYPES.keys()),
+    parser.add_argument("--compare", action="store_true",
+                        help="Compare two random dinosaurs side-by-side")
+    parser.add_argument("--tournament", "-t", nargs="?", const=8, type=int, default=None,
+                        help="Run an N-dinosaur tournament (default: 8)")
+    parser.add_argument("--type", choices=list(BODY_TYPES.keys()),
                         help="Generate a specific body type")
+    parser.add_argument("--json", action="store_true",
+                        help="Output dinosaur(s) as JSON instead of cards")
     parser.add_argument("--no-color", action="store_true",
                         help="Disable ANSI color codes")
     parser.add_argument("--interactive", "-i", action="store_true",
@@ -932,7 +1223,8 @@ Examples:
         random.seed(args.seed)
 
     # If no specific command, go interactive
-    if args.generate is None and not args.battle and not args.interactive:
+    if (args.generate is None and not args.battle and not args.compare
+            and args.tournament is None and not args.interactive):
         interactive()
         return
 
@@ -942,17 +1234,22 @@ Examples:
 
     if args.generate is not None:
         n = args.generate
+        dinos = []
         for i in range(n):
-            dino = generate_dinosaur()
-            if args.type:
-                attempts = 0
-                while dino.body_type != args.type and attempts < 100:
-                    dino = generate_dinosaur()
-                    attempts += 1
-            if n > 1:
-                print("")
-                print("--- Dinosaur {}/{} ---".format(i + 1, n))
-            print(render_full(dino, use_color=use_color))
+            dino = generate_dinosaur(body_type=args.type)
+            dinos.append(dino)
+
+        if args.json:
+            if len(dinos) == 1:
+                print(dinos[0].to_json())
+            else:
+                print(json.dumps([d.to_dict() for d in dinos], indent=2))
+        else:
+            for i, dino in enumerate(dinos):
+                if n > 1:
+                    print("")
+                    print("--- Dinosaur {}/{} ---".format(i + 1, n))
+                print(render_full(dino, use_color=use_color))
         return
 
     if args.battle:
@@ -968,6 +1265,26 @@ Examples:
         print("")
         print(render_art(dino2))
         print(battle(dino1, dino2))
+        return
+
+    if args.compare:
+        dino1 = generate_dinosaur()
+        dino2 = generate_dinosaur()
+        print(render_art(dino1))
+        print("")
+        print(render_art(dino2))
+        print(compare(dino1, dino2))
+        return
+
+    if args.tournament is not None:
+        n = args.tournament
+        if n < 2:
+            print("Error: Need at least 2 dinosaurs for a tournament.", file=sys.stderr)
+            sys.exit(1)
+        dinos = [generate_dinosaur() for _ in range(n)]
+        champion = tournament(dinos, use_color=use_color)
+        if args.json:
+            print(champion.to_json())
         return
 
 
