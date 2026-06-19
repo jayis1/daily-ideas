@@ -52,6 +52,22 @@ Enhancements from v2.2:
 - Comet orbit path drawn with a distinct style (dim dots)
 - Comet tail: series of trailing dots pointing radially away from the Sun
 - --comet CLI flag to start with comet visible
+
+Bug fixes from v2.2.1:
+- Fixed format_distance_km: zero distance now returns "0 km" instead of "0K km";
+  negative values handled gracefully; small distances (< 1K km) show "km" not "K km"
+- Fixed au_to_screen with negative/zero max_r: now returns center coordinates instead
+  of producing wrong offsets when max_r is degenerate (tiny terminals)
+- Fixed Moon display radius: changed from max_r//25 (always 0, clamped to 2) to
+  max_r//8 so the Moon orbit actually scales with the view on larger terminals
+- Fixed Reset (R key): now resets ALL state (scale, selected planet, paused,
+  asteroids, moon, comet, orbits, labels) instead of only date/speed/trails
+- Fixed controls bar overflow: controls are now responsive with abbreviated versions
+  shown on terminals narrower than 90, 72, or 55 columns
+- Fixed info panel overflow: panel lines are now capped at height-4 to leave room
+  for the orrery display and controls on small terminals
+- Fixed compute_elongation degenerate cases: returns 0.0 when Earth is at the
+  Sun (origin) or when the planet and Earth are at the same position
 """
 
 import argparse
@@ -62,7 +78,7 @@ import time
 from datetime import datetime, timedelta
 import sys
 
-__version__ = "2.2.0"
+__version__ = "2.2.1"
 
 # J2000 epoch reference date
 J2000_EPOCH = datetime(2000, 1, 1)
@@ -282,8 +298,14 @@ def compute_elongation(planet_x: float, planet_y: float,
         earth_x, earth_y: Earth position in AU
 
     Returns:
-        Elongation angle in degrees (0-180)
+        Elongation angle in degrees (0-180). Returns 0 for degenerate cases.
     """
+    # Degenerate cases: if Earth is at the Sun (origin), elongation is undefined
+    if earth_x == 0 and earth_y == 0:
+        return 0.0
+    # If the planet is at the same position as Earth, elongation is 0
+    if planet_x == earth_x and planet_y == earth_y:
+        return 0.0
     # Vector from Earth to Sun: (-earth_x, -earth_y)
     # Vector from Earth to Planet: (planet_x - earth_x, planet_y - earth_y)
     sun_angle = math.atan2(-earth_y, -earth_x)
@@ -394,6 +416,10 @@ def au_to_screen(x_au: float, y_au: float, cx: int, cy: int, scale: float, max_r
     """
     r_au = math.sqrt(x_au**2 + y_au**2)
     if r_au == 0:
+        return cx, cy
+
+    # Guard against degenerate max_r — everything maps to center
+    if max_r <= 0:
         return cx, cy
 
     # Apply power scaling to compress distances
@@ -617,18 +643,23 @@ def format_distance_km(au: float) -> str:
     """Format a distance in AU as a human-readable string.
 
     Args:
-        au: Distance in AU
+        au: Distance in AU (must be non-negative)
 
     Returns:
         Formatted string like "0.387 AU (57.9M km)" or "30.1 AU (4.50B km)"
+        Returns "0 km" for zero distance.
     """
+    if au <= 0:
+        return "0 km"
     km = au * AU_KM
     if km >= 1e9:
         return f"{au:.3f} AU ({km/1e9:.2f}B km)"
     elif km >= 1e6:
         return f"{au:.3f} AU ({km/1e6:.1f}M km)"
-    else:
+    elif km >= 1e3:
         return f"{au:.3f} AU ({km/1e3:.0f}K km)"
+    else:
+        return f"{au:.3f} AU ({km:.0f} km)"
 
 
 class OrreryState:
@@ -831,11 +862,19 @@ def main(stdscr):
             elif key == curses.KEY_RIGHT:
                 state.selected_planet = (state.selected_planet + 1) % len(planet_data)
             elif key == ord('r') or key == ord('R'):
-                # Reset
+                # Reset all state to defaults
                 state.current_date = datetime(2026, 1, 1)
                 state.speed = 1.0
-                state.trail_positions = {i: [] for i in range(len(PLANETS))}
+                state.paused = False
+                state.selected_planet = 2  # Earth
+                state.scale = 12.0
+                state.show_orbits = True
+                state.show_labels = True
                 state.show_trails = True
+                state.show_asteroids = False
+                state.show_moon = True
+                state.show_comet = False
+                state.trail_positions = {i: [] for i in range(len(PLANETS))}
                 state.prev_positions = None
 
         # Update time
@@ -982,7 +1021,7 @@ def main(stdscr):
                 moon_angle = 2 * math.pi * years_since_epoch / MOON_PERIOD_YEARS
                 # Moon position relative to Earth, scaled up for visibility
                 # We use a larger display radius (not real scale) so it's visible
-                moon_display_r = max(2, max_r // 25)  # At least 2 screen units from Earth to avoid overlap
+                moon_display_r = max(2, max_r // 8)  # At least 2 screen units; scales with view
                 moon_sx = sx + int(moon_display_r * math.cos(moon_angle))
                 moon_sy = sy + int(moon_display_r * 0.5 * math.sin(moon_angle))  # Y compressed
                 if 0 <= moon_sy < height and 0 <= moon_sx < width:
@@ -1085,15 +1124,29 @@ def main(stdscr):
             except ValueError:
                 pass
 
-        for idx, line in enumerate(lines):
+        # Limit panel lines to available vertical space (leave room for controls bar and orrery)
+        max_panel_lines = max(1, height - 4)  # Reserve lines for header area, controls, margin
+        for idx, line in enumerate(lines[:max_panel_lines]):
             row = panel_y + idx
             if 0 <= row < height - 1:
                 safe_addstr(stdscr, row, panel_x, line, curses.color_pair(10), height, width)
 
         # --- Controls ---
+        # Responsive controls bar that adapts to terminal width
         controls_y = height - 2
-        controls = "SPC:Pause +/-:Speed ↑↓:Zoom ←→:Planet O:Orbits L:Labels T:Trails A:Belt M:Moon C:Comet D:Date S:Speed H:Today R:Reset Q:Quit"
         if controls_y > 0:
+            controls_full = "SPC:Pause +/-:Speed ↑↓:Zoom ←→:Planet O:Orbits L:Labels T:Trails A:Belt M:Moon C:Comet D:Date S:Speed H:Today R:Reset Q:Quit"
+            controls_medium = "SPC:Pause +/-:Speed ↑↓:Zoom ←→:Select O:Orbits T:Trails A:Belt M:Moon C:Comet D:Date Q:Quit"
+            controls_short = "SPC:Pause +/-:Speed ↑↓:Zoom ←→:Select O:Orbits T:Trails D:Date Q:Quit"
+            controls_tiny = "SPC:Pause +/-:Speed ↑↓:Zoom ←→:Select D:Date Q:Quit"
+            if width >= 120:
+                controls = controls_full
+            elif width >= 90:
+                controls = controls_medium
+            elif width >= 65:
+                controls = controls_short
+            else:
+                controls = controls_tiny
             safe_addstr(stdscr, controls_y, 1, controls, curses.color_pair(10) | curses.A_DIM, height, width)
 
         # Input mode

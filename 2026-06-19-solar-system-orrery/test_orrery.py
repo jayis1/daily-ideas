@@ -182,6 +182,16 @@ sx_pos, sy_pos = au_to_screen(0, 10, 40, 12, 12.0, 38)
 sx_neg, sy_neg = au_to_screen(10, 0, 40, 12, 12.0, 38)
 # Y displacement should be roughly half X displacement for same AU distance
 y_disp = abs(sy_pos - 12)
+
+# Negative/zero max_r → center (bug fix v2.2.1)
+sx, sy = au_to_screen(1.0, 0.0, 40, 12, 12.0, 0)
+test("Zero max_r maps to center", sx == 40 and sy == 12, f"got ({sx}, {sy})")
+
+sx, sy = au_to_screen(1.0, 0.0, 40, 12, 12.0, -5)
+test("Negative max_r maps to center", sx == 40 and sy == 12, f"got ({sx}, {sy})")
+
+sx, sy = au_to_screen(5.0, 3.0, 40, 12, 12.0, -1)
+test("Negative max_r with offset AU maps to center", sx == 40 and sy == 12, f"got ({sx}, {sy})")
 x_disp = abs(sx_neg - 40)
 test("Y compression: Y displacement < X displacement", y_disp < x_disp,
      f"y_disp={y_disp}, x_disp={x_disp}")
@@ -246,7 +256,7 @@ dt = datetime(1, 1, 1)
 test("format_date year 1", format_date(dt).endswith("01-01"), f"got '{format_date(dt)}'")
 
 # ============================================================
-# 6. Format Distance Tests (NEW in v2.2)
+# 6. Format Distance Tests (v2.2, updated v2.2.1)
 # ============================================================
 print("\n=== Format Distance Tests ===")
 
@@ -266,6 +276,22 @@ test("format_distance 30 AU uses B", "B" in dist_str or "billion" in dist_str.lo
 # Very small distance
 dist_str = format_distance_km(0.01)
 test("format_distance 0.01 AU", "0.010" in dist_str, f"got '{dist_str}'")
+
+# Zero distance — should return "0 km" (bug fix v2.2.1)
+dist_str = format_distance_km(0.0)
+test("format_distance 0 AU returns '0 km'", dist_str == "0 km", f"got '{dist_str}'")
+
+# Negative distance — should return "0 km" (bug fix v2.2.1)
+dist_str = format_distance_km(-1.0)
+test("format_distance negative AU returns '0 km'", dist_str == "0 km", f"got '{dist_str}'")
+
+# Very small distance (< 1K km) — should use "km" not "K km" (bug fix v2.2.1)
+dist_str = format_distance_km(0.0067)  # ~1M km
+test("format_distance <1M km uses 'M'", "M" in dist_str, f"got '{dist_str}'")
+
+# Distance between 1K and 1M km — should use "K km"
+dist_str = format_distance_km(0.01)  # ~1.5M km, uses M
+test("format_distance 0.01 AU uses 'M'", "M" in dist_str, f"got '{dist_str}'")
 
 # ============================================================
 # 7. OrreryState Tests
@@ -290,6 +316,51 @@ test("Trail dict has correct length", len(s.trail_positions) == 8)
 test("Trails start empty", all(len(v) == 0 for v in s.trail_positions.values()))
 test("Default conjunctions: empty", s.conjunctions == [])
 test("Default prev_positions: None", s.prev_positions is None)
+
+# Test that resetting state restores all defaults (bug fix v2.2.1)
+# Simulate what the R key does in main()
+s.current_date = datetime(2030, 6, 15)
+s.speed = 100.0
+s.paused = True
+s.selected_planet = 5
+s.scale = 50.0
+s.show_orbits = False
+s.show_labels = False
+s.show_trails = False
+s.show_asteroids = True
+s.show_moon = False
+s.show_comet = True
+s.trail_positions = {i: [(1.0, 2.0)] for i in range(8)}
+s.prev_positions = [(1.0, 2.0)] * 8
+
+# Now reset all state to defaults (same as R key handler)
+s.current_date = datetime(2026, 1, 1)
+s.speed = 1.0
+s.paused = False
+s.selected_planet = 2  # Earth
+s.scale = 12.0
+s.show_orbits = True
+s.show_labels = True
+s.show_trails = True
+s.show_asteroids = False
+s.show_moon = True
+s.show_comet = False
+s.trail_positions = {i: [] for i in range(len(PLANETS))}
+s.prev_positions = None
+
+test("Reset: date restored", s.current_date == datetime(2026, 1, 1))
+test("Reset: speed restored", s.speed == 1.0)
+test("Reset: paused restored", s.paused == False)
+test("Reset: selected_planet restored", s.selected_planet == 2)
+test("Reset: scale restored", s.scale == 12.0)
+test("Reset: show_orbits restored", s.show_orbits == True)
+test("Reset: show_labels restored", s.show_labels == True)
+test("Reset: show_trails restored", s.show_trails == True)
+test("Reset: show_asteroids restored", s.show_asteroids == False)
+test("Reset: show_moon restored", s.show_moon == True)
+test("Reset: show_comet restored", s.show_comet == False)
+test("Reset: trails cleared", all(len(v) == 0 for v in s.trail_positions.values()))
+test("Reset: prev_positions cleared", s.prev_positions is None)
 
 # ============================================================
 # 8. Orbital Mechanics Consistency Tests
@@ -475,7 +546,7 @@ print("\n=== Version and Constants Tests ===")
 
 test("Version is a string", isinstance(__version__, str))
 test("Version format valid", "." in __version__, f"got {__version__}")
-test("Version is 2.2.0", __version__ == "2.2.0", f"got {__version__}")
+test("Version is 2.2.1", __version__ == "2.2.1", f"got {__version__}")
 
 test("J2000_EPOCH is datetime", isinstance(J2000_EPOCH, datetime))
 test("J2000_EPOCH year is 2000", J2000_EPOCH.year == 2000)
@@ -688,10 +759,20 @@ elong2 = compute_elongation(0.0, 30.0, 1.0, 0.0)
 test("Far planet at quadrature: elongation near 90°",
      85 < elong2 < 95, f"got {elong2:.1f}°")
 
-# Earth looking at itself should give 0 elongation (edge case)
+# Earth looking at itself should give 0 elongation (bug fix v2.2.1: was 180°)
 elong_self = compute_elongation(1.0, 0.0, 1.0, 0.0)
-test("Earth-planet self: elongation computed", isinstance(elong_self, float),
-     f"got {elong_self:.1f}°")
+test("Earth-planet self: elongation is 0° (bug fix v2.2.1)",
+     abs(elong_self) < 0.01, f"got {elong_self:.1f}°")
+
+# Both at origin should return 0 (bug fix v2.2.1: was 180°)
+elong_origin = compute_elongation(0.0, 0.0, 0.0, 0.0)
+test("Both at origin: elongation is 0° (bug fix v2.2.1)",
+     abs(elong_origin) < 0.01, f"got {elong_origin:.1f}°")
+
+# Planet at origin, Earth not at origin (bug fix v2.2.1: was 0° which was correct but for wrong reason)
+elong_planet_origin = compute_elongation(0.0, 0.0, 1.0, 0.0)
+test("Planet at origin, Earth at (1,0): computed",
+     isinstance(elong_planet_origin, float), f"got {elong_planet_origin:.1f}°")
 
 # ============================================================
 # 18. Elongation Status Tests (NEW in v2.2)

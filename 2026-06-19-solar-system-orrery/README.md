@@ -1,6 +1,6 @@
-# 🪐 Solar System Orrery v2.2
+# 🪐 Solar System Orrery v2.2.1
 
-An animated terminal-based orrery that displays all eight planets orbiting the Sun using real orbital mechanics — now with Halley's Comet, elongation angles, retrograde detection, and perihelion/aphelion data.
+An animated terminal-based orrery that displays all eight planets orbiting the Sun using real orbital mechanics — now with Halley's Comet, elongation angles, retrograde detection, perihelion/aphelion data, and responsive UI.
 
 ## Features
 
@@ -11,7 +11,7 @@ An animated terminal-based orrery that displays all eight planets orbiting the S
 - **Starfield Background** — Randomly generated stars for atmosphere (regenerated only on terminal resize)
 
 ### Visualization
-- **Earth's Moon** — A small dot orbiting Earth with the correct ~27.3-day period (toggle with `M`)
+- **Earth's Moon** — A small dot orbiting Earth with the correct ~27.3-day period, display radius that scales with zoom (toggle with `M`)
 - **Asteroid Belt** — 60 animated asteroids between Mars and Jupiter following Kepler's third law (toggle with `A`)
 - **Halley's Comet** — The famous comet with its highly eccentric orbit (e≈0.967), argument of perihelion rotation, and an animated tail that points away from the Sun and scales with distance (toggle with `C`)
 - **Orbital Trails** — Toggle trail accumulation on/off with `T` to visualize orbit paths
@@ -25,12 +25,15 @@ An animated terminal-based orrery that displays all eight planets orbiting the S
 - **Retrograde Motion** — Displays whether the selected planet is in prograde or retrograde motion
 - **Conjunction Detection** — Automatically detects and alerts when two planets are within 5° of each other
 - **Halley's Comet Info** — When visible, shows the comet's current distance from the Sun and velocity
+- **Responsive Layout** — Panel lines are capped at terminal height minus 4, preventing overflow on small screens
 
 ### Controls
 - **Time Control** — Speed up/slow down time, jump to any date, or pause
 - **Zoom** — Zoom in/out to focus on inner planets or see the full system
 - **Planet Selection** — Browse planet info with arrow keys
 - **Jump to Today** — Press `H` to instantly jump to today's date
+- **Full Reset** — Press `R` to reset ALL state (date, speed, zoom, selection, toggles) to defaults
+- **Responsive Controls Bar** — Adapts to terminal width, showing fewer controls on narrow terminals
 - **CLI Flags** — `--help`, `--version`, `--date`, `--speed`, `--no-trails`, `--no-moon`, `--asteroids`, `--comet`
 
 ### Robustness
@@ -38,8 +41,10 @@ An animated terminal-based orrery that displays all eight planets orbiting the S
 - **Unicode Fallback** — Gracefully degrades to ASCII symbols on terminals without UTF-8 support
 - **Frame Time Cap** — Prevents huge time jumps if the window is hidden/minimized
 - **Bounds Checking** — All drawing operations are safely clamped to terminal dimensions
+- **Degenerate Terminal Sizes** — `au_to_screen` with zero or negative `max_r` returns center coordinates instead of producing wrong offsets
 - **Speed Validation** — Simulation speed is clamped to valid range (0.01–3650 days/sec) on assignment
 - **Case-Insensitive Keys** — All letter keys work with both uppercase and lowercase
+- **Distance Formatting** — Zero and negative distances handled gracefully; small distances use proper unit suffixes
 
 ## How to Install
 
@@ -98,7 +103,7 @@ python3 orrery.py --help
 | `D` | Jump to a specific date (YYYY-MM-DD) |
 | `S` | Set simulation speed manually (must be > 0) |
 | `H` | Jump to today's date |
-| `R` | Reset to default view, date, and trails |
+| `R` | Reset everything to defaults |
 | `Q` | Quit |
 
 All letter keys work with both uppercase and lowercase.
@@ -166,6 +171,12 @@ panel. Mercury's orbit is most extreme: perihelion at 0.307 AU, aphelion
 at 0.467 AU (eccentricity 0.206).
 ```
 
+**Full reset:**
+```
+Press 'R' to reset everything — date, speed, zoom, planet selection, and all
+toggles (orbits, labels, trails, asteroids, moon, comet) — back to defaults.
+```
+
 ## How It Works
 
 ### Orbital Mechanics
@@ -182,7 +193,7 @@ Halley's Comet uses real orbital parameters: semi-major axis 17.834 AU, eccentri
 
 ### Elongation
 
-Elongation is the angle Sun-Earth-Planet, computed using `atan2`. It determines whether an inner planet is visible as an "Evening Star" (east of Sun) or "Morning Star" (west of Sun). The cross product of the Sun-Earth and Planet-Earth vectors determines east vs. west.
+Elongation is the angle Sun-Earth-Planet, computed using `atan2`. It determines whether an inner planet is visible as an "Evening Star" (east of Sun) or "Morning Star" (west of Sun). The cross product of the Sun-Earth and Planet-Earth vectors determines east vs. west. Degenerate cases (Earth at origin, planet at same position as Earth) return 0° instead of 180°.
 
 ### Retrograde Detection
 
@@ -198,11 +209,19 @@ Every frame, the angular positions of all planet pairs are compared. When two pl
 
 ### Earth's Moon
 
-A small dot orbits Earth with the Moon's real 27.3-day period. The display radius is exaggerated for visibility (real scale would be invisible). The Moon is offset from Earth by at least 2 screen units to prevent overlap on small terminals.
+A small dot orbits Earth with the Moon's real 27.3-day period. The display radius scales with the terminal zoom level (`max_r // 8`, minimum 2) so the Moon orbit is visible at different zoom levels.
 
 ### Speed Units
 
 The simulation speed is displayed in "days/sec" — at speed 1.0, approximately 1 day of simulation time passes per real second at 30fps. The actual formula is `elapsed_days = speed × dt_frame × 30`.
+
+### Responsive Controls
+
+The controls bar at the bottom of the screen adapts to the terminal width:
+- **≥ 120 columns**: Full controls with all key hints
+- **90–119 columns**: Medium controls (omits L, S, H, R)
+- **65–89 columns**: Short controls (omits L, A, M, C, S, H, R)
+- **< 65 columns**: Minimal controls (only pause, speed, zoom, select, date, quit)
 
 ## Architecture
 
@@ -211,12 +230,12 @@ The simulation speed is displayed in "days/sec" — at speed 1.0, approximately 
 - `halley_position(years)` — Computes Halley's Comet position with rotated orbit (argument of perihelion).
 - `halley_tail_segments(x, y)` — Calculates anti-solar tail positions scaled by distance from Sun.
 - `orbital_velocity_km_s(a, period, r)` — Computes orbital velocity at distance r via vis-viva equation.
-- `compute_elongation(planet, earth)` — Calculates Sun-Earth-Planet angle for visibility.
+- `compute_elongation(planet, earth)` — Calculates Sun-Earth-Planet angle for visibility. Returns 0° for degenerate cases (Earth at origin, same position).
 - `elongation_status(angle, planet, earth)` — Determines Evening Star / Morning Star / Near Sun status.
 - `compute_retrograde(prev, curr)` — Detects prograde vs. retrograde motion from position change.
-- `format_distance_km(au)` — Formats AU distances with human-readable km units.
+- `format_distance_km(au)` — Formats AU distances with human-readable km units. Returns "0 km" for zero/negative values.
 - `detect_conjunctions(positions, threshold)` — Finds planet pairs within a given angular threshold.
-- `au_to_screen(x, y, cx, cy, scale, max_r)` — Maps AU coordinates to screen coordinates with power-law compression.
+- `au_to_screen(x, y, cx, cy, scale, max_r)` — Maps AU coordinates to screen coordinates with power-law compression. Returns center for degenerate max_r ≤ 0.
 - `draw_orbit()` — Draws an orbital ellipse as a dotted path.
 - `draw_halley_orbit()` — Draws Halley's comet orbit as sparse dots.
 - `generate_asteroids(seed)` — Creates deterministic asteroid belt with Kepler-correct speeds.
@@ -231,68 +250,46 @@ The simulation speed is displayed in "days/sec" — at speed 1.0, approximately 
 python3 test_orrery.py
 ```
 
-Runs 179 tests covering:
+Runs 201 tests covering:
 - Kepler solver (convergence, edge cases, invalid inputs, large mean anomaly)
 - Planet position calculations (circular orbits, all 8 planets, invalid parameters)
-- Screen coordinate mapping (origin, clamping, perspective compression)
+- Screen coordinate mapping (origin, clamping, perspective compression, degenerate max_r)
 - Star generation (bounds checking, degenerate sizes, determinism)
 - Date formatting
-- Distance formatting (human-readable km units)
-- State management (defaults, toggle behavior, speed property validation)
+- Distance formatting (human-readable km units, zero/negative edge cases)
+- State management (defaults, toggle behavior, speed property validation, full reset)
 - Orbital mechanics consistency (perihelion/aphelion ranges, periodicity)
 - Orbital velocity (vis-viva equation, edge cases, relative ordering)
 - Conjunction detection (aligned, opposite, close, far, empty, format, degenerate origin)
 - Asteroid belt generation (count, structure, Kepler's law, determinism)
 - Moon constants (radius, period, angle computation)
 - Halley's Comet (position, tail segments, rotation, perihelion/aphelion)
-- Elongation calculation (near Sun, opposition, quadrature, self-reference)
+- Elongation calculation (near Sun, opposition, quadrature, self-reference, degenerate cases)
 - Elongation status (Evening Star, Morning Star, Near Sun)
 - Retrograde detection (prograde, retrograde, no motion)
 - Perihelion/aphelion (all planets, validation)
 - Version and constants validation
 - safe_addstr bounds checking and text truncation
-- Bug fix regression tests (speed clamping, conjunction origin, generate_asteroids API)
+- Bug fix regression tests (speed clamping, conjunction origin, generate_asteroids API, reset completeness, format_distance_km edge cases, au_to_screen degenerate max_r, elongation degenerate cases)
 
-## What's New in v2.2
+## Bug Fixes (v2.2.1)
 
-### Halley's Comet
-- Press `C` to toggle Halley's Comet with its real orbital parameters (a=17.834 AU, e=0.967, P=75.32 yr)
-- The orbit is rotated by the argument of perihelion (111.33°) for accurate positioning
-- An animated tail points away from the Sun and grows longer near perihelion
-- The comet orbit is drawn as sparse dots to distinguish it from planet orbits
-- Comet info (distance, velocity) appears in the info panel when enabled
-- Use `--comet` CLI flag to start with the comet visible
-
-### Elongation & Visibility
-- The info panel now shows the elongation angle (Sun-Earth-Planet) for the selected planet
-- Visibility status indicates whether the planet is an "Evening Star", "Morning Star", "Near Sun", or at "Opposition"
-- Helps you understand when planets are actually visible in the sky
-
-### Retrograde Motion
-- The info panel shows "Prograde" or "Retrograde" for each planet based on heliocentric longitude change
-- Watch Mars switch to retrograde when Earth overtakes it!
-
-### Perihelion & Aphelion
-- The info panel now shows perihelion and aphelion distances for the selected planet
-- See how Mercury's orbit varies between 0.307 AU and 0.467 AU
-
-### Distance from Earth
-- The info panel shows the current distance from Earth to the selected planet (Distance⊕)
-- Watch this value change as planets orbit at different speeds
-
-### Other Improvements
-- `prev_positions` tracking for retrograde detection
-- `format_distance_km()` helper for human-readable distance strings
-- Comet cyan color pair (pair 14)
-- Comet toggle `C` key and `--comet` CLI flag
+1. **`format_distance_km` zero/negative values** — Zero distance now returns `"0 km"` instead of `"0K km"`. Negative values also return `"0 km"`. Distances under 1K km now show plain `km` instead of `K km`.
+2. **`au_to_screen` degenerate max_r** — With `max_r ≤ 0` (tiny terminals), the function now returns center coordinates instead of producing wrong offsets. Previously, `max_r = -5` would map planets to offset positions.
+3. **Moon display radius formula** — Changed from `max_r // 25` (which was always 0, clamped to 2) to `max_r // 8` so the Moon orbit actually scales with the view. On a standard 80×24 terminal (`max_r=10`), the Moon now orbits at 2 screen units; on larger displays (`max_r=30`), at 3 units.
+4. **Reset key (R) incomplete** — Pressing `R` now resets ALL state: paused, selected planet, zoom scale, orbit/label/trail/asteroid/moon/comet toggles — not just date, speed, and trails.
+5. **Controls bar overflow** — The 124-character controls bar is now responsive: 4 tiers (124 chars for ≥120 cols, 91 for ≥90, 69 for ≥65, 51 for <65) prevent truncation issues on narrow terminals.
+6. **Info panel overflow** — Panel lines are now capped at `height - 4` to leave room for the orrery display and controls bar on small terminals (previously could fill 23 of 24 lines).
+7. **`compute_elongation` degenerate cases** — When Earth is at the origin (0,0) or the planet is at the same position as Earth, the function now returns 0° instead of 180°. This prevents misleading "opposition" readings for the Earth-self case.
 
 ## Bug Fixes (v2.1)
 
-1. **Speed label was incorrect** — Displayed "days/frame" but the actual unit is "days/sec". Fixed.
-2. **Label rendering off-by-one** — Labels that exactly fit at the terminal right edge were incorrectly skipped.
-3. **Conjunction detection false positive at origin** — Planets at (0, 0) no longer cause false conjunctions.
-4. **Unicode rendering overflow** — Planet symbols now fall back to ASCII near the right edge.
-5. **Key bindings case sensitivity** — All letter keys now accept both uppercase and lowercase.
-6. **Moon overlap on small terminals** — Moon display radius minimum raised to 2 screen units.
-7. **Speed property not validated on assignment** — Now clamps to [0.01, 3650].
-8. **`generate_asteroids()` had unused parameters** — Removed for a cleaner API.
+1. Speed label: was "days/frame", now correctly "days/sec"
+2. Label rendering off-by-one: labels that exactly fit at terminal right edge were incorrectly skipped
+3. Conjunction detection false positive at origin: planets at (0, 0) no longer cause false conjunctions
+4. Unicode rendering overflow: planet symbols now fall back to ASCII near the right edge
+5. Key bindings case sensitivity: all letter keys now accept both uppercase and lowercase
+6. Moon overlap on small terminals: Moon display radius minimum raised to 2 screen units
+7. Speed property validation on assignment: now clamps to [0.01, 3650]
+8. `generate_asteroids()` had unused parameters: removed for a cleaner API
+9. Added `_` key as alias for `-` (slow down)
