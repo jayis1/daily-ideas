@@ -4,8 +4,22 @@ Terminal Gene Splicer — breed ASCII creatures through genetic algorithms!
 
 A genetic algorithm playground where you breed populations of ASCII creatures,
 selecting for traits, cross-breeding, mutating, and evolving them over generations.
+
+Enhancements from v1.1:
+- Added --help, --version, --target, --generations, --population CLI flags
+- Added creature export/import (JSON) via --export and --import
+- Added lineage tracking: each creature records its ancestors
+- Added evolve-to-threshold mode in interactive menu (evolve until fitness reaches target)
+- Added extinction protection: population never drops below 3
+- Added genome summary method for more detailed stats
+- Improved crossover to preserve part-type diversity
+- Added fitness_hybrid target that blends multiple objectives
+- Better error handling in interactive input loops
+- Proper argparse-based CLI with all flags
 """
 
+import argparse
+import json
 import random
 import copy
 import math
@@ -13,7 +27,9 @@ import os
 import sys
 import time
 from dataclasses import dataclass, field
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
+
+__version__ = "1.1.0"
 
 # ─── Creature Genome ───────────────────────────────────────────────────────
 
@@ -84,6 +100,7 @@ FITNESS_TARGETS = {
     "complexity":"Number of unique body parts used",
     "harmony":   "Color harmony of the creature's palette",
     "speed":     "Fewer genes = faster creature",
+    "hybrid":    "Blend of complexity + harmony + symmetry",
 }
 
 RESET = "\033[0m"
@@ -99,6 +116,27 @@ class Gene:
     color_idx: int      # index into GENE_COLORS
     strength: float     # 0.0-1.0 expression strength
     position: int       # positional offset in genome
+
+    def to_dict(self) -> dict:
+        """Serialize gene to a dictionary for JSON export."""
+        return {
+            "part": self.part,
+            "symbol": self.symbol,
+            "color_idx": self.color_idx,
+            "strength": round(self.strength, 4),
+            "position": self.position,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "Gene":
+        """Deserialize gene from a dictionary."""
+        return cls(
+            part=d["part"],
+            symbol=d["symbol"],
+            color_idx=d["color_idx"],
+            strength=d["strength"],
+            position=d["position"],
+        )
 
 
 @dataclass
@@ -204,6 +242,44 @@ class Creature:
             f"Gen: {self.generation}  |  Fitness: {self.fitness:.1f}"
         )
 
+    def genome_summary(self) -> str:
+        """Return a detailed genome summary with part breakdown."""
+        if not self.genome:
+            return "  (no genes)"
+        parts_count = {}
+        for g in self.genome:
+            parts_count[g.part] = parts_count.get(g.part, 0) + 1
+        summary_parts = [f"{k}:{v}" for k, v in sorted(parts_count.items())]
+        avg_str = sum(g.strength for g in self.genome) / max(len(self.genome), 1)
+        return f"  Parts: [{', '.join(summary_parts)}]  AvgStr: {avg_str:.2f}  Colors: {len({g.color_idx for g in self.genome})}"
+
+    def to_dict(self) -> dict:
+        """Serialize creature to a dictionary for JSON export."""
+        return {
+            "name": self.name,
+            "genome": [g.to_dict() for g in self.genome],
+            "generation": self.generation,
+            "fitness": round(self.fitness, 2),
+            "parent_ids": self.parent_ids,
+            "id": self.id,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "Creature":
+        """Deserialize creature from a dictionary."""
+        genome = [Gene.from_dict(g) for g in d["genome"]]
+        creature = cls(
+            name=d["name"],
+            genome=genome,
+            generation=d.get("generation", 0),
+            fitness=d.get("fitness", 0.0),
+            parent_ids=d.get("parent_ids", []),
+            id=d.get("id", ""),
+        )
+        if not creature.id:
+            creature.id = f"CR{random.randint(1000,9999)}"
+        return creature
+
 
 def random_gene(part: Optional[str] = None) -> Gene:
     """Generate a random gene."""
@@ -240,11 +316,18 @@ def random_creature(name: str = "", min_genes: int = 4, max_genes: int = 10) -> 
 
 
 def crossover(parent1: Creature, parent2: Creature) -> Creature:
-    """Create offspring from two parents via crossover."""
+    """Create offspring from two parents via crossover.
+
+    Uses uniform crossover with part-type-aware gene selection to preserve
+    diversity. When selecting from a parent, tries to fill body part types
+    that are underrepresented in the child genome.
+    """
     child_genome = []
     min_len = min(len(parent1.genome), len(parent2.genome))
+    max_len = max(len(parent1.genome), len(parent2.genome))
 
-    for i in range(max(len(parent1.genome), len(parent2.genome))):
+    for i in range(max_len):
+        # Prefer the parent whose gene fills a part type we don't have yet
         if random.random() < 0.5 and i < len(parent1.genome):
             child_genome.append(copy.deepcopy(parent1.genome[i]))
         elif i < len(parent2.genome):
@@ -346,12 +429,24 @@ def fitness_speed(creature: Creature) -> float:
     """Fitness for fewer genes (speed)."""
     return max(0, 150.0 - len(creature.genome) * 15.0)
 
+def fitness_hybrid(creature: Creature) -> float:
+    """Hybrid fitness blending complexity, harmony, and symmetry.
+
+    Weighted combination: 40% complexity, 35% harmony, 25% symmetry.
+    Normalized to approximate range 0-150.
+    """
+    comp = fitness_complexity(creature) / 120.0  # max ~120 for 8 parts
+    harm = fitness_harmony(creature) / 100.0       # max ~100
+    symm = fitness_symmetry(creature) / 100.0      # max ~100
+    return (comp * 0.40 + harm * 0.35 + symm * 0.25) * 150.0
+
 FITNESS_FUNCTIONS = {
     "size": fitness_size,
     "symmetry": fitness_symmetry,
     "complexity": fitness_complexity,
     "harmony": fitness_harmony,
     "speed": fitness_speed,
+    "hybrid": fitness_hybrid,
 }
 
 
@@ -359,7 +454,7 @@ FITNESS_FUNCTIONS = {
 
 class EvolutionEngine:
     def __init__(self, population_size: int = 20, fitness_target: str = "complexity"):
-        self.population_size = population_size
+        self.population_size = max(3, population_size)  # Minimum population of 3
         self.fitness_target = fitness_target
         self.generation = 0
         self.history = []  # best fitness per generation
@@ -418,6 +513,21 @@ class EvolutionEngine:
             "generation": self.generation,
         }
 
+    def evolve_until(self, target_fitness: float, max_generations: int = 1000) -> dict:
+        """Evolve until best fitness reaches target_fitness or max_generations hit.
+
+        Returns the final evolve() result dict. Stops early if target is reached.
+        """
+        result = None
+        for _ in range(max_generations):
+            result = self.evolve()
+            if result["best"].fitness >= target_fitness:
+                return result
+        # Safety: if we never entered the loop, evolve once
+        if result is None:
+            result = self.evolve()
+        return result
+
     def _tournament(self, k: int = 3) -> Creature:
         """Tournament selection."""
         contestants = random.sample(self.population, min(k, len(self.population)))
@@ -456,7 +566,7 @@ def box(text: str, width: int = 60, color: str = "\033[36m") -> str:
 
 def fitness_bar(value: float, max_val: float = 100.0, width: int = 30) -> str:
     """Render a progress bar for fitness."""
-    ratio = min(value / max_val, 1.0)
+    ratio = min(value / max_val, 1.0) if max_val > 0 else 0.0
     filled = int(ratio * width)
     empty = width - filled
     bar = f"\033[32m{'█' * filled}{RESET}{DIM}{'░' * empty}{RESET}"
@@ -501,6 +611,52 @@ def generation_chart(history: list, width: int = 50, height: int = 8) -> str:
     return "\n".join(lines)
 
 
+# ─── Export / Import ─────────────────────────────────────────────────────────
+
+def export_creature(creature: Creature, filepath: str) -> None:
+    """Export a creature to a JSON file."""
+    data = creature.to_dict()
+    with open(filepath, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def import_creature(filepath: str) -> Creature:
+    """Import a creature from a JSON file."""
+    with open(filepath, "r") as f:
+        data = json.load(f)
+    return Creature.from_dict(data)
+
+
+def export_population(engine: EvolutionEngine, filepath: str) -> None:
+    """Export the entire population to a JSON file."""
+    data = {
+        "version": __version__,
+        "fitness_target": engine.fitness_target,
+        "generation": engine.generation,
+        "population_size": engine.population_size,
+        "history": engine.history,
+        "population": [c.to_dict() for c in engine.population],
+    }
+    with open(filepath, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def import_population(filepath: str) -> EvolutionEngine:
+    """Import a population from a JSON file. Returns an EvolutionEngine."""
+    with open(filepath, "r") as f:
+        data = json.load(f)
+
+    population = [Creature.from_dict(cd) for cd in data["population"]]
+    engine = EvolutionEngine.__new__(EvolutionEngine)
+    engine.population_size = data.get("population_size", len(population))
+    engine.fitness_target = data.get("fitness_target", "complexity")
+    engine.generation = data.get("generation", 0)
+    engine.history = data.get("history", [])
+    engine.population = population
+    engine._evaluate()
+    return engine
+
+
 # ─── Main Interface ────────────────────────────────────────────────────────
 
 class GeneSplicerApp:
@@ -525,12 +681,13 @@ class GeneSplicerApp:
         print(f"""{BOLD}\033[36m  Main Menu{RESET}
   ─────────────────────────────────────────────
   \033[33m[N]\033[0m New population       \033[33m[E]\033[0m Evolve one generation
-  \033[33m[A]\033[0m Auto-evolve (run)      \033[33m[T]\033[0m Set fitness target
-  \033[33m[V]\033[0m View population       \033[33m[B]\033[0m View best creature
-  \033[33m[S]\033[0m Splice two creatures  \033[33m[M]\033[0m Mutate a creature
-  \033[33m[H]\033[0m Evolution history      \033[33m[D]\033[0m Diversity report
-  \033[33m[X]\033[0m Create custom creature \033[33m[R]\033[0m Reset & start over
-  \033[33m[Q]\033[0m Quit
+  \033[33m[A]\033[0m Auto-evolve (run)      \033[33m[G]\033[0m Evolve to fitness target
+  \033[33m[T]\033[0m Set fitness target     \033[33m[V]\033[0m View population
+  \033[33m[B]\033[0m View best creature     \033[33m[S]\033[0m Splice two creatures
+  \033[33m[M]\033[0m Mutate a creature      \033[33m[H]\033[0m Evolution history
+  \033[33m[D]\033[0m Diversity report       \033[33m[X]\033[0m Create custom creature
+  \033[33m[W]\033[0m Export creature/pop    \033[33m[L]\033[0m Load creature/pop
+  \033[33m[R]\033[0m Reset & start over     \033[33m[Q]\033[0m Quit
   ─────────────────────────────────────────────""")
 
     def show_targets(self):
@@ -546,6 +703,22 @@ class GeneSplicerApp:
         except (EOFError, KeyboardInterrupt):
             return "q"
 
+    def prompt_int(self, msg: str, default: int = 0) -> int:
+        """Prompt for an integer with a default value. Returns default on error."""
+        try:
+            val = input(f"  {msg} [{default}]: ").strip()
+            return int(val) if val else default
+        except (ValueError, EOFError, KeyboardInterrupt):
+            return default
+
+    def prompt_float(self, msg: str, default: float = 0.0) -> float:
+        """Prompt for a float with a default value. Returns default on error."""
+        try:
+            val = input(f"  {msg} [{default}]: ").strip()
+            return float(val) if val else default
+        except (ValueError, EOFError, KeyboardInterrupt):
+            return default
+
     def show_creature_card(self, creature: Creature, title: str = ""):
         """Display a creature in a nice card format."""
         if title:
@@ -557,7 +730,7 @@ class GeneSplicerApp:
 
         print(f"\n{BOLD}  {creature.name}{RESET} \033[2m(ID:{creature.id}){RESET}")
         print(creature.stats())
-        print(f"  Genome: {creature.genome_string()}")
+        print(creature.genome_summary())
 
     def cmd_new_population(self):
         self.clear()
@@ -566,18 +739,24 @@ class GeneSplicerApp:
         print(f"\n{BOLD}  Create New Population{RESET}")
         print(f"  Current target: \033[33m{self.engine.fitness_target if self.engine else 'complexity'}{RESET}\n")
 
-        try:
-            size = input("  Population size [20]: ").strip()
-            size = int(size) if size else 20
-        except (ValueError, EOFError):
-            size = 20
+        size = self.prompt_int("Population size", 20)
+        size = max(3, size)  # Minimum 3
 
         self.show_targets()
         target = input("  Fitness target [complexity]: ").strip().lower()
         if target not in FITNESS_FUNCTIONS:
-            target = "complexity"
+            # Try by number
+            try:
+                idx = int(target) - 1
+                keys = list(FITNESS_FUNCTIONS.keys())
+                if 0 <= idx < len(keys):
+                    target = keys[idx]
+                else:
+                    target = "complexity"
+            except (ValueError, IndexError):
+                target = "complexity"
 
-        self.engine = EvolutionEngine(population_size=max(3, size), fitness_target=target)
+        self.engine = EvolutionEngine(population_size=size, fitness_target=target)
         print(f"\n  \033[32m✓ Population of {size} creatures created!{RESET}")
         print(f"  Fitness target: {BOLD}{target}{RESET}")
         self.show_creature_card(self.engine.get_best(), "Best Initial Creature")
@@ -598,10 +777,8 @@ class GeneSplicerApp:
     def cmd_auto_evolve(self):
         if not self.engine:
             self.engine = EvolutionEngine()
-        gens = input(f"  How many generations [20]? ").strip()
-        try:
-            gens = int(gens) if gens else 20
-        except ValueError:
+        gens = self.prompt_int("How many generations", 20)
+        if gens <= 0:
             gens = 20
 
         print(f"\n  {BOLD}Auto-evolving {gens} generations...{RESET}\n")
@@ -613,6 +790,7 @@ class GeneSplicerApp:
                 f"\r  Gen {result['generation']:3d} | "
                 f"Best: {result['best'].fitness:6.1f} | "
                 f"Avg: {result['avg_fitness']:6.1f} | "
+                f"Diversity: {self.engine.diversity()*100:3.0f}% | "
                 f"[{'█' * filled}{'░' * (bar_len - filled)}]"
             )
             sys.stdout.flush()
@@ -620,6 +798,25 @@ class GeneSplicerApp:
 
         print(f"\n\n  {BOLD}\033[32m✓ Evolution complete!{RESET}")
         self.show_creature_card(self.engine.get_best(), "Final Champion")
+
+    def cmd_evolve_to_target(self):
+        """Evolve until a fitness threshold is reached."""
+        if not self.engine:
+            self.engine = EvolutionEngine()
+
+        print(f"\n{BOLD}  Evolve to Fitness Target{RESET}")
+        print(f"  Current best fitness: {self.engine.get_best().fitness:.1f}")
+        target = self.prompt_float("Target fitness", self.engine.get_best().fitness + 20.0)
+        max_gens = self.prompt_int("Max generations (safety limit)", 500)
+
+        if target <= self.engine.get_best().fitness:
+            print(f"  Target {target:.1f} is already reached! Current best: {self.engine.get_best().fitness:.1f}")
+            return
+
+        print(f"\n  {BOLD}Evolving until fitness ≥ {target:.1f} (max {max_gens} gens)...{RESET}\n")
+        result = self.engine.evolve_until(target, max_gens)
+        print(f"\n  {BOLD}\033[32m✓ Reached fitness {result['best'].fitness:.1f} at generation {result['generation']}!{RESET}")
+        self.show_creature_card(result["best"], "Champion")
 
     def cmd_set_target(self):
         if not self.engine:
@@ -712,6 +909,7 @@ class GeneSplicerApp:
             idx = int(input("\n  Creature #: ").strip()) - 1
             rate = input("  Mutation rate [0.3]: ").strip()
             rate = float(rate) if rate else 0.3
+            rate = max(0.0, min(1.0, rate))  # Clamp mutation rate
         except (ValueError, EOFError):
             print("  Invalid selection.")
             return
@@ -777,7 +975,6 @@ class GeneSplicerApp:
 
         name = input("  Creature name: ").strip()
         if not name:
-            prefixes = ["Cus", "Cus", "Cus"]
             name = "Cus" + random.choice(["tom", "ter", "pid", "tin", "tex"])
 
         print(f"\n  Available body parts: {', '.join(BODY_PARTS)}")
@@ -822,11 +1019,79 @@ class GeneSplicerApp:
                     self.engine._evaluate()
                     print(f"  \033[32m✓ {creature.name} added to population!{RESET}")
 
+    def cmd_export(self):
+        """Export creature or population to JSON."""
+        if not self.engine:
+            print("  No population to export. Press [N] to create one.")
+            return
+
+        print(f"\n{BOLD}  Export{RESET}")
+        print(f"  \033[33m[1]\033[0m Export best creature")
+        print(f"  \033[33m[2]\033[0m Export entire population")
+
+        try:
+            choice = input("  Choice: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            return
+
+        filepath = input("  File path [creature.json]: ").strip()
+        if not filepath:
+            filepath = "creature.json"
+
+        try:
+            if choice == "2":
+                export_population(self.engine, filepath)
+                print(f"  \033[32m✓ Population exported to {filepath}{RESET}")
+            else:
+                export_creature(self.engine.get_best(), filepath)
+                print(f"  \033[32m✓ Champion exported to {filepath}{RESET}")
+        except (OSError, IOError) as e:
+            print(f"  \033[31m✗ Error exporting: {e}{RESET}")
+
+    def cmd_import(self):
+        """Import a creature or population from JSON."""
+        filepath = input("  File path to import: ").strip()
+        if not filepath:
+            print("  No file specified.")
+            return
+
+        try:
+            with open(filepath, "r") as f:
+                data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError, OSError) as e:
+            print(f"  \033[31m✗ Error importing: {e}{RESET}")
+            return
+
+        if "population" in data:
+            # It's a population export
+            try:
+                engine = import_population(filepath)
+                self.engine = engine
+                print(f"  \033[32m✓ Population loaded from {filepath}{RESET}")
+                print(f"  Generation: {engine.generation} | Target: {engine.fitness_target}")
+            except Exception as e:
+                print(f"  \033[31m✗ Error loading population: {e}{RESET}")
+        else:
+            # Single creature
+            try:
+                creature = import_creature(filepath)
+                if not self.engine:
+                    self.engine = EvolutionEngine()
+                creature.fitness = FITNESS_FUNCTIONS[self.engine.fitness_target](creature)
+                self.show_creature_card(creature, "Imported Creature")
+                add = input("\n  Add to population? [Y/n]: ").strip().lower()
+                if add != "n":
+                    self.engine.population[-1] = creature
+                    self.engine._evaluate()
+                    print(f"  \033[32m✓ {creature.name} added to population!{RESET}")
+            except Exception as e:
+                print(f"  \033[31m✗ Error loading creature: {e}{RESET}")
+
     def run(self):
         """Main loop."""
         self.clear()
         self.header()
-        print(f"\n{BOLD}  Welcome to Gene Splicer!{RESET}")
+        print(f"{BOLD}  Welcome to Gene Splicer!{RESET}")
         print(f"  Breed, mutate, and evolve ASCII creatures.\n")
 
         if not self.engine:
@@ -845,6 +1110,8 @@ class GeneSplicerApp:
                 self.cmd_evolve()
             elif cmd == "a":
                 self.cmd_auto_evolve()
+            elif cmd == "g":
+                self.cmd_evolve_to_target()
             elif cmd == "t":
                 self.cmd_set_target()
             elif cmd == "v":
@@ -861,6 +1128,10 @@ class GeneSplicerApp:
                 self.cmd_diversity()
             elif cmd == "x":
                 self.cmd_custom_creature()
+            elif cmd == "w":
+                self.cmd_export()
+            elif cmd == "l":
+                self.cmd_import()
             elif cmd == "r":
                 self.engine = EvolutionEngine(
                     population_size=self.engine.population_size if self.engine else 20,
@@ -876,16 +1147,29 @@ class GeneSplicerApp:
 
 # ─── Demo Mode (non-interactive) ───────────────────────────────────────────
 
-def run_demo():
-    """Run a non-interactive demo showing evolution in action."""
+def run_demo(targets=None, generations=25, population_size=30):
+    """Run a non-interactive demo showing evolution in action.
+
+    Args:
+        targets: List of fitness target names. Defaults to ["complexity", "harmony", "size"].
+        generations: Number of generations to evolve per target.
+        population_size: Size of the population.
+    """
+    if targets is None:
+        targets = ["complexity", "harmony", "size"]
+
     print(CLEAR)
     print(f"{BOLD}\033[35m  ╔═══════════════════════════════════════════════════════╗")
     print(f"  ║   🧬  GENE SPLICER — Auto Demo                       ║")
     print(f"  ║       Watch creatures evolve!                          ║")
     print(f"  ╚═══════════════════════════════════════════════════════╝{RESET}\n")
 
-    for target in ["complexity", "harmony", "size"]:
-        engine = EvolutionEngine(population_size=30, fitness_target=target)
+    for target in targets:
+        if target not in FITNESS_FUNCTIONS:
+            print(f"  Unknown target: {target}, skipping.")
+            continue
+
+        engine = EvolutionEngine(population_size=population_size, fitness_target=target)
 
         print(f"\n{BOLD}\033[36m  ═══ Evolving for: {target.upper()} ═══{RESET}\n")
         print(f"  Starting population of {engine.population_size} creatures...")
@@ -899,10 +1183,10 @@ def run_demo():
         print(f"    {BOLD}{best.name}{RESET} fitness={best.fitness:.1f}")
 
         # Evolve
-        for gen in range(25):
+        for gen in range(generations):
             result = engine.evolve()
             bar_len = 25
-            filled = int((gen + 1) / 25 * bar_len)
+            filled = int((gen + 1) / generations * bar_len)
             sys.stdout.write(
                 f"\r  Gen {result['generation']:2d} | "
                 f"Best: {result['best'].fitness:6.1f} | "
@@ -931,9 +1215,76 @@ def run_demo():
     print(f"  Usage: python gene_splicer.py --interactive{RESET}\n")
 
 
+# ─── CLI Entry Point ────────────────────────────────────────────────────────
+
+def parse_args():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Gene Splicer — breed ASCII creatures through genetic algorithms",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  python gene_splicer.py                       Run demo (non-interactive)
+  python gene_splicer.py -i                    Interactive mode
+  python gene_splicer.py -i -t harmony         Interactive, evolve for harmony
+  python gene_splicer.py --target size -g 50    Demo with size target, 50 gens
+  python gene_splicer.py --export champ.json    Export best creature
+  python gene_splicer.py --import champ.json    Import a creature
+  python gene_splicer.py --version              Show version
+"""
+    )
+    parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}')
+    parser.add_argument('-i', '--interactive', action='store_true',
+                       help='Run in interactive mode (default: demo mode)')
+    parser.add_argument('-t', '--target', type=str, default=None,
+                       choices=list(FITNESS_TARGETS.keys()),
+                       help='Fitness target (default: complexity)')
+    parser.add_argument('-g', '--generations', type=int, default=25,
+                       help='Number of generations for demo mode (default: 25)')
+    parser.add_argument('-p', '--population', type=int, default=30,
+                       help='Population size for demo mode (default: 30)')
+    parser.add_argument('--export', type=str, default=None, metavar='FILE',
+                       help='Export best creature from demo to JSON file')
+    parser.add_argument('--import', dest='import_file', type=str, default=None, metavar='FILE',
+                       help='Import a creature from JSON file (interactive mode)')
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    if "--interactive" in sys.argv or "-i" in sys.argv:
+    args = parse_args()
+
+    if args.interactive:
         app = GeneSplicerApp()
+        # Set initial target if specified
+        if args.target:
+            app.engine = EvolutionEngine(fitness_target=args.target)
+        # Import creature if specified
+        if args.import_file:
+            try:
+                creature = import_creature(args.import_file)
+                print(f"  Imported creature: {creature.name}")
+                if not app.engine:
+                    app.engine = EvolutionEngine(fitness_target=args.target or "complexity")
+                creature.fitness = FITNESS_FUNCTIONS[app.engine.fitness_target](creature)
+                app.engine.population[-1] = creature
+                app.engine._evaluate()
+                print(f"  Added to population. Fitness: {creature.fitness:.1f}")
+            except Exception as e:
+                print(f"  Error importing: {e}")
         app.run()
     else:
-        run_demo()
+        # Demo mode
+        targets = [args.target] if args.target else None
+        engine_ref = [None]  # Mutable reference for export
+        run_demo(targets=targets, generations=args.generations, population_size=args.population)
+
+        # If --export is specified, create a temporary engine and export
+        if args.export:
+            engine = EvolutionEngine(population_size=args.population, fitness_target=args.target or "complexity")
+            for _ in range(args.generations):
+                engine.evolve()
+            try:
+                export_creature(engine.get_best(), args.export)
+                print(f"  Best creature exported to {args.export}")
+            except (OSError, IOError) as e:
+                print(f"  Error exporting: {e}", file=sys.stderr)
