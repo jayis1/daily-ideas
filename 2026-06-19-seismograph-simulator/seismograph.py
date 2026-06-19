@@ -5,6 +5,8 @@ Simulates earthquake seismic waves propagating through multiple monitoring stati
 Visualizes P-waves, S-waves, and surface waves with realistic travel-time curves.
 """
 
+__version__ = "1.1.0"
+
 import time
 import math
 import random
@@ -22,8 +24,11 @@ SURFACE_WAVE_VELOCITY = 3.0  # km/s (Rayleigh wave approx)
 
 # Seismic magnitude → amplitude scaling (simplified)
 def magnitude_to_amplitude(mag):
-    """Rough amplitude scaling: each unit ~10x increase."""
-    return 10 ** ((mag - 3.0) * 0.8) * 0.3
+    """Rough amplitude scaling: each unit ~10x increase.
+    Clamped to a minimum to ensure even small quakes are visible."""
+    amplitude = 10 ** ((mag - 3.0) * 0.8) * 0.3
+    # Ensure a minimum visible amplitude for very small magnitudes
+    return max(amplitude, 0.05)
 
 # ── Data Structures ──────────────────────────────────────────────────────────
 
@@ -56,7 +61,9 @@ def s_wave_arrival_time(distance_km, depth_km=10):
     return hyp_distance / S_WAVE_VELOCITY
 
 def surface_wave_arrival_time(distance_km, depth_km=10):
-    """Surface wave travel time — slower but only propagates along surface."""
+    """Surface wave travel time — slower but only propagates along surface.
+    Note: depth_km is accepted for API consistency but not used, as surface
+    waves travel along the surface regardless of earthquake depth."""
     return distance_km / SURFACE_WAVE_VELOCITY
 
 def generate_p_wave(t, arrival, amplitude):
@@ -261,8 +268,13 @@ def draw_travel_time_curve(stations, earthquake, width=70, height=12):
     """Draw travel-time curves showing P, S, and Surface wave arrivals."""
     canvas = [[" " for _ in range(width)] for _ in range(height)]
     
-    max_dist = max(s.distance_km for s in stations) * 1.1
+    max_dist = max((s.distance_km for s in stations), default=100) * 1.1
+    # Guard against zero-distance stations causing division by zero
+    if max_dist <= 0:
+        max_dist = 100.0
     max_time = surface_wave_arrival_time(max_dist, earthquake.depth_km) * 1.1
+    if max_time <= 0:
+        max_time = 100.0
     
     # Draw axes
     for x in range(width):
@@ -355,9 +367,12 @@ def draw_richter_scale(magnitude):
     elif magnitude < 7:
         color = Colors.RED
         label = "Strong"
+    elif magnitude < 8:
+        color = Colors.RED
+        label = "Major"
     else:
         color = Colors.MAGENTA + Colors.BOLD
-        label = "Major"
+        label = "Great"
     
     result = f"  {Colors.BOLD}Richter Scale{Colors.RESET}  "
     result += f"{color}{'█' * fill}{'░' * (bar_width - fill)}{Colors.RESET} "
@@ -386,6 +401,16 @@ def draw_phase_diagram(current_time, earthquake):
 
 def run_simulation(earthquake, stations, duration=60.0, speed=1.0, no_map=False):
     """Run the seismograph simulation."""
+    
+    # Validate speed to prevent ZeroDivisionError or negative sleep
+    if speed <= 0:
+        print(f"  {Colors.RED}Error: speed must be positive (got {speed}). "
+              f"Defaulting to 1.0x.{Colors.RESET}")
+        speed = 1.0
+    if duration <= 0:
+        print(f"  {Colors.RED}Error: duration must be positive (got {duration}). "
+              f"Defaulting to 60s.{Colors.RESET}")
+        duration = 60.0
     
     cols, rows = get_terminal_size()
     
@@ -610,12 +635,13 @@ Examples:
     parser.add_argument("--lat", type=float, default=35.6, help="Latitude (default: 35.6)")
     parser.add_argument("--lon", type=float, default=139.7, help="Longitude (default: 139.7)")
     parser.add_argument("--duration", type=float, default=60, help="Simulation duration in seconds (default: 60)")
-    parser.add_argument("--speed", type=float, default=1.0, help="Playback speed multiplier (default: 1.0)")
+    parser.add_argument("--speed", type=float, default=1.0, help="Playback speed multiplier (default: 1.0, must be > 0)")
     parser.add_argument("--historical", action="store_true", help="Simulate a random historical earthquake")
     parser.add_argument("--interactive", action="store_true", help="Choose from historical earthquake list")
     parser.add_argument("--list", action="store_true", help="List historical earthquakes and exit")
     parser.add_argument("--no-map", action="store_true", help="Skip the station map display")
     parser.add_argument("--stations", type=int, default=10, help="Number of stations (default: 10)")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     
     args = parser.parse_args()
     
@@ -673,7 +699,8 @@ Examples:
         earthquake = random.choice(list_historical_earthquakes())
     elif args.magnitude:
         magnitude = max(1.0, min(10.0, args.magnitude))
-        earthquake = Earthquake(magnitude, args.depth, args.lat, args.lon)
+        depth = max(0.0, args.depth)  # Depth must be non-negative
+        earthquake = Earthquake(magnitude, depth, args.lat, args.lon)
     else:
         earthquake = generate_random_earthquake()
     

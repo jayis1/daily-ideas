@@ -12,10 +12,12 @@ A real-time terminal-based seismograph simulator that visualizes earthquake seis
 - **10 Seismic Stations** — Each at different distances and azimuths from the epicenter
 - **Live Waveform Display** — Animated seismogram traces for all stations with phase-colored fills
 - **Travel Time Calculations** — Real-time arrival status with ETA countdowns for each wave type at each station
-- **Richter Scale Bar** — Visual magnitude indicator with classification (Minor/Moderate/Strong/Major)
+- **Richter Scale Bar** — Visual magnitude indicator with classification (Minor/Moderate/Strong/Major/Great)
 - **Station Map** — Top-down view showing epicenter and station positions (shown at start)
+- **Travel-Time Curve Plot** — ASCII chart showing P, S, and surface wave travel-time curves with station markers
 - **Historical Earthquakes** — Simulate famous events like the 2011 Tohoku M9.0 or 2004 Indian Ocean M9.1
 - **Configurable** — Set magnitude, depth, speed, duration, and number of stations
+- **Input Validation** — Invalid inputs (speed ≤ 0, negative depth, etc.) are gracefully handled with sensible defaults
 - **Zero Dependencies** — Pure Python 3, no external packages required
 
 ## How It Works
@@ -79,6 +81,11 @@ python3 seismograph.py -m 8.0 --speed 10    # 10x realtime
 python3 seismograph.py -m 5.5 --duration 120 --stations 5
 ```
 
+### Show version
+```bash
+python3 seismograph.py --version
+```
+
 ### Full options
 ```
 python3 seismograph.py -m 7.5 -d 30 --lat 35.6 --lon 139.7 --speed 2 --duration 90
@@ -89,16 +96,17 @@ python3 seismograph.py -m 7.5 -d 30 --lat 35.6 --lon 139.7 --speed 2 --duration 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-m`, `--magnitude` | Random | Earthquake magnitude (1.0–10.0) |
-| `-d`, `--depth` | 10 | Depth in km |
+| `-d`, `--depth` | 10 | Depth in km (must be ≥ 0) |
 | `--lat` | 35.6 | Epicenter latitude |
 | `--lon` | 139.7 | Epicenter longitude |
-| `--duration` | 60 | Simulation duration in seconds |
-| `--speed` | 1.0 | Playback speed multiplier |
+| `--duration` | 60 | Simulation duration in seconds (must be > 0) |
+| `--speed` | 1.0 | Playback speed multiplier (must be > 0) |
 | `--historical` | — | Simulate a random famous earthquake |
 | `--interactive` | — | Choose from a list of historical events |
 | `--list` | — | List historical earthquakes and exit |
 | `--no-map` | — | Skip the station map display |
 | `--stations` | 10 | Number of monitoring stations (3–10) |
+| `--version` | — | Show version and exit |
 
 ## What You'll See
 
@@ -132,29 +140,52 @@ Press **Ctrl+C** to stop the simulation at any time.
 | 9 | 5.5 | Hypothetical London |
 | 10 | 4.5 | Small Bay Area |
 
-## Example Output
+## Richter Scale Classification
 
+| Magnitude | Classification | Color |
+|-----------|---------------|-------|
+| < 3.0 | Minor | Green |
+| 3.0–4.9 | Moderate | Yellow |
+| 5.0–6.9 | Strong | Red |
+| 7.0–7.9 | Major | Red (bold) |
+| ≥ 8.0 | Great | Magenta (bold) |
+
+## Testing
+
+Run the test suite:
+
+```bash
+python3 -m pytest test_seismograph.py -v
 ```
-  ════════════════════════════════════════════════════════════════════
-    🌍 SEISMOGRAPH SIMULATOR  │  Live Seismic Monitoring
-  ════════════════════════════════════════════════════════════════════
-  Epicenter: (35.6°, 139.7°)  Magnitude: M7.0  Depth: 10 km  Time: 29.9s
-  Richter Scale  █████████████████████░░░░░░░░░ M7.0 (Major)
 
-  ────────────────────────────────────────────────────────────────────
-    Real-Time Seismograms
-  ────────────────────────────────────────────────────────────────────
-  Alpha Ridge   45km │     ████████████░░████████                     │ Surface
-  Delta Creek   80km │        █░░░░░███░░█░█░░█░███░█████████░░░░█    │ Surface
-  Bravo Peak  120km │                                       █         │ P-wave
-  Juliet Dock 150km │                 █░░░█░█████████░██░██              │ S-wave
-  ────────────────────────────────────────────────────────────────────
+The test suite includes 51 tests covering:
+- Magnitude-to-amplitude conversion (including edge cases and minimum clamping)
+- Wave arrival time calculations (zero distance, depth handling, ordering)
+- Wave generation (before/after arrival, decay, noise)
+- Compute waveform (integration test)
+- Drawing functions (Richter scale, map, travel-time curve, phase diagram)
+- Zero-distance station in travel-time curve (division-by-zero fix)
+- Empty station lists
+- CLI argument parsing (--version, --list, magnitude/depth/speed validation)
+- Data structure integrity
 
-  Wave Phase Guide
-    P-wave     High freq, low amp           ● ACTIVE
-    S-wave     Medium freq, med amp         ● ACTIVE
-    Surface    Low freq, high amp           ● ACTIVE
-```
+## Changelog
+
+### v1.1.0 — Bug Fix Release
+
+**Critical Fixes:**
+- **Fixed ZeroDivisionError in `draw_travel_time_curve`** when all stations have zero distance — now falls back to a default distance
+- **Fixed crash with `--speed 0`** — previously caused `ZeroDivisionError` in `time.sleep(dt/speed)`; now validates and falls back to 1.0x with an error message
+- **Fixed crash with `--speed < 0`** — previously caused `ValueError: sleep length must be non-negative`; now validates and falls back to 1.0x with an error message
+
+**Improvements:**
+- **Added `--version` flag** — shows version `1.1.0`
+- **Added Richter scale "Great" classification** — M8.0+ now labeled "Great" (was incorrectly labeled "Major"); M7.0–7.9 remains "Major"
+- **Added minimum amplitude clamping** — Very small magnitudes (M1–M2) now produce visible waveforms instead of being lost in noise
+- **Added depth validation** — Negative depth values are clamped to 0
+- **Added duration validation** — Non-positive durations fall back to 60s with a warning
+- **Added docstring to `surface_wave_arrival_time`** — Clarifies that the `depth_km` parameter is accepted for API consistency but not used in the calculation
+- **Added comprehensive test suite** — 51 unit tests covering all core functions, edge cases, and CLI argument parsing
 
 ## License
 
