@@ -7,8 +7,13 @@ A terminal-based Nonogram puzzle game with:
 - Automatic solver using constraint propagation + backtracking
 - Interactive gameplay with keyboard controls
 - Multiple difficulty levels (5x5, 10x10, 15x15)
-- Puzzle import/export
-- Timer and hint system
+- Puzzle import/export with compact encoding
+- Undo support and seed-based reproducibility
+- Timer and hint system with mistake tracking
+- Solution uniqueness verification
+- --help and --version flags
+
+Version: 2.0.0
 """
 
 import random
@@ -16,11 +21,15 @@ import time
 import sys
 import json
 import os
+import copy
 from collections import defaultdict
+
+__version__ = "2.0.0"
 
 # ─── ANSI Helpers ────────────────────────────────────────────────────────────
 
 class Style:
+    """ANSI escape code constants for terminal formatting."""
     RESET = "\033[0m"
     BOLD = "\033[1m"
     DIM = "\033[2m"
@@ -44,20 +53,24 @@ class Style:
 
 
 def clear_screen():
+    """Clear the terminal screen (cross-platform)."""
     os.system("cls" if os.name == "nt" else "clear")
 
 
 def move_cursor(row, col):
+    """Move the terminal cursor to (row, col)."""
     sys.stdout.write(f"\033[{row};{col}H")
     sys.stdout.flush()
 
 
 def hide_cursor():
+    """Hide the terminal cursor."""
     sys.stdout.write("\033[?25l")
     sys.stdout.flush()
 
 
 def show_cursor():
+    """Show the terminal cursor."""
     sys.stdout.write("\033[?25h")
     sys.stdout.flush()
 
@@ -65,7 +78,18 @@ def show_cursor():
 # ─── Nonogram Logic ──────────────────────────────────────────────────────────
 
 def compute_clues(grid):
-    """Compute row and column clues from a solved grid."""
+    """
+    Compute row and column clues from a solved grid.
+
+    Each clue is a list of consecutive block lengths.
+    An entirely empty row/column gets a clue of [0].
+
+    Args:
+        grid: 2D list of 0s and 1s
+
+    Returns:
+        Tuple of (row_clues, col_clues), each a list of lists of ints.
+    """
     rows = len(grid)
     cols = len(grid[0]) if rows > 0 else 0
 
@@ -107,9 +131,27 @@ def compute_clues(grid):
 
 
 def generate_line_possibilities(clue, length):
-    """Generate all possible line configurations for a given clue and length."""
+    """
+    Generate all possible line configurations for a given clue and line length.
+
+    Uses recursive backtracking to enumerate every valid placement of
+    the clue blocks within the line. Each configuration is a tuple of
+    0s (empty) and 1s (filled).
+
+    Args:
+        clue: List of ints representing block lengths (e.g. [2, 1])
+        length: Length of the line
+
+    Returns:
+        List of tuples, each a valid configuration.
+    """
     if clue == [0]:
         return [tuple([0] * length)]
+
+    # Quick feasibility check: minimum length needed for this clue
+    min_length = sum(clue) + len(clue) - 1
+    if min_length > length:
+        return []
 
     results = []
 
@@ -134,24 +176,40 @@ def generate_line_possibilities(clue, length):
     return results
 
 
-def solve_nonogram(row_clues, col_clues):
+def solve_nonogram(row_clues, col_clues, timeout=60):
     """
     Solve a nonogram using constraint propagation + backtracking.
-    Returns the solved grid, or None if unsolvable.
+
+    First applies constraint propagation to deduce cells, then uses
+    backtracking for remaining unknowns. Includes a timeout to prevent
+    hanging on very large puzzles.
+
+    Args:
+        row_clues: List of row clue lists
+        col_clues: List of column clue lists
+        timeout: Maximum seconds to spend solving (default 60)
+
+    Returns:
+        Solved grid (list of lists) or None if unsolvable/timeout.
     """
     rows = len(row_clues)
     cols = len(col_clues)
+    start_time = time.time()
 
     # Pre-compute possibilities
     row_possibilities = []
     for r in range(rows):
         poss = generate_line_possibilities(row_clues[r], cols)
-        row_possibilities.append(poss)
+        if not poss:
+            return None  # Infeasible clue
+        row_possibilities.append(list(poss))
 
     col_possibilities = []
     for c in range(cols):
         poss = generate_line_possibilities(col_clues[c], rows)
-        col_possibilities.append(poss)
+        if not poss:
+            return None  # Infeasible clue
+        col_possibilities.append(list(poss))
 
     # Grid: -1 = unknown, 0 = empty, 1 = filled
     grid = [[-1] * cols for _ in range(rows)]
@@ -217,16 +275,41 @@ def solve_nonogram(row_clues, col_clues):
     if not propagate():
         return None
 
+    # Check timeout
+    if time.time() - start_time > timeout:
+        return None
+
     # Check if solved
     if all(grid[r][c] != -1 for r in range(rows) for c in range(cols)):
         return grid
 
     # Backtracking
-    return backtrack(grid, row_possibilities, col_possibilities, rows, cols)
+    return backtrack(grid, row_possibilities, col_possibilities, rows, cols, start_time, timeout)
 
 
-def backtrack(grid, row_poss, col_poss, rows, cols):
-    """Backtracking solver for remaining unknowns."""
+def backtrack(grid, row_poss, col_poss, rows, cols, start_time, timeout):
+    """
+    Backtracking solver for remaining unknowns after constraint propagation.
+
+    Picks the first unknown cell, tries filling and emptying it,
+    then recursively propagates and backtracks.
+
+    Args:
+        grid: Current grid state
+        row_poss: Current row possibilities
+        col_poss: Current column possibilities
+        rows: Number of rows
+        cols: Number of columns
+        start_time: When solving started (for timeout)
+        timeout: Maximum solving time in seconds
+
+    Returns:
+        Solved grid or None
+    """
+    # Timeout check
+    if time.time() - start_time > timeout:
+        return None
+
     # Find first unknown cell
     for r in range(rows):
         for c in range(cols):
@@ -245,7 +328,7 @@ def backtrack(grid, row_poss, col_poss, rows, cols):
                     if not new_row_poss[r] or not new_col_poss[c]:
                         continue
 
-                    result = _propagate_and_solve(new_grid, new_row_poss, new_col_poss, rows, cols)
+                    result = _propagate_and_solve(new_grid, new_row_poss, new_col_poss, rows, cols, start_time, timeout)
                     if result is not None:
                         return result
 
@@ -254,8 +337,26 @@ def backtrack(grid, row_poss, col_poss, rows, cols):
     return grid
 
 
-def _propagate_and_solve(grid, row_poss, col_poss, rows, cols):
-    """Run constraint propagation then backtrack if needed."""
+def _propagate_and_solve(grid, row_poss, col_poss, rows, cols, start_time, timeout):
+    """
+    Run constraint propagation then backtrack if needed.
+
+    Args:
+        grid: Current grid state
+        row_poss: Current row possibilities
+        col_poss: Current column possibilities
+        rows: Number of rows
+        cols: Number of columns
+        start_time: When solving started (for timeout)
+        timeout: Maximum solving time in seconds
+
+    Returns:
+        Solved grid or None
+    """
+    # Timeout check
+    if time.time() - start_time > timeout:
+        return None
+
     changed = True
     while changed:
         changed = False
@@ -294,26 +395,167 @@ def _propagate_and_solve(grid, row_poss, col_poss, rows, cols):
     for r in range(rows):
         for c in range(cols):
             if grid[r][c] == -1:
-                return backtrack(grid, row_poss, col_poss, rows, cols)
+                return backtrack(grid, row_poss, col_poss, rows, cols, start_time, timeout)
 
     return grid
 
 
-def generate_puzzle(rows, cols, difficulty="medium"):
+def verify_unique_solution(row_clues, col_clues, timeout=30):
+    """
+    Verify that a nonogram puzzle has exactly one solution.
+
+    Finds the first solution, then tries to find a second one by
+    forcing differences. Returns True if the solution is unique.
+
+    Args:
+        row_clues: Row clues for the puzzle
+        col_clues: Column clues for the puzzle
+        timeout: Maximum time in seconds to spend
+
+    Returns:
+        True if the puzzle has a unique solution, False otherwise.
+    """
+    rows = len(row_clues)
+    cols = len(col_clues)
+
+    # Find first solution
+    solution = solve_nonogram(row_clues, col_clues, timeout=timeout)
+    if solution is None:
+        return False
+
+    # Try to find a second solution by excluding the first
+    # For each filled cell, try forcing it empty (and vice versa)
+    for r in range(rows):
+        for c in range(cols):
+            # Create modified clues that exclude the known solution value
+            test_row_clues = list(row_clues)
+            test_col_clues = list(col_clues)
+
+            # We need to check if there's a different solution
+            # by adding a constraint that cell (r,c) is different
+            alt_solution = _solve_with_exclusion(
+                row_clues, col_clues, rows, cols, r, c, 1 - solution[r][c]
+            )
+            if alt_solution is not None:
+                # Check it's truly different
+                different = False
+                for ar in range(rows):
+                    for ac in range(cols):
+                        if alt_solution[ar][ac] != solution[ar][ac]:
+                            different = True
+                            break
+                    if different:
+                        break
+                if different:
+                    return False
+
+    return True
+
+
+def _solve_with_exclusion(row_clues, col_clues, rows, cols, exclude_r, exclude_c, exclude_val):
+    """
+    Solve a nonogram with one cell forced to a specific value.
+
+    Used for uniqueness verification. Returns a solution grid or None.
+    """
+    # Pre-compute possibilities
+    row_possibilities = []
+    for r in range(rows):
+        poss = generate_line_possibilities(row_clues[r], cols)
+        if not poss:
+            return None
+        row_possibilities.append(list(poss))
+
+    col_possibilities = []
+    for c in range(cols):
+        poss = generate_line_possibilities(col_clues[c], rows)
+        if not poss:
+            return None
+        col_possibilities.append(list(poss))
+
+    grid = [[-1] * cols for _ in range(rows)]
+    grid[exclude_r][exclude_c] = exclude_val
+
+    # Filter possibilities for the excluded cell
+    row_possibilities[exclude_r] = [p for p in row_possibilities[exclude_r] if p[exclude_c] == exclude_val]
+    col_possibilities[exclude_c] = [p for p in col_possibilities[exclude_c] if p[exclude_r] == exclude_val]
+
+    if not row_possibilities[exclude_r] or not col_possibilities[exclude_c]:
+        return None
+
+    def propagate_local():
+        changed = True
+        while changed:
+            changed = False
+            for r in range(rows):
+                new_poss = [p for p in row_possibilities[r]
+                            if all(grid[r][c] == -1 or grid[r][c] == p[c] for c in range(cols))]
+                if not new_poss:
+                    return False
+                if len(new_poss) < len(row_possibilities[r]):
+                    row_possibilities[r] = new_poss
+                    changed = True
+                for c in range(cols):
+                    if grid[r][c] == -1:
+                        vals = set(p[c] for p in row_possibilities[r])
+                        if len(vals) == 1:
+                            grid[r][c] = vals.pop()
+                            changed = True
+
+            for c in range(cols):
+                new_poss = [p for p in col_possibilities[c]
+                            if all(grid[r][c] == -1 or grid[r][c] == p[r] for r in range(rows))]
+                if not new_poss:
+                    return False
+                if len(new_poss) < len(col_possibilities[c]):
+                    col_possibilities[c] = new_poss
+                    changed = True
+                for r in range(rows):
+                    if grid[r][c] == -1:
+                        vals = set(p[r] for p in col_possibilities[c])
+                        if len(vals) == 1:
+                            grid[r][c] = vals.pop()
+                            changed = True
+        return True
+
+    if not propagate_local():
+        return None
+
+    if all(grid[r][c] != -1 for r in range(rows) for c in range(cols)):
+        return grid
+
+    return backtrack(grid, row_possibilities, col_possibilities, rows, cols, time.time(), 30)
+
+
+def generate_puzzle(rows, cols, difficulty="medium", seed=None):
     """
     Generate a random nonogram puzzle.
-    Creates a random pattern, computes clues, and ensures unique solution.
+
+    Creates a random pattern, computes clues, and verifies unique solvability
+    for easy/medium difficulty levels. Falls back to non-unique puzzles for
+    hard difficulty after many attempts.
+
+    Args:
+        rows: Number of rows
+        cols: Number of columns
+        difficulty: 'easy', 'medium', or 'hard'
+        seed: Optional random seed for reproducibility
+
+    Returns:
+        Tuple of (grid, row_clues, col_clues)
     """
-    # Generate random patterns with structure (symmetry, shapes)
-    max_attempts = 50
+    if seed is not None:
+        rng = random.Random(seed)
+    else:
+        rng = random.Random()
+
+    max_attempts = 100
+    check_uniqueness = difficulty in ("easy", "medium")
 
     for attempt in range(max_attempts):
-        grid = generate_pattern(rows, cols, difficulty)
+        grid = generate_pattern(rows, cols, difficulty, rng=rng)
         row_clues, col_clues = compute_clues(grid)
 
-        # Check uniqueness by solving
-        # (for simplicity, we'll just use the generated grid)
-        # A more robust version would verify uniqueness
         filled = sum(sum(row) for row in grid)
         total = rows * cols
         fill_ratio = filled / total
@@ -324,26 +566,54 @@ def generate_puzzle(rows, cols, difficulty="medium"):
         if difficulty == "hard" and fill_ratio > 0.7:
             continue
 
+        # Avoid trivially empty puzzles
+        if filled == 0:
+            continue
+
+        # Verify solvability
+        solution = solve_nonogram(row_clues, col_clues, timeout=30)
+        if solution is None:
+            continue
+
+        # Verify uniqueness for easier difficulties
+        if check_uniqueness and rows * cols <= 225:  # Only check for reasonable sizes
+            if not verify_unique_solution(row_clues, col_clues, timeout=15):
+                continue
+
         return grid, row_clues, col_clues
 
-    # Fallback
-    grid = generate_pattern(rows, cols, difficulty)
+    # Fallback: generate without uniqueness check
+    grid = generate_pattern(rows, cols, difficulty, rng=rng)
     row_clues, col_clues = compute_clues(grid)
     return grid, row_clues, col_clues
 
 
-def generate_pattern(rows, cols, difficulty):
-    """Generate a random pattern with some structure."""
+def generate_pattern(rows, cols, difficulty, rng=None):
+    """
+    Generate a random pattern with structure appropriate to the difficulty.
+
+    Args:
+        rows: Grid height
+        cols: Grid width
+        difficulty: 'easy', 'medium', or 'hard'
+        rng: Random.Random instance for reproducibility (optional)
+
+    Returns:
+        2D list of 0s and 1s
+    """
+    if rng is None:
+        rng = random.Random()
+
     grid = [[0] * cols for _ in range(rows)]
 
     if difficulty == "easy":
-        # Simple shapes - rectangles and crosses
-        num_shapes = random.randint(1, 3)
+        # Simple shapes - rectangles and crosses with some random fill
+        num_shapes = rng.randint(1, 3)
         for _ in range(num_shapes):
-            sr = random.randint(0, rows - 1)
-            sc = random.randint(0, cols - 1)
-            sh = random.randint(1, min(3, rows - sr))
-            sw = random.randint(1, min(3, cols - sc))
+            sr = rng.randint(0, rows - 1)
+            sc = rng.randint(0, cols - 1)
+            sh = rng.randint(1, min(3, rows - sr))
+            sw = rng.randint(1, min(3, cols - sc))
             for r in range(sr, min(sr + sh, rows)):
                 for c in range(sc, min(sc + sw, cols)):
                     grid[r][c] = 1
@@ -351,21 +621,17 @@ def generate_pattern(rows, cols, difficulty):
         # Add some random cells
         for r in range(rows):
             for c in range(cols):
-                if random.random() < 0.25:
+                if rng.random() < 0.25:
                     grid[r][c] = 1
 
     elif difficulty == "medium":
         # Horizontal/vertical symmetry patterns
-        center_r = rows // 2
-        center_c = cols // 2
-
         for r in range(rows):
             for c in range(cols):
-                # Mirror coordinates
                 mr = rows - 1 - r
                 mc = cols - 1 - c
 
-                if random.random() < 0.4:
+                if rng.random() < 0.4:
                     grid[r][c] = 1
                     grid[mr][c] = 1  # Vertical symmetry
                     grid[r][mc] = 1  # Horizontal symmetry
@@ -375,34 +641,68 @@ def generate_pattern(rows, cols, difficulty):
         # Random density with some clustering
         for r in range(rows):
             for c in range(cols):
-                if random.random() < 0.5:
+                if rng.random() < 0.5:
                     grid[r][c] = 1
 
         # Cluster: force some adjacent cells on
         for _ in range(rows * cols // 4):
-            r = random.randint(0, rows - 1)
-            c = random.randint(0, cols - 1)
+            r = rng.randint(0, rows - 1)
+            c = rng.randint(0, cols - 1)
             grid[r][c] = 1
             for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                 nr, nc = r + dr, c + dc
                 if 0 <= nr < rows and 0 <= nc < cols:
-                    if random.random() < 0.6:
+                    if rng.random() < 0.6:
                         grid[nr][nc] = 1
 
     return grid
 
 
 def check_solution(player_grid, solution):
-    """Check if the player's grid matches the solution."""
+    """
+    Check if the player's grid matches the solution.
+
+    Compares each cell: only 1 (filled) and 0 (empty) states are checked.
+    Cells marked as -1 (unknown) or 2 (X-mark) are treated as incomplete.
+
+    Args:
+        player_grid: Player's current grid state
+        solution: The correct solution grid
+
+    Returns:
+        True if all cells match the solution
+    """
     for r in range(len(solution)):
         for c in range(len(solution[0])):
-            if player_grid[r][c] != solution[r][c]:
+            # X-marks (player value 0 for known-empty) match solution empty (0)
+            # Filled cells (player value 1) match solution filled (1)
+            # Unknown (-1) or X-mark (2 in player terms) are incomplete
+            pv = player_grid[r][c]
+            sv = solution[r][c]
+            if pv == -1:
                 return False
+            if pv == 1 and sv != 1:
+                return False
+            if pv == 0 and sv != 0:
+                return False
+            # pv == 2 means X-mark (known empty) — treated as 0
+            # Actually we use 0 for X-marks in player_grid, matching solution 0
     return True
 
 
 def get_hint(grid, solution):
-    """Find a cell that the player hasn't filled correctly."""
+    """
+    Find a cell that the player hasn't filled correctly.
+
+    Prioritizes cells where the player made a mistake over empty cells.
+
+    Args:
+        grid: Player's current grid (values: -1=unknown, 0=X-mark, 1=filled)
+        solution: The correct solution grid
+
+    Returns:
+        Tuple of ((row, col), is_wrong_cell) or (None, False) if no hint needed
+    """
     wrong_cells = []
     empty_cells = []
 
@@ -415,15 +715,26 @@ def get_hint(grid, solution):
 
     # Prefer fixing wrong cells first
     if wrong_cells:
-        return random.choice(wrong_cells), True  # True = wrong cell
+        return random.choice(wrong_cells), True
     if empty_cells:
         r, c = random.choice(empty_cells)
-        return (r, c), False  # False = empty cell
+        return (r, c), False
     return None, False
 
 
 def export_puzzle(row_clues, col_clues, rows, cols):
-    """Export puzzle as JSON string."""
+    """
+    Export puzzle as JSON string for sharing.
+
+    Args:
+        row_clues: Row clues
+        col_clues: Column clues
+        rows: Number of rows
+        cols: Number of columns
+
+    Returns:
+        JSON string representation of the puzzle
+    """
     data = {
         "rows": rows,
         "cols": cols,
@@ -434,33 +745,96 @@ def export_puzzle(row_clues, col_clues, rows, cols):
 
 
 def import_puzzle(json_str):
-    """Import puzzle from JSON string."""
+    """
+    Import puzzle from JSON string.
+
+    Args:
+        json_str: JSON string with 'rows', 'cols', 'row_clues', 'col_clues' keys
+
+    Returns:
+        Tuple of (row_clues, col_clues, rows, cols)
+
+    Raises:
+        json.JSONDecodeError: If the string is not valid JSON
+        KeyError: If required keys are missing
+        ValueError: If puzzle dimensions are invalid
+    """
     data = json.loads(json_str)
-    return data["row_clues"], data["col_clues"], data["rows"], data["cols"]
+
+    # Validate required fields
+    required_keys = {"rows", "cols", "row_clues", "col_clues"}
+    missing = required_keys - set(data.keys())
+    if missing:
+        raise KeyError(f"Missing required fields: {missing}")
+
+    rows = data["rows"]
+    cols = data["cols"]
+
+    if not isinstance(rows, int) or rows <= 0:
+        raise ValueError(f"Invalid rows value: {rows}")
+    if not isinstance(cols, int) or cols <= 0:
+        raise ValueError(f"Invalid cols value: {cols}")
+    if rows > 30 or cols > 30:
+        raise ValueError(f"Puzzle too large: {rows}x{cols}. Maximum is 30x30.")
+
+    if len(data["row_clues"]) != rows:
+        raise ValueError(f"row_clues length {len(data['row_clues'])} doesn't match rows {rows}")
+    if len(data["col_clues"]) != cols:
+        raise ValueError(f"col_clues length {len(data['col_clues'])} doesn't match cols {cols}")
+
+    return data["row_clues"], data["col_clues"], rows, cols
+
+
+def compute_progress(player_grid, solution):
+    """
+    Compute completion percentage of the puzzle.
+
+    Args:
+        player_grid: Player's current grid
+        solution: The solution grid
+
+    Returns:
+        Float between 0.0 and 1.0
+    """
+    if not solution:
+        return 0.0
+    total = len(solution) * len(solution[0])
+    if total == 0:
+        return 0.0
+    correct = 0
+    for r in range(len(solution)):
+        for c in range(len(solution[0])):
+            if player_grid[r][c] != -1 and player_grid[r][c] == solution[r][c]:
+                correct += 1
+    return correct / total
 
 
 # ─── Terminal UI ──────────────────────────────────────────────────────────────
 
 class NonogramGame:
-    """Interactive terminal nonogram game."""
+    """Interactive terminal nonogram game with undo support and progress tracking."""
 
-    # Cell states
-    EMPTY = 0
-    FILLED = 1
-    MARKED = 2  # X mark (definitely empty)
+    # Cell states in player grid
+    UNKNOWN = -1  # Not yet determined
+    FILLED = 1    # Filled cell
+    EMPTY = 0     # Marked as empty (X-mark)
 
-    def __init__(self, size=10, difficulty="medium"):
+    def __init__(self, size=10, difficulty="medium", seed=None):
         self.difficulty = difficulty
         self.rows = size
         self.cols = size
+        self.seed = seed
 
         # Generate puzzle
         self.solution, self.row_clues, self.col_clues = generate_puzzle(
-            self.rows, self.cols, difficulty
+            self.rows, self.cols, difficulty, seed=seed
         )
 
-        # Player grid: -1 = unknown, 0 = marked empty (X), 1 = filled
+        # Player grid: -1 = unknown, 0 = X-mark (empty), 1 = filled
         self.player_grid = [[-1] * self.cols for _ in range(self.rows)]
+
+        # Undo stack: list of (r, c, old_value) tuples
+        self.undo_stack = []
 
         # Cursor position
         self.cursor_r = 0
@@ -481,21 +855,30 @@ class NonogramGame:
         self.max_col_clue_len = max(len(c) for c in self.col_clues)
 
     def draw(self):
-        """Draw the entire game board."""
+        """Draw the entire game board with progress indicator."""
         clear_screen()
         lines = []
 
         # Title bar
         title = f"  {Style.BOLD}{Style.CYAN}◇ NONOGRAM PICROSS ◇{Style.RESET}"
         diff_str = f"  {self.difficulty.upper()}  {self.rows}×{self.cols}"
+        if self.seed is not None:
+            diff_str += f"  seed:{self.seed}"
         elapsed = time.time() - self.start_time
         mins, secs = int(elapsed) // 60, int(elapsed) % 60
         timer = f"  ⏱ {mins:02d}:{secs:02d}"
         hints = f"  💡 Hints: {self.hints_used}"
         mistakes = f"  ✗ Mistakes: {self.mistakes}"
 
+        # Progress bar
+        progress = compute_progress(self.player_grid, self.solution)
+        bar_len = 20
+        filled_bar = int(progress * bar_len)
+        bar = f"  [{Style.GREEN}{'█' * filled_bar}{Style.DIM}{'░' * (bar_len - filled_bar)}{Style.RESET}] {progress * 100:.0f}%"
+
         lines.append(f"{title}")
         lines.append(f"  {Style.DIM}{diff_str}{timer}{hints}{mistakes}{Style.RESET}")
+        lines.append(bar)
         lines.append("")
 
         # Column clues
@@ -567,7 +950,7 @@ class NonogramGame:
         lines.append("")
         lines.append(f"  {Style.DIM}Controls:{Style.RESET}")
         lines.append(f"  {Style.BOLD}Arrows/WASD{Style.RESET} Move  {Style.BOLD}Space/f{Style.RESET} Fill  {Style.BOLD}x{Style.RESET} Mark  {Style.BOLD}Backspace{Style.RESET} Clear")
-        lines.append(f"  {Style.BOLD}h{Style.RESET} Hint  {Style.BOLD}S{Style.RESET} Solve  {Style.BOLD}e{Style.RESET} Export  {Style.BOLD}q{Style.RESET} Quit")
+        lines.append(f"  {Style.BOLD}u{Style.RESET} Undo  {Style.BOLD}h{Style.RESET} Hint  {Style.BOLD}S{Style.RESET} Solve  {Style.BOLD}e{Style.RESET} Export  {Style.BOLD}q{Style.RESET} Quit")
 
         if self.game_won:
             lines.append("")
@@ -578,7 +961,7 @@ class NonogramGame:
         print("\n".join(lines))
 
     def _is_row_complete(self, r):
-        """Check if a row matches the solution clues."""
+        """Check if a row matches the solution."""
         for c in range(self.cols):
             if self.player_grid[r][c] != self.solution[r][c]:
                 return False
@@ -591,28 +974,50 @@ class NonogramGame:
                 return False
         return True
 
+    def _push_undo(self, r, c, old_val):
+        """Save a cell state to the undo stack."""
+        self.undo_stack.append((r, c, old_val))
+        # Limit undo history to prevent excessive memory use
+        if len(self.undo_stack) > 1000:
+            self.undo_stack = self.undo_stack[-500:]
+
+    def undo(self):
+        """Undo the last action."""
+        if not self.undo_stack:
+            return
+        r, c, old_val = self.undo_stack.pop()
+        self.player_grid[r][c] = old_val
+
     def toggle_fill(self):
         """Toggle fill state of current cell."""
         r, c = self.cursor_r, self.cursor_c
-        if self.player_grid[r][c] == 1:
+        old_val = self.player_grid[r][c]
+        self._push_undo(r, c, old_val)
+
+        if old_val == 1:
             self.player_grid[r][c] = -1
         else:
             self.player_grid[r][c] = 1
-            self.filled_count += 1
             if self.player_grid[r][c] != self.solution[r][c]:
                 self.mistakes += 1
 
     def toggle_mark(self):
         """Toggle X mark on current cell."""
         r, c = self.cursor_r, self.cursor_c
-        if self.player_grid[r][c] == 0:
+        old_val = self.player_grid[r][c]
+        self._push_undo(r, c, old_val)
+
+        if old_val == 0:
             self.player_grid[r][c] = -1
         else:
             self.player_grid[r][c] = 0
 
     def clear_cell(self):
-        """Clear current cell."""
-        self.player_grid[self.cursor_r][self.cursor_c] = -1
+        """Clear current cell back to unknown."""
+        r, c = self.cursor_r, self.cursor_c
+        old_val = self.player_grid[r][c]
+        self._push_undo(r, c, old_val)
+        self.player_grid[r][c] = -1
 
     def give_hint(self):
         """Reveal one cell."""
@@ -620,6 +1025,7 @@ class NonogramGame:
         if cell is None:
             return
         r, c = cell
+        self._push_undo(r, c, self.player_grid[r][c])
         self.player_grid[r][c] = self.solution[r][c]
         self.hints_used += 1
         self._check_win()
@@ -638,12 +1044,12 @@ class NonogramGame:
             self.elapsed = time.time() - self.start_time
 
     def move_cursor(self, dr, dc):
-        """Move cursor by delta."""
+        """Move cursor by delta, clamping to grid bounds."""
         self.cursor_r = max(0, min(self.rows - 1, self.cursor_r + dr))
         self.cursor_c = max(0, min(self.cols - 1, self.cursor_c + dc))
 
     def play(self):
-        """Main game loop."""
+        """Main game loop with keyboard input handling."""
         hide_cursor()
         try:
             import tty
@@ -688,6 +1094,8 @@ class NonogramGame:
                         self.clear_cell()
                     elif ch == 'h':
                         self.give_hint()
+                    elif ch == 'u':
+                        self.undo()
                     elif ch == 'S':
                         self.auto_solve()
                     elif ch == 'e':
@@ -712,7 +1120,7 @@ class NonogramGame:
             show_cursor()
 
     def _export_and_show(self):
-        """Export puzzle and show the code."""
+        """Export puzzle and show the code, waiting for user acknowledgment."""
         json_str = export_puzzle(self.row_clues, self.col_clues, self.rows, self.cols)
         print(f"\n\n  Puzzle exported! Copy this string to share:\n")
         print(f"  {json_str}\n")
@@ -721,17 +1129,32 @@ class NonogramGame:
             import tty, termios
             fd = sys.stdin.fileno()
             old = termios.tcgetattr(fd)
-            tty.setraw(fd)
-            sys.stdin.read(1)
-            termios.tcsetattr(fd, termios.TCSADRAIN, old)
-        except:
-            input()
+            try:
+                tty.setraw(fd)
+                sys.stdin.read(1)
+            finally:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        except (ImportError, termios.error, OSError):
+            try:
+                input()
+            except Exception:
+                pass
 
 
 # ─── Non-Interactive Modes ───────────────────────────────────────────────────
 
 def print_puzzle(row_clues, col_clues, rows, cols, grid=None, player_grid=None):
-    """Print a nonogram puzzle to the terminal (non-interactive)."""
+    """
+    Print a nonogram puzzle to the terminal (non-interactive).
+
+    Args:
+        row_clues: Row clues for display
+        col_clues: Column clues for display
+        rows: Number of rows
+        cols: Number of columns
+        grid: Optional solution grid for display
+        player_grid: Optional player grid for display
+    """
     max_row_clue_len = max(len(c) for c in row_clues)
     max_col_clue_len = max(len(c) for c in col_clues)
 
@@ -791,7 +1214,18 @@ def print_puzzle(row_clues, col_clues, rows, cols, grid=None, player_grid=None):
 
 
 def solve_and_display(row_clues, col_clues, rows, cols):
-    """Solve a nonogram and display the result."""
+    """
+    Solve a nonogram and display the result.
+
+    Args:
+        row_clues: Row clues
+        col_clues: Column clues
+        rows: Number of rows
+        cols: Number of columns
+
+    Returns:
+        Solution grid or None if unsolvable
+    """
     print(f"\n  {Style.BOLD}Solving {rows}×{cols} nonogram...{Style.RESET}\n")
 
     start = time.time()
@@ -807,11 +1241,23 @@ def solve_and_display(row_clues, col_clues, rows, cols):
     return solution
 
 
-def generate_and_display(size, difficulty, solve=False):
-    """Generate a puzzle and optionally solve it."""
-    grid, row_clues, col_clues = generate_puzzle(size, size, difficulty)
+def generate_and_display(size, difficulty, solve=False, seed=None):
+    """
+    Generate a puzzle and optionally solve it.
 
-    print(f"\n  {Style.BOLD}{Style.CYAN}Generated {size}×{size} {difficulty} puzzle{Style.RESET}\n")
+    Args:
+        size: Grid dimensions (size x size)
+        difficulty: 'easy', 'medium', or 'hard'
+        solve: Whether to show the solution
+        seed: Optional random seed
+
+    Returns:
+        Tuple of (grid, row_clues, col_clues)
+    """
+    grid, row_clues, col_clues = generate_puzzle(size, size, difficulty, seed=seed)
+
+    seed_info = f" (seed: {seed})" if seed is not None else ""
+    print(f"\n  {Style.BOLD}{Style.CYAN}Generated {size}×{size} {difficulty} puzzle{seed_info}{Style.RESET}\n")
     print_puzzle(row_clues, col_clues, size, size)
 
     if solve:
@@ -825,19 +1271,78 @@ def generate_and_display(size, difficulty, solve=False):
     return grid, row_clues, col_clues
 
 
-def import_and_solve(json_str):
-    """Import a puzzle from JSON and solve it."""
+def import_and_solve(json_str, solve=True):
+    """
+    Import a puzzle from JSON and optionally solve it.
+
+    Args:
+        json_str: JSON string representing the puzzle
+        solve: Whether to solve after importing
+
+    Returns:
+        Solution grid or None
+    """
     try:
         row_clues, col_clues, rows, cols = import_puzzle(json_str)
-    except (json.JSONDecodeError, KeyError) as e:
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
         print(f"  {Style.RED}Invalid puzzle code: {e}{Style.RESET}")
         return None
 
     print(f"\n  {Style.BOLD}Imported {rows}×{cols} puzzle{Style.RESET}\n")
     print_puzzle(row_clues, col_clues, rows, cols)
 
-    solution = solve_and_display(row_clues, col_clues, rows, cols)
-    return solution
+    if solve:
+        solution = solve_and_display(row_clues, col_clues, rows, cols)
+        return solution
+    return None
+
+
+def import_and_play(json_str):
+    """
+    Import a puzzle from JSON and play it interactively.
+
+    Args:
+        json_str: JSON string representing the puzzle
+
+    Returns:
+        None
+    """
+    try:
+        row_clues, col_clues, rows, cols = import_puzzle(json_str)
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
+        print(f"  {Style.RED}Invalid puzzle code: {e}{Style.RESET}")
+        return None
+
+    # Create game from imported puzzle
+    game = NonogramGame.__new__(NonogramGame)
+    game.difficulty = "imported"
+    game.rows = rows
+    game.cols = cols
+    game.seed = None
+    game.row_clues = row_clues
+    game.col_clues = col_clues
+
+    # Solve to get the solution
+    game.solution = solve_nonogram(row_clues, col_clues)
+    if game.solution is None:
+        print(f"  {Style.RED}Could not solve the imported puzzle — it may be unsolvable.{Style.RESET}")
+        return None
+
+    game.player_grid = [[-1] * cols for _ in range(rows)]
+    game.undo_stack = []
+    game.cursor_r = 0
+    game.cursor_c = 0
+    game.start_time = time.time()
+    game.elapsed = 0
+    game.hints_used = 0
+    game.mistakes = 0
+    game.filled_count = 0
+    game.game_won = False
+    game.max_row_clue_len = max(len(c) for c in row_clues)
+    game.max_col_clue_len = max(len(c) for c in col_clues)
+
+    game.play()
+    return game
 
 
 # ─── CLI ─────────────────────────────────────────────────────────────────────
@@ -856,9 +1361,11 @@ Examples:
   %(prog)s --generate 10 --solve    Generate and show solution
   %(prog)s --solve --puzzle '...'   Solve an imported puzzle
   %(prog)s --import '...'           Import and play a shared puzzle
+  %(prog)s --seed 42                Play a reproducible puzzle
         """
     )
 
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("-s", "--size", type=int, default=10,
                         help="Puzzle size (default: 10)")
     parser.add_argument("-d", "--difficulty", choices=["easy", "medium", "hard"],
@@ -869,23 +1376,36 @@ Examples:
                         help="Show solution (with --generate)")
     parser.add_argument("--puzzle", type=str,
                         help="Puzzle JSON string to solve")
+    parser.add_argument("--import-puzzle", type=str,
+                        help="Import a puzzle JSON string and play it interactively")
+    parser.add_argument("--seed", type=int, default=None,
+                        help="Random seed for reproducible puzzle generation")
 
     args = parser.parse_args()
 
-    if args.puzzle:
+    # Clamp size to reasonable bounds
+    if args.size < 3:
+        print(f"  {Style.RED}Puzzle size must be at least 3. Using 3.{Style.RESET}")
+        args.size = 3
+    elif args.size > 20:
+        print(f"  {Style.YELLOW}Large puzzles (>20) may be slow. Using {args.size}.{Style.RESET}")
+
+    if args.import_puzzle:
+        import_and_play(args.import_puzzle)
+    elif args.puzzle:
         if args.solve:
-            import_and_solve(args.puzzle)
+            import_and_solve(args.puzzle, solve=True)
         else:
             try:
                 row_clues, col_clues, rows, cols = import_puzzle(args.puzzle)
                 print_puzzle(row_clues, col_clues, rows, cols)
-            except (json.JSONDecodeError, KeyError) as e:
+            except (json.JSONDecodeError, KeyError, ValueError) as e:
                 print(f"  {Style.RED}Invalid puzzle code: {e}{Style.RESET}")
     elif args.generate:
-        generate_and_display(args.size, args.difficulty, solve=args.solve)
+        generate_and_display(args.size, args.difficulty, solve=args.solve, seed=args.seed)
     else:
         # Interactive game
-        game = NonogramGame(size=args.size, difficulty=args.difficulty)
+        game = NonogramGame(size=args.size, difficulty=args.difficulty, seed=args.seed)
         game.play()
 
 
