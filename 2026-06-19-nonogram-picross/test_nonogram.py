@@ -667,11 +667,157 @@ class TestVersion:
         for part in parts:
             assert part.isdigit()
 
-    def test_version_is_3(self):
-        """Version should be 3.0.0 after the uniqueness fix."""
-        assert __version__ == "3.0.0"
+    def test_version_is_3_1(self):
+        """Version should be 3.1.0 after bug fixes."""
+        assert __version__ == "3.1.0"
 
+
+class TestCheckSolutionBounds:
+    """Test check_solution with dimension mismatches and edge cases."""
+
+    def test_dimension_mismatch_rows(self):
+        """check_solution should return False if row counts differ."""
+        assert check_solution([[1]], [[1, 0]]) is False
+
+    def test_dimension_mismatch_cols(self):
+        """check_solution should return False if column counts differ."""
+        assert check_solution([[1, 0]], [[1]]) is False
+
+    def test_none_value_in_grid(self):
+        """check_solution should return False if player_grid has None values."""
+        assert check_solution([[None]], [[1]]) is False
+
+    def test_same_dimensions_correct(self):
+        """check_solution should return True for a correct solution."""
+        assert check_solution([[1, 0], [0, 1]], [[1, 0], [0, 1]]) is True
+
+
+class TestComputeProgressBounds:
+    """Test compute_progress with dimension mismatches and edge cases."""
+
+    def test_empty_solution(self):
+        """compute_progress with empty solution should return 0.0."""
+        assert compute_progress([], []) == 0.0
+
+    def test_mismatched_dimensions(self):
+        """compute_progress with mismatched dimensions should return 0.0."""
+        assert compute_progress([[-1]], [[1, 0]]) == 0.0
+
+    def test_mismatched_rows(self):
+        """compute_progress with different row counts should return 0.0."""
+        assert compute_progress([[-1]], [[1], [0]]) == 0.0
+
+
+class TestLoadGameStateValidation:
+    """Test load_game_state input validation."""
+
+    def test_load_bad_player_grid_dimensions(self):
+        """load_game_state should raise ValueError for wrong player_grid size."""
+        bad_json = '{"rows": 5, "cols": 5, "difficulty": "easy", "row_clues": [[1],[1],[1],[1],[1]], "col_clues": [[1],[1],[1],[1],[1]], "player_grid": [[1]], "cursor_r": 0, "cursor_c": 0, "hints_used": 0, "mistakes": 0}'
+        import pytest
+        with pytest.raises(ValueError):
+            load_game_state(bad_json)
+
+    def test_load_bad_cursor_out_of_bounds(self):
+        """load_game_state should raise ValueError for cursor out of bounds."""
+        game = NonogramGame(size=5, difficulty="easy", seed=42)
+        json_str = save_game_state(game)
+        data = json.loads(json_str)
+        data["cursor_r"] = 99
+        data["cursor_c"] = 99
+        bad_json = json.dumps(data)
+        import pytest
+        with pytest.raises(ValueError):
+            load_game_state(bad_json)
+
+
+class TestGeneratePuzzleValidation:
+    """Test generate_puzzle input validation."""
+
+    def test_invalid_difficulty(self):
+        """generate_puzzle should raise ValueError for invalid difficulty."""
+        import pytest
+        with pytest.raises(ValueError):
+            generate_puzzle(5, 5, "invalid", seed=42)
+
+    def test_zero_rows(self):
+        """generate_puzzle should raise ValueError for rows < 2."""
+        import pytest
+        with pytest.raises(ValueError):
+            generate_puzzle(0, 5, "easy", seed=42)
+
+    def test_zero_cols(self):
+        """generate_puzzle should raise ValueError for cols < 2."""
+        import pytest
+        with pytest.raises(ValueError):
+            generate_puzzle(5, 0, "easy", seed=42)
+
+
+class TestGeneratePatternValidation:
+    """Test generate_pattern input validation."""
+
+    def test_zero_dimensions(self):
+        """generate_pattern should raise ValueError for 0 dimensions."""
+        import pytest
+        with pytest.raises(ValueError):
+            generate_pattern(0, 0, "easy")
+
+    def test_single_row(self):
+        """generate_pattern should handle 1-row grids."""
+        rng = random.Random(42)
+        pattern = generate_pattern(1, 5, "easy", rng=rng)
+        assert len(pattern) == 1
+        assert len(pattern[0]) == 5
+
+    def test_single_col(self):
+        """generate_pattern should handle 1-column grids."""
+        rng = random.Random(42)
+        pattern = generate_pattern(5, 1, "easy", rng=rng)
+        assert len(pattern) == 5
+        assert len(pattern[0]) == 1
+
+
+class TestNonogramGameValidation:
+    """Test NonogramGame input validation."""
+
+    def test_size_zero(self):
+        """NonogramGame should raise ValueError for size 0."""
+        import pytest
+        with pytest.raises(ValueError):
+            NonogramGame(size=0)
+
+    def test_size_negative(self):
+        """NonogramGame should raise ValueError for negative size."""
+        import pytest
+        with pytest.raises(ValueError):
+            NonogramGame(size=-1)
+
+    def test_invalid_difficulty(self):
+        """NonogramGame should raise ValueError for invalid difficulty."""
+        import pytest
+        with pytest.raises(ValueError):
+            NonogramGame(size=5, difficulty="insane")
+
+
+class TestNoColorMode:
+    """Test that --no-color mode properly suppresses ANSI codes."""
+
+    def test_no_color_flag_disables_style(self):
+        """When _NO_COLOR is True, Style attributes should return empty strings."""
+        import nonogram as nm
+        old = nm._NO_COLOR
+        try:
+            nm._NO_COLOR = False
+            assert nm.Style.RED != ""
+            assert nm.Style.BOLD != ""
+            nm._NO_COLOR = True
+            assert nm.Style.RED == ""
+            assert nm.Style.BOLD == ""
+            assert nm.Style.RESET == ""
+        finally:
+            nm._NO_COLOR = old
 
 if __name__ == "__main__":
     import pytest
+    pytest.main([__file__, "-v"])
     pytest.main([__file__, "-v"])
