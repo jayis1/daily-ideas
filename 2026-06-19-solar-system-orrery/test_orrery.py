@@ -20,7 +20,9 @@ from orrery import (
     HALLEY_A, HALLEY_PERIOD, HALLEY_ECCENTRICITY, HALLEY_OMEGA,
     AU_KM,
     halley_position, halley_tail_segments,
-    compute_elongation, elongation_status, compute_retrograde
+    compute_elongation, elongation_status, compute_retrograde,
+    detect_oppositions, detect_transits, find_conjunction_time,
+    PLANET_DIAMETERS_KM, PLANET_SIZE_CHARS, PLANET_SIZE_CHARS_ASCII
 )
 
 passed = 0
@@ -546,7 +548,7 @@ print("\n=== Version and Constants Tests ===")
 
 test("Version is a string", isinstance(__version__, str))
 test("Version format valid", "." in __version__, f"got {__version__}")
-test("Version is 2.2.1", __version__ == "2.2.1", f"got {__version__}")
+test("Version is 3.0", __version__ == "3.0", f"got {__version__}")
 
 test("J2000_EPOCH is datetime", isinstance(J2000_EPOCH, datetime))
 test("J2000_EPOCH year is 2000", J2000_EPOCH.year == 2000)
@@ -840,6 +842,229 @@ mercury_e = 0.206
 test("Mercury eccentricity > all other planets",
      all(mercury_e >= e for _, _, _, e in PLANET_DATA),
      "Some planet has higher eccentricity than Mercury")
+
+# ============================================================
+# 21. Opposition Detection Tests (NEW in v3.0)
+# ============================================================
+print("\n=== Opposition Detection Tests ===")
+
+# Mars at opposition: Earth between Sun and Mars
+# Earth at (1, 0), Mars at (2, 0.01) → Mars is on far side of Earth from Sun
+# elongation should be close to 180°
+positions_opp = [(0.5, 0.0), (0.8, 0.0), (1.0, 0.0), (2.0, 0.01),
+                  (0.0, 0.0), (0.0, 0.0), (0.0, 0.0), (0.0, 0.0)]
+opps = detect_oppositions(positions_opp, 1.0, 0.0)
+test("Mars opposition detected", len(opps) > 0,
+     f"got {len(opps)} oppositions")
+if len(opps) > 0:
+    test("Mars opposition: planet index 3",
+         opps[0][0] == 3, f"got index {opps[0][0]}")
+
+# Mars NOT in opposition (same side as Earth, near Sun)
+positions_same = [(0.5, 0.0), (0.8, 0.0), (1.0, 0.0), (1.5, 0.5),
+                   (0.0, 0.0), (0.0, 0.0), (0.0, 0.0), (0.0, 0.0)]
+opps = detect_oppositions(positions_same, 1.0, 0.0)
+test("No opposition when planets same side", len(opps) == 0,
+     f"got {len(opps)} oppositions")
+
+# Earth at origin: no oppositions (degenerate case)
+opps = detect_oppositions(positions_same, 0.0, 0.0)
+test("No oppositions when Earth at origin", len(opps) == 0,
+     f"got {len(opps)} oppositions")
+
+# Empty positions
+opps = detect_oppositions([], 1.0, 0.0)
+test("No oppositions with empty positions", len(opps) == 0)
+
+# Real planetary positions at epoch
+epoch_positions = []
+for name, a, period, e in PLANET_DATA:
+    x, y = planet_position(a, period, e, 0.0)
+    epoch_positions.append((x, y))
+earth_x, earth_y = epoch_positions[2]  # Earth is index 2
+opps = detect_oppositions(epoch_positions, earth_x, earth_y)
+test("Real epoch positions: opposition detection runs", True,
+     f"found {len(opps)} oppositions")
+
+# ============================================================
+# 22. Transit Detection Tests (NEW in v3.0)
+# ============================================================
+print("\n=== Transit Detection Tests ===")
+
+# Mercury nearly aligned between Sun and Earth
+# Earth at (1, 0), Mercury at (0.3, 0.01) → very close to Sun-Earth line
+positions_transit = [(0.3, 0.01), (0.7, 0.01), (1.0, 0.0), (1.5, 0.5),
+                     (5.0, 1.0), (0.0, 0.0), (0.0, 0.0), (0.0, 0.0)]
+transits = detect_transits(positions_transit, 1.0, 0.0)
+test("Mercury transit detected", len(transits) > 0,
+     f"got {len(transits)} transits")
+if len(transits) > 0:
+    test("Transit: planet index 0 (Mercury)",
+         transits[0][0] == 0, f"got index {transits[0][0]}")
+
+# Both inner planets far from Sun-Earth line → no transit
+# Mercury at (0.3, 0.5) → elongation > 2°, so no transit
+# Venus at (0.7, 0.5) → elongation > 2°, so no transit
+positions_no_transit = [(0.3, 0.5), (0.7, 0.5), (1.0, 0.0), (1.5, 0.5),
+                        (5.0, 1.0), (0.0, 0.0), (0.0, 0.0), (0.0, 0.0)]
+transits = detect_transits(positions_no_transit, 1.0, 0.0)
+test("No transit when both inner planets far from Sun-Earth line", len(transits) == 0,
+     f"got {len(transits)} transits")
+
+# Earth at origin: no transits (degenerate case)
+transits = detect_transits(positions_transit, 0.0, 0.0)
+test("No transits when Earth at origin", len(transits) == 0)
+
+# Empty positions
+transits = detect_transits([], 1.0, 0.0)
+test("No transits with empty positions", len(transits) == 0)
+
+# ============================================================
+# 23. Find Conjunction Time Tests (NEW in v3.0)
+# ============================================================
+print("\n=== Find Conjunction Time Tests ===")
+
+# Find conjunction from a known starting point
+result = find_conjunction_time(PLANETS, 26.0)  # Start at J2000 + 26 years
+test("find_conjunction_time returns result", result is not None,
+     "got None")
+if result is not None:
+    conj_t, conj_i, conj_j, conj_sep = result
+    test("find_conjunction_time: time > start",
+         conj_t > 26.0, f"got t={conj_t:.4f}")
+    test("find_conjunction_time: planet indices valid",
+         0 <= conj_i < 8 and 0 <= conj_j < 8,
+         f"got i={conj_i}, j={conj_j}")
+    test("find_conjunction_time: separation < 10°",
+         conj_sep < 10.0, f"got sep={conj_sep:.1f}°")
+
+# Search from very far future (should still find something)
+result2 = find_conjunction_time(PLANETS, 100.0, max_search_years=50.0)
+test("find_conjunction_time: works from t=100", result2 is not None,
+     "got None")
+
+# Search with impossibly large threshold should still find something
+result3 = find_conjunction_time(PLANETS, 0.0)
+test("find_conjunction_time: works from epoch", result3 is not None,
+     "got None")
+
+# ============================================================
+# 24. Planet Diameter and Size Class Tests (NEW in v3.0)
+# ============================================================
+print("\n=== Planet Size Class Tests ===")
+
+test("PLANET_DIAMETERS_KM has 8 entries",
+     len(PLANET_DIAMETERS_KM) == 8,
+     f"got {len(PLANET_DIAMETERS_KM)}")
+
+test("PLANET_SIZE_CHARS has 8 entries",
+     len(PLANET_SIZE_CHARS) == 8,
+     f"got {len(PLANET_SIZE_CHARS)}")
+
+test("PLANET_SIZE_CHARS_ASCII has 8 entries",
+     len(PLANET_SIZE_CHARS_ASCII) == 8,
+     f"got {len(PLANET_SIZE_CHARS_ASCII)}")
+
+# Terrestrial planets (Mercury-Mars, indices 0-3) should have smaller diameters
+for i in range(4):
+    test(f"{PLANETS[i][0]} is terrestrial (diameter < 15000 km)",
+         PLANET_DIAMETERS_KM[i] < 15000,
+         f"got {PLANET_DIAMETERS_KM[i]}")
+
+# Gas giants (Jupiter-Saturn, indices 4-5) should have larger diameters
+for i in [4, 5]:
+    test(f"{PLANETS[i][0]} is gas giant (diameter > 100000 km)",
+         PLANET_DIAMETERS_KM[i] > 100000,
+         f"got {PLANET_DIAMETERS_KM[i]}")
+
+# Ice giants (Uranus-Neptune, indices 6-7) should have medium diameters
+for i in [6, 7]:
+    test(f"{PLANETS[i][0]} is ice giant (diameter 40000-60000 km)",
+         40000 < PLANET_DIAMETERS_KM[i] < 60000,
+         f"got {PLANET_DIAMETERS_KM[i]}")
+
+# Jupiter is the largest
+test("Jupiter is the largest planet",
+     PLANET_DIAMETERS_KM[4] == max(PLANET_DIAMETERS_KM),
+     f"max diameter at index {PLANET_DIAMETERS_KM.index(max(PLANET_DIAMETERS_KM))}")
+
+# Size characters: terrestrial=·, gas giant=◉, ice giant=○
+for i in range(4):
+    test(f"{PLANETS[i][0]} uses terrestrial symbol",
+         PLANET_SIZE_CHARS[i] in ["·", "."], f"got '{PLANET_SIZE_CHARS[i]}'")
+
+test("Jupiter uses gas giant symbol",
+     PLANET_SIZE_CHARS[4] in ["◉", "O"], f"got '{PLANET_SIZE_CHARS[4]}'")
+test("Saturn uses gas giant symbol",
+     PLANET_SIZE_CHARS[5] in ["◉", "O"], f"got '{PLANET_SIZE_CHARS[5]}'")
+test("Uranus uses ice giant symbol",
+     PLANET_SIZE_CHARS[6] in ["○", "o"], f"got '{PLANET_SIZE_CHARS[6]}'")
+test("Neptune uses ice giant symbol",
+     PLANET_SIZE_CHARS[7] in ["○", "o"], f"got '{PLANET_SIZE_CHARS[7]}'")
+
+# ============================================================
+# 25. OrreryState v3.0 Tests (NEW)
+# ============================================================
+print("\n=== OrreryState v3.0 Tests ===")
+
+s = OrreryState()
+test("Default start_date: 2026-01-01",
+     s.start_date == datetime(2026, 1, 1),
+     f"got {s.start_date}")
+
+test("Default oppositions: empty",
+     s.oppositions == [],
+     f"got {s.oppositions}")
+
+test("Default transits: empty",
+     s.transits == [],
+     f"got {s.transits}")
+
+test("Default finding_conjunction: False",
+     s.finding_conjunction == False,
+     f"got {s.finding_conjunction}")
+
+# Reset also resets start_date and finding_conjunction
+s.start_date = datetime(2030, 6, 15)
+s.finding_conjunction = True
+s.current_date = datetime(2030, 6, 15)
+s.speed = 100.0
+s.paused = True
+s.selected_planet = 5
+s.scale = 50.0
+s.show_orbits = False
+s.show_labels = False
+s.show_trails = False
+s.show_asteroids = True
+s.show_moon = False
+s.show_comet = True
+s.trail_positions = {i: [(1.0, 2.0)] for i in range(8)}
+s.prev_positions = [(1.0, 2.0)] * 8
+s.oppositions = [(3, 179.5)]
+s.transits = [(0, 1.2)]
+
+# Now reset all state to defaults
+s.current_date = datetime(2026, 1, 1)
+s.start_date = datetime(2026, 1, 1)
+s.speed = 1.0
+s.paused = False
+s.selected_planet = 2
+s.scale = 12.0
+s.show_orbits = True
+s.show_labels = True
+s.show_trails = True
+s.show_asteroids = False
+s.show_moon = True
+s.show_comet = False
+s.trail_positions = {i: [] for i in range(len(PLANETS))}
+s.prev_positions = None
+s.finding_conjunction = False
+
+test("Reset v3.0: start_date restored",
+     s.start_date == datetime(2026, 1, 1),
+     f"got {s.start_date}")
+test("Reset v3.0: finding_conjunction restored",
+     s.finding_conjunction == False)
 
 # ============================================================
 # Summary

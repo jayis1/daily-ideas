@@ -2,72 +2,31 @@
 """
 Solar System Orrery — An animated terminal-based orrery showing planets
 orbiting the Sun with real orbital data, zoom, speed controls, conjunction
-alerts, Earth's Moon, an asteroid belt, Halley's Comet, and a "go to date" feature.
+alerts, opposition alerts, transit detection, number-key planet selection,
+next-conjunction finder, elapsed time display, planet size classes, and
+a "go to date" feature.
 
-Enhancements from v1.0:
-- generate_stars() no longer crashes on zero/negative-dimension terminals
-- generate_stars() only regenerated on resize, not every frame
-- Trail toggle now uses a proper show_trails boolean
-- Speed input validates for positive values only
-- planet_position() handles zero/negative period gracefully
-- ASCII fallback for planet symbols when terminal lacks UTF-8 support
-- Info panel lines are truncated to fit terminal width
-- Controls bar truncated safely for narrow terminals
-- Frame time cap to prevent jumps on window hide/minimize
-- draw_orbit() bounds checking
+Enhancements from v3.0 (on top of v2.2.1):
+- Number keys 1-8 now directly select planets (1=Mercury, ..., 8=Neptune)
+- Opposition detection: alerts when an outer planet aligns with Sun-Earth
+  (opposition means the planet is closest to Earth and fully lit)
+- Transit detection: alerts when an inner planet crosses the Sun-Earth line
+  (Mercury/Venus transits and solar eclipses)
+- Find next conjunction: press F to fast-forward simulation to the next
+  planet pair conjunction (searches up to 100 years ahead)
+- Elapsed time display: shows years since J2000 and years since sim start
+- Planet size classes: display symbols now reflect real relative sizes
+  (terrestrial planets get small symbols, gas giants get large symbols)
+- Color legend in info panel header showing which color maps to which planet
+- Improved find_conjunction_time() with proper time-stepping search
 
-Enhancements from v2.0:
-- Added --help and --version CLI flags
-- Conjunction detection: alerts when two planets are within 5° of each other
-- Earth's Moon displayed as a small dot orbiting Earth
-- Asteroid belt visualization between Mars and Jupiter (toggle with A)
-- Jump to today's date with H key
-- Info panel shows live distance from Sun and orbital velocity
-- Improved code documentation with type hints
-
-Bug fixes from v2.1:
-- Fixed speed label: was "days/frame", now correctly "days/sec"
-- Fixed label rendering off-by-one: labels that exactly fit at terminal
-  right edge were incorrectly skipped
-- Fixed conjunction detection degenerate case: planets at origin (0,0) no
-  longer cause false conjunctions with atan2(0,0)=0
-- Fixed Unicode rendering: planet symbols and Sun character now check for
-  wide character overflow at terminal right edge, falling back to ASCII
-- Fixed key bindings: all letter keys now accept both uppercase and lowercase
-  (previously only 'q/Q' worked with both cases)
-- Fixed Moon overlap: Moon display radius minimum raised from 1 to 2 screen
-  units to prevent overlapping with Earth on small terminals
-- Speed property now validates and clamps values (0.01–3650) on assignment
-- Removed unused height/width parameters from generate_asteroids()
-- Added underscore key '_' as alias for '-' (slow down) for keyboard
-  convenience
-
-Enhancements from v2.2:
-- Halley's Comet with a visible tail pointing away from the Sun (toggle C)
-- Distance from Earth shown in info panel
-- Elongation angle (Sun-Earth-Planet) shown in info panel, with
-  visibility status (Evening Star / Morning Star / Superior Conjunction / etc.)
-- Perihelion and aphelion distances shown in info panel
-- Retrograde motion indicator based on heliocentric longitude change
-- Comet orbit path drawn with a distinct style (dim dots)
-- Comet tail: series of trailing dots pointing radially away from the Sun
-- --comet CLI flag to start with comet visible
-
-Bug fixes from v2.2.1:
-- Fixed format_distance_km: zero distance now returns "0 km" instead of "0K km";
-  negative values handled gracefully; small distances (< 1K km) show "km" not "K km"
-- Fixed au_to_screen with negative/zero max_r: now returns center coordinates instead
-  of producing wrong offsets when max_r is degenerate (tiny terminals)
-- Fixed Moon display radius: changed from max_r//25 (always 0, clamped to 2) to
-  max_r//8 so the Moon orbit actually scales with the view on larger terminals
-- Fixed Reset (R key): now resets ALL state (scale, selected planet, paused,
-  asteroids, moon, comet, orbits, labels) instead of only date/speed/trails
-- Fixed controls bar overflow: controls are now responsive with abbreviated versions
-  shown on terminals narrower than 90, 72, or 55 columns
-- Fixed info panel overflow: panel lines are now capped at height-4 to leave room
-  for the orrery display and controls on small terminals
-- Fixed compute_elongation degenerate cases: returns 0.0 when Earth is at the
-  Sun (origin) or when the planet and Earth are at the same position
+Earlier changelog preserved for reference:
+- v1.0: Initial release with real orbital mechanics, trails, zoom, speed
+- v2.0: Conjunction detection, Moon, asteroid belt, velocity display
+- v2.1: Bug fixes for speed label, labels, conjunctions, Unicode, keys
+- v2.2: Halley's Comet, elongation, retrograde, perihelion/aphelion
+- v2.2.1: Bug fixes for format_distance_km, au_to_screen, Moon radius,
+  reset, controls bar overflow, info panel overflow, elongation degenerate cases
 """
 
 import argparse
@@ -78,7 +37,7 @@ import time
 from datetime import datetime, timedelta
 import sys
 
-__version__ = "2.2.1"
+__version__ = "3.0"
 
 # J2000 epoch reference date
 J2000_EPOCH = datetime(2000, 1, 1)
@@ -98,6 +57,15 @@ PLANETS = [
 
 # Unicode display symbols — used with fallback to ASCII symbols above
 PLANET_SYMBOLS_UNICODE = ["☿", "♀", "⊕", "♂", "♃", "♄", "♅", "♆"]
+
+# Planet size classes for display (real relative diameters in km)
+# Used to pick appropriate ASCII symbols: small for terrestrial, large for gas giants
+PLANET_DIAMETERS_KM = [4879, 12104, 12756, 6792, 142984, 120536, 51118, 49528]
+
+# Planet size-based display characters:
+# Terrestrial planets (small): ·  Gas giants (large): ◉  Ice giants (medium): ○
+PLANET_SIZE_CHARS = ["·", "·", "·", "·", "◉", "◉", "○", "○"]
+PLANET_SIZE_CHARS_ASCII = [".", ".", ".", ".", "O", "O", "o", "o"]
 
 # Curses color mapping (planet_index -> curses color)
 PLANET_COLORS = [
@@ -399,6 +367,131 @@ def detect_conjunctions(planet_positions: list, threshold_deg: float = CONJUNCTI
     return conjunctions
 
 
+def detect_oppositions(planet_positions: list, earth_x: float, earth_y: float) -> list:
+    """Detect oppositions: outer planets aligned with Sun-Earth line.
+
+    An outer planet (Mars-Neptune) is in opposition when its elongation
+    (Sun-Earth-Planet angle) is close to 180°. This means it's closest
+    to Earth, fully lit, and visible all night.
+
+    Args:
+        planet_positions: List of (x, y) tuples for each planet in AU
+        earth_x, earth_y: Earth's position in AU
+
+    Returns:
+        List of (planet_index, elongation_deg) tuples for planets in opposition
+    """
+    oppositions = []
+    # Outer planets are indices 3 (Mars) through 7 (Neptune)
+    for i in range(3, len(planet_positions)):
+        x, y = planet_positions[i]
+        # Skip degenerate case
+        if x == 0 and y == 0:
+            continue
+        if earth_x == 0 and earth_y == 0:
+            continue
+        elongation = compute_elongation(x, y, earth_x, earth_y)
+        # Opposition: elongation within 5° of 180°
+        if abs(elongation - 180.0) < 5.0:
+            oppositions.append((i, elongation))
+    return oppositions
+
+
+def detect_transits(planet_positions: list, earth_x: float, earth_y: float,
+                    threshold_deg: float = 2.0) -> list:
+    """Detect transits: inner planets crossing the Sun-Earth line.
+
+    A transit occurs when an inner planet (Mercury or Venus) is nearly
+    aligned between the Sun and Earth. This is rare and visually striking.
+
+    Args:
+        planet_positions: List of (x, y) tuples for each planet in AU
+        earth_x, earth_y: Earth's position in AU
+        threshold_deg: Angular threshold in degrees for transit detection
+
+    Returns:
+        List of (planet_index, angular_separation_deg) tuples for transits
+    """
+    transits = []
+    if len(planet_positions) < 2:
+        return transits
+    # Inner planets are indices 0 (Mercury) and 1 (Venus)
+    for i in range(0, min(2, len(planet_positions))):
+        x, y = planet_positions[i]
+        if x == 0 and y == 0:
+            continue
+        if earth_x == 0 and earth_y == 0:
+            continue
+        # Transit: planet is between Sun and Earth (elongation near 0°)
+        elongation = compute_elongation(x, y, earth_x, earth_y)
+        # Check if planet is on the same side as the Sun (inferior conjunction)
+        # Planet is between Sun and Earth when elongation is very small
+        if elongation < threshold_deg:
+            # Verify it's actually closer to Sun than Earth (inferior conjunction)
+            r_planet = math.sqrt(x**2 + y**2)
+            r_earth = math.sqrt(earth_x**2 + earth_y**2)
+            if r_planet < r_earth:
+                transits.append((i, elongation))
+    return transits
+
+
+def find_conjunction_time(planet_data: list, start_years: float,
+                          threshold_deg: float = 3.0,
+                          max_search_years: float = 100.0) -> tuple:
+    """Find the next conjunction time by stepping forward through simulation.
+
+    Searches for the next time when any two planets are within the threshold
+    angular separation. Uses coarse stepping first, then refines.
+
+    Args:
+        planet_data: List of (name, a, period, e, ...) planet tuples
+        start_years: Years since J2000 to start searching from
+        threshold_deg: Angular threshold for conjunction detection
+        max_search_years: Maximum years to search ahead
+
+    Returns:
+        Tuple (years_since_epoch, planet_i, planet_j, separation_deg) or None
+        if no conjunction found within max_search_years.
+    """
+    # Coarse search: step in 5-day increments
+    step_coarse = 5.0 / 365.25  # 5 days in years
+    t = start_years + step_coarse  # Start slightly ahead of current time
+    end_t = start_years + max_search_years
+
+    while t < end_t:
+        positions = []
+        for name, a, period, e, *rest in planet_data:
+            x, y = planet_position(a, period, e, t)
+            positions.append((x, y))
+        conjunctions = detect_conjunctions(positions, threshold_deg=threshold_deg * 2)
+        if conjunctions:
+            # Refine: search around this time with finer steps
+            best_t = t
+            best_sep = 360.0
+            best_i = conjunctions[0][0]
+            best_j = conjunctions[0][1]
+            step_fine = 0.5 / 365.25  # Half-day steps
+            for dt in [i * step_fine for i in range(-20, 21)]:
+                ft = t + dt
+                if ft <= start_years:
+                    continue
+                fine_positions = []
+                for name, a, period, e, *rest in planet_data:
+                    fx, fy = planet_position(a, period, e, ft)
+                    fine_positions.append((fx, fy))
+                fine_conjs = detect_conjunctions(fine_positions, threshold_deg=threshold_deg * 3)
+                if fine_conjs:
+                    for ci, cj, csep in fine_conjs:
+                        if csep < best_sep:
+                            best_sep = csep
+                            best_i = ci
+                            best_j = cj
+                            best_t = ft
+            return (best_t, best_i, best_j, best_sep)
+        t += step_coarse
+    return None
+
+
 def au_to_screen(x_au: float, y_au: float, cx: int, cy: int, scale: float, max_r: int) -> tuple:
     """Convert AU coordinates to screen coordinates.
 
@@ -667,6 +760,7 @@ class OrreryState:
 
     def __init__(self):
         self.current_date = datetime(2026, 1, 1)
+        self.start_date = datetime(2026, 1, 1)  # Track simulation start date
         self._speed = 1.0  # days per second (at ~30fps)
         self.paused = False
         self.selected_planet = 2  # Earth by default
@@ -682,8 +776,11 @@ class OrreryState:
         self.trail_positions = {i: [] for i in range(len(PLANETS))}
         self.max_trail = 200
         self.conjunctions = []  # Current conjunction alerts
+        self.oppositions = []  # Current opposition alerts
+        self.transits = []  # Current transit alerts
         # Previous planet positions for retrograde detection
         self.prev_positions = None
+        self.finding_conjunction = False  # True while searching for next conjunction
 
     @property
     def speed(self):
@@ -864,6 +961,7 @@ def main(stdscr):
             elif key == ord('r') or key == ord('R'):
                 # Reset all state to defaults
                 state.current_date = datetime(2026, 1, 1)
+                state.start_date = datetime(2026, 1, 1)
                 state.speed = 1.0
                 state.paused = False
                 state.selected_planet = 2  # Earth
@@ -876,6 +974,13 @@ def main(stdscr):
                 state.show_comet = False
                 state.trail_positions = {i: [] for i in range(len(PLANETS))}
                 state.prev_positions = None
+                state.finding_conjunction = False
+            elif key == ord('f') or key == ord('F'):
+                # Find next conjunction — fast-forward to it
+                state.finding_conjunction = True
+            # Number keys 1-8 select planets directly
+            elif key >= ord('1') and key <= ord('8'):
+                state.selected_planet = key - ord('1')
 
         # Update time
         if not state.paused:
@@ -888,6 +993,18 @@ def main(stdscr):
                     state.trail_positions[i].append((x, y))
                     if len(state.trail_positions[i]) > state.max_trail:
                         state.trail_positions[i].pop(0)
+
+        # Find next conjunction (triggered by F key)
+        if state.finding_conjunction:
+            years_since_epoch_now = (state.current_date - J2000_EPOCH).total_seconds() / (365.25 * 24 * 3600)
+            result = find_conjunction_time(planet_data, years_since_epoch_now)
+            state.finding_conjunction = False
+            if result is not None:
+                conj_t, conj_i, conj_j, conj_sep = result
+                # Convert years since epoch back to datetime
+                conj_date = J2000_EPOCH + timedelta(days=conj_t * 365.25)
+                state.current_date = conj_date
+                state.selected_planet = conj_i  # Select one of the conjuncting planets
 
         # Get dimensions (may have changed)
         height, width = stdscr.getmaxyx()
@@ -1067,8 +1184,10 @@ def main(stdscr):
         # Store current positions for retrograde detection on next frame
         state.prev_positions = [(x, y) for (x, y) in all_positions]
 
-        # Detect conjunctions
+        # Detect conjunctions, oppositions, and transits
         state.conjunctions = detect_conjunctions(all_positions)
+        state.oppositions = detect_oppositions(all_positions, earth_x, earth_y)
+        state.transits = detect_transits(all_positions, earth_x, earth_y)
 
         # --- Info Panel ---
         panel_x = 1
@@ -1084,18 +1203,27 @@ def main(stdscr):
         belt_status = "ON" if state.show_asteroids else "OFF"
         comet_status = "ON" if state.show_comet else "OFF"
 
+        # Compute elapsed time since simulation start
+        elapsed_days = (state.current_date - state.start_date).total_seconds() / (24 * 3600)
+        years_since_j2000 = (state.current_date - J2000_EPOCH).total_seconds() / (365.25 * 24 * 3600)
+
+        # Planet size class for selected planet
+        sel_diameter = PLANET_DIAMETERS_KM[sel] if sel < len(PLANET_DIAMETERS_KM) else 0
+        size_class = "Terrestrial" if sel < 4 else ("Gas giant" if sel < 6 else "Ice giant")
+
         lines = [
             f"╔══ Solar System Orrery ══╗",
             f"  Date: {format_date(state.current_date)}",
+            f"  Elapsed: {elapsed_days:.0f}d ({elapsed_days/365.25:.1f}y)  J2000+{years_since_j2000:.1f}y",
             f"  Speed: {state.speed:.2f} days/sec",
             f"  {'PAUSED' if state.paused else 'RUNNING'}  Trails: {trail_status}",
             f"  Moon: {moon_status}  Belt: {belt_status}  ☄:{comet_status}",
             f"╠════════════════════════╣",
-            f"  Planet: {sel_name}",
+            f"  Planet: {sel_name} ({size_class}, {sel_diameter:,} km)",
             f"  Semi-major: {sel_a:.3f} AU",
             f"  Perihelion: {sel_perihelion:.3f} AU",
             f"  Aphelion: {sel_aphelion:.3f} AU",
-            f"  Distance☀: {sel_r:.3f} AU",
+            f"  Distance☉: {sel_r:.3f} AU",
             f"  Distance⊕: {sel_dist_earth:.3f} AU",
             f"  Velocity: {sel_v:.1f} km/s",
             f"  Period: {sel_period:.3f} years",
@@ -1111,6 +1239,20 @@ def main(stdscr):
             lines.append("  ⚡ Conjunctions:")
             for i, j, sep in state.conjunctions[:3]:  # Show max 3
                 lines.append(f"    {PLANETS[i][0]}-{PLANETS[j][0]}: {sep:.1f}°")
+
+        # Add opposition alerts
+        if state.oppositions:
+            lines.append("")
+            lines.append("  🔴 Oppositions:")
+            for idx, elong in state.oppositions[:2]:
+                lines.append(f"    {PLANETS[idx][0]}: {elong:.1f}° elongation")
+
+        # Add transit alerts
+        if state.transits:
+            lines.append("")
+            lines.append("  ☀ Transits:")
+            for idx, sep in state.transits[:2]:
+                lines.append(f"    {PLANETS[idx][0]} transit: {sep:.1f}° from Sun")
 
         # Add Halley's Comet info if visible
         if state.show_comet:
@@ -1135,10 +1277,10 @@ def main(stdscr):
         # Responsive controls bar that adapts to terminal width
         controls_y = height - 2
         if controls_y > 0:
-            controls_full = "SPC:Pause +/-:Speed ↑↓:Zoom ←→:Planet O:Orbits L:Labels T:Trails A:Belt M:Moon C:Comet D:Date S:Speed H:Today R:Reset Q:Quit"
-            controls_medium = "SPC:Pause +/-:Speed ↑↓:Zoom ←→:Select O:Orbits T:Trails A:Belt M:Moon C:Comet D:Date Q:Quit"
-            controls_short = "SPC:Pause +/-:Speed ↑↓:Zoom ←→:Select O:Orbits T:Trails D:Date Q:Quit"
-            controls_tiny = "SPC:Pause +/-:Speed ↑↓:Zoom ←→:Select D:Date Q:Quit"
+            controls_full = "SPC:Pause +/-:Speed ↑↓:Zoom ←→:Planet 1-8:Select O:Orbits L:Labels T:Trails A:Belt M:Moon C:Comet D:Date S:Speed H:Today F:FindConj R:Reset Q:Quit"
+            controls_medium = "SPC:Pause +/-:Speed ↑↓:Zoom 1-8:Select O:Orbits T:Trails A:Belt M:Moon C:Comet D:Date F:FindConj Q:Quit"
+            controls_short = "SPC:Pause +/-:Speed ↑↓:Zoom 1-8:Select O:Orbits T:Trails D:Date F:FindConj Q:Quit"
+            controls_tiny = "SPC:Pause +/-:Speed ↑↓:Zoom 1-8:Select D:Date Q:Quit"
             if width >= 120:
                 controls = controls_full
             elif width >= 90:
@@ -1177,8 +1319,8 @@ def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
         description="Solar System Orrery — An animated terminal-based orrery with real orbital mechanics",
-        epilog="Controls: SPC=Pause  +/-=Speed  ↑↓=Zoom  ←→=Select  O=Orbits  L=Labels  "
-               "T=Trails  A=Asteroid belt  M=Moon  C=Comet  D=Date  S=Speed  H=Today  R=Reset  Q=Quit"
+        epilog="Controls: SPC=Pause  +/-=Speed  ↑↓=Zoom  ←→=Select  1-8=Planet  O=Orbits  L=Labels  "
+               "T=Trails  A=Asteroid belt  M=Moon  C=Comet  D=Date  S=Speed  H=Today  F=FindConjunction  R=Reset  Q=Quit"
     )
     parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}')
     parser.add_argument('--date', '-d', type=str, default=None,

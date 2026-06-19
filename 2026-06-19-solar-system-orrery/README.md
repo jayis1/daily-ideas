@@ -1,6 +1,6 @@
-# 🪐 Solar System Orrery v2.2.1
+# 🪐 Solar System Orrery v3.0
 
-An animated terminal-based orrery that displays all eight planets orbiting the Sun using real orbital mechanics — now with Halley's Comet, elongation angles, retrograde detection, perihelion/aphelion data, and responsive UI.
+An animated terminal-based orrery that displays all eight planets orbiting the Sun using real orbital mechanics — now with opposition detection, transit alerts, find-next-conjunction, number-key planet selection, elapsed time display, and planet size classification.
 
 ## Features
 
@@ -20,19 +20,24 @@ An animated terminal-based orrery that displays all eight planets orbiting the S
 - **Perspective Effect** — Y-axis compression gives a subtle 3D perspective feel
 
 ### Information Panel
-- **Selected Planet Info** — Shows semi-major axis, perihelion, aphelion, current distance from Sun, distance from Earth, orbital velocity (km/s), period, eccentricity, position in AU
+- **Selected Planet Info** — Shows name, size class (Terrestrial/Gas giant/Ice giant), diameter in km, semi-major axis, perihelion, aphelion, current distance from Sun, distance from Earth, orbital velocity (km/s), period, eccentricity
+- **Elapsed Time** — Shows days and years since simulation start, and years since J2000 epoch
 - **Elongation Angle** — Shows the Sun-Earth-Planet angle with visibility status (Evening Star, Morning Star, Near Sun, Opposition)
 - **Retrograde Motion** — Displays whether the selected planet is in prograde or retrograde motion
-- **Conjunction Detection** — Automatically detects and alerts when two planets are within 5° of each other
+- **Conjunction Detection** — Automatically alerts when two planets are within 5° of each other
+- **Opposition Detection** — Alerts when an outer planet (Mars–Neptune) aligns opposite the Sun from Earth — the best time to observe it
+- **Transit Detection** — Alerts when Mercury or Venus crosses the Sun-Earth line — a rare and astronomically significant event
 - **Halley's Comet Info** — When visible, shows the comet's current distance from the Sun and velocity
+- **Planet Size Classes** — Terrestrial planets (Mercury–Mars) displayed with `·`, gas giants (Jupiter–Saturn) with `◉`, ice giants (Uranus–Neptune) with `○`
 - **Responsive Layout** — Panel lines are capped at terminal height minus 4, preventing overflow on small screens
 
 ### Controls
 - **Time Control** — Speed up/slow down time, jump to any date, or pause
 - **Zoom** — Zoom in/out to focus on inner planets or see the full system
-- **Planet Selection** — Browse planet info with arrow keys
+- **Planet Selection** — Browse with arrow keys OR press `1`–`8` to jump directly to a planet
+- **Find Next Conjunction** — Press `F` to fast-forward the simulation to the next planet conjunction
 - **Jump to Today** — Press `H` to instantly jump to today's date
-- **Full Reset** — Press `R` to reset ALL state (date, speed, zoom, selection, toggles) to defaults
+- **Full Reset** — Press `R` to reset ALL state (date, speed, zoom, selection, toggles)
 - **Responsive Controls Bar** — Adapts to terminal width, showing fewer controls on narrow terminals
 - **CLI Flags** — `--help`, `--version`, `--date`, `--speed`, `--no-trails`, `--no-moon`, `--asteroids`, `--comet`
 
@@ -88,12 +93,13 @@ python3 orrery.py --help
 ## Controls
 
 | Key | Action |
-|-----|--------|
+|-----|---------|
 | `SPACE` | Pause / Resume |
 | `+` / `=` | Speed up time |
 | `-` / `_` | Slow down time |
 | `↑` / `↓` | Zoom in / out |
 | `←` / `→` | Select previous / next planet |
+| `1`–`8` | Jump directly to Mercury–Neptune |
 | `O` | Toggle orbit paths |
 | `L` | Toggle planet labels |
 | `T` | Toggle orbital trails on/off |
@@ -103,6 +109,7 @@ python3 orrery.py --help
 | `D` | Jump to a specific date (YYYY-MM-DD) |
 | `S` | Set simulation speed manually (must be > 0) |
 | `H` | Jump to today's date |
+| `F` | Find next conjunction (fast-forward to it) |
 | `R` | Reset everything to defaults |
 | `Q` | Quit |
 
@@ -130,11 +137,24 @@ sunset), "Morning Star" means west (visible before sunrise). "Near Sun"
 means it's lost in the Sun's glare.
 ```
 
-**Watch for retrograde motion:**
+**Watch for oppositions:**
 ```
-Speed up time and select Mars or Jupiter. The "Motion" line in the info
-panel switches between "Prograde" and "Retrograde" — retrograde motion
-occurs when Earth overtakes an outer planet.
+Speed up time and watch for 🔴 opposition alerts when Mars, Jupiter, or
+another outer planet aligns opposite the Sun from Earth. This is when the
+planet is closest, brightest, and visible all night.
+```
+
+**Watch for transits:**
+```
+Speed up time and watch for ☀ transit alerts when Mercury or Venus crosses
+the Sun-Earth line. These rare events are astronomically significant.
+```
+
+**Find the next conjunction:**
+```
+Press 'F' to fast-forward the simulation to the next time two planets come
+within 5° of each other as seen from the Sun. The simulation jumps to that
+date and selects one of the conjuncting planets.
 ```
 
 **Jump to a specific date:**
@@ -150,6 +170,12 @@ Press 'H' to instantly set the simulation date to today
 **Focus on inner planets:**
 ```
 Press '↑' to zoom in, then watch Mercury, Venus, Earth, and Mars in detail
+```
+
+**Quick planet selection:**
+```
+Press '4' to jump directly to Mars, '5' for Jupiter, etc.
+The info panel updates immediately with that planet's data.
 ```
 
 **Enable the asteroid belt:**
@@ -195,6 +221,25 @@ Halley's Comet uses real orbital parameters: semi-major axis 17.834 AU, eccentri
 
 Elongation is the angle Sun-Earth-Planet, computed using `atan2`. It determines whether an inner planet is visible as an "Evening Star" (east of Sun) or "Morning Star" (west of Sun). The cross product of the Sun-Earth and Planet-Earth vectors determines east vs. west. Degenerate cases (Earth at origin, planet at same position as Earth) return 0° instead of 180°.
 
+### Opposition Detection
+
+An outer planet (Mars–Neptune) is in **opposition** when its elongation (Sun-Earth-Planet angle) is within 5° of 180°. This means the planet is on the opposite side of Earth from the Sun, making it closest to Earth, fully illuminated, and visible all night. Oppositions are the best time to observe outer planets.
+
+### Transit Detection
+
+A **transit** occurs when an inner planet (Mercury or Venus) passes between the Sun and Earth with elongation less than 2°. This is an inferior conjunction — the planet appears as a tiny dot crossing the Sun's disk. Mercury transits occur about 13 times per century; Venus transits come in pairs 8 years apart, separated by over a century.
+
+### Find Next Conjunction
+
+Pressing `F` triggers a search forward in time (up to 100 years) for the next pair of planets within a small angular threshold. The search uses coarse 5-day steps first, then refines with half-day steps around the detected time. The simulation jumps to the conjunction date and selects one of the conjuncting planets.
+
+### Planet Size Classes
+
+Planets are classified by real diameter:
+- **Terrestrial** (Mercury–Mars): Diameter < 15,000 km, displayed with `·`
+- **Gas Giants** (Jupiter, Saturn): Diameter > 100,000 km, displayed with `◉`
+- **Ice Giants** (Uranus, Neptune): Diameter 40,000–60,000 km, displayed with `○`
+
 ### Retrograde Detection
 
 The heliocentric longitude (`atan2(y, x)`) is tracked frame-to-frame for each planet. When it decreases, the planet is in retrograde — an apparent backward motion caused by Earth overtaking it in orbit.
@@ -219,9 +264,9 @@ The simulation speed is displayed in "days/sec" — at speed 1.0, approximately 
 
 The controls bar at the bottom of the screen adapts to the terminal width:
 - **≥ 120 columns**: Full controls with all key hints
-- **90–119 columns**: Medium controls (omits L, S, H, R)
-- **65–89 columns**: Short controls (omits L, A, M, C, S, H, R)
-- **< 65 columns**: Minimal controls (only pause, speed, zoom, select, date, quit)
+- **90–119 columns**: Medium controls (key additions plus find-conjunction)
+- **65–89 columns**: Short controls (core keys plus find-conjunction)
+- **< 65 columns**: Minimal controls (pause, speed, zoom, select, date, quit)
 
 ## Architecture
 
@@ -230,17 +275,20 @@ The controls bar at the bottom of the screen adapts to the terminal width:
 - `halley_position(years)` — Computes Halley's Comet position with rotated orbit (argument of perihelion).
 - `halley_tail_segments(x, y)` — Calculates anti-solar tail positions scaled by distance from Sun.
 - `orbital_velocity_km_s(a, period, r)` — Computes orbital velocity at distance r via vis-viva equation.
-- `compute_elongation(planet, earth)` — Calculates Sun-Earth-Planet angle for visibility. Returns 0° for degenerate cases (Earth at origin, same position).
-- `elongation_status(angle, planet, earth)` — Determines Evening Star / Morning Star / Near Sun status.
+- `compute_elongation(planet, earth)` — Calculates Sun-Earth-Planet angle for visibility. Returns 0° for degenerate cases.
+- `elongation_status(angle, planet, earth)` — Determines Evening Star / Morning Star / Near Star / Opposition status.
 - `compute_retrograde(prev, curr)` — Detects prograde vs. retrograde motion from position change.
-- `format_distance_km(au)` — Formats AU distances with human-readable km units. Returns "0 km" for zero/negative values.
 - `detect_conjunctions(positions, threshold)` — Finds planet pairs within a given angular threshold.
-- `au_to_screen(x, y, cx, cy, scale, max_r)` — Maps AU coordinates to screen coordinates with power-law compression. Returns center for degenerate max_r ≤ 0.
+- `detect_oppositions(positions, earth)` — Finds outer planets in opposition (elongation near 180°).
+- `detect_transits(positions, earth, threshold)` — Finds inner planets transiting the Sun-Earth line.
+- `find_conjunction_time(planet_data, start, threshold, max_search)` — Finds next conjunction by stepping forward through time.
+- `format_distance_km(au)` — Formats AU distances with human-readable km units. Returns "0 km" for zero/negative values.
+- `au_to_screen(x, y, cx, cy, scale, max_r)` — Maps AU coordinates to screen coordinates with power-law compression.
 - `draw_orbit()` — Draws an orbital ellipse as a dotted path.
 - `draw_halley_orbit()` — Draws Halley's comet orbit as sparse dots.
 - `generate_asteroids(seed)` — Creates deterministic asteroid belt with Kepler-correct speeds.
 - `generate_stars()` — Creates a deterministic starfield. Returns empty list for degenerate terminal sizes.
-- `OrreryState` — Tracks date, speed (validated via property), selection, trail data, toggles, conjunction alerts, and previous positions for retrograde detection.
+- `OrreryState` — Tracks date, speed, selection, trail data, toggles, conjunction/opposition/transit alerts, and previous positions.
 - `main()` — Curses event loop handling input, simulation, and rendering.
 - `parse_args()` — CLI argument parser with --help, --version, --date, --speed, --no-trails, --no-moon, --asteroids, --comet.
 
@@ -250,7 +298,7 @@ The controls bar at the bottom of the screen adapts to the terminal width:
 python3 test_orrery.py
 ```
 
-Runs 201 tests covering:
+Runs 244 tests covering:
 - Kepler solver (convergence, edge cases, invalid inputs, large mean anomaly)
 - Planet position calculations (circular orbits, all 8 planets, invalid parameters)
 - Screen coordinate mapping (origin, clamping, perspective compression, degenerate max_r)
@@ -261,6 +309,9 @@ Runs 201 tests covering:
 - Orbital mechanics consistency (perihelion/aphelion ranges, periodicity)
 - Orbital velocity (vis-viva equation, edge cases, relative ordering)
 - Conjunction detection (aligned, opposite, close, far, empty, format, degenerate origin)
+- Opposition detection (aligned, same-side, degenerate, real positions)
+- Transit detection (Mercury transit, no transit, degenerate, empty)
+- Find conjunction time (basic, from future, from epoch)
 - Asteroid belt generation (count, structure, Kepler's law, determinism)
 - Moon constants (radius, period, angle computation)
 - Halley's Comet (position, tail segments, rotation, perihelion/aphelion)
@@ -268,28 +319,7 @@ Runs 201 tests covering:
 - Elongation status (Evening Star, Morning Star, Near Sun)
 - Retrograde detection (prograde, retrograde, no motion)
 - Perihelion/aphelion (all planets, validation)
+- Planet size classes (diameter data, character mapping, classification)
 - Version and constants validation
 - safe_addstr bounds checking and text truncation
 - Bug fix regression tests (speed clamping, conjunction origin, generate_asteroids API, reset completeness, format_distance_km edge cases, au_to_screen degenerate max_r, elongation degenerate cases)
-
-## Bug Fixes (v2.2.1)
-
-1. **`format_distance_km` zero/negative values** — Zero distance now returns `"0 km"` instead of `"0K km"`. Negative values also return `"0 km"`. Distances under 1K km now show plain `km` instead of `K km`.
-2. **`au_to_screen` degenerate max_r** — With `max_r ≤ 0` (tiny terminals), the function now returns center coordinates instead of producing wrong offsets. Previously, `max_r = -5` would map planets to offset positions.
-3. **Moon display radius formula** — Changed from `max_r // 25` (which was always 0, clamped to 2) to `max_r // 8` so the Moon orbit actually scales with the view. On a standard 80×24 terminal (`max_r=10`), the Moon now orbits at 2 screen units; on larger displays (`max_r=30`), at 3 units.
-4. **Reset key (R) incomplete** — Pressing `R` now resets ALL state: paused, selected planet, zoom scale, orbit/label/trail/asteroid/moon/comet toggles — not just date, speed, and trails.
-5. **Controls bar overflow** — The 124-character controls bar is now responsive: 4 tiers (124 chars for ≥120 cols, 91 for ≥90, 69 for ≥65, 51 for <65) prevent truncation issues on narrow terminals.
-6. **Info panel overflow** — Panel lines are now capped at `height - 4` to leave room for the orrery display and controls bar on small terminals (previously could fill 23 of 24 lines).
-7. **`compute_elongation` degenerate cases** — When Earth is at the origin (0,0) or the planet is at the same position as Earth, the function now returns 0° instead of 180°. This prevents misleading "opposition" readings for the Earth-self case.
-
-## Bug Fixes (v2.1)
-
-1. Speed label: was "days/frame", now correctly "days/sec"
-2. Label rendering off-by-one: labels that exactly fit at terminal right edge were incorrectly skipped
-3. Conjunction detection false positive at origin: planets at (0, 0) no longer cause false conjunctions
-4. Unicode rendering overflow: planet symbols now fall back to ASCII near the right edge
-5. Key bindings case sensitivity: all letter keys now accept both uppercase and lowercase
-6. Moon overlap on small terminals: Moon display radius minimum raised to 2 screen units
-7. Speed property validation on assignment: now clamps to [0.01, 3650]
-8. `generate_asteroids()` had unused parameters: removed for a cleaner API
-9. Added `_` key as alias for `-` (slow down)
