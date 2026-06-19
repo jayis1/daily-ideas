@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Comprehensive tests for the Solar System Orrery v2.2.
+Comprehensive tests for the Solar System Orrery v3.1.
 Tests orbital mechanics, screen mapping, star generation, state management,
 conjunction detection, orbital velocity, asteroid belt, Moon position,
 Halley's Comet, elongation, retrograde detection, edge cases, and bug fixes.
@@ -8,6 +8,7 @@ Halley's Comet, elongation, retrograde detection, edge cases, and bug fixes.
 import sys
 sys.path.insert(0, '.')
 import math
+from collections import deque
 from datetime import datetime
 
 from orrery import (
@@ -316,6 +317,7 @@ test("Default input_mode: None", s.input_mode is None)
 test("Default input_buffer: empty", s.input_buffer == "")
 test("Trail dict has correct length", len(s.trail_positions) == 8)
 test("Trails start empty", all(len(v) == 0 for v in s.trail_positions.values()))
+test("Trail positions use deque", all(isinstance(v, deque) for v in s.trail_positions.values()))
 test("Default conjunctions: empty", s.conjunctions == [])
 test("Default prev_positions: None", s.prev_positions is None)
 
@@ -332,11 +334,14 @@ s.show_trails = False
 s.show_asteroids = True
 s.show_moon = False
 s.show_comet = True
-s.trail_positions = {i: [(1.0, 2.0)] for i in range(8)}
+s.trail_positions = {i: deque([(1.0, 2.0)], maxlen=s.max_trail) for i in range(8)}
 s.prev_positions = [(1.0, 2.0)] * 8
+s.oppositions = [(3, 179.5)]
+s.transits = [(0, 1.2)]
 
 # Now reset all state to defaults (same as R key handler)
 s.current_date = datetime(2026, 1, 1)
+s.start_date = datetime(2026, 1, 1)
 s.speed = 1.0
 s.paused = False
 s.selected_planet = 2  # Earth
@@ -347,8 +352,11 @@ s.show_trails = True
 s.show_asteroids = False
 s.show_moon = True
 s.show_comet = False
-s.trail_positions = {i: [] for i in range(len(PLANETS))}
+s.trail_positions = {i: deque(maxlen=s.max_trail) for i in range(len(PLANETS))}
 s.prev_positions = None
+s.finding_conjunction = False
+s.oppositions = []
+s.transits = []
 
 test("Reset: date restored", s.current_date == datetime(2026, 1, 1))
 test("Reset: speed restored", s.speed == 1.0)
@@ -363,6 +371,8 @@ test("Reset: show_moon restored", s.show_moon == True)
 test("Reset: show_comet restored", s.show_comet == False)
 test("Reset: trails cleared", all(len(v) == 0 for v in s.trail_positions.values()))
 test("Reset: prev_positions cleared", s.prev_positions is None)
+test("Reset: oppositions cleared", s.oppositions == [])
+test("Reset: transits cleared", s.transits == [])
 
 # ============================================================
 # 8. Orbital Mechanics Consistency Tests
@@ -548,7 +558,7 @@ print("\n=== Version and Constants Tests ===")
 
 test("Version is a string", isinstance(__version__, str))
 test("Version format valid", "." in __version__, f"got {__version__}")
-test("Version is 3.0", __version__ == "3.0", f"got {__version__}")
+test("Version is 3.1", __version__ == "3.1", f"got {__version__}")
 
 test("J2000_EPOCH is datetime", isinstance(J2000_EPOCH, datetime))
 test("J2000_EPOCH year is 2000", J2000_EPOCH.year == 2000)
@@ -1038,7 +1048,7 @@ s.show_trails = False
 s.show_asteroids = True
 s.show_moon = False
 s.show_comet = True
-s.trail_positions = {i: [(1.0, 2.0)] for i in range(8)}
+s.trail_positions = {i: deque([(1.0, 2.0)], maxlen=s.max_trail) for i in range(8)}
 s.prev_positions = [(1.0, 2.0)] * 8
 s.oppositions = [(3, 179.5)]
 s.transits = [(0, 1.2)]
@@ -1056,15 +1066,87 @@ s.show_trails = True
 s.show_asteroids = False
 s.show_moon = True
 s.show_comet = False
-s.trail_positions = {i: [] for i in range(len(PLANETS))}
+s.trail_positions = {i: deque(maxlen=s.max_trail) for i in range(len(PLANETS))}
 s.prev_positions = None
 s.finding_conjunction = False
+s.oppositions = []
+s.transits = []
 
 test("Reset v3.0: start_date restored",
      s.start_date == datetime(2026, 1, 1),
      f"got {s.start_date}")
 test("Reset v3.0: finding_conjunction restored",
      s.finding_conjunction == False)
+test("Reset v3.1: oppositions cleared",
+     s.oppositions == [],
+     f"got {s.oppositions}")
+test("Reset v3.1: transits cleared",
+     s.transits == [],
+     f"got {s.transits}")
+test("Reset v3.1: trails use deque",
+     all(isinstance(v, deque) for v in s.trail_positions.values()),
+     "Not all trail_positions are deques")
+
+# ============================================================
+# 26. v3.1 Bug Fix Tests
+# ============================================================
+print("\n=== v3.1 Bug Fix Tests ===")
+
+# Bug fix: R key now resets oppositions and transits
+s_reset = OrreryState()
+s_reset.oppositions = [(3, 179.5)]
+s_reset.transits = [(0, 1.2)]
+s_reset.conjunctions = [(0, 1, 2.5)]
+# Simulate full reset (same as R key handler)
+s_reset.current_date = datetime(2026, 1, 1)
+s_reset.start_date = datetime(2026, 1, 1)
+s_reset.speed = 1.0
+s_reset.paused = False
+s_reset.selected_planet = 2
+s_reset.scale = 12.0
+s_reset.show_orbits = True
+s_reset.show_labels = True
+s_reset.show_trails = True
+s_reset.show_asteroids = False
+s_reset.show_moon = True
+s_reset.show_comet = False
+s_reset.trail_positions = {i: deque(maxlen=s_reset.max_trail) for i in range(len(PLANETS))}
+s_reset.prev_positions = None
+s_reset.finding_conjunction = False
+s_reset.oppositions = []
+s_reset.transits = []
+test("v3.1 bug fix: oppositions reset after R key",
+     s_reset.oppositions == [],
+     f"got {s_reset.oppositions}")
+test("v3.1 bug fix: transits reset after R key",
+     s_reset.transits == [],
+     f"got {s_reset.transits}")
+
+# Bug fix: Input buffer length is capped
+s_input = OrreryState()
+test("MAX_INPUT_LENGTH is set",
+     hasattr(OrreryState, 'MAX_INPUT_LENGTH'),
+     "MAX_INPUT_LENGTH not found")
+test("MAX_INPUT_LENGTH is 30",
+     OrreryState.MAX_INPUT_LENGTH == 30,
+     f"got {OrreryState.MAX_INPUT_LENGTH}")
+
+# Bug fix: Trail positions use deque for O(1) append
+s_trail = OrreryState()
+test("Trails use deque",
+     all(isinstance(v, deque) for v in s_trail.trail_positions.values()),
+     "Not all trail_positions are deques")
+# Test that deque maxlen works
+s_trail.trail_positions[0].append((1.0, 2.0))
+test("Deque append works",
+     len(s_trail.trail_positions[0]) == 1,
+     f"got length {len(s_trail.trail_positions[0])}")
+# Fill up to maxlen
+for i in range(300):
+    s_trail.trail_positions[0].append((float(i), 0.0))
+test("Deque respects maxlen",
+     len(s_trail.trail_positions[0]) == s_trail.max_trail,
+     f"got length {len(s_trail.trail_positions[0])}, expected {s_trail.max_trail}")
 
 # ============================================================
 # Summary

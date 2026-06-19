@@ -1,6 +1,13 @@
-# 🪐 Solar System Orrery v3.0
+# 🪐 Solar System Orrery v3.1
 
-An animated terminal-based orrery that displays all eight planets orbiting the Sun using real orbital mechanics — now with opposition detection, transit alerts, find-next-conjunction, number-key planet selection, elapsed time display, and planet size classification.
+An animated terminal-based orrery that displays all eight planets orbiting the Sun using real orbital mechanics — with opposition detection, transit alerts, find-next-conjunction, number-key planet selection, elapsed time display, and planet size classification.
+
+## What's New in v3.1
+
+Bug fixes from v3.0:
+- **R (Reset) key now clears oppositions and transits** — Previously, pressing R to reset the simulation left stale opposition and transit alerts in the info panel. They are now properly cleared on reset.
+- **Input buffer length capped at 30 characters** — Previously, typing in date (`D`) or speed (`S`) input mode had no character limit, allowing arbitrarily long inputs that could overflow the display. Input is now capped at 30 characters.
+- **Trail positions use `collections.deque` for O(1) performance** — Trail storage previously used plain Python lists with `pop(0)`, which is O(n) per frame for each of 8 planets. Now uses `deque(maxlen=200)` for automatic size management and constant-time append/eviction.
 
 ## Features
 
@@ -27,6 +34,7 @@ An animated terminal-based orrery that displays all eight planets orbiting the S
 - **Conjunction Detection** — Automatically alerts when two planets are within 5° of each other
 - **Opposition Detection** — Alerts when an outer planet (Mars–Neptune) aligns opposite the Sun from Earth — the best time to observe it
 - **Transit Detection** — Alerts when Mercury or Venus crosses the Sun-Earth line — a rare and astronomically significant event
+- **Find Next Conjunction** — Press `F` to fast-forward the simulation to the next planet conjunction
 - **Halley's Comet Info** — When visible, shows the comet's current distance from the Sun and velocity
 - **Planet Size Classes** — Terrestrial planets (Mercury–Mars) displayed with `·`, gas giants (Jupiter–Saturn) with `◉`, ice giants (Uranus–Neptune) with `○`
 - **Responsive Layout** — Panel lines are capped at terminal height minus 4, preventing overflow on small screens
@@ -37,7 +45,7 @@ An animated terminal-based orrery that displays all eight planets orbiting the S
 - **Planet Selection** — Browse with arrow keys OR press `1`–`8` to jump directly to a planet
 - **Find Next Conjunction** — Press `F` to fast-forward the simulation to the next planet conjunction
 - **Jump to Today** — Press `H` to instantly jump to today's date
-- **Full Reset** — Press `R` to reset ALL state (date, speed, zoom, selection, toggles)
+- **Full Reset** — Press `R` to reset ALL state (date, speed, zoom, selection, toggles, oppositions, transits)
 - **Responsive Controls Bar** — Adapts to terminal width, showing fewer controls on narrow terminals
 - **CLI Flags** — `--help`, `--version`, `--date`, `--speed`, `--no-trails`, `--no-moon`, `--asteroids`, `--comet`
 
@@ -50,6 +58,7 @@ An animated terminal-based orrery that displays all eight planets orbiting the S
 - **Speed Validation** — Simulation speed is clamped to valid range (0.01–3650 days/sec) on assignment
 - **Case-Insensitive Keys** — All letter keys work with both uppercase and lowercase
 - **Distance Formatting** — Zero and negative distances handled gracefully; small distances use proper unit suffixes
+- **Input Buffer Limit** — Date and speed input modes cap input at 30 characters to prevent display overflow
 
 ## How to Install
 
@@ -201,6 +210,7 @@ at 0.467 AU (eccentricity 0.206).
 ```
 Press 'R' to reset everything — date, speed, zoom, planet selection, and all
 toggles (orbits, labels, trails, asteroids, moon, comet) — back to defaults.
+Opposition and transit alerts are also cleared.
 ```
 
 ## How It Works
@@ -288,7 +298,7 @@ The controls bar at the bottom of the screen adapts to the terminal width:
 - `draw_halley_orbit()` — Draws Halley's comet orbit as sparse dots.
 - `generate_asteroids(seed)` — Creates deterministic asteroid belt with Kepler-correct speeds.
 - `generate_stars()` — Creates a deterministic starfield. Returns empty list for degenerate terminal sizes.
-- `OrreryState` — Tracks date, speed, selection, trail data, toggles, conjunction/opposition/transit alerts, and previous positions.
+- `OrreryState` — Tracks date, speed, selection, trail data, toggles, conjunction/opposition/transit alerts, and previous positions. Uses `collections.deque` for O(1) trail position management.
 - `main()` — Curses event loop handling input, simulation, and rendering.
 - `parse_args()` — CLI argument parser with --help, --version, --date, --speed, --no-trails, --no-moon, --asteroids, --comet.
 
@@ -298,14 +308,14 @@ The controls bar at the bottom of the screen adapts to the terminal width:
 python3 test_orrery.py
 ```
 
-Runs 244 tests covering:
+Runs 257 tests covering:
 - Kepler solver (convergence, edge cases, invalid inputs, large mean anomaly)
 - Planet position calculations (circular orbits, all 8 planets, invalid parameters)
 - Screen coordinate mapping (origin, clamping, perspective compression, degenerate max_r)
 - Star generation (bounds checking, degenerate sizes, determinism)
 - Date formatting
 - Distance formatting (human-readable km units, zero/negative edge cases)
-- State management (defaults, toggle behavior, speed property validation, full reset)
+- State management (defaults, toggle behavior, speed property validation, full reset including oppositions/transits)
 - Orbital mechanics consistency (perihelion/aphelion ranges, periodicity)
 - Orbital velocity (vis-viva equation, edge cases, relative ordering)
 - Conjunction detection (aligned, opposite, close, far, empty, format, degenerate origin)
@@ -323,3 +333,32 @@ Runs 244 tests covering:
 - Version and constants validation
 - safe_addstr bounds checking and text truncation
 - Bug fix regression tests (speed clamping, conjunction origin, generate_asteroids API, reset completeness, format_distance_km edge cases, au_to_screen degenerate max_r, elongation degenerate cases)
+- v3.1 bug fixes (R key resets oppositions/transits, input buffer length cap, deque trail positions)
+
+## Changelog
+
+### v3.1
+- **Fixed**: R (Reset) key now properly clears `oppositions` and `transits` state, which were previously left stale after reset
+- **Fixed**: Input buffer in date/speed input modes is now capped at 30 characters (`MAX_INPUT_LENGTH`), preventing display overflow from arbitrarily long input
+- **Improved**: Trail position storage now uses `collections.deque(maxlen=200)` instead of plain lists, giving O(1) append performance instead of O(n) from `list.pop(0)`
+
+### v3.0
+- Added opposition detection for outer planets (Mars–Neptune)
+- Added transit detection for inner planets (Mercury, Venus)
+- Added `F` key to find next conjunction and fast-forward to it
+- Added number keys 1–8 for direct planet selection
+- Added elapsed time display (days since start and years since J2000)
+- Added planet size classes with display symbols (·, ◉, ○)
+- Added planet diameter data and classification in info panel
+
+### v2.2.1
+- Bug fixes for format_distance_km, au_to_screen, Moon radius, reset, controls bar overflow, info panel overflow, elongation degenerate cases
+
+### v2.2
+- Halley's Comet, elongation, retrograde, perihelion/aphelion
+
+### v2.0
+- Conjunction detection, Moon, asteroid belt, velocity display
+
+### v1.0
+- Initial release with real orbital mechanics, trails, zoom, speed

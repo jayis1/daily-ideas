@@ -6,6 +6,12 @@ alerts, opposition alerts, transit detection, number-key planet selection,
 next-conjunction finder, elapsed time display, planet size classes, and
 a "go to date" feature.
 
+v3.1 bug fixes (on top of v3.0):
+- Fixed R (reset) key not clearing oppositions and transits state
+- Fixed unlimited input buffer length in date/speed input modes (now capped at 30 chars)
+- Improved trail_positions performance by switching from list to collections.deque
+  with maxlen for O(1) appends instead of O(n) list.pop(0)
+
 Enhancements from v3.0 (on top of v2.2.1):
 - Number keys 1-8 now directly select planets (1=Mercury, ..., 8=Neptune)
 - Opposition detection: alerts when an outer planet aligns with Sun-Earth
@@ -34,10 +40,11 @@ import curses
 import math
 import random
 import time
+from collections import deque
 from datetime import datetime, timedelta
 import sys
 
-__version__ = "3.0"
+__version__ = "3.1"
 
 # J2000 epoch reference date
 J2000_EPOCH = datetime(2000, 1, 1)
@@ -758,6 +765,8 @@ def format_distance_km(au: float) -> str:
 class OrreryState:
     """Tracks the current state of the orrery simulation."""
 
+    MAX_INPUT_LENGTH = 30  # Maximum length for date/speed input
+
     def __init__(self):
         self.current_date = datetime(2026, 1, 1)
         self.start_date = datetime(2026, 1, 1)  # Track simulation start date
@@ -773,8 +782,8 @@ class OrreryState:
         self.show_comet = False  # Toggle with C — Halley's Comet
         self.input_mode = None  # None, 'date', 'speed'
         self.input_buffer = ""
-        self.trail_positions = {i: [] for i in range(len(PLANETS))}
         self.max_trail = 200
+        self.trail_positions = {i: deque(maxlen=self.max_trail) for i in range(len(PLANETS))}
         self.conjunctions = []  # Current conjunction alerts
         self.oppositions = []  # Current opposition alerts
         self.transits = []  # Current transit alerts
@@ -894,7 +903,8 @@ def main(stdscr):
             elif key == curses.KEY_BACKSPACE or key == 127:
                 state.input_buffer = state.input_buffer[:-1]
             elif key >= 32 and key < 127:
-                state.input_buffer += chr(key)
+                if len(state.input_buffer) < OrreryState.MAX_INPUT_LENGTH:
+                    state.input_buffer += chr(key)
         elif state.input_mode == 'speed':
             if key == 10 or key == 13:
                 try:
@@ -911,7 +921,8 @@ def main(stdscr):
             elif key == curses.KEY_BACKSPACE or key == 127:
                 state.input_buffer = state.input_buffer[:-1]
             elif key >= 32 and key < 127:
-                state.input_buffer += chr(key)
+                if len(state.input_buffer) < OrreryState.MAX_INPUT_LENGTH:
+                    state.input_buffer += chr(key)
         else:
             if key == ord('q') or key == ord('Q'):
                 break
@@ -929,7 +940,7 @@ def main(stdscr):
                 # Toggle trail accumulation — clear trails when turning off
                 if state.show_trails:
                     state.show_trails = False
-                    state.trail_positions = {i: [] for i in range(len(PLANETS))}
+                    state.trail_positions = {i: deque(maxlen=state.max_trail) for i in range(len(PLANETS))}
                 else:
                     state.show_trails = True
             elif key == ord('a') or key == ord('A'):
@@ -972,9 +983,11 @@ def main(stdscr):
                 state.show_asteroids = False
                 state.show_moon = True
                 state.show_comet = False
-                state.trail_positions = {i: [] for i in range(len(PLANETS))}
+                state.trail_positions = {i: deque(maxlen=state.max_trail) for i in range(len(PLANETS))}
                 state.prev_positions = None
                 state.finding_conjunction = False
+                state.oppositions = []
+                state.transits = []
             elif key == ord('f') or key == ord('F'):
                 # Find next conjunction — fast-forward to it
                 state.finding_conjunction = True
@@ -991,8 +1004,6 @@ def main(stdscr):
                 for i, (name, a, period, e, sym, cp, usym) in enumerate(planet_data):
                     x, y = planet_position(a, period, e, years_since_epoch)
                     state.trail_positions[i].append((x, y))
-                    if len(state.trail_positions[i]) > state.max_trail:
-                        state.trail_positions[i].pop(0)
 
         # Find next conjunction (triggered by F key)
         if state.finding_conjunction:
