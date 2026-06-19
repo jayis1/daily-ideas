@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Comprehensive tests for the Solar System Orrery.
+Comprehensive tests for the Solar System Orrery v2.0.
 Tests orbital mechanics, screen mapping, star generation, state management,
+conjunction detection, orbital velocity, asteroid belt, Moon position,
 edge cases, and bug fixes.
 """
 import sys
@@ -11,7 +12,11 @@ from datetime import datetime
 
 from orrery import (
     solve_kepler, planet_position, au_to_screen,
-    generate_stars, format_date, OrreryState, safe_addstr
+    generate_stars, format_date, OrreryState, safe_addstr,
+    detect_conjunctions, orbital_velocity_km_s,
+    generate_asteroids, ASTEROID_BELT_INNER_AU, ASTEROID_BELT_OUTER_AU,
+    MOON_ORBITAL_RADIUS_AU, MOON_PERIOD_YEARS,
+    CONJUNCTION_THRESHOLD_DEG, __version__, PLANETS, J2000_EPOCH
 )
 
 passed = 0
@@ -50,6 +55,13 @@ test("M=1, e=0.9 → verifies", abs(M_check - 1.0) < 1e-8, f"residual={M_check -
 # Edge: very small eccentricity
 E = solve_kepler(2.0, 0.001)
 test("Small eccentricity converges", abs(E) < 10, f"got {E}")
+
+# Edge: large mean anomaly — solver doesn't crash and still satisfies Kepler's equation
+E = solve_kepler(100 * math.pi, 0.3)
+M_check = E - 0.3 * math.sin(E)
+test("Large mean anomaly: Kepler equation satisfied",
+     abs(M_check - 100 * math.pi) / (100 * math.pi) < 1e-6,
+     f"residual={abs(M_check - 100*math.pi):.6f}")
 
 # Error cases
 try:
@@ -243,10 +255,13 @@ test("Default scale: 12.0", s.scale == 12.0)
 test("Default show_orbits: True", s.show_orbits == True)
 test("Default show_labels: True", s.show_labels == True)
 test("Default show_trails: True", s.show_trails == True)
+test("Default show_asteroids: False", s.show_asteroids == False)
+test("Default show_moon: True", s.show_moon == True)
 test("Default input_mode: None", s.input_mode is None)
 test("Default input_buffer: empty", s.input_buffer == "")
 test("Trail dict has correct length", len(s.trail_positions) == 8)
 test("Trails start empty", all(len(v) == 0 for v in s.trail_positions.values()))
+test("Default conjunctions: empty", s.conjunctions == [])
 
 # ============================================================
 # 7. Orbital Mechanics Consistency Tests
@@ -254,7 +269,7 @@ test("Trails start empty", all(len(v) == 0 for v in s.trail_positions.values()))
 print("\n=== Orbital Mechanics Consistency Tests ===")
 
 # All 8 planets at epoch should give valid positions
-PLANETS = [
+PLANET_DATA = [
     ("Mercury",  0.387,   0.241,  0.206),
     ("Venus",    0.723,   0.615,  0.007),
     ("Earth",    1.000,   1.000,  0.017),
@@ -265,7 +280,7 @@ PLANETS = [
     ("Neptune", 30.069, 164.800,  0.009),
 ]
 
-for name, a, period, e in PLANETS:
+for name, a, period, e in PLANET_DATA:
     x, y = planet_position(a, period, e, 0.0)
     r = math.sqrt(x**2 + y**2)
     test(f"{name} at epoch: r in range [{a*(1-e):.3f}, {a*(1+e):.3f}]",
@@ -273,12 +288,208 @@ for name, a, period, e in PLANETS:
          f"r={r:.4f}")
 
 # Verify periodicity: planet position at t and t+period should be same
-for name, a, period, e in PLANETS:
+for name, a, period, e in PLANET_DATA:
     x1, y1 = planet_position(a, period, e, 0.0)
     x2, y2 = planet_position(a, period, e, period)
     test(f"{name}: position at t=0 ≈ t=period",
          abs(x1 - x2) < 0.001 and abs(y1 - y2) < 0.001,
          f"diff=({abs(x1-x2):.6f}, {abs(y1-y2):.6f})")
+
+# ============================================================
+# 8. Orbital Velocity Tests (NEW)
+# ============================================================
+print("\n=== Orbital Velocity Tests ===")
+
+# Earth's average orbital velocity should be ~29.8 km/s
+v_earth = orbital_velocity_km_s(1.0, 1.0, 1.0)
+test("Earth velocity at 1 AU ≈ 29.8 km/s",
+     28.0 < v_earth < 31.0, f"got {v_earth:.1f} km/s")
+
+# Mercury should be faster (average ~47.9 km/s)
+v_mercury = orbital_velocity_km_s(0.387, 0.241, 0.387)
+test("Mercury velocity at ~0.387 AU > Earth velocity",
+     v_mercury > v_earth, f"Mercury={v_mercury:.1f}, Earth={v_earth:.1f}")
+
+# Neptune should be slower (average ~5.4 km/s)
+v_neptune = orbital_velocity_km_s(30.069, 164.8, 30.069)
+test("Neptune velocity at ~30 AU < Earth velocity",
+     v_neptune < v_earth, f"Neptune={v_neptune:.1f}, Earth={v_earth:.1f}")
+
+# Zero distance should return 0
+test("Velocity at r=0 returns 0", orbital_velocity_km_s(1.0, 1.0, 0.0) == 0.0)
+
+# Negative distance should return 0
+test("Velocity at negative r returns 0", orbital_velocity_km_s(1.0, 1.0, -1.0) == 0.0)
+
+# ============================================================
+# 9. Conjunction Detection Tests (NEW)
+# ============================================================
+print("\n=== Conjunction Detection Tests ===")
+
+# Two planets at same angle → conjunction
+positions_aligned = [(1.0, 0.0), (2.0, 0.0)]  # Both on X-axis
+conjs = detect_conjunctions(positions_aligned, threshold_deg=5.0)
+test("Aligned planets: conjunction detected", len(conjs) > 0,
+     f"got {len(conjs)} conjunctions")
+
+# Two planets 180° apart → no conjunction
+positions_opposite = [(1.0, 0.0), (-2.0, 0.0)]  # Opposite sides
+conjs = detect_conjunctions(positions_opposite, threshold_deg=5.0)
+test("Opposite planets: no conjunction", len(conjs) == 0,
+     f"got {len(conjs)} conjunctions")
+
+# Empty list → no conjunctions
+conjs = detect_conjunctions([], threshold_deg=5.0)
+test("Empty positions: no conjunctions", len(conjs) == 0)
+
+# Single planet → no conjunctions
+conjs = detect_conjunctions([(1.0, 0.0)], threshold_deg=5.0)
+test("Single planet: no conjunctions", len(conjs) == 0)
+
+# Two planets 2° apart → conjunction with threshold 5°
+angle1 = math.radians(0)
+angle2 = math.radians(2)
+positions_close = [(math.cos(angle1), math.sin(angle1)),
+                    (2 * math.cos(angle2), 2 * math.sin(angle2))]
+conjs = detect_conjunctions(positions_close, threshold_deg=5.0)
+test("Planets 2° apart: conjunction detected", len(conjs) > 0)
+
+# Two planets 2° apart → no conjunction with threshold 1°
+conjs = detect_conjunctions(positions_close, threshold_deg=1.0)
+test("Planets 2° apart: no conjunction with 1° threshold", len(conjs) == 0)
+
+# Real planetary positions at epoch
+epoch_positions = []
+for name, a, period, e in PLANET_DATA:
+    x, y = planet_position(a, period, e, 0.0)
+    epoch_positions.append((x, y))
+conjs = detect_conjunctions(epoch_positions, threshold_deg=10.0)
+test("Real epoch positions: conjunction detection runs", True,
+     f"found {len(conjs)} conjunctions")
+
+# Verify conjunction format
+positions_test = [(1.0, 0.0), (2.0, 0.001)]
+conjs = detect_conjunctions(positions_test, threshold_deg=5.0)
+if len(conjs) > 0:
+    test("Conjunction format: (i, j, degrees)", 
+         len(conjs[0]) == 3 and isinstance(conjs[0][2], float),
+         f"got {conjs[0]}")
+else:
+    test("Conjunction format: (i, j, degrees)", False, "No conjunction found")
+
+# ============================================================
+# 10. Generate Asteroids Tests (NEW)
+# ============================================================
+print("\n=== Generate Asteroids Tests ===")
+
+asteroids = generate_asteroids(24, 80)
+test("Asteroids: correct count", len(asteroids) == 60, f"got {len(asteroids)}")
+
+# All asteroids have correct tuple structure
+if len(asteroids) > 0:
+    test("Asteroids: tuple has 4 elements", len(asteroids[0]) == 4,
+         f"got {len(asteroids[0])} elements")
+    angle_frac, radius_frac, angular_speed, char = asteroids[0]
+    test("Asteroid: angle_frac in [0,1)", 0 <= angle_frac < 1,
+         f"got {angle_frac}")
+    test("Asteroid: radius_frac in [0,1)", 0 <= radius_frac < 1,
+         f"got {radius_frac}")
+    test("Asteroid: angular_speed > 0", angular_speed > 0,
+         f"got {angular_speed}")
+    test("Asteroid: char is valid", char in [".", ","], f"got '{char}'")
+else:
+    test("Asteroids: tuple structure", False, "No asteroids generated")
+
+# Deterministic generation
+asteroids2 = generate_asteroids(24, 80)
+test("Asteroids: deterministic (same seed)", asteroids == asteroids2)
+
+# Radius corresponds to belt range
+for _, radius_frac, _, _ in asteroids:
+    radius_au = ASTEROID_BELT_INNER_AU + radius_frac * (ASTEROID_BELT_OUTER_AU - ASTEROID_BELT_INNER_AU)
+    test("Asteroid radius in belt range",
+         ASTEROID_BELT_INNER_AU <= radius_au <= ASTEROID_BELT_OUTER_AU,
+         f"got {radius_au:.2f} AU")
+    break  # Just test first one to avoid 60 messages
+
+# Angular speed follows Kepler's third law (roughly)
+inner_speeds = [a_s for _, r_f, a_s, _ in asteroids if r_f < 0.1]
+outer_speeds = [a_s for _, r_f, a_s, _ in asteroids if r_f > 0.9]
+if inner_speeds and outer_speeds:
+    test("Inner asteroids orbit faster than outer",
+         min(inner_speeds) > max(outer_speeds),
+         f"inner_min={min(inner_speeds):.3f}, outer_max={max(outer_speeds):.3f}")
+
+# ============================================================
+# 11. Moon Constants Tests (NEW)
+# ============================================================
+print("\n=== Moon Constants Tests ===")
+
+test("Moon orbital radius ~0.00257 AU",
+     abs(MOON_ORBITAL_RADIUS_AU - 0.00257) < 0.001,
+     f"got {MOON_ORBITAL_RADIUS_AU}")
+
+test("Moon period ~27.3 days (~0.0748 years)",
+     abs(MOON_PERIOD_YEARS - 0.0748) < 0.01,
+     f"got {MOON_PERIOD_YEARS}")
+
+# Moon position can be computed for various times
+for t in [0.0, 0.0748, 1.0]:
+    moon_angle = 2 * math.pi * t / MOON_PERIOD_YEARS
+    test(f"Moon angle at t={t}: computed successfully",
+         0 <= moon_angle % (2 * math.pi) < 2 * math.pi,
+         f"angle={moon_angle}")
+
+# ============================================================
+# 12. Version and Constants Tests (NEW)
+# ============================================================
+print("\n=== Version and Constants Tests ===")
+
+test("Version is a string", isinstance(__version__, str))
+test("Version format valid", "." in __version__, f"got {__version__}")
+
+test("J2000_EPOCH is datetime", isinstance(J2000_EPOCH, datetime))
+test("J2000_EPOCH year is 2000", J2000_EPOCH.year == 2000)
+
+test("PLANETS has 8 entries", len(PLANETS) == 8)
+test("PLANET_DATA has 8 entries", len(PLANET_DATA) == 8)
+
+# Conjunction threshold is reasonable
+test("Conjunction threshold in [1, 30] degrees",
+     1 <= CONJUNCTION_THRESHOLD_DEG <= 30,
+     f"got {CONJUNCTION_THRESHOLD_DEG}")
+
+# Asteroid belt constants
+test("Asteroid belt inner < outer",
+     ASTEROID_BELT_INNER_AU < ASTEROID_BELT_OUTER_AU)
+test("Asteroid belt inner > Mars orbit",
+     ASTEROID_BELT_INNER_AU > 1.5)  # Mars is ~1.5 AU
+test("Asteroid belt outer < Jupiter orbit",
+     ASTEROID_BELT_OUTER_AU < 5.5)  # Jupiter is ~5.2 AU
+
+# ============================================================
+# 13. safe_addstr Tests (NEW)
+# ============================================================
+print("\n=== safe_addstr Tests ===")
+
+class MockScreen:
+    """Mock curses screen for testing safe_addstr."""
+    def __init__(self):
+        self.strings = []
+
+    def addstr(self, y, x, text, attr):
+        self.strings.append((y, x, text, attr))
+
+# Note: safe_addstr returns bool, but we can't easily mock stdscr.
+# Instead, test the logic directly.
+test("safe_addstr: out of bounds Y returns False",
+     safe_addstr(None, -1, 0, "test", 0, 24, 80) == False)
+test("safe_addstr: out of bounds X returns False",
+     safe_addstr(None, 0, -1, "test", 0, 24, 80) == False)
+test("safe_addstr: Y >= height returns False",
+     safe_addstr(None, 24, 0, "test", 0, 24, 80) == False)
+test("safe_addstr: X >= width returns False",
+     safe_addstr(None, 0, 80, "test", 0, 24, 80) == False)
 
 # ============================================================
 # Summary
