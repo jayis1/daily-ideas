@@ -1,4 +1,4 @@
-# 🪐 Solar System Orrery v2.0
+# 🪐 Solar System Orrery v2.1
 
 An animated terminal-based orrery that displays all eight planets orbiting the Sun using real orbital mechanics. Watch Mercury race around while Neptune crawls — all in your terminal!
 
@@ -32,9 +32,11 @@ An animated terminal-based orrery that displays all eight planets orbiting the S
 
 ### Robustness
 - **Graceful Error Handling** — Handles small terminals, invalid inputs, and edge cases
-- **Unicode Fallback** — Gracefully degrades to ASCII symbols on terminals without UTF-8 support
+- **Unicode Fallback** — Gracefully degrades to ASCII symbols on terminals without UTF-8 support; handles wide character overflow at terminal edges
 - **Frame Time Cap** — Prevents huge time jumps if the window is hidden/minimized
 - **Bounds Checking** — All drawing operations are safely clamped to terminal dimensions
+- **Speed Validation** — Simulation speed is clamped to valid range (0.01–3650 days/sec) on assignment
+- **Case-Insensitive Keys** — All letter keys work with both uppercase and lowercase
 
 ## How to Install
 
@@ -75,7 +77,7 @@ python3 orrery.py --help
 |-----|--------|
 | `SPACE` | Pause / Resume |
 | `+` / `=` | Speed up time |
-| `-` | Slow down time |
+| `-` / `_` | Slow down time |
 | `↑` / `↓` | Zoom in / out |
 | `←` / `→` | Select previous / next planet |
 | `O` | Toggle orbit paths |
@@ -88,6 +90,8 @@ python3 orrery.py --help
 | `H` | Jump to today's date |
 | `R` | Reset to default view, date, and trails |
 | `Q` | Quit |
+
+All letter keys work with both uppercase and lowercase.
 
 ## Usage Examples
 
@@ -126,7 +130,7 @@ planets are within 5° of each other as seen from the Sun.
 **Study a single planet's orbit:**
 ```
 Press '←'/'→' to select a planet, then read its orbital data in the info panel
-—including live distance from Sun and orbital velocity in km/s.
+— including live distance from Sun and orbital velocity in km/s.
 ```
 
 **Toggle trails to see orbit paths:**
@@ -152,7 +156,7 @@ The info panel displays real-time orbital velocity computed using the **vis-viva
 
 ### Conjunction Detection
 
-Every frame, the angular positions of all planet pairs are compared. When two planets are within 5° of each other (as seen from the Sun), a conjunction alert is displayed with the exact angular separation.
+Every frame, the angular positions of all planet pairs are compared. When two planets are within 5° of each other (as seen from the Sun), a conjunction alert is displayed with the exact angular separation. Planets at the origin (degenerate case) are skipped to avoid false positives.
 
 ### Asteroid Belt
 
@@ -160,22 +164,24 @@ Every frame, the angular positions of all planet pairs are compared. When two pl
 
 ### Earth's Moon
 
-A small dot orbits Earth with the Moon's real 27.3-day period. The display radius is exaggerated for visibility (real scale would be invisible).
+A small dot orbits Earth with the Moon's real 27.3-day period. The display radius is exaggerated for visibility (real scale would be invisible). The Moon is offset from Earth by at least 2 screen units to prevent overlap on small terminals.
 
-Orbital parameters are real values from J2000 epoch data.
+### Speed Units
+
+The simulation speed is displayed in "days/sec" — at speed 1.0, approximately 1 day of simulation time passes per real second at 30fps. The actual formula is `elapsed_days = speed × dt_frame × 30`.
 
 ## Architecture
 
 - `solve_kepler(M, e)` — Solves Kepler's equation with Newton's method. Validates eccentricity (0 ≤ e < 1).
 - `planet_position(a, period, e, years)` — Computes (x, y) in AU from orbital elements. Validates period > 0 and a > 0.
 - `orbital_velocity_km_s(a, period, r)` — Computes orbital velocity at distance r via vis-viva equation.
-- `detect_conjunctions(positions, threshold)` — Finds planet pairs within a given angular threshold.
+- `detect_conjunctions(positions, threshold)` — Finds planet pairs within a given angular threshold. Skips degenerate origin positions.
 - `au_to_screen(x, y, cx, cy, scale, max_r)` — Maps AU coordinates to screen coordinates with power-law compression.
 - `draw_orbit()` — Draws an orbital ellipse as a dotted path.
-- `generate_asteroids()` — Creates deterministic asteroid belt with Kepler-correct speeds.
+- `generate_asteroids(seed)` — Creates deterministic asteroid belt with Kepler-correct speeds.
 - `draw_asteroid_belt()` — Renders animated asteroids on screen.
 - `generate_stars()` — Creates a deterministic starfield (seeded). Returns empty list for degenerate terminal sizes.
-- `OrreryState` — Tracks date, speed, selection, trail data, toggles, and conjunction alerts.
+- `OrreryState` — Tracks date, speed (validated via property), selection, trail data, toggles, and conjunction alerts.
 - `main()` — Curses event loop handling input, simulation, and rendering.
 - `parse_args()` — CLI argument parser with --help, --version, --date, --speed, --no-trails, --no-moon, --asteroids.
 
@@ -185,21 +191,40 @@ Orbital parameters are real values from J2000 epoch data.
 python3 test_orrery.py
 ```
 
-Runs 110 tests covering:
+Runs 123 tests covering:
 - Kepler solver (convergence, edge cases, invalid inputs, large mean anomaly)
 - Planet position calculations (circular orbits, all 8 planets, invalid parameters)
 - Screen coordinate mapping (origin, clamping, perspective compression)
 - Star generation (bounds checking, degenerate sizes, determinism)
-- State management (defaults, toggle behavior, new fields)
+- State management (defaults, toggle behavior, speed property validation)
 - Orbital mechanics consistency (perihelion/aphelion ranges, periodicity)
 - Orbital velocity (vis-viva equation, edge cases, relative ordering)
-- Conjunction detection (aligned, opposite, close, far, empty, format)
+- Conjunction detection (aligned, opposite, close, far, empty, format, degenerate origin)
 - Asteroid belt generation (count, structure, Kepler's law, determinism)
 - Moon constants (radius, period, angle computation)
 - Version and constants validation
-- safe_addstr bounds checking
+- safe_addstr bounds checking and text truncation
+- Bug fix regression tests (speed clamping, conjunction origin, generate_asteroids API)
 
-## Bug Fixes (from initial version)
+## Bug Fixes (v2.1)
+
+1. **Speed label was incorrect** — Displayed "days/frame" but the actual unit is "days/sec" (at ~30fps, speed=1.0 gives ~1 day/sec). Fixed to display "days/sec" throughout (info panel, speed input prompt, and CLI help text).
+
+2. **Label rendering off-by-one** — Labels that exactly fit at the terminal right edge were incorrectly skipped (`< width` should have been `<= width`). A 3-character label at column `width-3` would now render correctly.
+
+3. **Conjunction detection false positive at origin** — A planet at position (0, 0) would have `atan2(0, 0) = 0`, causing false conjunctions with planets on the X-axis. Now skips degenerate origin positions.
+
+4. **Unicode rendering overflow** — Planet symbols (☿♀⊕♂♃♄♅♆) and the Sun character (☀) may be wide (2-column) characters on some terminals. Added bounds checks that fall back to ASCII symbols when too close to the right edge, and handle `UnicodeEncodeError` in addition to `curses.error`.
+
+5. **Key bindings case sensitivity** — Only 'q/Q' accepted both cases; all other letter keys (o, l, t, a, m, d, s, h, r) only worked with lowercase. Now all keys accept both uppercase and lowercase. Also added `_` as an alias for `-` (slow down).
+
+6. **Moon overlap on small terminals** — Moon display radius minimum was 1 screen unit, which could overlap with Earth. Raised to 2 screen units.
+
+7. **Speed property not validated on assignment** — `OrreryState.speed` could be set to negative values directly, causing time to run backwards. Now implemented as a property that clamps values to the range [0.01, 3650].
+
+8. **`generate_asteroids()` had unused parameters** — The function took `height` and `width` parameters but never used them. Removed these unused parameters for a cleaner API.
+
+## Bug Fixes (from v1.0 → v2.0)
 
 1. **`generate_stars()` crashed on zero/negative terminal dimensions** — Now returns an empty list instead of raising `ValueError`.
 2. **Starfield regenerated every frame** — Stars are now only regenerated on terminal resize.
@@ -222,4 +247,3 @@ Runs 110 tests covering:
 - **Orbital velocity**: Live km/s readout in info panel via vis-viva equation
 - **Current distance**: Shows actual distance from Sun (varies with eccentricity)
 - **Jump to today**: Press `H` to set the date to now
-- **110 tests**: Expanded from 65 to 110, covering all new features

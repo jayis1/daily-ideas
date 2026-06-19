@@ -24,6 +24,23 @@ Enhancements from v2.0:
 - Jump to today's date with H key
 - Info panel shows live distance from Sun and orbital velocity
 - Improved code documentation with type hints
+
+Bug fixes from v2.1:
+- Fixed speed label: was "days/frame", now correctly "days/sec"
+- Fixed label rendering off-by-one: labels that exactly fit at terminal
+  right edge were incorrectly skipped
+- Fixed conjunction detection degenerate case: planets at origin (0,0) no
+  longer cause false conjunctions with atan2(0,0)=0
+- Fixed Unicode rendering: planet symbols and Sun character now check for
+  wide character overflow at terminal right edge, falling back to ASCII
+- Fixed key bindings: all letter keys now accept both uppercase and lowercase
+  (previously only 'q/Q' worked with both cases)
+- Fixed Moon overlap: Moon display radius minimum raised from 1 to 2 screen
+  units to prevent overlapping with Earth on small terminals
+- Speed property now validates and clamps values (0.01–3650) on assignment
+- Removed unused height/width parameters from generate_asteroids()
+- Added underscore key '_' as alias for '-' (slow down) for keyboard
+  convenience
 """
 
 import argparse
@@ -34,7 +51,7 @@ import time
 from datetime import datetime, timedelta
 import sys
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 
 # J2000 epoch reference date
 J2000_EPOCH = datetime(2000, 1, 1)
@@ -188,6 +205,9 @@ def detect_conjunctions(planet_positions: list, threshold_deg: float = CONJUNCTI
         for j in range(i + 1, len(planet_positions)):
             x1, y1 = planet_positions[i]
             x2, y2 = planet_positions[j]
+            # Skip if either planet is at the origin (degenerate case)
+            if (x1 == 0 and y1 == 0) or (x2 == 0 and y2 == 0):
+                continue
             # Angle of each planet from Sun (origin)
             angle1 = math.atan2(y1, x1)
             angle2 = math.atan2(y2, x2)
@@ -276,7 +296,7 @@ def draw_orbit(stdscr, a: float, e: float, cx: int, cy: int,
                     pass
 
 
-def generate_asteroids(height: int, width: int, seed: int = 12345) -> list:
+def generate_asteroids(seed: int = 12345) -> list:
     """Generate asteroid belt positions as (angle_fraction, radius_fraction, size_char).
 
     Each asteroid is stored as a fraction of its orbital position so it can be
@@ -284,8 +304,6 @@ def generate_asteroids(height: int, width: int, seed: int = 12345) -> list:
     and radius_fraction is [0, 1) between inner and outer belt edge.
 
     Args:
-        height: Terminal height (unused, kept for API consistency)
-        width: Terminal width (unused)
         seed: Random seed for deterministic generation
 
     Returns:
@@ -392,7 +410,7 @@ class OrreryState:
 
     def __init__(self):
         self.current_date = datetime(2026, 1, 1)
-        self.speed = 1.0  # days per frame
+        self._speed = 1.0  # days per second (at ~30fps)
         self.paused = False
         self.selected_planet = 2  # Earth by default
         self.scale = 12.0
@@ -406,6 +424,16 @@ class OrreryState:
         self.trail_positions = {i: [] for i in range(len(PLANETS))}
         self.max_trail = 200
         self.conjunctions = []  # Current conjunction alerts
+
+    @property
+    def speed(self):
+        """Get the current simulation speed in days/second."""
+        return self._speed
+
+    @speed.setter
+    def speed(self, value):
+        """Set the simulation speed, clamping to valid range."""
+        self._speed = max(0.01, min(value, 3650))
 
 
 def safe_addstr(stdscr, y: int, x: int, text: str, attr, height: int, width: int) -> bool:
@@ -473,7 +501,7 @@ def main(stdscr):
     last_height, last_width = height, width
 
     # Generate asteroid belt (deterministic)
-    asteroids = generate_asteroids(height, width)
+    asteroids = generate_asteroids()
 
     last_time = time.time()
 
@@ -532,32 +560,32 @@ def main(stdscr):
                 state.paused = not state.paused
             elif key == ord('+') or key == ord('='):
                 state.speed = min(state.speed * 1.5, 3650)
-            elif key == ord('-'):
+            elif key == ord('-') or key == ord('_'):
                 state.speed = max(state.speed / 1.5, 0.01)
-            elif key == ord('o'):
+            elif key == ord('o') or key == ord('O'):
                 state.show_orbits = not state.show_orbits
-            elif key == ord('l'):
+            elif key == ord('l') or key == ord('L'):
                 state.show_labels = not state.show_labels
-            elif key == ord('t'):
+            elif key == ord('t') or key == ord('T'):
                 # Toggle trail accumulation — clear trails when turning off
                 if state.show_trails:
                     state.show_trails = False
                     state.trail_positions = {i: [] for i in range(len(PLANETS))}
                 else:
                     state.show_trails = True
-            elif key == ord('a'):
+            elif key == ord('a') or key == ord('A'):
                 # Toggle asteroid belt
                 state.show_asteroids = not state.show_asteroids
-            elif key == ord('m'):
+            elif key == ord('m') or key == ord('M'):
                 # Toggle Moon
                 state.show_moon = not state.show_moon
-            elif key == ord('d'):
+            elif key == ord('d') or key == ord('D'):
                 state.input_mode = 'date'
                 state.input_buffer = ""
-            elif key == ord('s'):
+            elif key == ord('s') or key == ord('S'):
                 state.input_mode = 'speed'
                 state.input_buffer = ""
-            elif key == ord('h'):
+            elif key == ord('h') or key == ord('H'):
                 # Jump to today's date
                 state.current_date = datetime.now()
             elif key == curses.KEY_UP:
@@ -568,7 +596,7 @@ def main(stdscr):
                 state.selected_planet = (state.selected_planet - 1) % len(planet_data)
             elif key == curses.KEY_RIGHT:
                 state.selected_planet = (state.selected_planet + 1) % len(planet_data)
-            elif key == ord('r'):
+            elif key == ord('r') or key == ord('R'):
                 # Reset
                 state.current_date = datetime(2026, 1, 1)
                 state.speed = 1.0
@@ -618,9 +646,14 @@ def main(stdscr):
         # Draw Sun
         if 0 <= cy < height and 0 <= cx < width:
             sun_str = "☀"
+            # Sun symbol may be a wide character; ensure room for it
             try:
-                stdscr.addstr(cy, cx, sun_str, curses.color_pair(1) | curses.A_BOLD)
-            except curses.error:
+                if cx + 1 < width:  # Room for wide char
+                    stdscr.addstr(cy, cx, sun_str, curses.color_pair(1) | curses.A_BOLD)
+                else:
+                    # At the right edge, use ASCII fallback
+                    stdscr.addch(cy, cx, ord('*'), curses.color_pair(1) | curses.A_BOLD)
+            except (curses.error, UnicodeEncodeError):
                 try:
                     stdscr.addch(cy, cx, ord('*'), curses.color_pair(1) | curses.A_BOLD)
                 except curses.error:
@@ -652,9 +685,16 @@ def main(stdscr):
                                 pass
 
             # Draw planet symbol (try Unicode first, fall back to ASCII)
+            # Unicode symbols may be wide (2 columns) — ensure we have room
             if 0 <= sy < height and 0 <= sx < width:
+                # Try Unicode symbol first; if it's wide, we need sx+1 < width
                 try:
-                    stdscr.addstr(sy, sx, usym, cp | curses.A_BOLD)
+                    # Attempt to write the Unicode symbol
+                    if sx + 1 < width:  # Ensure room for wide char + label offset
+                        stdscr.addstr(sy, sx, usym, cp | curses.A_BOLD)
+                    else:
+                        # At the right edge, fall back to ASCII (always 1 column)
+                        stdscr.addstr(sy, sx, sym, cp | curses.A_BOLD)
                 except (curses.error, UnicodeEncodeError):
                     try:
                         stdscr.addstr(sy, sx, sym, cp | curses.A_BOLD)
@@ -669,7 +709,7 @@ def main(stdscr):
                 attr = cp
                 if i == state.selected_planet:
                     attr = cp | curses.A_REVERSE
-                if lx + len(label) < width:
+                if lx + len(label) <= width:
                     try:
                         stdscr.addstr(ly, lx, label, attr)
                     except curses.error:
@@ -680,7 +720,7 @@ def main(stdscr):
                 moon_angle = 2 * math.pi * years_since_epoch / MOON_PERIOD_YEARS
                 # Moon position relative to Earth, scaled up for visibility
                 # We use a larger display radius (not real scale) so it's visible
-                moon_display_r = max(1, max_r // 25)  # At least 1 screen unit from Earth
+                moon_display_r = max(2, max_r // 25)  # At least 2 screen units from Earth to avoid overlap
                 moon_sx = sx + int(moon_display_r * math.cos(moon_angle))
                 moon_sy = sy + int(moon_display_r * 0.5 * math.sin(moon_angle))  # Y compressed
                 if 0 <= moon_sy < height and 0 <= moon_sx < width:
@@ -707,7 +747,7 @@ def main(stdscr):
         lines = [
             f"╔══ Solar System Orrery ══╗",
             f"  Date: {format_date(state.current_date)}",
-            f"  Speed: {state.speed:.2f} days/frame",
+            f"  Speed: {state.speed:.2f} days/sec",
             f"  {'PAUSED' if state.paused else 'RUNNING'}  Trails: {trail_status}",
             f"  Moon: {moon_status}  Belt: {belt_status}",
             f"╠════════════════════════╣",
@@ -745,7 +785,7 @@ def main(stdscr):
             prompt_y = min(cy + max_r + 2, height - 3)
             safe_addstr(stdscr, prompt_y, max(0, cx - len(prompt) // 2), prompt, curses.color_pair(1) | curses.A_BOLD, height, width)
         elif state.input_mode == 'speed':
-            prompt = f"Speed (days/frame, >0): {state.input_buffer}_"
+            prompt = f"Speed (days/sec, >0): {state.input_buffer}_"
             prompt_y = min(cy + max_r + 2, height - 3)
             safe_addstr(stdscr, prompt_y, max(0, cx - len(prompt) // 2), prompt, curses.color_pair(1) | curses.A_BOLD, height, width)
 
@@ -774,7 +814,7 @@ def parse_args():
     parser.add_argument('--date', '-d', type=str, default=None,
                        help='Start date in YYYY-MM-DD format (default: 2026-01-01)')
     parser.add_argument('--speed', '-s', type=float, default=None,
-                       help='Initial speed in days/frame (default: 1.0)')
+                       help='Initial speed in days/sec (default: 1.0)')
     parser.add_argument('--no-trails', action='store_true',
                        help='Start with trails disabled')
     parser.add_argument('--no-moon', action='store_true',

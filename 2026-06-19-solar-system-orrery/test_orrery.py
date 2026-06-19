@@ -382,7 +382,7 @@ else:
 # ============================================================
 print("\n=== Generate Asteroids Tests ===")
 
-asteroids = generate_asteroids(24, 80)
+asteroids = generate_asteroids()
 test("Asteroids: correct count", len(asteroids) == 60, f"got {len(asteroids)}")
 
 # All asteroids have correct tuple structure
@@ -401,7 +401,7 @@ else:
     test("Asteroids: tuple structure", False, "No asteroids generated")
 
 # Deterministic generation
-asteroids2 = generate_asteroids(24, 80)
+asteroids2 = generate_asteroids()
 test("Asteroids: deterministic (same seed)", asteroids == asteroids2)
 
 # Radius corresponds to belt range
@@ -490,6 +490,72 @@ test("safe_addstr: Y >= height returns False",
      safe_addstr(None, 24, 0, "test", 0, 24, 80) == False)
 test("safe_addstr: X >= width returns False",
      safe_addstr(None, 0, 80, "test", 0, 24, 80) == False)
+
+# ============================================================
+# 14. Bug Fix Tests (v2.1)
+# ============================================================
+print("\n=== Bug Fix Tests (v2.1) ===")
+
+# Bug fix: Conjunction detection skips degenerate origin case
+conjs = detect_conjunctions([(0, 0), (1.0, 0.0)], threshold_deg=5.0)
+test("Conjunction: planet at origin is skipped",
+     len(conjs) == 0,
+     f"expected no conjunctions, got {len(conjs)}")
+
+conjs = detect_conjunctions([(0, 0), (0, 0)], threshold_deg=5.0)
+test("Conjunction: two planets at origin are skipped",
+     len(conjs) == 0,
+     f"expected no conjunctions, got {len(conjs)}")
+
+# Bug fix: Speed property clamps values
+s = OrreryState()
+s.speed = -5
+test("Speed property: negative value clamped to 0.01",
+     abs(s.speed - 0.01) < 0.001, f"got {s.speed}")
+
+s.speed = 0
+test("Speed property: zero clamped to 0.01",
+     abs(s.speed - 0.01) < 0.001, f"got {s.speed}")
+
+s.speed = 10000
+test("Speed property: very large value clamped to 3650",
+     abs(s.speed - 3650) < 0.001, f"got {s.speed}")
+
+s.speed = 5.0
+test("Speed property: normal value accepted",
+     abs(s.speed - 5.0) < 0.001, f"got {s.speed}")
+
+# Bug fix: generate_asteroids no longer takes height/width
+asteroids = generate_asteroids()
+test("generate_asteroids(): works without args", len(asteroids) == 60,
+     f"got {len(asteroids)}")
+
+asteroids2 = generate_asteroids(seed=42)
+test("generate_asteroids(seed=42): works with custom seed", len(asteroids2) == 60,
+     f"got {len(asteroids2)}")
+
+# Bug fix: Version bumped
+test("Version is 2.1.0", __version__ == "2.1.0", f"got {__version__}")
+
+# Bug fix: Label bounds check uses <= instead of <
+# We can't easily test this without a terminal, but verify the logic
+# Test safe_addstr with a mock screen for in-bounds drawing
+mock = MockScreen()
+result = safe_addstr(mock, 0, 0, "test", 0, 24, 80)
+test("safe_addstr: valid position returns True with mock screen",
+     result == True, f"got {result}")
+test("Mock screen received the string",
+     len(mock.strings) == 1 and mock.strings[0][2] == "test",
+     f"mock.strings = {mock.strings}")
+
+# Test truncation: text that's too long should be truncated
+mock2 = MockScreen()
+result = safe_addstr(mock2, 0, 78, "abcde", 0, 24, 80)
+test("safe_addstr: long text truncated to fit",
+     result == True, f"got {result}")
+test("Truncated text is correct length",
+     len(mock2.strings) == 1 and len(mock2.strings[0][2]) <= 2,
+     f"mock2.strings = {mock2.strings}")
 
 # ============================================================
 # Summary
