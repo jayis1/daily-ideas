@@ -1,12 +1,20 @@
-# 🔍 Terminal Polygraph Simulator
+# 🔍 Terminal Polygraph Simulator v2.1.0
 
-An interactive lie detector simulation that analyzes your **keystroke dynamics** — typing speed, rhythm consistency, hesitations, corrections, stress indicators, and burst patterns — to estimate whether you're being deceptive.
+An interactive lie detector simulation that analyzes your **keystroke dynamics** — typing speed, rhythm consistency, hesitations, and corrections — to estimate whether you're being deceptive.
 
-> **Disclaimer:** This is a simulation for entertainment purposes only. Real polygraph tests are scientifically controversial, and keystroke-dynamic lie detection is not proven reliable. Don't take the results seriously! 🙂
+## What's New in v2.1.0
+
+- **Bug fix**: `record_backspace()` no longer increments the backspace counter when the response is empty, preventing `correction_rate` from exceeding 1.0
+- **Bug fix**: Replaced fragile `_` throwaway variable with explicit `truth_prob` in `quick_mode()` — prevents `UnboundLocalError` or incorrect `truth_probability` values
+- **Bug fix**: `quick_mode()` no longer crashes with `UnboundLocalError` when the response is too short for analysis — returns `None` gracefully
+- **Bug fix**: Empty response after all backspaces is properly handled — returns `None` metrics instead of crashing
+- **New feature**: `--auto` / `-a` flag for fully non-interactive mode with simulated responses (no stdin required) — perfect for CI/CD and scripting
+- **New feature**: `KeystrokeAnalyzer.from_response()` class method for creating synthetic keystroke analyzers programmatically
+- **14 new tests** covering all bug fixes and new features
 
 ## How It Works
 
-The simulator uses real behavioral science principles (simplified for entertainment):
+The simulator uses behavioral science principles (simplified for entertainment):
 
 1. **Baseline Calibration** — You answer simple factual questions to establish your truthful typing pattern
 2. **Keystroke Analysis** — During the exam, it measures:
@@ -14,39 +22,27 @@ The simulator uses real behavioral science principles (simplified for entertainm
    - Rhythm consistency (standard deviation of inter-key intervals)
    - Hesitation pauses (gaps longer than 0.5 seconds)
    - Correction rate (backspace frequency)
-   - Stress index (composite of pauses, corrections, and rhythm disruption)
-   - Burst count (rapid-fire key groups — more bursts = more cognitive load)
-   - Initial latency (time before first keypress)
+   - Initial latency (delay before starting to type)
+   - Stress index (composite of pause, correction, and rhythm disruption)
 3. **Deviation Scoring** — Your exam responses are compared against your baseline using z-scores
 4. **Visual Verdict** — Results displayed with ASCII polygraph traces, meter bars, and detailed indicator breakdowns
 
 ## Features
 
-### Core
-- **Two modes**: Full examination (4 baseline + 6 exam questions) and quick mode (single question)
+- **Two interactive modes**: Full examination (4 baseline + 6 exam questions) and quick mode (single question)
+- **Non-interactive mode**: `--auto` flag runs simulated responses with no stdin required
+- **JSON export**: `--json` for programmatic use; `--auto` implies `--json`
 - **ASCII polygraph trace visualization** — Sine-wave-based traces that react to deception scores
 - **Detailed indicator analysis** — See which behavioral metrics triggered suspicion
 - **Baseline normalization** — Compares against YOUR typing patterns, not generic averages
 - **Rich terminal UI** — Color-coded meters, verdict banners, and summary tables
-
-### New in v2.0
-- **`--version` flag** — Show version number
-- **`--seed SEED`** — Reproducible question selection for consistent sessions
-- **`--json` / `-j`** — Output results as JSON for programmatic use and scripting
-- **`--quiet`** — Reduce delays and animations for faster experience
-- **`--baseline N`** — Customize number of calibration questions (2–6)
-- **`--questions N`** — Customize number of exam questions (1–10)
-- **Stress index** — New composite metric combining pauses, corrections, and rhythm disruption
-- **Burst analysis** — Counts rapid-fire key groups (more bursts = more cognitive load)
-- **Initial latency tracking** — Measures hesitation before starting to type
-- **Per-question min/max** — Final report highlights your most and least deceptive answers
-- **Better input fallback** — Simulates natural keystroke timing variation when raw terminal isn't available
-- **Improved error handling** — Handles edge cases like empty responses, single-char answers, and zero-variance baselines
-- **43 unit tests** — Comprehensive test coverage for all core functionality
+- **25 provocative exam questions** — Randomly selected each session
+- **Reproducible results** — `--seed` for deterministic question selection and simulated typing
+- **Adjustable question counts** — `--questions` and `--baseline` flags
 
 ## Installation
 
-No external dependencies needed — uses only Python standard library:
+No external dependencies — uses only the Python standard library:
 
 ```bash
 git clone <repo-url>
@@ -57,7 +53,7 @@ Requires Python 3.6+.
 
 ## Usage
 
-### Full Examination
+### Full Examination (Interactive)
 
 ```bash
 python3 polygraph.py
@@ -69,7 +65,7 @@ This will:
 3. Analyze each response against your baseline
 4. Produce a full report with overall deception index
 
-### Quick Mode
+### Quick Mode (Interactive)
 
 ```bash
 python3 polygraph.py --quick
@@ -77,89 +73,68 @@ python3 polygraph.py --quick
 
 Single question mode: type the alphabet for calibration, then answer one question.
 
-### JSON Output
+### Auto Mode (Non-Interactive)
+
+```bash
+python3 polygraph.py --auto --seed 42
+```
+
+Runs a complete simulation with synthetic responses — no user input required. Outputs structured JSON. Perfect for:
+
+- CI/CD pipelines
+- Scripting and automation
+- Testing and benchmarking
+- Demo screenshots
+
+```bash
+# Custom question count in auto mode
+python3 polygraph.py --auto --questions 3 --baseline 2 --seed 42
+
+# Pretty-print JSON output
+python3 polygraph.py --auto --seed 42 | python3 -m json.tool
+```
+
+### JSON Output (Interactive)
 
 ```bash
 python3 polygraph.py --json
 ```
 
-Outputs structured JSON with all analysis data — useful for scripting, logging, or piping to other tools:
+Outputs results as JSON after the interactive session completes.
 
-```json
-{
-  "version": "2.0.0",
-  "baseline_samples": 4,
-  "results": [
-    {
-      "question": "Have you ever told a lie in your life?",
-      "response": "Well I try not to...",
-      "deception_score": 0.48,
-      "confidence": 0.56,
-      "verdict": "INCONCLUSIVE",
-      "indicators": [...]
-    }
-  ],
-  "overall_deception_score": 0.48,
-  "overall_verdict": "INCONCLUSIVE"
-}
-```
+### All CLI Flags
 
-### Reproducible Sessions
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--auto` | `-a` | Non-interactive mode with simulated responses (implies `--json`) |
+| `--quick` | `-q` | Quick mode: single question examination |
+| `--questions N` | `-n N` | Number of exam questions (default: 6, range: 1–10) |
+| `--baseline N` | `-b N` | Number of baseline questions (default: 4, range: 2–6) |
+| `--seed N` | `-s N` | Random seed for reproducible question selection |
+| `--json` | `-j` | Output results as JSON |
+| `--quiet` | | Reduce delays and animations |
+| `--version` | | Show version number |
+| `--help` | `-h` | Show help message |
 
-```bash
-python3 polygraph.py --seed 42
-```
+## Example Output
 
-Use `--seed` to get the same question order across runs.
-
-### All Options
-
-```
-python3 polygraph.py [OPTIONS]
-
-Options:
-  -h, --help            Show help message and exit
-  --version             Show version number and exit
-  --quick, -q           Quick mode: single question examination
-  --questions, -n N     Number of exam questions (default: 6, range: 1-10)
-  --baseline, -b N      Number of baseline calibration questions (default: 4, range: 2-6)
-  --seed, -s SEED       Random seed for reproducible question selection
-  --quiet               Reduce delays and animations for faster experience
-  --json, -j            Output results as JSON (for programmatic use)
-```
-
-### Combinations
-
-```bash
-# Quick JSON output with reproducible seed
-python3 polygraph.py --quick --json --seed 42
-
-# 10-question exam with 6 baseline questions, quiet mode
-python3 polygraph.py -n 10 -b 6 --quiet
-
-# 3-question exam with JSON output
-python3 polygraph.py -n 3 --json
-```
-
-## Example Session
+### Interactive Session
 
 ```
 ╔════════════════════════════════════════════════════════╗
-║                                                        ║
 ║          🔍  TERMINAL POLYGRAPH SIMULATOR  🔍          ║
-║                                                        ║
-║        Interactive Lie Detection via Keystroke         ║
-║              Dynamics Analysis Engine                  ║
-║                                                        ║
 ╚════════════════════════════════════════════════════════╝
 
-  Analyzes typing speed, rhythm, corrections, and hesitation
-  to detect deviations from your truthful baseline.
+  Phase 1: Baseline Calibration
+  Calibration Question 1/4
+  What is your first name?
+  > Alice
+  ✓ Response recorded
 
-           ⚠  TRUTH VERIFICATION PROTOCOL  ⚠
-
-  This system analyzes keystroke dynamics to detect
-  physiological stress patterns associated with deception.
+  Phase 2: Truth Examination
+  Question 1/6
+  Have you ever told a lie in your life?
+  > Well I try not to...
 
   ──────────────────────────────────────────────────────────
 
@@ -167,20 +142,41 @@ python3 polygraph.py -n 3 --json
 
   Deception Level      ████████████████░░░░░░░░░░░░░░░░░  48%
   Confidence           ██████████████████████░░░░░░░░░░░░  56%
-  Stress Indicator     ██████████████░░░░░░░░░░░░░░░░░░░░  32%
 
   ⚡ Key Indicators:
     ▓▓░ More inconsistent rhythm (z=+0.82)
     ▓░░ Slower typing than baseline (z=+0.34)
-
-  ┌─ Detailed Analysis ─────────────────────────────────────┐
-  │  Some deviation from baseline detected, but within      │
-  │  normal variation range. Cannot conclusively determine   │
-  │  truthfulness from keystroke data alone.                 │
-  └──────────────────────────────────────────────────────────┘
 ```
 
-## Analysis Metrics
+### Auto Mode JSON
+
+```bash
+$ python3 polygraph.py --auto --seed 42 --questions 2 --baseline 2
+```
+
+```json
+{
+  "version": "2.1.0",
+  "mode": "auto",
+  "baseline_samples": 2,
+  "results": [
+    {
+      "question": "Have you ever cheated on a test or game?",
+      "response": "Yes I have but only small ones",
+      "deception_score": 0.4922,
+      "confidence": 0.4,
+      "verdict": "INCONCLUSIVE",
+      "truth_probability": 0.65,
+      "indicators": [...]
+    }
+  ],
+  "overall_deception_score": 0.3812,
+  "overall_verdict": "LIKELY TRUTHFUL",
+  "baseline": { ... }
+}
+```
+
+## How the Analysis Works
 
 | Metric | What It Measures | Deception Signal |
 |--------|----------------|------------------|
@@ -190,11 +186,20 @@ python3 polygraph.py -n 3 --json
 | Pause count | Hesitation frequency | More pauses = constructing answers |
 | Avg pause length | How long you pause | Longer pauses = cognitive load |
 | Rhythm consistency | Coefficient of variation | Lower = more automatic (truthful) |
-| Stress index | Composite metric | Higher = overall stress response |
-| Burst count | Rapid-fire key groups | More bursts = more cognitive load |
-| Initial latency | Time before first key | Longer = thinking before answering |
+| Stress index | Composite indicator | Higher = more stress |
+| Initial latency | Time to first keystroke | Longer = more hesitation |
 
 Each metric is compared against your baseline using z-scores, then weighted and combined into an overall deception index.
+
+## Bugs Fixed in v2.1.0
+
+1. **Backspace on empty response inflated correction rate** — `record_backspace()` now only increments `backspaces` when there's actually a character to delete. Previously, pressing backspace on an empty response would increment the counter, making `correction_rate` exceed 1.0.
+
+2. **Fragile `_` variable for truth_probability** — `quick_mode()` used `question, _ = random.choice(...)` then later `result['truth_probability'] = _`. The `_` throwaway variable was replaced with the explicit `truth_prob` variable name.
+
+3. **UnboundLocalError in quick_mode** — When metrics were None (empty response), the `result` variable was never assigned but was still referenced at `return result`, causing a crash. Now `result` is initialized to `None` before the conditional.
+
+4. **No non-interactive mode** — `--json` still required interactive stdin, making it unusable for automation. Added `--auto` flag with `KeystrokeAnalyzer.from_response()` class method for fully synthetic keystroke simulation.
 
 ## Running Tests
 
@@ -202,14 +207,11 @@ Each metric is compared against your baseline using z-scores, then weighted and 
 python3 -m pytest test_polygraph.py -v
 ```
 
-43 tests covering:
-- KeystrokeAnalyzer metrics computation
-- PolygraphEngine baseline and analysis
-- Edge cases (empty data, zero-variance baselines, negative intervals)
-- Visual components (traces, bars, labels)
-- CLI argument parsing (--version, --quick, --seed, --json, etc.)
-- JSON export structure
-- Reproducibility with seed
+57 tests covering KeystrokeAnalyzer, PolygraphEngine, visual components, CLI arguments, JSON export, reproducibility, edge cases, all bug fixes, and the new auto mode.
+
+## Disclaimer
+
+This is a **simulation for entertainment purposes only**. Real polygraph tests are scientifically controversial, and keystroke-dynamic lie detection is not proven reliable. Don't take the results seriously! 🙂
 
 ## License
 

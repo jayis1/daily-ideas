@@ -32,7 +32,7 @@ import os
 import json
 import argparse
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 
 # ─── ANSI Helpers ──────────────────────────────────────────────────────────
 
@@ -192,11 +192,16 @@ class KeystrokeAnalyzer:
         self.response += char
 
     def record_backspace(self):
-        """Record a backspace keypress."""
-        now = time.time()
-        self.key_times.append((now, 'BACKSPACE'))
-        self.backspaces += 1
+        """Record a backspace keypress.
+
+        Only counts the backspace if there is a character to delete.
+        Backspaces on an empty response are ignored to prevent inflating
+        the correction rate beyond 1.0.
+        """
         if self.response:
+            now = time.time()
+            self.key_times.append((now, 'BACKSPACE'))
+            self.backspaces += 1
             self.response = self.response[:-1]
 
     def finish(self):
@@ -281,6 +286,40 @@ class KeystrokeAnalyzer:
             if dt > gap_threshold:
                 bursts += 1
         return bursts
+
+    @classmethod
+    def from_response(cls, response, base_interval=0.08, variation=0.02):
+        """Create an analyzer with synthetic keystroke timing from a response string.
+
+        Useful for non-interactive / automated mode where no real keystrokes
+        are captured. Simulates realistic typing patterns with natural variation.
+
+        Args:
+            response: The text response to simulate
+            base_interval: Average time between keystrokes in seconds
+            variation: Standard deviation for keystroke timing variation
+
+        Returns:
+            A KeystrokeAnalyzer with metrics already computed.
+        """
+        analyzer = cls()
+        base_time = time.time()
+        analyzer.start_time = base_time
+        analyzer.key_times = [(base_time, None)]
+
+        t = base_time
+        for i, ch in enumerate(response):
+            dt = max(0.01, random.gauss(base_interval, variation))
+            # Add occasional pauses to simulate natural typing
+            if random.random() < 0.08:
+                dt += random.uniform(0.3, 0.8)
+            t += dt
+            analyzer.key_times.append((t, ch))
+            analyzer.total_chars += 1
+            analyzer.response += ch
+
+        analyzer.finish()
+        return analyzer
 
 
 class PolygraphEngine:
@@ -1057,7 +1096,7 @@ def quick_mode(quiet=False, json_output=False):
         reset()
         print()
 
-    question, _ = random.choice(EXAM_QUESTIONS)
+    question, truth_prob = random.choice(EXAM_QUESTIONS)
 
     engine = PolygraphEngine()
 
@@ -1140,13 +1179,14 @@ def quick_mode(quiet=False, json_output=False):
     analyzer.finish()
 
     metrics = analyzer.get_metrics()
+    result = None
     if metrics:
         result = engine.analyze(metrics)
         result['question'] = question
         result['response'] = response
         result['response_length'] = metrics['response_length']
         result['typing_speed'] = metrics['typing_speed_cps']
-        result['truth_probability'] = _
+        result['truth_probability'] = truth_prob
 
         if json_output:
             json_data = {
@@ -1178,6 +1218,17 @@ def quick_mode(quiet=False, json_output=False):
         time.sleep(0.5 if quiet else 1.5)
 
         print_deception_result(result, quiet=quiet)
+    else:
+        if not json_output:
+            red(); print("  ✗ Response too short for analysis"); reset()
+        if json_output:
+            return {
+                'version': __version__,
+                'mode': 'quick',
+                'baseline_samples': len(engine.baseline_metrics),
+                'results': [],
+                'error': 'Response too short for analysis',
+            }
 
     if not json_output:
         dim()
@@ -1186,6 +1237,156 @@ def quick_mode(quiet=False, json_output=False):
         input()
 
     return result
+
+
+# ─── Auto Mode (Non-Interactive) ────────────────────────────────────────────
+
+# Sample responses for auto mode baseline questions
+AUTO_BASELINE_RESPONSES = [
+    "My name is Alex",
+    "New York",
+    "Blue",
+    "Ten fingers",
+    "Saturday",
+    "Four",
+    "Earth",
+    "Spring",
+    "Cold",
+    "Four legs",
+    "Washington DC",
+    "Green",
+    "Pizza",
+    "Thursday",
+    "English",
+]
+
+AUTO_EXAM_RESPONSES = [
+    "Yes I have but only small ones",
+    "Mostly yes but not always",
+    "Maybe once or twice when I was younger",
+    "No I am terrible at lying",
+    "I would never do that",
+    "It depends on the situation",
+    "Not that I can recall",
+    "I always try to be honest",
+    "Never I always studied hard",
+    "Most people would say yes",
+    "That cookie was mine and I admit it",
+    "I try my best to return things on time",
+    "Honestly yes sometimes I say that",
+    "Not really I try to be genuine",
+    "No I respect people's privacy",
+    "Of course I do every time",
+    "Guilty as charged on that one",
+    "I would rather be honest even if it hurts",
+    "No I keep every gift I receive",
+    "Yes sometimes I nod along to avoid conflict",
+    "My profile is one hundred percent accurate",
+    "Mostly yes I follow the rules",
+    "Only when the joke is from my boss",
+    "No I always confront people directly",
+    "I would never read someone's private journal",
+]
+
+
+def auto_mode(num_questions=6, num_baseline=4, seed=None):
+    """Run a fully automated polygraph simulation with synthetic responses.
+
+    No user input required — all responses are generated automatically with
+    simulated keystroke timing. Outputs JSON-compatible results.
+
+    Args:
+        num_questions: number of exam questions (1–10)
+        num_baseline: number of baseline calibration questions (2–6)
+        seed: random seed for reproducibility
+
+    Returns:
+        dict with full results suitable for JSON output
+    """
+    if seed is not None:
+        random.seed(seed)
+
+    num_questions = max(1, min(10, num_questions))
+    num_baseline = max(2, min(6, num_baseline))
+
+    engine = PolygraphEngine()
+
+    # Phase 1: Baseline calibration with synthetic responses
+    baseline_questions = random.sample(BASELINE_QUESTIONS, min(num_baseline, len(BASELINE_QUESTIONS)))
+    for i, question in enumerate(baseline_questions):
+        response = AUTO_BASELINE_RESPONSES[i % len(AUTO_BASELINE_RESPONSES)]
+        analyzer = KeystrokeAnalyzer.from_response(response, base_interval=0.07, variation=0.015)
+        metrics = analyzer.get_metrics()
+        if metrics:
+            engine.add_baseline(metrics)
+
+    # Phase 2: Exam with synthetic responses
+    exam_questions = random.sample(EXAM_QUESTIONS, min(num_questions, len(EXAM_QUESTIONS)))
+    results = []
+
+    for i, (question, truth_prob) in enumerate(exam_questions):
+        # Simulate more varied/deceptive responses for exam questions
+        # Add longer pauses and more variation to simulate stress
+        response = AUTO_EXAM_RESPONSES[i % len(AUTO_EXAM_RESPONSES)]
+        # Vary the typing pattern: more pauses and variation for higher truth_prob questions
+        base_interval = 0.08 + random.uniform(0, 0.04)
+        variation = 0.02 + random.uniform(0, 0.02)
+        analyzer = KeystrokeAnalyzer.from_response(response, base_interval=base_interval, variation=variation)
+        metrics = analyzer.get_metrics()
+
+        if metrics:
+            result = engine.analyze(metrics)
+            result['question'] = question
+            result['response'] = response
+            result['response_length'] = metrics['response_length']
+            result['typing_speed'] = metrics['typing_speed_cps']
+            result['truth_probability'] = truth_prob
+            results.append(result)
+
+    if not results:
+        return {
+            'version': __version__,
+            'mode': 'auto',
+            'baseline_samples': len(engine.baseline_metrics),
+            'results': [],
+            'error': 'No valid responses generated',
+        }
+
+    baseline_stats = engine.get_baseline_stats()
+    avg_deception = statistics.mean([r['deception_score'] for r in results])
+
+    json_data = {
+        'version': __version__,
+        'mode': 'auto',
+        'baseline_samples': len(engine.baseline_metrics),
+        'results': [{
+            'question': r['question'],
+            'response': r['response'],
+            'response_length': r.get('response_length', 0),
+            'typing_speed_cps': r.get('typing_speed', 0),
+            'deception_score': round(r['deception_score'], 4),
+            'confidence': round(r['confidence'], 4),
+            'verdict': format_deception_label(r['deception_score'])[0],
+            'truth_probability': r.get('truth_probability', 0),
+            'indicators': [
+                {'description': desc, 'score': round(sc, 4), 'z_score': round(z, 4)}
+                for desc, sc, z in r['indicators']
+            ],
+            'metric_zscores': {
+                k: round(v, 4) for k, v in r.get('metric_zscores', {}).items()
+            },
+        } for r in results],
+        'overall_deception_score': round(avg_deception, 4),
+        'overall_verdict': format_deception_label(avg_deception)[0],
+    }
+
+    if baseline_stats:
+        json_data['baseline'] = {
+            k: {'mean': round(v['mean'], 6), 'std': round(v['std'], 6)}
+            for k, v in baseline_stats.items()
+        }
+
+    return json_data
 
 
 # ─── Entry Point ────────────────────────────────────────────────────────────
@@ -1209,8 +1410,14 @@ def main():
                         help='Reduce delays and animations for faster experience')
     parser.add_argument('--json', '-j', action='store_true',
                         help='Output results as JSON (for programmatic use)')
+    parser.add_argument('--auto', '-a', action='store_true',
+                        help='Auto mode: run non-interactively with simulated responses (implies --json)')
 
     args = parser.parse_args()
+
+    # Auto mode implies JSON output
+    if args.auto:
+        args.json = True
 
     if args.seed is not None:
         random.seed(args.seed)
@@ -1220,7 +1427,15 @@ def main():
     args.baseline = max(2, min(6, args.baseline))
 
     try:
-        if args.quick:
+        if args.auto:
+            result = auto_mode(
+                num_questions=args.questions,
+                num_baseline=args.baseline,
+                seed=args.seed,
+            )
+            if result:
+                print(json.dumps(result, indent=2))
+        elif args.quick:
             result = quick_mode(quiet=args.quiet, json_output=args.json)
             if args.json and result:
                 print(json.dumps(result, indent=2))
