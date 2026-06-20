@@ -47,7 +47,7 @@ import sys
 import time
 from datetime import datetime
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 
 # ─── Configuration ────────────────────────────────────────────────────────
 
@@ -345,6 +345,15 @@ class VolcanoSimulator:
             intensity = random.uniform(lo, hi)
         intensity = max(0.0, min(1.0, intensity))
 
+        # Very low intensity (< 0.05) triggers a brief rumble then subsides
+        if intensity < 0.05:
+            self.eruption_phase = "subsiding"
+            self.target_intensity = 0.0
+            self.seismic_activity = min(1.0, intensity * 2)
+            self.total_eruptions += 1
+            self.eruption_log.append((self.frame, self.eruption_type, intensity))
+            return
+
         self.eruption_phase = "building"
         self.target_intensity = intensity
         self.seismic_activity = min(1.0, intensity * 0.7)
@@ -401,7 +410,9 @@ class VolcanoSimulator:
             self.eruption_intensity += 0.02
             self.seismic_activity = min(1.0, self.seismic_activity + 0.01)
             self.shake_intensity = self.seismic_activity * 0.5 * shake_mult
-            if self.eruption_intensity >= self.target_intensity * 0.6:
+            # Transition to erupting when we reach at least 60% of target or a minimum of 0.05
+            threshold = max(0.05, self.target_intensity * 0.6)
+            if self.eruption_intensity >= threshold:
                 self.eruption_phase = "erupting"
 
         elif self.eruption_phase == "erupting":
@@ -647,11 +658,9 @@ class VolcanoSimulator:
         color_buf = [[0 for _ in range(self.width)] for _ in range(self.height)]
         bg_buf = [[None for _ in range(self.width)] for _ in range(self.height)]
 
-        # Sky color with smooth transition
-        if self.day_transition > 0.5:
-            sky_color = SKY_DAY
-        else:
-            sky_color = SKY_NIGHT
+        # Sky color with smooth day/night blending
+        # Interpolate between night (16) and day (195) based on day_transition
+        sky_color = int(SKY_NIGHT + (SKY_DAY - SKY_NIGHT) * self.day_transition)
 
         # Fill background
         for y in range(self.height):
@@ -659,6 +668,8 @@ class VolcanoSimulator:
                 bg_buf[y][x] = sky_color
 
         # Draw terrain (mountain)
+        # Use a deterministic seed for mountain chars so they don't flicker
+        mt_rng = random.Random(self.seed if self.seed is not None else 42)
         for x in range(self.width):
             terrain_y = self.terrain[x]
             # Mountain face
@@ -667,11 +678,18 @@ class VolcanoSimulator:
                     continue
                 depth = y - terrain_y
                 if depth < 3:
-                    buf[y][x] = random.choice(MOUNTAIN_CHARS[:2]) if self.frame % 5 == 0 else "▓"
-                    color_buf[y][x] = 239 if self.is_day else 235
+                    # Use deterministic char based on position so it doesn't flicker
+                    char_idx = (x + y * 7) % len(MOUNTAIN_CHARS[:2])
+                    buf[y][x] = MOUNTAIN_CHARS[:2][char_idx]
+                    # Blend mountain colors with day/night
+                    day_color = 239
+                    night_color = 235
+                    color_buf[y][x] = int(night_color + (day_color - night_color) * self.day_transition)
                 else:
                     buf[y][x] = "░" if depth > 5 else "▒"
-                    color_buf[y][x] = 236 if self.is_day else 233
+                    day_color = 236
+                    night_color = 233
+                    color_buf[y][x] = int(night_color + (day_color - night_color) * self.day_transition)
 
         # Crater glow during eruption
         if self.eruption_intensity > 0.1:
@@ -735,18 +753,43 @@ class VolcanoSimulator:
 
         # Night stars
         if not self.is_day:
-            random.seed(self.frame // 50)  # Stars twinkle slowly
+            star_rng = random.Random(self.frame // 50)  # Stars twinkle slowly
             num_stars = self.width // 3
             for _ in range(num_stars):
-                sx = random.randint(0, self.width - 1)
+                sx = star_rng.randint(0, self.width - 1)
                 # Only in sky (above terrain)
                 if self.terrain[min(sx, self.width - 1)] > 2:
-                    sy = random.randint(0, self.terrain[min(sx, self.width - 1)] - 2)
+                    sy = star_rng.randint(0, self.terrain[min(sx, self.width - 1)] - 2)
                     if 0 <= sy < self.height and buf[sy][sx] == ' ':
-                        if random.random() < 0.3:
-                            buf[sy][sx] = random.choice(["·", "•", "✦", "⋆"])
-                            color_buf[sy][sx] = random.choice([254, 255, 229, 230])
-            random.seed()  # Reset seed
+                        if star_rng.random() < 0.3:
+                            buf[sy][sx] = star_rng.choice(["·", "•", "✦", "⋆"])
+                            color_buf[sy][sx] = star_rng.choice([254, 255, 229, 230])
+
+        # Apply earthquake shake offset to the buffer
+        if self.shake_intensity > 0.01:
+            sx = self.shake_x
+            sy = self.shake_y
+            if sx != 0 or sy != 0:
+                # Shift buffer contents by shake offset
+                new_buf = [[' ' for _ in range(self.width)] for _ in range(self.height)]
+                new_color = [[0 for _ in range(self.width)] for _ in range(self.height)]
+                new_bg = [[None for _ in range(self.width)] for _ in range(self.height)]
+                for y in range(self.height):
+                    for x in range(self.width):
+                        # Source position (shifted opposite to shake)
+                        src_y = y - sy
+                        src_x = x - sx
+                        if 0 <= src_y < self.height and 0 <= src_x < self.width:
+                            new_buf[y][x] = buf[src_y][src_x]
+                            new_color[y][x] = color_buf[src_y][src_x]
+                            new_bg[y][x] = bg_buf[src_y][src_x]
+                        else:
+                            new_buf[y][x] = ' '
+                            new_color[y][x] = 0
+                            new_bg[y][x] = sky_color
+                buf = new_buf
+                color_buf = new_color
+                bg_buf = new_bg
 
         # Build output string
         lines = []
@@ -768,7 +811,7 @@ class VolcanoSimulator:
         return lines
 
     def render_stats(self):
-        """Render stats panel at the bottom."""
+        """Render stats panel at the bottom, adapting to terminal width."""
         phase_colors = {
             "dormant": 34, "building": 226,
             "erupting": 196, "subsiding": 208
@@ -782,8 +825,10 @@ class VolcanoSimulator:
         color = phase_colors.get(phase, 255)
         label = phase_labels.get(phase, phase.upper())
 
+        # Adapt bar length to terminal width
+        bar_len = max(8, min(20, self.width // 5))
+
         # Seismic bar
-        bar_len = 20
         filled = int(self.seismic_activity * bar_len)
         seismic_bar = "█" * filled + "░" * (bar_len - filled)
 
@@ -816,10 +861,13 @@ class VolcanoSimulator:
             f"Max VEI: {self.max_vei:.0f}"
         )
 
-        # Controls line
-        stats3 = (
-            f"[SPACE]Erupt [+/-]Intensity [t]Type [r]Regen [d]Day/Night [s]Screenshot [q]uit"
-        )
+        # Controls line — adapt to width
+        full_controls = "[SPACE]Erupt [+/-]Intensity [t]Type [r]Regen [d]Day/Night [s]Screenshot [q]uit"
+        short_controls = "[SPACE]Erupt [+/-]Int [t]Type [r]Regen [d]Night [s]Save [q]uit"
+        if self.width < 70:
+            stats3 = short_controls
+        else:
+            stats3 = full_controls
 
         return stats1, stats2, stats3
 
@@ -838,8 +886,8 @@ class VolcanoSimulator:
         lines = self.render()
         stats1, stats2, stats3 = self.render_stats()
 
-        # Clear screen and render
-        output = "\033[H"  # Move cursor to home
+        # Move cursor home and clear to end of screen to remove stale content
+        output = "\033[H\033[J"
         output += "\n".join(lines)
         separator = "─" * min(self.width, 120)
         output += "\n" + separator + "\n"

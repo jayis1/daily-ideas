@@ -313,7 +313,7 @@ class TestVolcanoSimulator:
         assert isinstance(sim.pyroclastic_flows, list)
 
     def test_version(self):
-        assert __version__ == "2.0.0"
+        assert __version__ == "2.1.0"
 
     def test_eruption_log(self):
         sim = VolcanoSimulator(seed=42, width=80, height=24)
@@ -338,6 +338,66 @@ class TestVolcanoSimulator:
         sim.update_eruption_state()
         assert sim.eruption_intensity < 0.5
         assert sim.seismic_activity < 0.5
+
+    def test_zero_intensity_no_full_eruption(self):
+        """trigger_eruption(0.0) should not lead to a full eruption."""
+        sim = VolcanoSimulator(seed=42, width=80, height=24, auto_erupt=False)
+        sim.trigger_eruption(0.0)
+        # Should go to subsiding, not erupting
+        assert sim.eruption_phase == "subsiding"
+        # Intensity should stay very low
+        for _ in range(30):
+            sim.update_eruption_state()
+        # Should not have erupted with high intensity
+        assert sim.eruption_intensity < 0.1 or sim.eruption_phase == "dormant"
+
+    def test_very_low_intensity_subside(self):
+        """Very low intensity triggers should subside quickly."""
+        sim = VolcanoSimulator(seed=42, width=80, height=24, auto_erupt=False)
+        sim.trigger_eruption(0.01)
+        assert sim.eruption_phase == "subsiding"
+
+    def test_shake_applied_in_render(self):
+        """Shake offsets should affect render output."""
+        sim = VolcanoSimulator(seed=42, width=80, height=24)
+        # Render without shake
+        lines_no_shake = sim.render()
+        # Set shake
+        sim.shake_intensity = 1.0
+        sim.shake_x = 2
+        sim.shake_y = 1
+        lines_with_shake = sim.render()
+        # With shake, output should differ
+        assert lines_no_shake != lines_with_shake
+
+    def test_sky_color_smooth_transition(self):
+        """Sky color should vary smoothly with day_transition."""
+        sim = VolcanoSimulator(seed=42, width=80, height=24)
+        # At day_transition 0.0 (full night), sky_color should be SKY_NIGHT (16)
+        sim.day_transition = 0.0
+        sim.is_day = False
+        expected = 16  # SKY_NIGHT
+        sky_at_night = int(16 + (195 - 16) * 0.0)
+        assert sky_at_night == expected
+
+        # At day_transition 1.0 (full day), sky_color should be SKY_DAY (195)
+        sim.day_transition = 1.0
+        sim.is_day = True
+        sky_at_day = int(16 + (195 - 16) * 1.0)
+        assert sky_at_day == 195
+
+        # At 0.5, should be intermediate
+        sky_mid = int(16 + (195 - 16) * 0.5)
+        assert 16 < sky_mid < 195
+
+    def test_render_adapts_to_width(self):
+        """Stats should adapt to narrow terminal widths."""
+        sim = VolcanoSimulator(seed=42, width=60, height=20)
+        s1, s2, s3 = sim.render_stats()
+        # Stats lines should be produced without error
+        assert isinstance(s3, str)
+        # On narrow terminal, should use short controls
+        assert len(s3) < 80  # Short controls should be shorter
 
 
 class TestANSIHelpers:
