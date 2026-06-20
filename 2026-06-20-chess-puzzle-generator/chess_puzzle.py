@@ -14,7 +14,7 @@ import time
 import argparse
 import json
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 # --- Chess Engine Core ---
 
@@ -120,7 +120,10 @@ class Board:
 
         # Check pawn attacks
         pawn = 'P' if by_color == 'w' else 'p'
-        pawn_dr = -1 if by_color == 'w' else 1
+        # White pawns attack upward (from higher row to lower row),
+        # so to find a white pawn that attacks (r,c), look at (r+1, c±1).
+        # Black pawns attack downward, so look at (r-1, c±1).
+        pawn_dr = 1 if by_color == 'w' else -1
         for dc in [-1, 1]:
             nr, nc = r + pawn_dr, c + dc
             if 0 <= nr < 8 and 0 <= nc < 8 and self.grid[nr][nc] == pawn:
@@ -517,30 +520,6 @@ def find_best_move(board, color, max_half_moves=5):
 
 # --- Puzzle Generation ---
 
-# Curated mate-in-2 patterns that are verified to work
-MATE_IN_2_PATTERNS = [
-    # Pattern 0: Smothered mate - Qg8+! Rxg8 Nf7# (or similar)
-    # Kh8, pg8, pg7, ph7, Nf6, Qd4, Ke1
-    lambda b: _setup_pattern(b,
-        white_pieces=[(7, 4, 'K'), (4, 3, 'Q'), (2, 5, 'N')],
-        black_pieces=[(0, 7, 'k'), (0, 6, 'p'), (1, 6, 'p'), (1, 7, 'p')]),
-    # Pattern 1: Smothered mate variant - Qf5
-    lambda b: _setup_pattern(b,
-        white_pieces=[(7, 4, 'K'), (3, 5, 'Q'), (2, 5, 'N')],
-        black_pieces=[(0, 7, 'k'), (0, 6, 'p'), (1, 6, 'p'), (1, 7, 'p')]),
-    # Pattern 2: Arabian mate - Rook + Knight
-    # Kh8, ph7, pg7, Nf6, Rc1, Ka1
-    lambda b: _setup_pattern(b,
-        white_pieces=[(7, 0, 'K'), (7, 2, 'R'), (2, 5, 'N')],
-        black_pieces=[(0, 7, 'k'), (1, 7, 'p'), (1, 6, 'p')]),
-    # Pattern 3: Back rank mate with Rook
-    # Kg1, Rd1 vs Kh8, Rg8, ph7, pg7, pf7
-    lambda b: _setup_pattern(b,
-        white_pieces=[(7, 6, 'K'), (7, 3, 'R')],
-        black_pieces=[(0, 7, 'k'), (1, 5, 'p'), (1, 6, 'p'), (1, 7, 'p')]),
-]
-
-
 def _setup_pattern(board, white_pieces, black_pieces):
     """Place pieces on the board. Returns the board."""
     for r, c, piece in white_pieces:
@@ -612,60 +591,168 @@ def generate_mate_in_1():
 
 
 def generate_mate_in_2():
-    """Generate a mate-in-2 puzzle using curated patterns.
+    """Generate a mate-in-2 puzzle by random placement and verification.
 
-    Each pattern is verified to be mate-in-2 but NOT mate-in-1.
-    Returns (board, mate_depth) where mate_depth is 2.
+    Uses random piece placement and verifies the position has a forced
+    mate in exactly 2 moves (4 half-moves) but not mate in 1.
+    Falls back to a known verified position if generation fails or times out.
     """
-    pattern_idx = random.randint(0, len(MATE_IN_2_PATTERNS) - 1)
-    board = MATE_IN_2_PATTERNS[pattern_idx](Board())
+    start_time = time.time()
+    max_time = 30  # Maximum seconds to spend searching
 
-    # Verify: not already mate in 1
-    m1 = find_mate_in_1_moves(board, 'w')
-    if m1:
-        # Pattern might be mate in 1 — fall back to a different pattern or mate-in-1
-        # Try other patterns
-        for idx in range(len(MATE_IN_2_PATTERNS)):
-            if idx == pattern_idx:
-                continue
-            test_board = MATE_IN_2_PATTERNS[idx](Board())
-            if not find_mate_in_1_moves(test_board, 'w'):
-                return test_board, 2
-        # All patterns give mate in 1? Fall back
-        return generate_mate_in_1()
+    for _ in range(50):
+        if time.time() - start_time > max_time:
+            break
+        board = Board()
+        board.turn = 'w'
 
-    return board, 2
+        # Place black king in corner or edge
+        bk_r = random.choice([0, 7])
+        bk_c = random.choice([0, 1, 6, 7])
+        board.set(bk_r, bk_c, 'k')
+
+        # Place white king at safe distance
+        for _ in range(50):
+            wk_r, wk_c = random.randint(0, 7), random.randint(0, 7)
+            if abs(wk_r - bk_r) + abs(wk_c - bk_c) >= 3 and board.get(wk_r, wk_c) is None:
+                board.set(wk_r, wk_c, 'K')
+                break
+
+        # Add restricting pawns for black (helps create back-rank mates)
+        pawn_dir = 1 if bk_r < 4 else -1
+        for dc in [-1, 0, 1]:
+            pr = bk_r + pawn_dir
+            pc = bk_c + dc
+            if 0 <= pr < 8 and 0 <= pc < 8 and board.get(pr, pc) is None:
+                if random.random() < 0.6:
+                    board.set(pr, pc, 'p')
+
+        # Place 1-2 white attacking pieces (avoid giving check)
+        piece_types = random.choice([['Q'], ['R', 'R'], ['Q', 'R'], ['Q', 'B']])
+        for piece_type in piece_types:
+            for _ in range(30):
+                pr = random.randint(0, 7)
+                pc = random.randint(0, 7)
+                if board.get(pr, pc) is None:
+                    if piece_type in ('Q', 'R') and (pr == bk_r or pc == bk_c):
+                        continue
+                    if piece_type in ('Q', 'B') and abs(pr - bk_r) == abs(pc - bk_c):
+                        continue
+                    board.set(pr, pc, piece_type)
+                    break
+
+        if board.in_check('b'):
+            continue
+
+        # Must not be mate in 1
+        m1 = find_mate_in_1_moves(board, 'w')
+        if m1:
+            continue
+
+        # Check for forced mate in exactly 2 moves (4 half-moves)
+        depth = find_forced_mate(board, 'w', max_half_moves=5)
+        if depth == 4:
+            return board, 2
+
+    # Fallback: verified smothered mate-in-2 position
+    # 5r1k/6pp/7N/3Q4/8/8/8/6K1 w
+    # Kh8, Rf8, pg7, ph7 vs Kg1, Qd5, Nh6
+    # 1.Qg8+! Rxg8 (only move) 2.Nf7# (smothered mate)
+    board = Board()
+    board.turn = 'w'
+    board.set(7, 6, 'K')   # Kg1
+    board.set(3, 3, 'Q')    # Qd5
+    board.set(2, 7, 'N')    # Nh6
+    board.set(0, 7, 'k')    # Kh8
+    board.set(0, 5, 'r')    # Rf8
+    board.set(1, 6, 'p')    # pg7
+    board.set(1, 7, 'p')    # ph7
+    # Verify this fallback is correct
+    if not find_mate_in_1_moves(board, 'w'):
+        depth = find_forced_mate(board, 'w', max_half_moves=5)
+        if depth == 4:
+            return board, 2
+
+    # Ultimate fallback - just generate a mate-in-1 instead
+    return generate_mate_in_1()
 
 
 def generate_mate_in_3():
-    """Generate a mate-in-3 puzzle using extended patterns with more pieces.
+    """Generate a mate-in-3 puzzle by random placement and verification.
 
-    These positions require 3 full moves (5 half-moves) to force checkmate.
+    Uses random piece placement and verifies the position has a forced
+    mate in exactly 3 moves (5 half-moves) but not shorter.
+    Falls back to generate_mate_in_2() if generation fails or times out.
     """
-    patterns = [
-        # Kg1, Qd1, Bg5 vs Kh8, pg7, ph7 - Queen + Bishop mate
-        lambda b: _setup_pattern(b,
-            white_pieces=[(7, 6, 'K'), (7, 3, 'Q'), (3, 6, 'B')],
-            black_pieces=[(0, 7, 'k'), (1, 6, 'p'), (1, 7, 'p')]),
-        # Kc1, Qd1, Re1 vs Kg8, f7, g7, h7
-        lambda b: _setup_pattern(b,
-            white_pieces=[(7, 2, 'K'), (7, 3, 'Q'), (7, 4, 'R')],
-            black_pieces=[(0, 6, 'k'), (1, 5, 'p'), (1, 6, 'p'), (1, 7, 'p')]),
-    ]
-    pattern_idx = random.randint(0, len(patterns) - 1)
-    board = patterns[pattern_idx](Board())
+    start_time = time.time()
+    max_time = 30  # Maximum seconds to spend searching
 
-    # Verify it's not already a shorter mate
-    m1 = find_mate_in_1_moves(board, 'w')
-    if m1:
-        # Fall back to generating a mate-in-2
-        return generate_mate_in_2()
+    for attempt in range(15):
+        if time.time() - start_time > max_time:
+            break
 
-    depth = find_forced_mate(board, 'w', max_half_moves=7)
-    if depth > 0:
-        return board, (depth + 1) // 2  # Convert half-moves to full moves
+        board = Board()
+        board.turn = 'w'
 
-    # Fallback
+        # Place black king in corner or edge
+        bk_r = random.choice([0, 7])
+        bk_c = random.choice([0, 1, 6, 7])
+        board.set(bk_r, bk_c, 'k')
+
+        # Place white king at safe distance
+        for _ in range(50):
+            wk_r, wk_c = random.randint(0, 7), random.randint(0, 7)
+            if abs(wk_r - bk_r) + abs(wk_c - bk_c) >= 3 and board.get(wk_r, wk_c) is None:
+                board.set(wk_r, wk_c, 'K')
+                break
+
+        # Add restricting pawns for black
+        pawn_dir = 1 if bk_r < 4 else -1
+        for dc in [-1, 0, 1]:
+            pr = bk_r + pawn_dir
+            pc = bk_c + dc
+            if 0 <= pr < 8 and 0 <= pc < 8 and board.get(pr, pc) is None:
+                if random.random() < 0.5:
+                    board.set(pr, pc, 'p')
+
+        # Place 2-3 white pieces (more pieces for deeper mate)
+        piece_types = random.choice([['Q', 'R'], ['Q', 'B'], ['Q', 'N'], ['R', 'R', 'N']])
+        for piece_type in piece_types:
+            for _ in range(30):
+                pr = random.randint(0, 7)
+                pc = random.randint(0, 7)
+                if board.get(pr, pc) is None:
+                    if piece_type in ('Q', 'R') and (pr == bk_r or pc == bk_c):
+                        continue
+                    if piece_type in ('Q', 'B') and abs(pr - bk_r) == abs(pc - bk_c):
+                        continue
+                    if piece_type == 'N' and (abs(pr - bk_r), abs(pc - bk_c)) in [(1, 2), (2, 1)]:
+                        continue
+                    board.set(pr, pc, piece_type)
+                    break
+
+        if board.in_check('b'):
+            continue
+
+        # Must not be mate in 1
+        m1 = find_mate_in_1_moves(board, 'w')
+        if m1:
+            continue
+
+        # Check not mate in 2
+        depth2 = find_forced_mate(board, 'w', max_half_moves=5)
+        if 0 < depth2 <= 4:
+            continue
+
+        # Check for forced mate in 3 moves (5 half-moves)
+        depth3 = find_forced_mate(board, 'w', max_half_moves=7)
+        if depth3 == 5:
+            return board, 3
+
+        if time.time() - start_time > max_time:
+            break
+
+    # Fallback to mate-in-2 if no mate-in-3 found
     return generate_mate_in_2()
 
 
@@ -841,7 +928,8 @@ def play_puzzle(board, mate_depth, puzzle_id=None):
                     best_move = m
                     best_depth = 1
                     break
-                mc = find_forced_mate(nb, 'w', max_half_moves=5)
+                search_depth = max(5, mate_depth * 2 + 1)
+                mc = find_forced_mate(nb, 'w', max_half_moves=search_depth)
                 if mc != -1 and mc < best_depth:
                     best_depth = mc
                     best_move = m
@@ -971,12 +1059,14 @@ def play_puzzle(board, mate_depth, puzzle_id=None):
             is_correct = True
         else:
             # Check if this move keeps the forced mate sequence alive
+            # Use appropriate search depth based on puzzle difficulty
+            search_depth = max(5, mate_depth * 2 + 1)
             black_moves = nb.generate_legal_moves('b')
             if black_moves:
                 all_good = True
                 for bm in black_moves:
                     nb2 = nb.make_move(bm)
-                    mc = find_forced_mate(nb2, 'w', max_half_moves=5)
+                    mc = find_forced_mate(nb2, 'w', max_half_moves=search_depth)
                     if mc == -1:
                         all_good = False
                         break
