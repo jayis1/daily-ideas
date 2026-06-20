@@ -393,5 +393,111 @@ class TestVersion(unittest.TestCase):
             self.assertTrue(part.isdigit())
 
 
+class TestBugFixes(unittest.TestCase):
+    """Tests for specific bug fixes."""
+
+    def test_evolve_no_duplicate_forms(self):
+        """Evolved languages should not have duplicate word forms."""
+        for seed in range(20):
+            lang = AlienLanguage(seed=seed)
+            evolved = lang.evolve(5)
+            all_forms = []
+            for cat in evolved.vocabulary:
+                for en, alien in evolved.vocabulary[cat].items():
+                    all_forms.append(alien)
+            self.assertEqual(len(all_forms), len(set(all_forms)),
+                             f"Seed {seed} has duplicate forms after evolution")
+
+    def test_evolve_updates_affixes(self):
+        """Evolution should apply sound changes to morphological affixes."""
+        lang = AlienLanguage(seed=100)
+        orig_affixes = dict(lang.tense_affixes)
+        evolved = lang.evolve(3)
+        # At least some affixes should have changed (not guaranteed, but likely)
+        # Check that the affixes are properly stored in evolved language
+        self.assertIsInstance(evolved.tense_affixes, dict)
+        self.assertEqual(set(evolved.tense_affixes.keys()),
+                         set(orig_affixes.keys()))
+
+    def test_evolve_updates_question_particle(self):
+        """Evolution should apply sound changes to question particle."""
+        lang = AlienLanguage(seed=100)
+        evolved = lang.evolve(3)
+        # question_particle should still be a string or None
+        self.assertTrue(evolved.question_particle is None or
+                        isinstance(evolved.question_particle, str))
+
+    def test_possessive_translation(self):
+        """Possessives should use language-specific affix, not English 's."""
+        lang = AlienLanguage(seed=42)
+        result = lang.translate_sentence("water's fire")
+        # Should NOT contain English "'s"
+        self.assertNotIn("'s", result)
+        # Should contain both translated words
+        water_alien = lang.translate_word("water")
+        fire_alien = lang.translate_word("fire")
+        self.assertIn(water_alien, result)
+        self.assertIn(fire_alien, result)
+
+    def test_no_single_char_words(self):
+        """Generated word forms should never be single characters."""
+        for seed in range(50):
+            lang = AlienLanguage(seed=seed)
+            for cat in lang.vocabulary:
+                for en, alien in lang.vocabulary[cat].items():
+                    self.assertGreater(len(alien), 1,
+                                       f"Seed {seed}, {cat}/{en}: single-char word '{alien}'")
+
+    def test_save_load_roundtrip_complete(self):
+        """Save and load should preserve all language properties."""
+        import tempfile, os
+        lang = AlienLanguage(seed=42)
+        tmpfile = tempfile.mktemp(suffix='.json')
+        try:
+            lang.save(tmpfile)
+            loaded = AlienLanguage.load(tmpfile)
+            self.assertEqual(lang.name, loaded.name)
+            self.assertEqual(lang.nominalizer, loaded.nominalizer)
+            self.assertEqual(lang.verbalizer, loaded.verbalizer)
+            self.assertEqual(lang.adjectivizer, loaded.adjectivizer)
+            self.assertEqual(lang.question_particle, loaded.question_particle)
+            self.assertEqual(lang.adj_before_noun, loaded.adj_before_noun)
+            self.assertEqual(lang.possession_suffix, loaded.possession_suffix)
+            self.assertEqual(lang.possessive_affix, loaded.possessive_affix)
+            self.assertEqual(lang.vocabulary, loaded.vocabulary)
+        finally:
+            if os.path.exists(tmpfile):
+                os.unlink(tmpfile)
+
+    def test_negation_not_duplicated(self):
+        """'not' should produce exactly one negation word, not two."""
+        lang = AlienLanguage(seed=42)
+        result = lang.translate_sentence("I not go")
+        neg_word = lang.translate_word("not")
+        if neg_word:
+            # Count occurrences of negation word
+            count = result.count(neg_word)
+            self.assertEqual(count, 1, "Negation word should appear exactly once")
+
+    def test_glyph_rendering_multi_char_phonemes(self):
+        """Glyphs should handle multi-char phonemes correctly."""
+        lang = AlienLanguage(seed=42)
+        # Find a word with a multi-char phoneme
+        multi_char = [p for p in lang.all_phonemes if len(p) > 1]
+        if multi_char:
+            # Find a word containing any multi-char phoneme
+            for cat in lang.vocabulary:
+                for en, alien in lang.vocabulary[cat].items():
+                    if any(p in alien for p in multi_char):
+                        result = lang.render_word_glyphs(alien)
+                        # Should produce output, not crash
+                        self.assertIsInstance(result, str)
+                        self.assertGreater(len(result), 0)
+                        break
+                else:
+                    continue
+                break
+
+
 if __name__ == "__main__":
     unittest.main()

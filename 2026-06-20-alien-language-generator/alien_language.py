@@ -27,7 +27,7 @@ import argparse
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 
 # ─── Phoneme Pools ───────────────────────────────────────────────────────────
 
@@ -303,12 +303,12 @@ class AlienLanguage:
                 self.phoneme_to_char[ph] = ch
                 idx += 1
 
-        # Syllable structure
+        # Syllable structure (avoid bare "V" patterns that produce single-char words)
         self.syllable_patterns = self.rng.choice([
-            ["CV"],                          # Simple
-            ["CV", "CVC"],                    # Medium
-            ["CV", "CVC", "CCV", "V"],        # Complex
-            ["V", "CV", "VC", "CVC"],         # Open
+            ["CV"],                              # Simple
+            ["CV", "CVC"],                        # Medium
+            ["CV", "CVC", "CCV"],                 # Complex (removed bare V)
+            ["CV", "VC", "CVC"],                   # Open (removed bare V)
         ])
 
     def _build_grammar(self):
@@ -347,6 +347,8 @@ class AlienLanguage:
         self.adjectivizer = self._gen_morpheme() if self.rng.random() < 0.6 else None
 
         self.prefix_mode = self.rng.random() < 0.5  # True=prefix, False=suffix
+        # Possessive marker (used when translating English possessives like "water's")
+        self.possessive_affix = self._gen_morpheme()
 
     def _gen_morpheme(self) -> str:
         """Generate a short morpheme for affixes."""
@@ -362,6 +364,10 @@ class AlienLanguage:
                 c2 = self.rng.choice(self.consonants[:6]) if len(self.consonants) > 6 else self.rng.choice(self.consonants)
                 morpheme += c1 + c2
         return morpheme
+
+    def _gen_possessive_marker(self) -> str:
+        """Return the possessive affix for this language."""
+        return self.possessive_affix
 
     def _gen_word_form(self) -> str:
         """Generate a random word form using the language's phonology."""
@@ -492,19 +498,13 @@ class AlienLanguage:
             # Skip English articles (the, a, an)
             if w in ("the", "a", "an"):
                 continue
-            # Handle negation: "not" → standalone
-            if w == "not" or w == "don't" or w == "doesn't":
+            # Handle negation: "not", "don't", "doesn't" → standalone negation word
+            if w in ("not", "don't", "doesn't"):
                 neg_word = self.translate_word("not")
                 if neg_word:
                     translated.append(neg_word)
                 else:
                     translated.append("[not]")
-                continue
-            # Handle "doesn't/don't" followed by verb
-            if w in ("doesn't", "don't"):
-                neg_word = self.translate_word("not")
-                if neg_word:
-                    translated.append(neg_word)
                 continue
 
             alien_w = self.translate_word(w)
@@ -516,10 +516,14 @@ class AlienLanguage:
                 stem = w[:-2]
                 alien_w = self.translate_word(stem)
                 if alien_w:
-                    if self.possession_suffix and not self.prefix_mode:
-                        translated.append(alien_w + "'s")
+                    if self.prefix_mode:
+                        # Prefix possession marker
+                        possessive_marker = self._gen_possessive_marker()
+                        translated.append(possessive_marker + " " + alien_w)
                     else:
-                        translated.append(alien_w + "'s")
+                        # Suffix possession marker
+                        possessive_marker = self._gen_possessive_marker()
+                        translated.append(alien_w + " " + possessive_marker)
                     continue
             # Handle plurals
             if w.endswith("es") and len(w) > 3:
@@ -581,14 +585,23 @@ class AlienLanguage:
 
     def render_word_glyphs(self, alien_word: str) -> str:
         """Render an alien word in the glyph writing system."""
-        # Break word into grapheme-sized chunks for rendering
+        # Break word into phoneme-sized chunks for rendering.
+        # Multi-char phonemes (like "ts", "dʒ") need to be matched as a unit.
+        # Sort phonemes by length (longest first) to greedily match.
+        sorted_phonemes = sorted(self.all_phonemes, key=len, reverse=True)
+
         chunks = []
         i = 0
         while i < len(alien_word):
-            if i + 1 < len(alien_word) and alien_word[i:i+2] in self.phoneme_to_char.values():
-                chunks.append(alien_word[i:i+2])
-                i += 2
-            else:
+            matched = False
+            for ph in sorted_phonemes:
+                if alien_word[i:i+len(ph)] == ph:
+                    chunks.append(ph)
+                    i += len(ph)
+                    matched = True
+                    break
+            if not matched:
+                # Unknown character, skip it
                 chunks.append(alien_word[i])
                 i += 1
 
@@ -758,6 +771,7 @@ class AlienLanguage:
 
         Returns a new AlienLanguage derived from this one with accumulated
         sound changes. Each generation applies one change rule.
+        Sound changes are also applied to morphological affixes and particles.
         """
         if rng is None:
             rng = random.Random()
@@ -767,6 +781,64 @@ class AlienLanguage:
         for cat, words in self.vocabulary.items():
             current_vocab[cat] = dict(words)
 
+        # Also track morphological affixes for sound changes
+        current_affixes = {}
+        for name, affix in self.case_affixes.items():
+            current_affixes[("case", name)] = affix
+        for name, affix in self.tense_affixes.items():
+            current_affixes[("tense", name)] = affix
+        for name, affix in self.number_affixes.items():
+            current_affixes[("number", name)] = affix
+        if self.nominalizer:
+            current_affixes[("deriv", "nominalizer")] = self.nominalizer
+        if self.verbalizer:
+            current_affixes[("deriv", "verbalizer")] = self.verbalizer
+        if self.adjectivizer:
+            current_affixes[("deriv", "adjectivizer")] = self.adjectivizer
+        if self.possessive_affix:
+            current_affixes[("deriv", "possessive")] = self.possessive_affix
+        if self.question_particle:
+            current_affixes[("particle", "question")] = self.question_particle
+
+        # Helper to apply a replacement to both vocab and affixes
+        def apply_replacement(target: str, replacement: str):
+            """Apply a phoneme replacement to vocabulary and affixes."""
+            for cat in current_vocab:
+                for en, alien in list(current_vocab[cat].items()):
+                    new_form = alien.replace(target, replacement)
+                    if new_form != alien:
+                        current_vocab[cat][en] = new_form
+            for key in list(current_affixes.keys()):
+                new_affix = current_affixes[key].replace(target, replacement)
+                current_affixes[key] = new_affix
+
+        # Helper to apply a replacement to first occurrence only
+        def apply_first_replacement(target: str, replacement: str):
+            """Apply a replacement to the first occurrence in each word/affix."""
+            for cat in current_vocab:
+                for en, alien in list(current_vocab[cat].items()):
+                    if target in alien:
+                        idx_pos = alien.index(target)
+                        new_form = alien[:idx_pos] + replacement + alien[idx_pos + len(target):]
+                        current_vocab[cat][en] = new_form
+            for key in list(current_affixes.keys()):
+                affix = current_affixes[key]
+                if target in affix:
+                    idx_pos = affix.index(target)
+                    new_affix = affix[:idx_pos] + replacement + affix[idx_pos + len(target):]
+                    current_affixes[key] = new_affix
+
+        # Helper to apply insertion replacement
+        def apply_insertion(old: str, new: str):
+            """Apply an insertion replacement to vocabulary and affixes."""
+            for cat in current_vocab:
+                for en, alien in list(current_vocab[cat].items()):
+                    if old in alien:
+                        current_vocab[cat][en] = alien.replace(old, new)
+            for key in list(current_affixes.keys()):
+                if old in current_affixes[key]:
+                    current_affixes[key] = current_affixes[key].replace(old, new)
+
         # Track changes
         changes_applied = []
 
@@ -775,18 +847,12 @@ class AlienLanguage:
             change_type = rng.choice(SOUND_CHANGE_TYPES)
 
             if change_type == "lenition":
-                # Apply lenition to a random subset of consonants
                 applicable = [c for c in self.consonants if c in LENITION_MAP]
                 if not applicable:
                     continue
                 target = rng.choice(applicable)
                 replacement = LENITION_MAP[target]
-                # Replace in all words
-                for cat in current_vocab:
-                    for en, alien in list(current_vocab[cat].items()):
-                        new_form = alien.replace(target, replacement)
-                        if new_form != alien:
-                            current_vocab[cat][en] = new_form
+                apply_replacement(target, replacement)
                 changes_applied.append(f"Gen {gen+1}: Lenition /{target}/ → /{replacement}/")
 
             elif change_type == "fortition":
@@ -795,11 +861,7 @@ class AlienLanguage:
                     continue
                 target = rng.choice(applicable)
                 replacement = FORTITION_MAP[target]
-                for cat in current_vocab:
-                    for en, alien in list(current_vocab[cat].items()):
-                        new_form = alien.replace(target, replacement)
-                        if new_form != alien:
-                            current_vocab[cat][en] = new_form
+                apply_replacement(target, replacement)
                 changes_applied.append(f"Gen {gen+1}: Fortition /{target}/ → /{replacement}/")
 
             elif change_type == "vowel_shift":
@@ -810,80 +872,124 @@ class AlienLanguage:
                     continue
                 target = rng.choice(applicable)
                 replacement = shift_map[target]
-                for cat in current_vocab:
-                    for en, alien in list(current_vocab[cat].items()):
-                        new_form = alien.replace(target, replacement)
-                        if new_form != alien:
-                            current_vocab[cat][en] = new_form
+                apply_replacement(target, replacement)
                 changes_applied.append(f"Gen {gen+1}: Vowel shift /{target}/ → /{replacement}/ ({direction})")
 
             elif change_type == "merge":
-                # Two similar phonemes merge
                 if len(self.consonants) < 3:
                     continue
                 c1, c2 = rng.sample(self.consonants, 2)
-                # c2 merges into c1
-                for cat in current_vocab:
-                    for en, alien in list(current_vocab[cat].items()):
-                        new_form = alien.replace(c2, c1)
-                        if new_form != alien:
-                            current_vocab[cat][en] = new_form
+                apply_replacement(c2, c1)
                 changes_applied.append(f"Gen {gen+1}: Merger /{c2}/ → /{c1}/")
 
             elif change_type == "diphthongize":
-                # A vowel becomes a diphthong
                 if not self.vowels:
                     continue
                 target = rng.choice(self.vowels)
                 diphthong = target + rng.choice(["i", "u", "a"])
-                for cat in current_vocab:
-                    for en, alien in list(current_vocab[cat].items()):
-                        # Only diphthongize stressed (first) vowel
-                        if target in alien:
-                            # Replace first occurrence
-                            idx_pos = alien.index(target)
-                            new_form = alien[:idx_pos] + diphthong + alien[idx_pos + len(target):]
-                            current_vocab[cat][en] = new_form
+                apply_first_replacement(target, diphthong)
                 changes_applied.append(f"Gen {gen+1}: Diphthongization /{target}/ → /{diphthong}/")
 
             elif change_type == "insertion":
-                # Insert a vowel between certain consonant clusters
                 if not self.vowels:
                     continue
                 insert_vowel = rng.choice(self.vowels)
-                # Pick a consonant pair to break up
                 if len(self.consonants) < 2:
                     continue
                 c_pair = rng.choice(self.consonants) + rng.choice(self.consonants)
-                for cat in current_vocab:
-                    for en, alien in list(current_vocab[cat].items()):
-                        if c_pair in alien:
-                            new_form = alien.replace(c_pair, c_pair[0] + insert_vowel + c_pair[1])
-                            current_vocab[cat][en] = new_form
+                apply_insertion(c_pair, c_pair[0] + insert_vowel + c_pair[1])
                 changes_applied.append(f"Gen {gen+1}: Epenthesis /{c_pair}/ → /{c_pair[0]}{insert_vowel}{c_pair[1]}/")
 
             elif change_type == "assimilation":
-                # A consonant becomes more like a neighboring consonant
                 if len(self.consonants) < 2:
                     continue
                 c_target = rng.choice(self.consonants)
-                # Find words with double consonant and simplify
-                for cat in current_vocab:
-                    for en, alien in list(current_vocab[cat].items()):
-                        if c_target + c_target in alien:
-                            new_form = alien.replace(c_target + c_target, c_target)
-                            current_vocab[cat][en] = new_form
-                changes_applied.append(f"Gen {gen+1}: Degemination /{c_target}{c_target}/ → /{c_target}/")
+                double = c_target + c_target
+                apply_replacement(double, c_target)
+                changes_applied.append(f"Gen {gen+1}: Degemination /{double}/ → /{c_target}/")
 
         # Create evolved language as a copy of self with evolved vocabulary
         evolved = copy.deepcopy(self)
         evolved.name = self.name + "'"
         # Override vocabulary with evolved forms
         evolved.vocabulary = current_vocab
+
+        # Resolve duplicate word forms created by sound changes (mergers, etc.)
+        # When two English words map to the same alien form, disambiguate
+        # by appending a distinguishing suffix.
+        all_forms: Dict[str, List[Tuple[str, str]]] = {}  # alien_form -> [(cat, en_word)]
+        for cat in evolved.vocabulary:
+            for en, alien in evolved.vocabulary[cat].items():
+                if alien not in all_forms:
+                    all_forms[alien] = []
+                all_forms[alien].append((cat, en))
+
+        # Collect duplicates and fix them (avoid modifying dict during iteration)
+        disambig_vowels = evolved.vowels if evolved.vowels else ["a", "e", "i"]
+        vi = 0
+        duplicates_to_fix = []
+        for alien_form, entries in all_forms.items():
+            if len(entries) > 1:
+                duplicates_to_fix.append((alien_form, entries))
+
+        for alien_form, entries in duplicates_to_fix:
+            for j, (cat, en) in enumerate(entries[1:]):
+                # Try adding a consonant+vowel suffix to make the form unique
+                # First try single vowels, then CV combos
+                new_form = None
+                for v in disambig_vowels:
+                    candidate = alien_form + v
+                    if candidate not in all_forms:
+                        new_form = candidate
+                        break
+                if new_form is None:
+                    # Try CV combos using available consonants
+                    consonants_for_disambig = evolved.consonants[:5] if evolved.consonants else ["k", "t", "p"]
+                    for c in consonants_for_disambig:
+                        for v in disambig_vowels:
+                            candidate = alien_form + c + v
+                            if candidate not in all_forms:
+                                new_form = candidate
+                                break
+                        if new_form:
+                            break
+                if new_form is None:
+                    # Fallback: use a number suffix
+                    new_form = alien_form + str(j + 2)
+                evolved.vocabulary[cat][en] = new_form
+                all_forms[new_form] = [(cat, en)]
+
+        # Rebuild reverse vocabulary
         evolved.reverse_vocab = {}
         for cat in evolved.vocabulary:
             for en, alien in evolved.vocabulary[cat].items():
                 evolved.reverse_vocab[alien] = en
+
+        # Restore evolved morphological affixes
+        evolved.case_affixes = {}
+        evolved.tense_affixes = {}
+        evolved.number_affixes = {}
+        for key, affix in current_affixes.items():
+            category, name = key
+            if category == "case":
+                evolved.case_affixes[name] = affix
+            elif category == "tense":
+                evolved.tense_affixes[name] = affix
+            elif category == "number":
+                evolved.number_affixes[name] = affix
+            elif category == "deriv":
+                if name == "nominalizer":
+                    evolved.nominalizer = affix
+                elif name == "verbalizer":
+                    evolved.verbalizer = affix
+                elif name == "adjectivizer":
+                    evolved.adjectivizer = affix
+                elif name == "possessive":
+                    evolved.possessive_affix = affix
+            elif category == "particle":
+                if name == "question":
+                    evolved.question_particle = affix
+
         evolved.evolution_log = self.evolution_log + changes_applied
         # Update seed for reproducibility of evolved language
         evolved.seed = self.seed + generations
@@ -956,6 +1062,9 @@ class AlienLanguage:
             lines.append('║ ' + pad("  Verbalizer:  '" + self.verbalizer + "'") + '║')
         if self.adjectivizer:
             lines.append('║ ' + pad("  Adjectivizer: '" + self.adjectivizer + "'") + '║')
+        if self.possessive_affix:
+            pos_label = "prefix" if self.prefix_mode else "suffix"
+            lines.append('║ ' + pad("  Possessive:   " + pos_label + " '" + self.possessive_affix + "'") + '║')
         lines.append(f"║ {pad('')}║")
         vocab_count = str(sum(len(v) for v in self.vocabulary.values()))
         lines.append(f"║ {pad('Vocabulary: ' + vocab_count + ' words')}║")
@@ -1026,6 +1135,7 @@ class AlienLanguage:
             "name": self.name,
             "seed": self.seed,
             "culture": self.culture,
+            "cultural_words": self.cultural_words,
             "consonants": self.consonants,
             "vowels": self.vowels,
             "syllable_patterns": self.syllable_patterns,
@@ -1037,9 +1147,16 @@ class AlienLanguage:
             "tenses": self.tenses,
             "numbers": self.numbers,
             "prefix_mode": self.prefix_mode,
+            "adj_before_noun": self.adj_before_noun,
+            "possession_suffix": self.possession_suffix,
+            "question_particle": self.question_particle,
             "case_affixes": self.case_affixes,
             "tense_affixes": self.tense_affixes,
             "number_affixes": self.number_affixes,
+            "nominalizer": self.nominalizer,
+            "verbalizer": self.verbalizer,
+            "adjectivizer": self.adjectivizer,
+            "possessive_affix": self.possessive_affix,
             "vocabulary": self.vocabulary,
             "evolution_log": self.evolution_log,
         }
@@ -1066,6 +1183,7 @@ class AlienLanguage:
         lang = cls(seed=data["seed"])
         lang.name = data["name"]
         lang.culture = data["culture"]
+        lang.cultural_words = data.get("cultural_words", [])
         lang.consonants = data["consonants"]
         lang.vowels = data["vowels"]
         lang.syllable_patterns = data["syllable_patterns"]
@@ -1077,9 +1195,16 @@ class AlienLanguage:
         lang.tenses = data["tenses"]
         lang.numbers = data["numbers"]
         lang.prefix_mode = data["prefix_mode"]
+        lang.adj_before_noun = data.get("adj_before_noun", True)
+        lang.possession_suffix = data.get("possession_suffix", False)
+        lang.question_particle = data.get("question_particle")
         lang.case_affixes = data["case_affixes"]
         lang.tense_affixes = data["tense_affixes"]
         lang.number_affixes = data["number_affixes"]
+        lang.nominalizer = data.get("nominalizer")
+        lang.verbalizer = data.get("verbalizer")
+        lang.adjectivizer = data.get("adjectivizer")
+        lang.possessive_affix = data.get("possessive_affix", "")
         lang.vocabulary = data["vocabulary"]
         lang.evolution_log = data.get("evolution_log", [])
         lang.reverse_vocab = {}
