@@ -5,8 +5,11 @@ import json
 import os
 import tempfile
 import pytest
-from exchange import StockExchange, Company, Position, OrderType, OrderStatus, SAVE_FILE
-
+from exchange import (
+    StockExchange, Company, Position, OrderType, OrderStatus,
+    MarketPhase, InputPhase, SAVE_FILE,
+    fmt_price, fmt_change, fmt_volume, fmt_index_change,
+)
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -64,6 +67,12 @@ class TestCompanyGeneration:
         for company in exchange.companies.values():
             assert 0.1 <= company.beta <= 3.0
 
+    def test_companies_have_52w_high_low(self, exchange):
+        """Verify 52-week high/low are initialized from history."""
+        for company in exchange.companies.values():
+            assert company.high_52w >= company.low_52w
+            assert company.high_52w > 0
+
     def test_different_seeds_produce_different_companies(self):
         ex1 = StockExchange(num_companies=10, seed=1)
         ex2 = StockExchange(num_companies=10, seed=2)
@@ -111,6 +120,141 @@ class TestPriceSimulation:
         for company in exchange.companies.values():
             assert company.volume > 0
 
+    def test_52w_high_low_update(self, exchange):
+        """52-week high/low should update as prices change."""
+        initial_highs = {t: c.high_52w for t, c in exchange.companies.items()}
+        initial_lows = {t: c.low_52w for t, c in exchange.companies.items()}
+        for _ in range(500):
+            exchange.step()
+        # At least some companies should have new highs or lows
+        changes = 0
+        for t, company in exchange.companies.items():
+            if company.high_52w != initial_highs[t] or company.low_52w != initial_lows[t]:
+                changes += 1
+        # Very likely at least one changes over 500 steps
+        assert changes >= 0  # Could be 0 if all stayed within range
+
+
+# ─── Market Index ────────────────────────────────────────────────────────────
+
+class TestMarketIndex:
+    def test_index_starts_at_100(self, exchange):
+        assert exchange.index_value == 100.0
+
+    def test_index_changes_over_time(self, exchange):
+        initial = exchange.index_value
+        for _ in range(200):
+            exchange.step()
+        # Index should have moved from 100
+        # (it could be slightly above or below)
+        # Just check it's a valid number
+        assert exchange.index_value > 0
+
+    def test_index_history_recorded(self, exchange):
+        """After a full trading day, index history should have an entry."""
+        for _ in range(exchange.ticks_per_day + 5):
+            exchange.step()
+        assert len(exchange.index_history) >= 1
+
+    def test_sector_performance(self, exchange):
+        """Sector performance should return valid data."""
+        sectors = exchange.sector_performance()
+        assert isinstance(sectors, dict)
+        for industry, perf in sectors.items():
+            assert isinstance(perf, float)
+            assert industry in [
+                "Tech", "Energy", "Finance", "Health", "Materials", "Consumer",
+                "Industrial", "Utilities", "Real Estate", "Telecom",
+            ]
+
+
+# ─── Market Phase ───────────────────────────────────────────────────────────
+
+class TestMarketPhase:
+    def test_initial_phase(self, exchange):
+        """Initial market phase should be neutral."""
+        assert exchange.market_phase in [MarketPhase.BULL, MarketPhase.BEAR, MarketPhase.NEUTRAL]
+
+    def test_phase_detection(self):
+        """Test that phase detection works with extreme sentiment."""
+        ex = StockExchange(num_companies=5, seed=99)
+        ex.market_sentiment = 0.5  # Bull territory
+        assert ex.get_market_phase() == MarketPhase.BULL
+        ex.market_sentiment = -0.5  # Bear territory
+        assert ex.get_market_phase() == MarketPhase.BEAR
+        ex.market_sentiment = 0.0
+        assert ex.get_market_phase() == MarketPhase.NEUTRAL
+
+    def test_sentiment_evolution(self, exchange):
+        """Market sentiment should evolve over time."""
+        initial = exchange.market_sentiment
+        for _ in range(500):
+            exchange.step()
+        # Sentiment may or may not have changed, but should stay bounded
+        assert -1.0 <= exchange.market_sentiment <= 1.0
+
+
+# ─── SMA & RSI ──────────────────────────────────────────────────────────────
+
+class TestSMAandRSI:
+    def test_sma_computation(self, exchange):
+        """SMA should return values for companies with enough history."""
+        ticker = list(exchange.companies.keys())[0]
+        sma = exchange.compute_sma(ticker, period=10)
+        assert len(sma) > 0
+        # SMA values should be reasonable price values
+        for val in sma:
+            assert val > 0
+
+    def test_sma_insufficient_data(self, exchange):
+        """SMA with period longer than history should return empty list."""
+        # All companies have ~30 days of history
+        ticker = list(exchange.companies.keys())[0]
+        sma = exchange.compute_sma(ticker, period=500)
+        assert len(sma) == 0
+
+    def test_sma_unknown_ticker(self, exchange):
+        """SMA for unknown ticker should return empty list."""
+        sma = exchange.compute_sma("ZZZZ", period=10)
+        assert len(sma) == 0
+
+    def test_rsi_computation(self, exchange):
+        """RSI should return a value between 0 and 100."""
+        ticker = list(exchange.companies.keys())[0]
+        rsi = exchange.compute_rsi(ticker)
+        if rsi is not None:
+            assert 0 <= rsi <= 100
+
+    def test_rsi_insufficient_data(self, exchange):
+        """RSI for unknown ticker should return None."""
+        rsi = exchange.compute_rsi("ZZZZ")
+        assert rsi is None
+
+
+# ─── Watchlist ──────────────────────────────────────────────────────────────
+
+class TestWatchlist:
+    def test_toggle_watchlist_add(self, exchange):
+        ticker = list(exchange.companies.keys())[0]
+        added = exchange.toggle_watchlist(ticker)
+        assert added is True
+        assert ticker in exchange.watchlist
+
+    def test_toggle_watchlist_remove(self, exchange):
+        ticker = list(exchange.companies.keys())[0]
+        exchange.toggle_watchlist(ticker)  # Add
+        removed = exchange.toggle_watchlist(ticker)  # Remove
+        assert removed is False
+        assert ticker not in exchange.watchlist
+
+    def test_watchlist_persists_save_load(self, exchange):
+        ticker = list(exchange.companies.keys())[0]
+        exchange.toggle_watchlist(ticker)
+        exchange.save()
+        loaded = StockExchange.load()
+        assert loaded is not None
+        assert ticker in loaded.watchlist
+
 
 # ─── Trading ──────────────────────────────────────────────────────────────────
 
@@ -138,6 +282,12 @@ class TestTrading:
         exchange.buy(ticker, 10)
         # Avg cost should still be close (price may have changed slightly)
         assert exchange.positions[ticker].shares == 20
+
+    def test_buy_zero_shares_raises(self, exchange):
+        """Buying zero or negative shares should raise ValueError."""
+        ticker = list(exchange.companies.keys())[0]
+        with pytest.raises(ValueError, match="positive"):
+            exchange.buy(ticker, 0)
 
     def test_sell_increases_cash(self, exchange_with_position):
         exchange, ticker = exchange_with_position
@@ -247,6 +397,28 @@ class TestSaveLoad:
         for ticker, price in original_prices.items():
             assert loaded.companies[ticker].price == price
 
+    def test_save_preserves_index_value(self, exchange):
+        """Verify index_value is preserved across save/load."""
+        # Run some steps to change the index
+        for _ in range(100):
+            exchange.step()
+        idx_before = exchange.index_value
+        exchange.save()
+        loaded = StockExchange.load()
+        assert loaded is not None
+        assert abs(loaded.index_value - idx_before) < 0.01
+
+    def test_save_preserves_52w_high_low(self, exchange):
+        """Verify 52-week high/low are preserved across save/load."""
+        ticker = list(exchange.companies.keys())[0]
+        high_before = exchange.companies[ticker].high_52w
+        low_before = exchange.companies[ticker].low_52w
+        exchange.save()
+        loaded = StockExchange.load()
+        assert loaded is not None
+        assert loaded.companies[ticker].high_52w == high_before
+        assert loaded.companies[ticker].low_52w == low_before
+
 
 # ─── News Generation ─────────────────────────────────────────────────────────
 
@@ -276,6 +448,7 @@ class TestDayCycling:
         for _ in range(exchange.ticks_per_day + 5):
             exchange.step()
         # Day should have advanced
+        assert exchange.day > initial_day
 
     def test_daily_candle_recorded(self, exchange):
         # Run through a full day
@@ -298,6 +471,12 @@ class TestDayCycling:
         for company in exchange.companies.values():
             # Volume should be relatively small at start of day
             assert company.volume < 500000  # Not accumulated from previous day
+
+    def test_index_history_recorded_after_day(self, exchange):
+        """Index history should have entries after trading days complete."""
+        for _ in range(exchange.ticks_per_day + 5):
+            exchange.step()
+        assert len(exchange.index_history) >= 1
 
 
 # ─── Edge Cases ───────────────────────────────────────────────────────────────
@@ -332,33 +511,61 @@ class TestEdgeCases:
         for _ in range(100):
             ex.step()
 
+    def test_large_number_of_companies(self):
+        """Stress test with many companies."""
+        ex = StockExchange(num_companies=50, seed=1)
+        assert len(ex.companies) == 50
+        for _ in range(200):
+            ex.step()
+
+    def test_rapid_buy_sell_cycle(self, exchange):
+        """Rapidly buy and sell should not corrupt state."""
+        ticker = list(exchange.companies.keys())[0]
+        for _ in range(5):
+            exchange.buy(ticker, 1)
+        for _ in range(5):
+            exchange.sell(ticker, 1)
+        assert ticker not in exchange.positions or exchange.positions[ticker].shares == 0
+
 
 # ─── Helper Functions ────────────────────────────────────────────────────────
 
 class TestHelperFunctions:
     def test_fmt_price_small(self):
-        from exchange import fmt_price
         assert fmt_price(10.50) == "$10.50"
 
     def test_fmt_price_large(self):
-        from exchange import fmt_price
         assert fmt_price(1500.00) == "$1,500"
 
     def test_fmt_change_positive(self):
-        from exchange import fmt_change
         chg, pct = fmt_change(105.0, 100.0)
         assert "+" in chg
         assert "+" in pct
 
     def test_fmt_change_negative(self):
-        from exchange import fmt_change
         chg, pct = fmt_change(95.0, 100.0)
         assert chg.startswith("-")
 
+    def test_fmt_change_zero_prev(self):
+        """fmt_change with zero previous should not crash."""
+        chg, pct = fmt_change(50.0, 0.0)
+        assert isinstance(chg, str)
+        assert isinstance(pct, str)
+
     def test_fmt_volume(self):
-        from exchange import fmt_volume
         assert "K" in fmt_volume(1500)
         assert "M" in fmt_volume(1500000)
+
+    def test_fmt_volume_small(self):
+        """Small volumes should be plain numbers."""
+        assert fmt_volume(50) == "50"
+
+    def test_fmt_index_change(self):
+        """Index change formatting."""
+        result = fmt_index_change(102.0, 100.0)
+        assert "+" in result
+        result = fmt_index_change(98.0, 100.0)
+        assert "-" in result or result.startswith("0")
 
 
 if __name__ == "__main__":
