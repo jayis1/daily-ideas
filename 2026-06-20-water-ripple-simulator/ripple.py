@@ -37,7 +37,7 @@ from typing import List, Optional, Tuple
 # ---------------------------------------------------------------------------
 # Version
 # ---------------------------------------------------------------------------
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # ---------------------------------------------------------------------------
 # Grid dimensions (character cells)
@@ -133,6 +133,8 @@ class RippleSimulator:
     """2D wave equation simulation with terminal rendering."""
 
     def __init__(self, cols: int = COLS, rows: int = ROWS):
+        if cols < 3 or rows < 3:
+            raise ValueError(f"Grid dimensions must be at least 3x3, got {cols}x{rows}")
         self.cols = cols
         self.rows = rows
         n = cols * rows
@@ -148,7 +150,7 @@ class RippleSimulator:
         self.sources: List[WaveSource] = []
 
         # State
-        self.damping: float = DAMPING_DEFAULT
+        self.damping: float = max(0.0, min(1.0, DAMPING_DEFAULT))
         self.palette_id: int = 1
         self.rain_mode: bool = False
         self.rain_timer: int = 0
@@ -159,6 +161,7 @@ class RippleSimulator:
         self.color_cycle_timer: int = 0
         self.wall_preset_idx: int = -1  # -1 means no preset active
         self.sim_speed: float = 1.0  # multiplier for steps per frame
+        self.speed: float = SPEED  # wave propagation speed (per-instance)
 
     # ------------------------------------------------------------------
     # Index helpers
@@ -201,7 +204,7 @@ class RippleSimulator:
 
     def step(self) -> None:
         """Advance the simulation by one time step using the discrete wave equation."""
-        c2 = SPEED * SPEED
+        c2 = self.speed * self.speed
         damping = self.damping
         cols = self.cols
         cur = self.current
@@ -403,7 +406,11 @@ class RippleSimulator:
                     val = cur[i]
                     # Map wave height to intensity 0..9
                     # Negative values are also interesting (troughs)
-                    intensity = int(clamp(int((val + 4.0) / 8.0 * 9), 0, 9))
+                    # Guard against NaN/Inf which can crash int()
+                    if val != val or val == float('inf') or val == float('-inf'):
+                        intensity = 4  # Show as mid-level for anomalies
+                    else:
+                        intensity = int(clamp(int((val + 4.0) / 8.0 * 9), 0, 9))
                     # Choose block character based on intensity
                     if intensity <= 1:
                         ch = " "
@@ -461,8 +468,13 @@ def render_with_custom_palette(sim: RippleSimulator, palette: List[Tuple[int, in
     walls = sim.walls
     cols = sim.cols
 
+    # Ensure we have exactly 10 colors by repeating/interpolating if palette is short
+    while len(palette) < 10:
+        palette = list(palette) + palette  # Double until we have enough
+    palette = palette[:10]
+
     colors = []
-    for i in range(min(10, len(palette))):
+    for i in range(10):
         r, g, b = palette[i]
         colors.append(f"\033[38;2;{r};{g};{b}m")
 
@@ -495,7 +507,11 @@ def render_with_custom_palette(sim: RippleSimulator, palette: List[Tuple[int, in
                 line_parts.append(f"{source_color}◉")
             else:
                 val = cur[i]
-                intensity = int(clamp(int((val + 4.0) / 8.0 * 9), 0, 9))
+                # Guard against NaN/Inf which can crash int()
+                if val != val or val == float('inf') or val == float('-inf'):
+                    intensity = 4  # Show as mid-level for anomalies
+                else:
+                    intensity = int(clamp(int((val + 4.0) / 8.0 * 9), 0, 9))
                 if intensity <= 1:
                     ch = " "
                 elif intensity <= 3:
@@ -528,15 +544,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--cols", type=int, default=COLS, metavar="N",
-        help=f"grid width in characters (default: {COLS})",
+        help=f"grid width in characters, minimum 3 (default: {COLS})",
     )
     p.add_argument(
         "--rows", type=int, default=ROWS, metavar="N",
-        help=f"grid height in characters (default: {ROWS})",
+        help=f"grid height in characters, minimum 3 (default: {ROWS})",
     )
     p.add_argument(
         "--fps", type=int, default=FPS, metavar="N",
-        help=f"target frames per second (default: {FPS})",
+        help=f"target frames per second, minimum 1 (default: {FPS})",
     )
     p.add_argument(
         "--palette", type=int, default=1, choices=range(1, 6), metavar="N",
@@ -565,13 +581,16 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
 
-    # Override globals with CLI args
-    global SPEED
-    SPEED = max(0.01, min(0.49, args.speed))
+    # Validate and clamp parameters
+    cols = max(3, args.cols)
+    rows = max(3, args.rows)
     fps = max(1, args.fps)
+    speed = max(0.01, min(0.49, args.speed))
+    damping = max(0.0, min(1.0, args.damping))
 
-    sim = RippleSimulator(cols=args.cols, rows=args.rows)
-    sim.damping = args.damping
+    sim = RippleSimulator(cols=cols, rows=rows)
+    sim.speed = speed
+    sim.damping = damping
     sim.palette_id = args.palette
     sim.rain_mode = args.rain
 

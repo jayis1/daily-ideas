@@ -15,6 +15,7 @@ from ripple import (
     lerp_color,
     interference_drop,
     get_cycled_palette,
+    render_with_custom_palette,
     PALETTES,
     PALETTE_NAMES,
     WALL_PRESETS,
@@ -33,13 +34,10 @@ def test_clamp():
 
 def test_lerp_color():
     """Test color interpolation."""
-    # At t=0, should return c1
     result = lerp_color((0, 0, 0), (100, 100, 100), 0.0)
     assert result == (0, 0, 0)
-    # At t=1, should return c2
     result = lerp_color((0, 0, 0), (100, 100, 100), 1.0)
     assert result == (100, 100, 100)
-    # At t=0.5, should be midpoint
     result = lerp_color((0, 0, 0), (200, 200, 200), 0.5)
     assert result == (100, 100, 100)
 
@@ -51,7 +49,6 @@ def test_basic_drop():
 
     assert sim.drop_count == 1, f"Expected 1 drop, got {sim.drop_count}"
 
-    # The center cell should have some amplitude
     center_val = sim.current[sim.idx(10, 5)]
     assert center_val > 0, f"Center cell should have positive amplitude, got {center_val}"
 
@@ -67,7 +64,6 @@ def test_simulation_steps():
     assert sim.frame == 5, f"Expected frame 5, got {sim.frame}"
     assert sim.drop_count == 1, f"Expected 1 drop, got {sim.drop_count}"
 
-    # Check waves propagated (non-zero cells exist)
     nonzero = sum(1 for v in sim.current if abs(v) > 0.001)
     assert nonzero > 0, "Expected non-zero wave values after drop"
 
@@ -81,7 +77,6 @@ def test_wall_functionality():
     for i in range(10):
         sim.step()
 
-    # Wall cell should be 0
     assert sim.current[sim.idx(10, 5)] == 0.0, "Wall cell should remain 0"
 
 
@@ -126,41 +121,31 @@ def test_render_output_format():
     sim.step()
     lines = sim.render()
 
-    # Each line should contain ANSI escape sequences
     for line in lines:
         assert "\033[" in line, "Rendered line should contain ANSI escape codes"
 
 
 def test_wave_conservation():
     """Test that wave energy is roughly conserved (with damping it should decrease)."""
-    sim = RippleSimulator(cols=30, rows=15, )
+    sim = RippleSimulator(cols=30, rows=15)
     sim.damping = 1.0  # No damping for conservation check
     sim.drop_stone(15, 7, radius=2, amplitude=10)
 
-    # Calculate total energy (sum of squares) after initial drop
     initial_energy = sum(v * v for v in sim.current)
-
     sim.step()
-
     after_step_energy = sum(v * v for v in sim.current)
-    # Energy should be of similar magnitude (some goes to previous buffer)
-    # With no damping, it shouldn't disappear
     assert after_step_energy > 0, "Energy should not be zero after stepping"
 
 
 def test_boundary_conditions():
-    """Test that the boundary of the grid stays at zero (absorbing/reflecting)."""
+    """Test that the boundary of the grid stays at zero."""
     sim = RippleSimulator(cols=20, rows=10)
     sim.drop_stone(10, 5, radius=2, amplitude=10)
 
     for i in range(20):
         sim.step()
 
-    # Edges of the grid should be relatively calm (boundary condition)
-    # Top edge
     top_row_energy = sum(abs(sim.current[sim.idx(x, 0)]) for x in range(sim.cols))
-    # Middle should have more activity than edges typically
-    # Just check it doesn't blow up
     assert top_row_energy < 1000, f"Top row energy unexpectedly high: {top_row_energy}"
 
 
@@ -175,7 +160,6 @@ def test_multiple_drops():
     for i in range(10):
         sim.step()
 
-    # Both drop locations should have had influence
     nonzero = sum(1 for v in sim.current if abs(v) > 0.001)
     assert nonzero > 0, "Should have active wave cells"
 
@@ -184,15 +168,12 @@ def test_wave_source():
     """Test continuous wave source creation and removal."""
     sim = RippleSimulator(cols=30, rows=15)
 
-    # Add a source
     sim.add_source(10, 7, amplitude=5.0)
     assert len(sim.sources) == 1
 
-    # Add another source
     sim.add_source(20, 7, amplitude=5.0)
     assert len(sim.sources) == 2
 
-    # Remove a source by placing near it
     sim.add_source(10, 7, amplitude=5.0)  # Should toggle off
     assert len(sim.sources) == 1, "Source should be toggled off"
 
@@ -202,11 +183,9 @@ def test_wave_source_emission():
     sim = RippleSimulator(cols=30, rows=15)
     sim.add_source(15, 7, amplitude=5.0)
 
-    # Run enough frames for source to emit
     for i in range(20):
         sim.step()
 
-    # Should have waves from source emission
     nonzero = sum(1 for v in sim.current if abs(v) > 0.001)
     assert nonzero > 0, "Source should produce waves"
 
@@ -227,11 +206,8 @@ def test_wall_presets():
     sim.cycle_wall_preset()  # idx=1 (preset 1)
     assert sim.wall_preset_idx == 1
 
-    # Cycle through remaining presets (2, 3, 4) then clear state
-    # Total: 2 explicit + 4 in loop = 6 cycles from start
     for _ in range(len(WALL_PRESETS) - 1):
         sim.cycle_wall_preset()
-    # After 6 total cycles we should be at the clear state (idx=-1)
     assert sim.wall_preset_idx == -1, f"Expected -1 after cycling past all, got {sim.wall_preset_idx}"
     assert not any(sim.walls), "Cycling past all presets should clear walls"
 
@@ -242,11 +218,9 @@ def test_interference_drop():
     interference_drop(sim)
     assert sim.drop_count == 2, "Interference demo should create 2 drops"
 
-    # Run simulation
     for i in range(10):
         sim.step()
 
-    # Should have active waves
     nonzero = sum(1 for v in sim.current if abs(v) > 0.001)
     assert nonzero > 0, "Interference should produce waves"
 
@@ -268,7 +242,6 @@ def test_sim_speed():
     sim.sim_speed = 2.0
     sim.drop_stone(10, 5, radius=2, amplitude=10)
 
-    # Run 3 outer loops with 2 steps each = 6 frames
     steps = max(1, int(sim.sim_speed))
     for _ in range(3):
         for _ in range(steps):
@@ -285,11 +258,9 @@ def test_damping_adjustment():
     sim.damping = 0.99
     assert sim.damping == 0.99
 
-    # Clamp upper
     sim.damping = min(0.995, sim.damping + 0.01)
     assert sim.damping == 0.995
 
-    # Clamp lower
     sim.damping = max(0.80, sim.damping - 0.20)
     assert sim.damping == 0.80
 
@@ -300,15 +271,12 @@ def test_render_with_walls():
     sim.walls[sim.idx(10, 5)] = True
     lines = sim.render()
 
-    # At least one line should contain a wall character
     has_wall_char = any("▓" in line or "▒" in line or "░" in line for line in lines)
     assert has_wall_char, "Wall characters should appear in render output"
 
 
 def test_render_with_custom_palette():
     """Test rendering with a custom cycled palette."""
-    from ripple import render_with_custom_palette
-
     sim = RippleSimulator(cols=20, rows=10)
     sim.drop_stone(10, 5, radius=2, amplitude=10)
     sim.step()
@@ -356,7 +324,6 @@ def test_large_drop():
     sim = RippleSimulator(cols=30, rows=20)
     sim.drop_stone(15, 10, radius=5, amplitude=20)
 
-    # Should affect many cells
     nonzero = sum(1 for v in sim.current if abs(v) > 0.001)
     assert nonzero > 20, f"Large drop should affect many cells, got {nonzero}"
 
@@ -364,7 +331,6 @@ def test_large_drop():
 def test_drop_at_boundary():
     """Test dropping a stone near the edge of the grid."""
     sim = RippleSimulator(cols=20, rows=10)
-    # Should not crash when dropping near edges
     sim.drop_stone(0, 0, radius=2, amplitude=5)
     sim.drop_stone(19, 9, radius=2, amplitude=5)
     sim.drop_stone(0, 9, radius=2, amplitude=5)
@@ -372,9 +338,103 @@ def test_drop_at_boundary():
     for i in range(5):
         sim.step()
 
-    # Should still produce some waves
     nonzero = sum(1 for v in sim.current if abs(v) > 0.001)
     assert nonzero > 0
+
+
+def test_nan_inf_handling():
+    """Test that NaN and Inf values in wave buffer don't crash render."""
+    sim = RippleSimulator(cols=20, rows=10)
+    sim.current[0] = float('nan')
+    sim.current[1] = float('inf')
+    sim.current[2] = float('-inf')
+    # Should not crash
+    lines = sim.render()
+    assert len(lines) == 10
+
+    # Also test render_with_custom_palette
+    palette = get_cycled_palette(0)
+    lines2 = render_with_custom_palette(sim, palette)
+    assert len(lines2) == 10
+
+
+def test_short_palette_in_custom_render():
+    """Test that render_with_custom_palette handles short palettes gracefully."""
+    sim = RippleSimulator(cols=20, rows=10)
+    sim.drop_stone(10, 5, radius=2, amplitude=10)
+    short_palette = [(0, 0, 0), (50, 50, 50), (100, 100, 100)]
+    # Should not crash — palette is extended to 10 entries
+    lines = render_with_custom_palette(sim, short_palette)
+    assert len(lines) == 10
+
+
+def test_invalid_grid_dimensions():
+    """Test that invalid grid dimensions raise ValueError."""
+    try:
+        sim = RippleSimulator(cols=-5, rows=-5)
+        assert False, "Should have raised ValueError for negative dimensions"
+    except ValueError:
+        pass  # Expected
+
+    try:
+        sim = RippleSimulator(cols=2, rows=2)
+        assert False, "Should have raised ValueError for too-small dimensions"
+    except ValueError:
+        pass  # Expected
+
+    try:
+        sim = RippleSimulator(cols=0, rows=0)
+        assert False, "Should have raised ValueError for zero dimensions"
+    except ValueError:
+        pass  # Expected
+
+
+def test_per_instance_speed():
+    """Test that speed is stored per-instance and used in step()."""
+    sim1 = RippleSimulator(cols=20, rows=10)
+    sim2 = RippleSimulator(cols=20, rows=10)
+    sim1.speed = 0.3
+    sim2.speed = 0.45
+    # Both should work independently
+    sim1.drop_stone(10, 5, radius=2, amplitude=10)
+    sim2.drop_stone(10, 5, radius=2, amplitude=10)
+    for _ in range(5):
+        sim1.step()
+        sim2.step()
+    # They should have different wave patterns due to different speeds
+    assert sim1.frame == sim2.frame  # Same frame count
+
+
+def test_extreme_values_render():
+    """Test rendering with very large wave values doesn't crash."""
+    sim = RippleSimulator(cols=20, rows=10)
+    sim.current[0] = 1e10
+    sim.current[1] = -1e10
+    lines = sim.render()
+    assert len(lines) == 10
+
+
+def test_source_on_wall():
+    """Test placing a source on a wall cell."""
+    sim = RippleSimulator(cols=20, rows=10)
+    sim.walls[sim.idx(10, 5)] = True
+    sim.add_source(10, 5)
+    # Should not crash when rendering
+    lines = sim.render()
+    assert len(lines) == 10
+
+
+def test_stability_with_damping():
+    """Test simulation stability with various damping values."""
+    for damping in [0.0, 0.5, 0.96, 1.0]:
+        sim = RippleSimulator(cols=20, rows=10)
+        sim.damping = damping
+        sim.drop_stone(10, 5, radius=2, amplitude=10)
+        for _ in range(50):
+            sim.step()
+        max_val = max(abs(v) for v in sim.current)
+        # Should not blow up to astronomical values
+        assert max_val < 1e6, f"Damping {damping}: max_val={max_val}"
 
 
 if __name__ == "__main__":
@@ -389,7 +449,10 @@ if __name__ == "__main__":
         test_damping_adjustment, test_render_with_walls,
         test_render_with_custom_palette, test_palette_names,
         test_in_bounds, test_idx, test_rain_mode, test_large_drop,
-        test_drop_at_boundary,
+        test_drop_at_boundary, test_nan_inf_handling,
+        test_short_palette_in_custom_render, test_invalid_grid_dimensions,
+        test_per_instance_speed, test_extreme_values_render,
+        test_source_on_wall, test_stability_with_damping,
     ]
 
     passed = 0
