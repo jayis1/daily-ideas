@@ -20,7 +20,7 @@ import argparse
 import json
 import os
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # ── Character palettes ──────────────────────────────────────────────
 
@@ -384,7 +384,6 @@ def add_rain(canvas, seed=None):
     """Add rain streaks to the scene."""
     if seed is not None:
         random.seed(seed)
-    w, h = canvas.h, canvas.w  # We use standard w,h below
     w, h = canvas.w, canvas.h
     num_drops = random.randint(40, 80)
     for _ in range(num_drops):
@@ -512,11 +511,15 @@ def generate_cathedral(seed=None, width=100, height=50):
     body_width = min(width - 20, random.randint(60, 76))
     body_left = cx - body_width // 2
     body_right = body_left + body_width
-    body_height = random.randint(14, 20)
+    # Scale body height to fit canvas — leave room for towers/roof/spire
+    max_body_h = min(20, max(8, height - 12))
+    body_height = random.randint(max(8, min(14, max_body_h)), max_body_h)
     body_top = ground_y - body_height
 
     tower_w = random.randint(10, 14)
-    tower_h = random.randint(22, min(35, height - 8))
+    # Ensure tower height fits within canvas; minimum tower height is 8 rows
+    max_tower_h = min(35, height - 8)
+    tower_h = random.randint(8, max(8, max_tower_h))
 
     # ── Ground ──────────────────────────────────────────────────────
     canvas.rect(0, ground_y, width, 3, "▀", "ground")
@@ -541,7 +544,8 @@ def generate_cathedral(seed=None, width=100, height=50):
                 canvas.put(x, y, S["cross"], "wall")
 
     # ── Roof ────────────────────────────────────────────────────────
-    roof_h = random.randint(8, 14)
+    max_roof_h = min(14, max(4, body_top - 2))
+    roof_h = random.randint(max(4, min(8, max_roof_h)), max_roof_h)
     roof_peak = body_top - roof_h
 
     line(canvas, body_left + 1, body_top, cx, roof_peak, S["wall2"], "roof")
@@ -562,8 +566,10 @@ def generate_cathedral(seed=None, width=100, height=50):
     lt_x = body_left - tower_w + 2
     lt_top = ground_y - tower_h
     canvas.rect(lt_x, lt_top, tower_w, tower_h, S["wall"], "wall")
-    draw_glass_window(canvas, lt_x + tower_w // 2, lt_top + 3, 4, 8)
-    spire_h = random.randint(8, 14)
+    tower_win_h = min(8, max(4, tower_h - 6))
+    draw_glass_window(canvas, lt_x + tower_w // 2, lt_top + 3, 4, tower_win_h)
+    max_spire_h = min(14, max(4, lt_top - 2))
+    spire_h = random.randint(max(4, min(8, max_spire_h)), max_spire_h)
     draw_spire(canvas, lt_x + tower_w // 2, lt_top, spire_h)
     canvas.rect(lt_x, lt_top, tower_w, 1, S["wall"], "wall")
     # Tower courses
@@ -579,7 +585,7 @@ def generate_cathedral(seed=None, width=100, height=50):
     rt_x = body_right - 2
     rt_top = ground_y - tower_h
     canvas.rect(rt_x, rt_top, tower_w, tower_h, S["wall"], "wall")
-    draw_glass_window(canvas, rt_x + tower_w // 2, rt_top + 3, 4, 8)
+    draw_glass_window(canvas, rt_x + tower_w // 2, rt_top + 3, 4, tower_win_h)
     draw_spire(canvas, rt_x + tower_w // 2, rt_top, spire_h)
     canvas.rect(rt_x, rt_top, tower_w, 1, S["wall"], "wall")
     for y in range(rt_top + 3, ground_y, 4):
@@ -588,7 +594,8 @@ def generate_cathedral(seed=None, width=100, height=50):
 
     # ── Central spire ────────────────────────────────────────────────
     if has_central_spire:
-        draw_spire(canvas, cx, roof_peak, random.randint(10, 16))
+        max_central_spire_h = min(16, max(4, roof_peak - 1))
+        draw_spire(canvas, cx, roof_peak, random.randint(max(4, min(10, max_central_spire_h)), max_central_spire_h))
 
     # ── Rose window ──────────────────────────────────────────────────
     if has_rose:
@@ -596,7 +603,8 @@ def generate_cathedral(seed=None, width=100, height=50):
         draw_rose_window(canvas, cx, rose_y, random.randint(5, 7))
 
     # ── Side windows ─────────────────────────────────────────────────
-    win_h = random.randint(7, 10)
+    max_win_h = min(10, max(4, body_height - 6))
+    win_h = random.randint(max(4, min(7, max_win_h)), max_win_h)
     win_w = random.choice([4, 6])
     win_y = body_top + 3
 
@@ -620,7 +628,7 @@ def generate_cathedral(seed=None, width=100, height=50):
     place_windows(canvas, right_zone_start, right_zone_end, win_y, win_h, win_w, right_n)
 
     # ── Door ─────────────────────────────────────────────────────────
-    door_h = min(10, body_height - 5)
+    door_h = min(10, max(4, body_height - 5))
     door_y = ground_y - door_h - 1
     if has_double_door:
         draw_door(canvas, cx - door_width // 2 - 1, door_y, door_width, door_h)
@@ -696,12 +704,17 @@ def add_atmosphere(canvas, seed=None):
 # ── Main ────────────────────────────────────────────────────────────
 
 def validate_dimensions(width, height):
-    """Validate canvas dimensions, raising SystemExit on invalid values."""
+    """Validate canvas dimensions, raising SystemExit on invalid values.
+
+    Minimum sizes ensure the cathedral can render without crashes:
+    - Width >= 40: enough room for body, towers, and buttresses
+    - Height >= 30: enough room for ground, body, roof, towers, and spires
+    """
     if width < 40:
         print(f"Error: width must be at least 40 (got {width})", file=sys.stderr)
         sys.exit(1)
-    if height < 25:
-        print(f"Error: height must be at least 25 (got {height})", file=sys.stderr)
+    if height < 30:
+        print(f"Error: height must be at least 30 (got {height})", file=sys.stderr)
         sys.exit(1)
     if width > 300:
         print(f"Error: width must be at most 300 (got {width})", file=sys.stderr)
@@ -721,7 +734,7 @@ def main():
     parser.add_argument("--width", type=int, default=100,
                         help="Canvas width in characters (default: 100)")
     parser.add_argument("--height", type=int, default=50,
-                        help="Canvas height in characters (default: 50)")
+                        help="Canvas height in characters, minimum 30 (default: 50)")
     parser.add_argument("--no-atmosphere", action="store_true",
                         help="Skip stars, moon, and ground texture")
     parser.add_argument("--color", action="store_true",
@@ -741,6 +754,9 @@ def main():
     seed = args.seed if args.seed is not None else random.randint(0, 999999)
 
     all_metadata = []
+
+    # For --save, truncate the file on first write, then append for subsequent cathedrals
+    _save_file_initialized = False
 
     for i in range(args.multi):
         s = seed + i if args.seed is not None else random.randint(0, 999999)
@@ -764,21 +780,29 @@ def main():
 
         output = canvas.render(use_color=args.color and sys.stdout.isatty())
 
-        # Build header bar
+        # Build header bar — all lines must have the same display width
+        box_w = 64  # total display width including ╔ and ╗
+        inner_w = box_w - 2  # width between ║...║
+        seed_str = str(s)
+        title = f"  🏛️  Procedural Cathedral Generator  —  Seed: {seed_str}"
+        info = f"  Size: {args.width}x{args.height}  |  Re-run with --seed {seed_str} to reproduce"
         header = (
-            f"╔{'═' * 62}╗\n"
-            f"║  🏛️  Procedural Cathedral Generator  —  Seed: {s:<6}          ║\n"
-            f"║  Size: {args.width}x{args.height}  |  Re-run with --seed {s} to reproduce  ║\n"
-            f"╚{'═' * 62}╝"
+            f"╔{'═' * inner_w}╗\n"
+            f"║{title:<{inner_w}}║\n"
+            f"║{info:<{inner_w}}║\n"
+            f"╚{'═' * inner_w}╝"
         )
 
         # Output destination
         if args.save:
-            with open(args.save, "a", encoding="utf-8") as f:
+            # Use write mode for first cathedral (truncate), append for rest
+            mode = "w" if not _save_file_initialized else "a"
+            with open(args.save, mode, encoding="utf-8") as f:
                 f.write(header + "\n\n")
                 f.write(output + "\n\n")
-                if args.multi > 1:
+                if args.multi > 1 and i < args.multi - 1:
                     f.write(f"{'─' * args.width}\n\n")
+            _save_file_initialized = True
             print(f"Saved cathedral (seed {s}) to {args.save}")
         else:
             print(header)

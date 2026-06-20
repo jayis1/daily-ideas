@@ -299,6 +299,19 @@ class TestValidation:
         except SystemExit:
             pass
 
+    def test_height_below_minimum(self):
+        """Heights below 30 should be rejected (minimum was raised from 25 to 30)."""
+        try:
+            validate_dimensions(100, 25)
+            assert False, "Height 25 should be rejected (min is 30)"
+        except SystemExit:
+            pass
+        try:
+            validate_dimensions(100, 29)
+            assert False, "Height 29 should be rejected (min is 30)"
+        except SystemExit:
+            pass
+
     def test_width_too_large(self):
         try:
             validate_dimensions(500, 50)
@@ -316,7 +329,7 @@ class TestValidation:
     def test_valid_dimensions(self):
         # Should not raise
         validate_dimensions(100, 50)
-        validate_dimensions(40, 25)
+        validate_dimensions(40, 30)
         validate_dimensions(300, 150)
 
 
@@ -412,13 +425,65 @@ class TestCLI:
         )
         assert result.returncode == 0
 
+    def test_save_truncates_file(self):
+        """Verify --save truncates an existing file rather than appending."""
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            tmpfile = f.name
+        try:
+            # Write first cathedral
+            result1 = subprocess.run(
+                [sys.executable, "cathedral.py", "--seed", "1", "--save", tmpfile],
+                capture_output=True, text=True,
+                cwd=os.path.dirname(os.path.abspath(__file__))
+            )
+            assert result1.returncode == 0
+            with open(tmpfile) as f:
+                count1 = f.read().count("Procedural Cathedral Generator")
+
+            # Write second cathedral — should truncate, not append
+            result2 = subprocess.run(
+                [sys.executable, "cathedral.py", "--seed", "2", "--save", tmpfile],
+                capture_output=True, text=True,
+                cwd=os.path.dirname(os.path.abspath(__file__))
+            )
+            assert result2.returncode == 0
+            with open(tmpfile) as f:
+                count2 = f.read().count("Procedural Cathedral Generator")
+
+            assert count2 == 1, f"Expected 1 cathedral after overwrite, got {count2}"
+        finally:
+            os.unlink(tmpfile)
+
+
+class TestSmallCanvas:
+    """Test that small canvas sizes (previously crash-inducing) now work."""
+
+    def test_minimum_height(self):
+        """Height 30 (minimum) should generate without crash."""
+        canvas, meta = generate_cathedral(seed=42, width=60, height=30)
+        output = canvas.render()
+        assert len(output) > 50
+
+    def test_minimum_width(self):
+        """Width 40 (minimum) should generate without crash."""
+        canvas, meta = generate_cathedral(seed=42, width=40, height=40)
+        output = canvas.render()
+        assert len(output) > 50
+
+    def test_various_small_seeds(self):
+        """Multiple seeds at minimum size should not crash."""
+        for s in range(20):
+            canvas, meta = generate_cathedral(seed=s, width=50, height=30)
+            assert len(canvas.render()) > 20
 
 if __name__ == "__main__":
     # Run all tests
     import traceback
     test_classes = [
         TestCanvas, TestPrimitives, TestCathedralComponents,
-        TestGeneration, TestAtmosphere, TestValidation, TestCLI
+        TestGeneration, TestAtmosphere, TestValidation, TestCLI,
+        TestSmallCanvas
     ]
     total = 0
     passed = 0

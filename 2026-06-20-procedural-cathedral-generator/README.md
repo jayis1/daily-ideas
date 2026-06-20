@@ -5,6 +5,7 @@ Generate unique ASCII art gothic cathedrals every time! Each run produces a diff
 ## Features
 
 - **Procedural generation** — every cathedral is unique, controlled by a seed for reproducibility
+- **Responsive sizing** — cathedrals scale to fit the canvas, from 40×30 up to 300×150
 - **Gothic architecture elements**:
   - Twin towers with tapered spires and crosses
   - Pointed gothic arches for doors and windows
@@ -22,7 +23,7 @@ Generate unique ASCII art gothic cathedrals every time! Each run produces a diff
 - **Weather effects** (`--weather rain|snow|fog`) — atmospheric rain, snowfall, or fog
 - **Crescent moon** — randomly appears in the sky during atmosphere mode
 - **JSON metadata** (`--json`) — programmatically access seed, features, and dimensions
-- **Save to file** (`--save FILE`) — write output to a file instead of stdout
+- **Save to file** (`--save FILE`) — write output to a file (overwrites existing file; appends for `--multi`)
 - **Dimension validation** — helpful error messages for invalid sizes
 - **Configurable**: set seed, canvas size, and generate multiple cathedrals at once
 - **Reproducible**: use the same seed to recreate any cathedral exactly
@@ -45,6 +46,9 @@ python3 cathedral.py
 # Reproducible cathedral with seed 42
 python3 cathedral.py --seed 42
 
+# Small cathedral (minimum size)
+python3 cathedral.py --seed 42 --width 40 --height 30
+
 # Larger cathedral
 python3 cathedral.py --width 140 --height 60
 
@@ -65,9 +69,6 @@ python3 cathedral.py --seed 42 --json
 # Generate 3 different cathedrals with sequential seeds
 python3 cathedral.py --seed 100 --multi 3
 
-# Pure architecture, no atmosphere
-python3 cathedral.py --no-atmosphere --seed 999
-
 # Combined: color + weather + save
 python3 cathedral.py --seed 42 --color --weather snow --save output.txt
 
@@ -84,7 +85,7 @@ python3 cathedral.py --help
 |------|-------------|---------|
 | `--seed SEED` | Random seed for reproducibility | random |
 | `--width WIDTH` | Canvas width in characters (40–300) | 100 |
-| `--height HEIGHT` | Canvas height in characters (25–150) | 50 |
+| `--height HEIGHT` | Canvas height in characters (30–150) | 50 |
 | `--no-atmosphere` | Skip stars, moon, and ground texture | off |
 | `--color` | Enable ANSI color output | off |
 | `--weather` | Add weather: `rain`, `snow`, or `fog` | none |
@@ -111,6 +112,8 @@ The generator uses a layered construction approach:
 11. **Gargoyles** (optional): Decorative creatures on the façade
 12. **Atmosphere**: Random stars, crescent moon, and ground texture
 13. **Weather** (optional): Rain, snow, or fog overlay
+
+All element sizes (tower height, body height, roof height, spire height, window sizes) automatically scale down for small canvas sizes, ensuring cathedrals always render without crashes.
 
 Each architectural element uses Unicode block characters (█▓▒░), box drawing characters (╔╗╚╝├┤┬┼), and decorative symbols (✝✿◆◇●○✦✧) to create rich visual detail.
 
@@ -146,7 +149,17 @@ Run the test suite:
 python3 test_cathedral.py
 ```
 
-Tests cover: canvas operations, drawing primitives, individual cathedral components, full generation, atmosphere/weather effects, dimension validation, CLI flags, and reproducibility.
+Tests cover: canvas operations, drawing primitives, individual cathedral components, full generation, atmosphere/weather effects, dimension validation, CLI flags, save file behavior, small canvas sizes, and reproducibility.
+
+## Changelog
+
+### v1.2.0 — Bug fixes
+- **Fixed crash on small canvas sizes** — heights below 30 (previously claimed minimum of 25) caused `ValueError: empty range in randrange`. Tower height, body height, roof height, spire height, window height, and door height now all scale dynamically to fit the available canvas space.
+- **Raised minimum height from 25 to 30** — the true minimum that produces valid output is 30; the previous minimum of 25 always crashed.
+- **Fixed header box misalignment** — the info line (`Size: ...`) was shorter than the top/bottom borders, leaving the right `║` unaligned. All header lines now use consistent `inner_w` formatting.
+- **Fixed `--save` appending to existing files** — running `cathedral.py --save file.txt` twice would append a second cathedral to the same file. Now the first write truncates, and subsequent writes (within `--multi`) append.
+- **Removed dead code** — eliminated the swapped `w, h = canvas.h, canvas.w` line in `add_rain()` that was immediately overwritten by the correct `w, h = canvas.w, canvas.h`.
+- **Added tests** for small canvas sizes and save file truncation behavior.
 
 ## License
 
