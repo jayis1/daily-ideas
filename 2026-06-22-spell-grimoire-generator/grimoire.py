@@ -5,7 +5,7 @@ Procedural Spell Grimoire Generator
 Generates beautifully formatted grimoire pages for fantasy RPG spells
 with procedural names, ASCII art, incantations, reagents, and metadata.
 
-Version: 4.0.0
+Version: 5.0.0
 
 Features:
   - 8 schools of magic with school-specific content
@@ -14,10 +14,15 @@ Features:
   - Spell tags for thematic categorization
   - Mana cost calculation
   - Scroll GP value calculation (D&D-style gold piece pricing)
+  - Spell power rating system
+  - Spellcasting recipe generation (step-by-step casting instructions)
   - Spell synergy detection
   - Spell conflict detection (incompatible school pairings)
-  - Markdown, JSON, HTML, and plaintext export
+  - Spell compatibility scoring between pairs of spells
+  - Markdown, JSON, HTML, LaTeX, and plaintext export
   - Statistical analysis mode (--stats)
+  - Power ranking mode (--power-ranking)
+  - All-schools overview mode (--all-schools)
   - Interactive browser mode
   - Save/load spells to JSON files
   - Seed support for reproducible generation
@@ -34,7 +39,7 @@ from dataclasses import dataclass, field, asdict
 from typing import List, Optional, Dict, Tuple
 from pathlib import Path
 
-__version__ = "4.0.1"
+__version__ = "5.0.0"
 
 # ──────────────────────────────────────────────
 # Data pools for procedural generation
@@ -435,6 +440,75 @@ ORDERS = [
 MATERIALS_TABLET = ["obsidian", "granite", "crystal", "adamantine", "iron", "marble"]
 
 # ──────────────────────────────────────────────
+# Casting recipe steps
+# ──────────────────────────────────────────────
+
+CASTING_PREPARATIONS = [
+    "Purify your hands in moonlit water",
+    "Draw a protective circle with powdered {reagent}",
+    "Light a {color} candle at each cardinal point",
+    "Clear your mind of all worldly thoughts",
+    "Kneel facing {direction} and bow your head",
+    "Place {reagent} at the center of your workspace",
+    "Inscribe the spell's sigil upon the ground in {reagent}",
+    "Arrange {reagent} in a semicircle before you",
+    "Speak the words of warding thrice",
+    "Meditate on the nature of {school_lower} magic",
+]
+
+CASTING_GESTURES = [
+    "Extend your dominant hand toward the target",
+    "Trace an arcane circle in the air with your index finger",
+    "Sweep both hands outward in a widening arc",
+    "Press your palms together, then spread them apart",
+    "Draw the sigil of {school_lower} in the air before you",
+    "Raise your hand above your head, fingers splayed",
+    "Point at the target with an outstretched arm",
+    "Clasp both hands before your chest, then release",
+    "Make the sign of {school_lower} with your off-hand",
+    "Spin once {direction}, then stamp the ground",
+]
+
+CASTING_FINALS = [
+    "Release the energy with a sharp exhalation",
+    "Allow the magic to flow from your fingertips",
+    "Whisper the final word and close your eyes",
+    "Strike the ground with your staff or wand",
+    "Clap your hands once to seal the casting",
+    "Let the last syllable fade into silence",
+    "Snap your fingers to complete the binding",
+    "Lower your hands slowly as the magic takes hold",
+    "Speak the name of the spell one final time",
+    "Exhale slowly and open your eyes to the result",
+]
+
+DIRECTIONS = ["north", "south", "east", "west", "northeast", "northwest", "southeast", "southwest"]
+
+SPELL_COLORS = {
+    "Evocation": "crimson",
+    "Necromancy": "violet",
+    "Enchantment": "rose",
+    "Illusion": "silver",
+    "Conjuration": "golden",
+    "Abjuration": "white",
+    "Divination": "cerulean",
+    "Transmutation": "amber",
+}
+
+# ──────────────────────────────────────────────
+# Spell compatibility scoring
+# ──────────────────────────────────────────────
+
+COMPATIBILITY_FACTORS = {
+    ("same_school",): 3,       # Same school = high compatibility
+    ("synergy_pair",): 2,       # Known synergy = good compatibility
+    ("conflict_pair",): -3,     # Known conflict = poor compatibility
+    ("level_close",): 1,        # Levels within 2 of each other
+    ("mana_similar",): 1,       # Mana costs within 10 of each other
+    ("same_rarity",): 1,        # Same rarity tier
+}
+
+# ──────────────────────────────────────────────
 # Incantation generation
 # ──────────────────────────────────────────────
 
@@ -703,6 +777,8 @@ class Spell:
     tags: List[str] = field(default_factory=list)
     mana_cost: int = 0
     scroll_value: int = 0
+    power_rating: int = 0
+    casting_recipe: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict:
         """Convert spell to a JSON-serializable dictionary."""
@@ -767,6 +843,24 @@ class Spell:
                 f"{', '.join(self.tags)}",
             ])
 
+        # Power rating
+        md_lines.extend([
+            f"",
+            f"## Power Rating",
+            f"",
+            f"**{self.power_rating}/100**",
+        ])
+
+        # Casting recipe
+        if self.casting_recipe:
+            md_lines.extend([
+                f"",
+                f"## Casting Recipe",
+                f"",
+            ])
+            for step in self.casting_recipe:
+                md_lines.append(f"1. {step}")
+
         return "\n".join(md_lines)
 
     def to_html(self) -> str:
@@ -801,6 +895,17 @@ class Spell:
         <ul class="tags">
 {tag_items}
         </ul>
+      </div>"""
+
+        recipe_html = ""
+        if self.casting_recipe:
+            recipe_items = "\n".join(f'          <li>{html_escape(step)}</li>' for step in self.casting_recipe)
+            recipe_html = f"""
+      <div class="section">
+        <h3>Casting Recipe</h3>
+        <ol>
+{recipe_items}
+        </ol>
       </div>"""
 
         return f"""<!DOCTYPE html>
@@ -925,8 +1030,126 @@ class Spell:
     <h2>Lore</h2>
     <p class="lore">{html_escape(self.backstory)}</p>
   </div>{tags_html}
+  <div class="section">
+    <h2>Power Rating</h2>
+    <p><strong>{self.power_rating}/100</strong></p>
+  </div>{recipe_html}
 </body>
 </html>"""
+
+
+    def to_latex(self) -> str:
+        """Render the spell as a LaTeX document suitable for PDF compilation.
+
+        Generates a complete standalone .tex file with a dark-fantasy theme
+        matching the terminal output style.
+        """
+        level_str = SPELL_LEVELS[self.level]
+        components = []
+        if self.verbal:
+            components.append("V")
+        if self.somatic:
+            components.append("S")
+        if self.material != "None":
+            components.append("M (" + _latex_escape(self.material) + ")")
+        comp_str = ", ".join(components)
+
+        sigil_lines = "\n".join(_latex_escape(line) for line in self.sigil)
+        diagram_lines = "\n".join(_latex_escape(line) for line in self.diagram)
+        recipe_lines = "\n".join("  \\item " + _latex_escape(step) for step in self.casting_recipe)
+
+        higher_levels_tex = ""
+        if self.higher_levels:
+            higher_levels_tex = (
+                "\\subsection*{At Higher Levels}\n"
+                + _latex_escape(self.higher_levels) + "\n"
+            )
+
+        tags_tex = ""
+        if self.tags:
+            tag_items = ", ".join(_latex_escape(t) for t in self.tags)
+            tags_tex = "\\subsection*{Tags}\n" + tag_items + "\n"
+
+        return (
+            "\\documentclass{article}\n"
+            "\\usepackage[utf8]{inputenc}\n"
+            "\\usepackage{geometry}\n"
+            "\\geometry{a4paper, margin=1in}\n"
+            "\\usepackage{xcolor}\n"
+            "\\usepackage{framed}\n"
+            "\\usepackage{hyperref}\n"
+            "\n"
+            "\\definecolor{schoolcolor}{RGB}{128,0,0}\n"
+            "\\definecolor{raritycolor}{RGB}{0,100,0}\n"
+            "\\definecolor{loregray}{RGB}{100,100,100}\n"
+            "\n"
+            "\\title{" + _latex_escape(self.name) + "}\n"
+            "\\author{Spell Grimoire Generator v" + _latex_escape(__version__) + "}\n"
+            "\n"
+            "\\begin{document}\n"
+            "\\maketitle\n"
+            "\n"
+            "\\begin{center}\n"
+            "\\textcolor{schoolcolor}{\\Large " + _latex_escape(self.school) + "}"
+            + " --- " + _latex_escape(level_str) + " Level\n"
+            "\\quad \\textcolor{raritycolor}{[" + _latex_escape(self.rarity) + "]}\n"
+            "\\quad Mana: " + _latex_escape(str(self.mana_cost)) + "\n"
+            "\\quad Scroll: " + _latex_escape(f"{self.scroll_value:,} gp") + "\n"
+            "\\end{center}\n"
+            "\n"
+            "\\noindent\n"
+            "\\textbf{Casting Time:} " + _latex_escape(self.casting_time) + "\\\\\n"
+            "\\textbf{Range:} " + _latex_escape(self.rng) + "\\\\\n"
+            "\\textbf{Duration:} " + _latex_escape(self.duration) + "\\\\\n"
+            "\\textbf{Components:} " + _latex_escape(comp_str) + "\n"
+            "\n"
+            "\\subsection*{Sigil}\n"
+            "\\begin{verbatim}\n"
+            + sigil_lines + "\n"
+            "\\end{verbatim}\n"
+            "\n"
+            "\\subsection*{Spell Diagram}\n"
+            "\\begin{verbatim}\n"
+            + diagram_lines + "\n"
+            "\\end{verbatim}\n"
+            "\n"
+            "\\subsection*{Description}\n"
+            + _latex_escape(self.description) + "\n"
+            "\n"
+            + higher_levels_tex
+            + "\\subsection*{Incantation}\n"
+            "\\textit{" + _latex_escape(self.incantation) + "}\n"
+            "\n"
+            "\\subsection*{Lore}\n"
+            "\\textcolor{loregray}{\\textit{" + _latex_escape(self.backstory) + "}}\n"
+            "\n"
+            "\\subsection*{Casting Recipe}\n"
+            "\\begin{enumerate}\n"
+            + recipe_lines + "\n"
+            "\\end{enumerate}\n"
+            "\n"
+            + tags_tex
+            + "\\subsection*{Power Rating}\n"
+            + _latex_escape(str(self.power_rating)) + "/100\n"
+            "\n"
+            "\\end{document}\n"
+        )
+
+
+def _latex_escape(text: str) -> str:
+    """Escape special LaTeX characters in a string."""
+    return (text
+            .replace("\\", "\\textbackslash{}")
+            .replace("{", "\\{")
+            .replace("}", "\\}")
+            .replace("$", "\\$")
+            .replace("&", "\\&")
+            .replace("#", "\\#")
+            .replace("^", "\\^{}")
+            .replace("_", "\\_")
+            .replace("~", "\\~{}")
+            .replace("%", "\\%")
+            )
 
 
 # ──────────────────────────────────────────────
@@ -1060,6 +1283,329 @@ def calculate_scroll_value(level: int, rarity: str) -> int:
     else:
         value = round(value / 100) * 100
     return value
+
+
+# ──────────────────────────────────────────────
+# Power rating calculation
+# ──────────────────────────────────────────────
+
+def calculate_power_rating(spell: 'Spell') -> int:
+    """Calculate a power rating for a spell (0-100 scale).
+
+    Considers level, rarity, mana cost, scroll value, duration,
+    casting time, and components. Higher ratings mean more powerful spells.
+
+    Args:
+        spell: A Spell object.
+
+    Returns:
+        An integer power rating from 0-100.
+    """
+    score = 0
+
+    # Level contribution (0-9 → 0-30 points)
+    score += spell.level * 3 + (spell.level * spell.level) // 3
+
+    # Rarity contribution
+    rarity_scores = {"Common": 2, "Uncommon": 5, "Rare": 10, "Very Rare": 18, "Legendary": 30}
+    score += rarity_scores.get(spell.rarity, 0)
+
+    # Mana cost contribution (up to ~10 points)
+    score += min(spell.mana_cost // 5, 10)
+
+    # Scroll value contribution (up to ~10 points)
+    score += min(spell.scroll_value // 2500, 10)
+
+    # Duration bonus
+    duration_bonuses = {
+        "Instantaneous": 2,
+        "1 round": 1,
+        "1 minute": 3,
+        "10 minutes": 4,
+        "1 hour": 5,
+        "8 hours": 6,
+        "24 hours": 7,
+        "Concentration, up to 1 minute": 4,
+        "Concentration, up to 10 minutes": 5,
+        "Concentration, up to 1 hour": 7,
+        "Until dispelled": 8,
+        "Until the next dawn": 6,
+    }
+    score += duration_bonuses.get(spell.duration, 3)
+
+    # Casting time bonus (quicker = slightly higher rating for combat)
+    casting_bonuses = {
+        "1 reaction": 3,
+        "1 bonus action": 3,
+        "1 action": 2,
+        "1 minute": 1,
+        "10 minutes": 0,
+        "1 hour": -1,
+        "8 hours": -2,
+        "24 hours": -3,
+    }
+    score += casting_bonuses.get(spell.casting_time, 0)
+
+    # Component bonus (more components = more complex/rare)
+    comp_count = sum([spell.verbal, spell.somatic, spell.material != "None"])
+    score += comp_count
+
+    # Cap at 0-100
+    return max(0, min(100, score))
+
+
+# ──────────────────────────────────────────────
+# Casting recipe generation
+# ──────────────────────────────────────────────
+
+def generate_casting_recipe(spell: 'Spell') -> List[str]:
+    """Generate a step-by-step casting recipe for a spell.
+
+    Returns a list of strings, each being one step of the casting process.
+    Steps include preparation, gesture, incantation, and final release.
+
+    Args:
+        spell: A Spell object.
+
+    Returns:
+        A list of instruction strings.
+    """
+    steps = []
+
+    # Pick reagents
+    if spell.material != "None":
+        primary_reagent = spell.material.split(" and ")[0].strip()
+    else:
+        primary_reagent = random.choice(REAGENTS[:10])  # Use a common reagent as flavor
+
+    direction = random.choice(DIRECTIONS)
+    color = SPELL_COLORS.get(spell.school, "blue")
+
+    # Step 1: Preparation
+    prep_template = random.choice(CASTING_PREPARATIONS)
+    prep_step = prep_template.format(
+        reagent=primary_reagent,
+        color=color,
+        direction=direction,
+        school_lower=spell.school.lower(),
+    )
+    steps.append(f"1. {prep_step}")
+
+    # Step 2: Material (if any)
+    if spell.material != "None":
+        steps.append(f"2. Present the material component: {spell.material}")
+    else:
+        steps.append(f"2. Focus your will and steady your breathing")
+
+    # Step 3: Somatic gesture
+    if spell.somatic:
+        gesture_template = random.choice(CASTING_GESTURES)
+        gesture = gesture_template.format(
+            school_lower=spell.school.lower(),
+            direction=direction,
+        )
+        steps.append(f"3. {gesture}")
+    else:
+        steps.append(f"3. Keep your hands still — this spell requires no gestures")
+
+    # Step 4: Verbal incantation
+    if spell.verbal:
+        steps.append(f"4. Speak the incantation: {spell.incantation}")
+    else:
+        steps.append(f"4. Silence your mind — this spell requires no spoken words")
+
+    # Step 5: Final release
+    final_template = random.choice(CASTING_FINALS)
+    steps.append(f"5. {final_template}")
+
+    return steps
+
+
+# ──────────────────────────────────────────────
+# Spell compatibility scoring
+# ──────────────────────────────────────────────
+
+def calculate_compatibility(spell1: 'Spell', spell2: 'Spell') -> Tuple[int, str]:
+    """Calculate a compatibility score and description between two spells.
+
+    Returns a score from -10 to 10 and a description string.
+    Positive scores mean the spells work well together; negative means they clash.
+
+    Args:
+        spell1: First spell.
+        spell2: Second spell.
+
+    Returns:
+        A tuple of (score, description).
+    """
+    score = 0
+    reasons = []
+
+    # Same school bonus
+    if spell1.school == spell2.school:
+        score += 3
+        reasons.append(f"Same school ({spell1.school}) provides thematic harmony")
+
+    # Synergy bonus
+    key1 = (spell1.school, spell2.school)
+    key2 = (spell2.school, spell1.school)
+    synergy_desc = SYNERGY_PAIRS.get(key1) or SYNERGY_PAIRS.get(key2)
+    if synergy_desc:
+        score += 2
+        reasons.append(synergy_desc)
+
+    # Conflict penalty
+    conflict_desc = CONFLICT_PAIRS.get(key1) or CONFLICT_PAIRS.get(key2)
+    if conflict_desc:
+        score -= 3
+        reasons.append(conflict_desc)
+
+    # Level proximity bonus
+    if abs(spell1.level - spell2.level) <= 2:
+        score += 1
+        reasons.append("Similar power levels enable tactical combinations")
+
+    # Mana cost proximity bonus
+    if abs(spell1.mana_cost - spell2.mana_cost) <= 10:
+        score += 1
+        reasons.append("Comparable mana requirements allow efficient resource allocation")
+
+    # Same rarity bonus
+    if spell1.rarity == spell2.rarity:
+        score += 1
+        reasons.append(f"Equal rarity ({spell1.rarity}) suggests balanced discovery")
+
+    # Build description
+    if score > 3:
+        desc = f"Excellent compatibility. {'; '.join(reasons[:2])}"
+    elif score > 0:
+        desc = f"Moderate compatibility. {reasons[0] if reasons else 'No significant interaction'}"
+    elif score == 0:
+        desc = "Neutral — these spells neither complement nor interfere with each other"
+    elif score > -3:
+        desc = f"Some tension. {reasons[0] if reasons else 'Minor incompatibility'}"
+    else:
+        desc = f"Strong incompatibility! {reasons[0] if reasons else 'These spells clash'}"
+
+    return (score, desc)
+
+
+# ──────────────────────────────────────────────
+# Power ranking rendering
+# ──────────────────────────────────────────────
+
+def render_power_ranking(spells: List['Spell'], color: bool = True) -> str:
+    """Render a power ranking table for a list of spells.
+
+    Spells are sorted by power rating from highest to lowest.
+
+    Args:
+        spells: List of Spell objects.
+        color: Whether to use ANSI colors.
+
+    Returns:
+        A formatted string with the power ranking table.
+    """
+    rst = RST if color else ""
+    bold = BOLD if color else ""
+    dim = DIM if color else ""
+
+    rated = [(spell, calculate_power_rating(spell)) for spell in spells]
+    rated.sort(key=lambda x: x[1], reverse=True)
+
+    lines = [
+        f"  {bold}⚔ Spell Power Ranking{rst}",
+        f"  {dim}{'─' * 60}{rst}",
+        "",
+    ]
+
+    for rank, (spell, rating) in enumerate(rated, 1):
+        sc = SCHOOL_COLORS.get(spell.school, "") if color else ""
+        rc = RARITIES.get(spell.rarity, {}).get("color", "") if color else ""
+        # Power bar
+        bar_filled = "█" * (rating // 5)
+        bar_empty = "░" * (20 - rating // 5)
+        bar = f"{bar_filled}{bar_empty}"
+
+        lines.append(
+            f"  {bold}{rank:>2}.{rst} {sc}{spell.name:<30}{rst}  "
+            f"{rc}[{spell.rarity}]{rst}  "
+            f"{bold}{rating:>3}{rst}/100 {dim}{bar}{rst}"
+        )
+
+    return "\n".join(lines)
+
+
+# ──────────────────────────────────────────────
+# All-schools overview rendering
+# ──────────────────────────────────────────────
+
+def render_all_schools(level: Optional[int] = None, rarity: Optional[str] = None,
+                      color: bool = True) -> str:
+    """Generate one spell per school and render them in a compact overview.
+
+    Args:
+        level: Optional spell level filter.
+        rarity: Optional rarity filter.
+        color: Whether to use ANSI colors.
+
+    Returns:
+        A formatted string showing one spell per school.
+    """
+    rst = RST if color else ""
+    bold = BOLD if color else ""
+    dim = DIM if color else ""
+
+    lines = [
+        f"  {bold}📚 All-Schools Overview{rst}",
+        f"  {dim}{'─' * 60}{rst}",
+        "",
+    ]
+
+    spells = []
+    for school in SCHOOLS:
+        spell = generate_spell(school=school, level=level, rarity=rarity)
+        spells.append(spell)
+        sc = SCHOOL_COLORS.get(spell.school, "") if color else ""
+        rc = RARITIES.get(spell.rarity, {}).get("color", "") if color else ""
+        power = calculate_power_rating(spell)
+
+        lines.append(
+            f"  {sc}{bold}{spell.school:<14}{rst} "
+            f"{spell.name:<30} "
+            f"{rc}[{spell.rarity}]{rst} "
+            f"{SPELL_LEVELS[spell.level]:<4} "
+            f"Mana:{spell.mana_cost:<4} "
+            f"Pwr:{power:>3}"
+        )
+        # Brief description (truncated)
+        desc = spell.description
+        if len(desc) > 70:
+            desc = desc[:67] + "..."
+        lines.append(f"  {dim}    {desc}{rst}")
+        lines.append("")
+
+    # Compatibility summary
+    lines.append(f"  {bold}Compatibility Summary:{rst}")
+    compat_pairs = []
+    for i in range(len(spells)):
+        for j in range(i + 1, len(spells)):
+            score, _ = calculate_compatibility(spells[i], spells[j])
+            compat_pairs.append((spells[i], spells[j], score))
+    compat_pairs.sort(key=lambda x: x[2], reverse=True)
+
+    best = compat_pairs[0] if compat_pairs else None
+    worst = compat_pairs[-1] if compat_pairs else None
+    if best:
+        sc1 = SCHOOL_COLORS.get(best[0].school, "") if color else ""
+        sc2 = SCHOOL_COLORS.get(best[1].school, "") if color else ""
+        lines.append(f"  {sc1}{best[0].school}{rst} + {sc2}{best[1].school}{rst}: best synergy ({best[2]:+d})")
+    if worst:
+        sc1 = SCHOOL_COLORS.get(worst[0].school, "") if color else ""
+        sc2 = SCHOOL_COLORS.get(worst[1].school, "") if color else ""
+        lines.append(f"  {sc1}{worst[0].school}{rst} + {sc2}{worst[1].school}{rst}: worst clash ({worst[2]:+d})")
+
+    return "\n".join(lines)
 
 
 # ──────────────────────────────────────────────
@@ -1348,11 +1894,11 @@ def generate_spell(school: Optional[str] = None, level: Optional[int] = None,
 
     # Mana cost
     mana_cost = calculate_mana_cost(level, school, rarity, casting_time, duration)
-
     # Scroll value (gold piece price)
     scroll_value = calculate_scroll_value(level, rarity)
 
-    return Spell(
+    # Build the spell object first (without power_rating and casting_recipe)
+    spell = Spell(
         name=name, school=school, level=level, rarity=rarity,
         casting_time=casting_time, rng=rng, duration=duration,
         verbal=verbal, somatic=somatic, material=material,
@@ -1362,6 +1908,12 @@ def generate_spell(school: Optional[str] = None, level: Optional[int] = None,
         higher_levels=higher_levels, tags=tags, mana_cost=mana_cost,
         scroll_value=scroll_value,
     )
+
+    # Calculate power rating and casting recipe (depend on the spell object)
+    spell.power_rating = calculate_power_rating(spell)
+    spell.casting_recipe = generate_casting_recipe(spell)
+
+    return spell
 
 
 # ──────────────────────────────────────────────
@@ -1574,6 +2126,32 @@ def render_grimoire_page(spell: Spell, color: bool = True) -> str:
         lines.append(f"  ║ {DIM}{ll}{rst}{' ' * max(ll_pad, 0)} ║")
 
     lines.append(f"  ║{' ' * (page_width - 4)}║")
+
+    # Power rating
+    lines.append(f"  ╠{'─' * (page_width - 4)}╣")
+    pr_label = f"Power Rating: {spell.power_rating}/100"
+    bar_filled = "█" * (spell.power_rating // 5)
+    bar_empty = "░" * (20 - spell.power_rating // 5)
+    pr_bar = f"{pr_label}  {bar_filled}{bar_empty}"
+    pr_pad = page_width - 6 - len(pr_bar)
+    lines.append(f"  ║ {BOLD}{pr_bar}{rst}{' ' * max(pr_pad, 0)} ║")
+
+    lines.append(f"  ║{' ' * (page_width - 4)}║")
+
+    # Casting recipe
+    if spell.casting_recipe:
+        lines.append(f"  ╠{'─' * (page_width - 4)}╣")
+        lines.append(f"  ║{' ' * (page_width - 4)}║")
+        recipe_header = f"{BOLD}Casting Recipe{rst}" if color else "Casting Recipe"
+        rh_pad = page_width - 6 - len("Casting Recipe")
+        lines.append(f"  ║ {recipe_header}{' ' * max(rh_pad, 0)} ║")
+        lines.append(f"  ║{' ' * (page_width - 4)}║")
+        for step in spell.casting_recipe:
+            step_lines = wrap_text(step, width=page_width - 8)
+            for sl in step_lines:
+                sl_pad = page_width - 6 - len(sl)
+                lines.append(f"  ║ {sl}{' ' * max(sl_pad, 0)} ║")
+        lines.append(f"  ║{' ' * (page_width - 4)}║")
 
     # Bottom border
     lines.append(f"  ╚{'═' * (page_width - 4)}╝")
@@ -1877,6 +2455,8 @@ def load_spells(filepath: str) -> List[Spell]:
             tags=d.get("tags", []),
             mana_cost=d.get("mana_cost", 0),
             scroll_value=d.get("scroll_value", calculate_scroll_value(d.get("level", 0), d.get("rarity", "Common"))),
+            power_rating=d.get("power_rating", 0),
+            casting_recipe=d.get("casting_recipe", []),
         )
         spells.append(spell)
     return spells
@@ -1906,12 +2486,15 @@ def interactive_mode():
         print("  9. View spell history")
         print("  c. Find conflicts in recent spells")
         print("  t. View statistics")
+        print("  p. Power ranking of recent spells")
+        print("  a. All-schools overview")
+        print("  x. Compare compatibility of two spells")
         print("  s. Save spells to file")
         print("  l. Load spells from file")
         print("  q. Quit")
         print()
 
-        choice = input(f"{BOLD}Choose [1-9/c/t/s/l/q]:{RST} ").strip().lower()
+        choice = input(f"{BOLD}Choose [1-9/c/t/p/a/x/s/l/q]:{RST} ").strip().lower()
 
         if choice == "q":
             print(f"\n{DIM}May your spells always find their mark!{RST}\n")
@@ -2048,6 +2631,24 @@ def interactive_mode():
                     print(f"  - {spell.name} ({SPELL_LEVELS[spell.level]} {spell.school})")
             except (OSError, json.JSONDecodeError, KeyError) as e:
                 print(f"Error loading: {e}")
+        elif choice == "p":
+            if len(history) < 2:
+                print(f"\n{DIM}Generate at least 2 spells first.{RST}")
+            else:
+                print(render_power_ranking(history, color=True))
+        elif choice == "a":
+            print(render_all_schools(color=True))
+        elif choice == "x":
+            if len(history) < 2:
+                spell1 = generate_spell()
+                spell2 = generate_spell()
+                history.extend([spell1, spell2])
+            else:
+                spell1 = history[-2] if len(history) >= 2 else generate_spell()
+                spell2 = history[-1]
+            score, desc = calculate_compatibility(spell1, spell2)
+            print(f"\n  {BOLD}Compatibility Score:{RST} {score:+d}/10")
+            print(f"  {BOLD}Assessment:{RST} {desc}")
 
 
 # ──────────────────────────────────────────────
@@ -2119,6 +2720,14 @@ Examples:
                         help="Load and display spells from a JSON file")
     parser.add_argument("--seed", type=int,
                         help="Random seed for reproducible spells")
+    parser.add_argument("--latex", action="store_true",
+                        help="Output spell as a LaTeX document")
+    parser.add_argument("--power-ranking", type=int, metavar="N",
+                        help="Generate N spells and rank them by power rating")
+    parser.add_argument("--all-schools", action="store_true",
+                        help="Generate one spell per school and show an overview")
+    parser.add_argument("--compatibility", action="store_true",
+                        help="Calculate compatibility score between two spells")
 
     args = parser.parse_args()
 
@@ -2146,6 +2755,9 @@ Examples:
             elif args.html:
                 for spell in loaded:
                     print(spell.to_html())
+            elif args.latex:
+                for spell in loaded:
+                    print(spell.to_latex())
             else:
                 for spell in loaded:
                     print(render_grimoire_page(spell, color=color))
@@ -2360,6 +2972,80 @@ Examples:
             spells_list.append(spell)
 
         print(render_stats(spells_list, color=color))
+
+        if args.save:
+            save_spells(spells_list, args.save)
+            print(f"Saved {len(spells_list)} spells to {args.save}")
+        return
+
+    # Power ranking mode
+    if args.power_ranking:
+        num = args.power_ranking
+        spells_list = []
+        for _ in range(num):
+            spell = generate_spell(school=args.school, level=args.level, rarity=args.rarity)
+            spells_list.append(spell)
+
+        # Show each spell
+        for spell in spells_list:
+            print(render_grimoire_page(spell, color=color))
+            print()
+
+        # Show power ranking
+        print(render_power_ranking(spells_list, color=color))
+
+        if args.save:
+            save_spells(spells_list, args.save)
+            print(f"Saved {len(spells_list)} spells to {args.save}")
+        return
+
+    # All-schools mode
+    if args.all_schools:
+        print(render_all_schools(level=args.level, rarity=args.rarity, color=color))
+        return
+
+    # Compatibility mode
+    if args.compatibility:
+        spell1 = generate_spell(school=args.school, level=args.level, rarity=args.rarity)
+        spell2 = generate_spell(school=args.school, level=args.level, rarity=args.rarity)
+        score, desc = calculate_compatibility(spell1, spell2)
+
+        print(render_grimoire_page(spell1, color=color))
+        print()
+        print(render_grimoire_page(spell2, color=color))
+        print()
+
+        rst = RST if color else ""
+        bold = BOLD if color else ""
+        print(f"  {bold}Compatibility Score:{rst} {score:+d}/10")
+        print(f"  {bold}Assessment:{rst} {desc}")
+
+        if args.save:
+            save_spells([spell1, spell2], args.save)
+            print(f"Saved 2 spells to {args.save}")
+        return
+
+    # LaTeX output mode
+    if args.latex:
+        num = max(args.count, 1)
+        spells_list = []
+        latex_parts = []
+        for _ in range(num):
+            spell = generate_spell(school=args.school, level=args.level, rarity=args.rarity)
+            spells_list.append(spell)
+            latex_parts.append(spell.to_latex())
+        output = "\n\n".join(latex_parts)
+
+        if args.output:
+            try:
+                with open(args.output, "w", encoding="utf-8") as f:
+                    f.write(output)
+                print(f"LaTeX written to {args.output}")
+            except OSError as e:
+                print(f"Error writing to {args.output}: {e}", file=sys.stderr)
+                sys.exit(1)
+        else:
+            print(output)
 
         if args.save:
             save_spells(spells_list, args.save)

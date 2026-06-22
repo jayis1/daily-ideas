@@ -22,6 +22,9 @@ from grimoire import (
     format_duration_phrase, format_duration_phrase_cap, format_hp_phrase,
     calculate_scroll_value, find_conflicts, render_conflicts,
     render_stats, html_escape,
+    calculate_power_rating, generate_casting_recipe,
+    calculate_compatibility, render_power_ranking, render_all_schools,
+    _latex_escape,
     _reset_generated_names,
     __version__,
 )
@@ -1201,6 +1204,285 @@ class TestBugFixes:
         assert "gp" in result.stdout, "CLI --list should include gp scroll values"
 
 
+class TestPowerRating:
+    """Tests for the calculate_power_rating function."""
+
+    def test_power_rating_range(self):
+        """Power rating should be between 0 and 100."""
+        random.seed(42)
+        _reset_generated_names()
+        spell = generate_spell()
+        assert 0 <= spell.power_rating <= 100, f"Power rating {spell.power_rating} out of range"
+
+    def test_power_rating_increases_with_level(self):
+        """Higher level spells should generally have higher power ratings."""
+        random.seed(100)
+        _reset_generated_names()
+        low = generate_spell(level=1)
+        random.seed(101)
+        _reset_generated_names()
+        high = generate_spell(level=7)
+        # Not guaranteed due to randomness, but the base contribution is higher
+        assert high.power_rating >= low.power_rating - 10, \
+            f"Level 7 power ({high.power_rating}) too low vs level 1 ({low.power_rating})"
+
+    def test_power_rating_in_dict(self):
+        """Power rating should be included in to_dict output."""
+        random.seed(42)
+        _reset_generated_names()
+        spell = generate_spell()
+        d = spell.to_dict()
+        assert "power_rating" in d
+        assert d["power_rating"] == spell.power_rating
+
+    def test_power_rating_in_json(self):
+        """Power rating should be in JSON output."""
+        random.seed(42)
+        _reset_generated_names()
+        spell = generate_spell()
+        j = spell.to_json()
+        data = json.loads(j)
+        assert "power_rating" in data
+
+    def test_power_rating_rendered(self):
+        """Power rating should appear in grimoire page rendering."""
+        random.seed(42)
+        _reset_generated_names()
+        spell = generate_spell()
+        page = render_grimoire_page(spell, color=False)
+        assert "Power Rating" in page, "Power rating section missing from page"
+
+
+class TestCastingRecipe:
+    """Tests for the generate_casting_recipe function."""
+
+    def test_recipe_has_steps(self):
+        """Generated spell should have casting recipe steps."""
+        random.seed(42)
+        _reset_generated_names()
+        spell = generate_spell()
+        assert len(spell.casting_recipe) >= 3, "Casting recipe should have at least 3 steps"
+
+    def test_recipe_steps_are_strings(self):
+        """Each recipe step should be a string."""
+        random.seed(42)
+        _reset_generated_names()
+        spell = generate_spell()
+        for step in spell.casting_recipe:
+            assert isinstance(step, str), f"Recipe step is not a string: {step}"
+
+    def test_recipe_in_dict(self):
+        """Casting recipe should be in to_dict output."""
+        random.seed(42)
+        _reset_generated_names()
+        spell = generate_spell()
+        d = spell.to_dict()
+        assert "casting_recipe" in d
+        assert len(d["casting_recipe"]) > 0
+
+    def test_recipe_in_json(self):
+        """Casting recipe should be in JSON output."""
+        random.seed(42)
+        _reset_generated_names()
+        spell = generate_spell()
+        j = spell.to_json()
+        data = json.loads(j)
+        assert "casting_recipe" in data
+
+    def test_recipe_rendered(self):
+        """Casting recipe should appear in grimoire page rendering."""
+        random.seed(42)
+        _reset_generated_names()
+        spell = generate_spell()
+        page = render_grimoire_page(spell, color=False)
+        assert "Casting Recipe" in page, "Casting recipe section missing from page"
+
+
+class TestCompatibility:
+    """Tests for the calculate_compatibility function."""
+
+    def test_compatibility_returns_tuple(self):
+        """Compatibility should return (score, description) tuple."""
+        random.seed(42)
+        _reset_generated_names()
+        s1 = generate_spell()
+        random.seed(43)
+        _reset_generated_names()
+        s2 = generate_spell()
+        result = calculate_compatibility(s1, s2)
+        assert isinstance(result, tuple), "Should return a tuple"
+        assert len(result) == 2, "Should return (score, description)"
+        score, desc = result
+        assert isinstance(score, int), "Score should be int"
+        assert isinstance(desc, str), "Description should be str"
+        assert -10 <= score <= 10, f"Score {score} out of range"
+
+    def test_same_school_compatibility(self):
+        """Spells of the same school should have positive compatibility."""
+        random.seed(42)
+        _reset_generated_names()
+        s1 = generate_spell(school="Evocation")
+        random.seed(43)
+        _reset_generated_names()
+        s2 = generate_spell(school="Evocation")
+        score, _ = calculate_compatibility(s1, s2)
+        assert score > 0, f"Same school compatibility should be positive, got {score}"
+
+
+class TestPowerRanking:
+    """Tests for the render_power_ranking function."""
+
+    def test_power_ranking_output(self):
+        """Power ranking should produce output containing ranking info."""
+        random.seed(42)
+        _reset_generated_names()
+        spells = [generate_spell() for _ in range(3)]
+        output = render_power_ranking(spells, color=False)
+        assert "Power Ranking" in output or "Ranking" in output, "Missing ranking header"
+
+    def test_power_ranking_cli(self):
+        """--power-ranking CLI flag should work."""
+        result = subprocess.run(
+            [sys.executable, "grimoire.py", "--seed", "42", "--power-ranking", "2", "--no-color"],
+            capture_output=True, text=True, cwd=os.path.dirname(os.path.abspath(__file__)),
+        )
+        assert result.returncode == 0, f"Power ranking CLI failed: {result.stderr}"
+
+
+class TestAllSchools:
+    """Tests for the render_all_schools function."""
+
+    def test_all_schools_output(self):
+        """All-schools overview should mention all schools."""
+        random.seed(42)
+        _reset_generated_names()
+        output = render_all_schools(color=False)
+        for school in SCHOOLS:
+            assert school in output, f"School {school} missing from all-schools output"
+
+    def test_all_schools_cli(self):
+        """--all-schools CLI flag should work."""
+        result = subprocess.run(
+            [sys.executable, "grimoire.py", "--seed", "42", "--all-schools", "--no-color"],
+            capture_output=True, text=True, cwd=os.path.dirname(os.path.abspath(__file__)),
+        )
+        assert result.returncode == 0, f"All-schools CLI failed: {result.stderr}"
+
+
+class TestLatexExport:
+    """Tests for the LaTeX export feature."""
+
+    def test_latex_has_documentclass(self):
+        """LaTeX output should start with documentclass."""
+        random.seed(42)
+        _reset_generated_names()
+        spell = generate_spell()
+        latex = spell.to_latex()
+        assert "\\documentclass" in latex, "Missing \\documentclass in LaTeX output"
+
+    def test_latex_has_begin_document(self):
+        """LaTeX output should have begin document."""
+        random.seed(42)
+        _reset_generated_names()
+        spell = generate_spell()
+        latex = spell.to_latex()
+        assert "\\begin{document}" in latex, "Missing \\begin{document} in LaTeX output"
+        assert "\\end{document}" in latex, "Missing \\end{document} in LaTeX output"
+
+    def test_latex_has_spell_name(self):
+        """LaTeX output should contain the spell name."""
+        random.seed(42)
+        _reset_generated_names()
+        spell = generate_spell()
+        latex = spell.to_latex()
+        assert spell.name in latex, "Spell name missing from LaTeX output"
+
+    def test_latex_has_power_rating(self):
+        """LaTeX output should contain power rating."""
+        random.seed(42)
+        _reset_generated_names()
+        spell = generate_spell()
+        latex = spell.to_latex()
+        assert "Power Rating" in latex, "Power rating missing from LaTeX output"
+
+    def test_latex_has_casting_recipe(self):
+        """LaTeX output should contain casting recipe."""
+        random.seed(42)
+        _reset_generated_names()
+        spell = generate_spell()
+        latex = spell.to_latex()
+        assert "Casting Recipe" in latex, "Casting recipe missing from LaTeX output"
+
+    def test_latex_escape(self):
+        """_latex_escape should handle special characters."""
+        assert "\\$" in _latex_escape("$100")
+        assert "\\&" in _latex_escape("A & B")
+        assert "\\#" in _latex_escape("#tag")
+        assert "\\%" in _latex_escape("50%")
+
+    def test_latex_cli_flag(self):
+        """--latex CLI flag should work."""
+        result = subprocess.run(
+            [sys.executable, "grimoire.py", "--seed", "42", "--latex", "--no-color"],
+            capture_output=True, text=True, cwd=os.path.dirname(os.path.abspath(__file__)),
+        )
+        assert result.returncode == 0, f"LaTeX CLI failed: {result.stderr}"
+        assert "\\documentclass" in result.stdout, "LaTeX output missing documentclass"
+
+
+class TestCompatibilityCLI:
+    """Tests for the --compatibility CLI flag."""
+
+    def test_compatibility_cli(self):
+        """--compatibility CLI flag should work."""
+        result = subprocess.run(
+            [sys.executable, "grimoire.py", "--seed", "42", "--compatibility", "--no-color"],
+            capture_output=True, text=True, cwd=os.path.dirname(os.path.abspath(__file__)),
+        )
+        assert result.returncode == 0, f"Compatibility CLI failed: {result.stderr}"
+        assert "Compatibility Score" in result.stdout, "Missing compatibility score in output"
+
+
+class TestMarkdownNewFields:
+    """Tests that new fields appear in markdown export."""
+
+    def test_markdown_has_power_rating(self):
+        """Markdown export should include power rating."""
+        random.seed(42)
+        _reset_generated_names()
+        spell = generate_spell()
+        md = spell.to_markdown()
+        assert "Power Rating" in md, "Power rating missing from markdown"
+
+    def test_markdown_has_casting_recipe(self):
+        """Markdown export should include casting recipe."""
+        random.seed(42)
+        _reset_generated_names()
+        spell = generate_spell()
+        md = spell.to_markdown()
+        assert "Casting Recipe" in md, "Casting recipe missing from markdown"
+
+
+class TestHTMLNewFields:
+    """Tests that new fields appear in HTML export."""
+
+    def test_html_has_power_rating(self):
+        """HTML export should include power rating."""
+        random.seed(42)
+        _reset_generated_names()
+        spell = generate_spell()
+        html = spell.to_html()
+        assert "Power Rating" in html, "Power rating missing from HTML"
+
+    def test_html_has_casting_recipe(self):
+        """HTML export should include casting recipe."""
+        random.seed(42)
+        _reset_generated_names()
+        spell = generate_spell()
+        html = spell.to_html()
+        assert "Casting Recipe" in html, "Casting recipe missing from HTML"
+
+
 if __name__ == "__main__":
     # Simple test runner
     import traceback
@@ -1213,6 +1495,9 @@ if __name__ == "__main__":
         TestSeedDeterminism, TestGrimoireSave,
         TestScrollValue, TestConflicts, TestStats, TestHTMLExport,
         TestCLIConflictsStats, TestBugFixes,
+        TestPowerRating, TestCastingRecipe, TestCompatibility,
+        TestPowerRanking, TestAllSchools, TestLatexExport,
+        TestCompatibilityCLI, TestMarkdownNewFields, TestHTMLNewFields,
     ]
     passed = 0
     failed = 0
