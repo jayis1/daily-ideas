@@ -19,6 +19,8 @@ from grimoire import (
     wrap_text, pluralize, calculate_mana_cost, generate_tags,
     find_synergies, render_synergies, save_spells, load_spells,
     MANA_COSTS, MANA_MULTIPLIERS, TAG_POOLS, SYNERGY_PAIRS,
+    format_duration_phrase, format_duration_phrase_cap, format_hp_phrase,
+    _reset_generated_names,
     __version__,
 )
 
@@ -743,6 +745,142 @@ class TestEdgeCases:
             os.unlink(tmp)
 
 
+class TestDurationPhrase:
+    """Test duration phrase formatting."""
+
+    def test_instantaneous_is_empty(self):
+        """Instantaneous duration should produce no phrase."""
+        assert format_duration_phrase("Instantaneous") == ""
+
+    def test_until_dispelled(self):
+        """'Until dispelled' should produce 'until dispelled'."""
+        result = format_duration_phrase("Until dispelled")
+        assert result == " until dispelled"
+
+    def test_until_the_next_dawn(self):
+        """'Until the next dawn' should produce 'until the next dawn'."""
+        result = format_duration_phrase("Until the next dawn")
+        assert result == " until the next dawn"
+
+    def test_regular_duration(self):
+        """Regular durations should produce 'for X' phrases."""
+        assert format_duration_phrase("1 minute") == " for 1 minute"
+        assert format_duration_phrase("10 minutes") == " for 10 minutes"
+        assert format_duration_phrase("1 hour") == " for 1 hour"
+        assert format_duration_phrase("24 hours") == " for 24 hours"
+        assert format_duration_phrase("1 round") == " for 1 round"
+
+    def test_concentration_duration(self):
+        """Concentration durations should produce 'for up to X' phrases."""
+        result = format_duration_phrase("Concentration, up to 1 minute")
+        assert result == " for up to 1 minute"
+        result = format_duration_phrase("Concentration, up to 10 minutes")
+        assert result == " for up to 10 minutes"
+        result = format_duration_phrase("Concentration, up to 1 hour")
+        assert result == " for up to 1 hour"
+
+    def test_duration_phrase_cap(self):
+        """Capitalized version should start with uppercase."""
+        assert format_duration_phrase_cap("1 minute") == " For 1 minute"
+        assert format_duration_phrase_cap("Instantaneous") == ""
+
+    def test_hp_phrase_singular(self):
+        """Singular count should produce 'with X HP'."""
+        assert format_hp_phrase(1, 25) == " with 25 HP"
+
+    def test_hp_phrase_plural(self):
+        """Plural count should produce ', each with X HP'."""
+        assert format_hp_phrase(3, 25) == ", each with 25 HP"
+
+
+class TestDescriptionGrammar:
+    """Test that generated descriptions have correct grammar."""
+
+    def test_no_for_instantaneous(self):
+        """Descriptions should never contain 'for Instantaneous'."""
+        random.seed(42)
+        for _ in range(200):
+            spell = generate_spell()
+            assert "for Instantaneous" not in spell.description, \
+                f"'for Instantaneous' found: {spell.description}"
+
+    def test_no_singular_each_with(self):
+        """Singular undead servant should not have 'each with'."""
+        random.seed(42)
+        for _ in range(200):
+            spell = generate_spell(school="Necromancy")
+            if "1 undead servant" in spell.description:
+                assert ", each with" not in spell.description, \
+                    f"Singular 'each with' found: {spell.description}"
+
+    def test_no_for_until(self):
+        """Descriptions should not have 'for Until' (capitalized)."""
+        random.seed(42)
+        for _ in range(200):
+            spell = generate_spell()
+            assert "for Until" not in spell.description, \
+                f"'for Until' found: {spell.description}"
+
+
+class TestSeedDeterminism:
+    """Test that --seed produces deterministic output."""
+
+    def test_seed_reset_produces_same_names(self):
+        """Same seed should produce same spell names after reset."""
+        _reset_generated_names()
+        random.seed(777)
+        names1 = [generate_spell().name for _ in range(10)]
+        _reset_generated_names()
+        random.seed(777)
+        names2 = [generate_spell().name for _ in range(10)]
+        assert names1 == names2, "Same seed should produce same names after reset"
+
+
+class TestGrimoireSave:
+    """Test that --grimoire with --save works correctly."""
+
+    def test_grimoire_save_flag(self):
+        """--grimoire --save should save spells to a JSON file."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            tmp = f.name
+        try:
+            result = subprocess.run(
+                [sys.executable, "grimoire.py", "--grimoire", "--no-color",
+                 "--seed", "42", "--save", tmp],
+                capture_output=True, text=True,
+                cwd=os.path.dirname(os.path.abspath(__file__)),
+            )
+            assert result.returncode == 0, f"Exit code {result.returncode}: {result.stderr}"
+            assert f"Saved 5 spells to {tmp}" in result.stdout, \
+                f"Expected save message in output: {result.stdout}"
+            # Verify file contents
+            with open(tmp) as f:
+                data = json.load(f)
+            assert len(data) == 5, f"Expected 5 spells, got {len(data)}"
+            assert all("name" in s for s in data), "Each spell should have a name"
+        finally:
+            os.unlink(tmp)
+
+    def test_list_save_flag(self):
+        """--list --save should save spells to a JSON file."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            tmp = f.name
+        try:
+            result = subprocess.run(
+                [sys.executable, "grimoire.py", "--list", "3", "--no-color",
+                 "--seed", "42", "--save", tmp],
+                capture_output=True, text=True,
+                cwd=os.path.dirname(os.path.abspath(__file__)),
+            )
+            assert result.returncode == 0, f"Exit code {result.returncode}: {result.stderr}"
+            assert f"Saved 3 spells to {tmp}" in result.stdout
+            with open(tmp) as f:
+                data = json.load(f)
+            assert len(data) == 3
+        finally:
+            os.unlink(tmp)
+
+
 if __name__ == "__main__":
     # Simple test runner
     import traceback
@@ -751,7 +889,8 @@ if __name__ == "__main__":
         TestSynergies, TestSaveLoad, TestRendering, TestSideBySide,
         TestMarkdownExport, TestSigil, TestDiagram, TestIncantation,
         TestPluralize, TestWrapText, TestJsonExport, TestCLI,
-        TestEdgeCases,
+        TestEdgeCases, TestDurationPhrase, TestDescriptionGrammar,
+        TestSeedDeterminism, TestGrimoireSave,
     ]
     passed = 0
     failed = 0

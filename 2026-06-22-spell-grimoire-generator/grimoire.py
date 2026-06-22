@@ -249,45 +249,45 @@ EFFECT_TEMPLATES = {
     ],
     "Necromancy": [
         "Drains {dice}d{sides} hit points from the target, healing the caster by half.",
-        "Animates {count_undead_servant} for {duration}, each with {hp} HP.",
+        "Animates {count_undead_servant}{duration_phrase}{hp_phrase}.",
         "Target must make a WIS save or take {dice}d{sides} necrotic damage and be frightened.",
         "Creates a {area}-foot zone of negative energy. Living creatures take {dice}d{sides} damage.",
     ],
     "Enchantment": [
-        "Target must make a WIS save or become {condition} for {duration}.",
-        "Up to {count_creature_become} {condition} for {duration}.",
-        "Target creature regards the caster as a trusted ally for {duration}.",
+        "Target must make a WIS save or become {condition}{duration_phrase}.",
+        "Up to {count_creature_become} become {condition}{duration_phrase}.",
+        "Target creature regards the caster as a trusted ally{duration_phrase}.",
         "The caster can issue a {count}-word command that the target must follow.",
     ],
     "Illusion": [
-        "Creates a {area}-foot illusory {illusion} that lasts for {duration}.",
-        "The caster becomes invisible for {duration} or until they attack.",
-        "Creates a {area}-foot zone where all sounds are muffled for {duration}.",
+        "Creates a {area}-foot illusory {illusion}{duration_phrase}.",
+        "The caster becomes invisible{duration_phrase} or until they attack.",
+        "Creates a {area}-foot zone where all sounds are muffled{duration_phrase}.",
         "Target sees a terrifying phantasm; WIS save or take {dice}d{sides} psychic damage.",
     ],
     "Conjuration": [
-        "Summons {count_creature_summoned} for {duration}.",
-        "Opens a portal to {plane} lasting {duration}.",
+        "Summons {count_creature_summoned}{duration_phrase}.",
+        "Opens a portal to {plane}{duration_phrase}.",
         "Teleports the caster and up to {count_ally} to a location within {area} miles.",
-        "Conjures a {area}-foot dome of {material_to} lasting {duration_short}.",
+        "Conjures a {area}-foot dome of {material_to}{duration_phrase}.",
     ],
     "Abjuration": [
-        "Creates a {area}-foot radius anti-magic field for {duration}.",
-        "Grants {count_creature_resistance} resistance to {damage_type} for {duration}.",
+        "Creates a {area}-foot radius anti-magic field{duration_phrase}.",
+        "Grants {count_creature_resistance} resistance to {damage_type}{duration_phrase}.",
         "Dispels all magical effects of level {level} or lower in a {area}-foot radius.",
-        "Creates a magical barrier with {hp} HP that lasts for {duration} or until destroyed.",
+        "Creates a magical barrier with {hp} HP{duration_phrase} or until destroyed.",
     ],
     "Divination": [
         "Reveals the location of {count_hidden_object} within {area} feet.",
         "The caster receives a vision of events up to {count_day} in the future.",
-        "For {duration}, the caster can see through walls and illusions within {area} feet.",
+        "The caster can see through walls and illusions within {area} feet{duration_phrase}.",
         "Answers {count_question} about the future with 90% accuracy.",
     ],
     "Transmutation": [
-        "Transforms {area} cubic feet of {material_from} into {material_to} for {duration}.",
-        "Target creature grows to {size}x their size for {duration}.",
-        "Target creature shrinks to 1/{size} their size for {duration}.",
-        "For {duration}, the caster gains the ability to {ability}.",
+        "Transforms {area} cubic feet of {material_from} into {material_to}{duration_phrase}.",
+        "Target creature grows to {size}x their size{duration_phrase}.",
+        "Target creature shrinks to 1/{size} their size{duration_phrase}.",
+        "{duration_phrase_cap}the caster gains the ability to {ability}.",
     ],
 }
 
@@ -735,6 +735,45 @@ class Spell:
 # Helper: ordinal suffix for level strings
 # ──────────────────────────────────────────────
 
+def format_duration_phrase(duration: str) -> str:
+    """Format a duration string for embedding in a description.
+
+    Returns a phrase like ' for 1 minute', ' for up to 10 minutes', etc.
+    For 'Instantaneous', returns an empty string (duration doesn't apply).
+    For durations starting with 'Concentration', returns ' for up to X'.
+    For 'Until dispelled' / 'Until the next dawn', returns ' until dispelled' / ' until the next dawn'.
+    """
+    if duration == "Instantaneous":
+        return ""
+    if duration.startswith("Until "):
+        return " " + duration[0].lower() + duration[1:]
+    if duration.startswith("Concentration, up to "):
+        return " for " + duration[len("Concentration, "):]  # "up to X"
+    return f" for {duration}"
+
+
+def format_duration_phrase_cap(duration: str) -> str:
+    """Like format_duration_phrase but with the first letter capitalized for sentence start."""
+    phrase = format_duration_phrase(duration)
+    if not phrase:
+        return ""
+    # Find the first letter and capitalize it
+    for i, ch in enumerate(phrase):
+        if ch.isalpha():
+            return phrase[:i] + ch.upper() + phrase[i+1:]
+    return phrase
+
+
+def format_hp_phrase(count: int, hp: int) -> str:
+    """Format the HP phrase for undead servant descriptions.
+
+    Returns ', each with X HP' for plural, or ' with X HP' for singular.
+    """
+    if count == 1:
+        return f" with {hp} HP"
+    return f", each with {hp} HP"
+
+
 def ordinal(n: int) -> str:
     """Return the ordinal string for a number: 1 → '1st', 2 → '2nd', 3 → '3rd', etc."""
     if 11 <= (n % 100) <= 13:
@@ -864,6 +903,12 @@ def choose_rarity(level: Optional[int] = None) -> str:
 # Track generated names to avoid duplicates within a session
 _generated_names: set = set()
 
+def _reset_generated_names():
+    """Clear the set of generated names. Called when a seed is set to ensure
+    deterministic output across runs."""
+    global _generated_names
+    _generated_names = set()
+
 def generate_spell(school: Optional[str] = None, level: Optional[int] = None,
                    rarity: Optional[str] = None) -> Spell:
     """Generate a complete procedural spell.
@@ -940,6 +985,11 @@ def generate_spell(school: Optional[str] = None, level: Optional[int] = None,
     duration_short = duration.split(",")[-1].strip().rstrip(".") if "," in duration else duration
     level_word = SPELL_LEVELS[level]
 
+    # Computed phrases for description templates
+    duration_phrase = format_duration_phrase(duration)
+    duration_phrase_cap = format_duration_phrase_cap(duration)
+    hp_phrase = format_hp_phrase(count, hp)
+
     # Pluralized count+Noun strings for grammar-correct descriptions
     count_undead_servant = pluralize(count, "undead servant", "undead servants")
     count_creature_become = pluralize(count, "creature becomes", "creatures become")
@@ -960,6 +1010,9 @@ def generate_spell(school: Optional[str] = None, level: Optional[int] = None,
         hp=hp, illusion=illusion, creature_type=creature_type,
         plane=plane, material_from=material_from, material_to=material_to,
         size=size, ability=ability, level=level,
+        duration_phrase=duration_phrase,
+        duration_phrase_cap=duration_phrase_cap,
+        hp_phrase=hp_phrase,
         count_undead_servant=count_undead_servant,
         count_creature_become=count_creature_become,
         count_creature_summoned=count_creature_summoned,
@@ -1670,6 +1723,7 @@ Examples:
 
     if args.seed is not None:
         random.seed(args.seed)
+        _reset_generated_names()
 
     color = not args.no_color
 
@@ -1790,9 +1844,75 @@ Examples:
         return
 
     if args.grimoire:
-        output = generate_grimoire(num_spells=5, school=args.school, color=color)
+        # Generate spells for grimoire mode and collect them for saving
+        num_spells = 5
+        spells_list = []
+        pages = []
+        grimoire_school = args.school
+        if color and grimoire_school and grimoire_school in SCHOOL_COLORS:
+            sc = SCHOOL_COLORS[grimoire_school]
+        else:
+            sc = ""
+        rst = RESET if color else ""
+        pw = 64
+        title = "G R I M O I R E   O F   S P E L L S"
+        content_width = pw - 4
+        title_pad_left = (content_width - len(title)) // 2
+        title_pad_right = content_width - len(title) - title_pad_left
+        lines = []
+        lines.append(f"  {sc}╔{'═' * (pw - 4)}╗{rst}")
+        lines.append(f"  {sc}║{' ' * (pw - 4)}║{rst}")
+        lines.append(f"  {sc}║{' ' * title_pad_left}{title}{' ' * title_pad_right}║{rst}")
+        lines.append(f"  {sc}║{' ' * (pw - 4)}║{rst}")
+        sep = f"{'─' * 50}"
+        sep_pad = pw - 6 - len(sep)
+        lines.append(f"  {sc}║ {sep}{' ' * max(sep_pad, 0)} ║{rst}")
+        if grimoire_school:
+            school_line = f"School of {grimoire_school}"
+            school_pad = pw - 6 - len(school_line)
+            lines.append(f"  {sc}║ {BOLD}{school_line}{rst}{sc}{' ' * max(school_pad, 0)} ║{rst}")
+        lines.append(f"  {sc}║{' ' * (pw - 4)}║{rst}")
+        lines.append(f"  {sc}╚{'═' * (pw - 4)}╝{rst}")
+        header = "\n".join(lines)
+        pages.append(header)
+
+        for i in range(num_spells):
+            spell = generate_spell(school=grimoire_school)
+            spells_list.append(spell)
+            page = render_grimoire_page(spell, color=color)
+            pages.append(page)
+            if i < num_spells - 1:
+                pages.append("\n")
+
+        output = "\n".join(pages)
+        if not color:
+            output = strip_ansi(output)
+
     elif args.list:
-        output = generate_spell_list(num_spells=args.list, school=args.school, color=color)
+        # Generate spells for list mode and collect them for saving
+        num_spells = args.list
+        spells_list = []
+        list_lines = []
+        list_lines.append(f"  {'Rarity':<12} {'Level':<8} {'Mana':<6} {'School':<14} {'Spell Name':<30}")
+        list_lines.append(f"  {'─' * 12} {'─' * 8} {'─' * 6} {'─' * 14} {'─' * 30}")
+
+        for _ in range(num_spells):
+            spell = generate_spell(school=args.school)
+            spells_list.append(spell)
+            sc = SCHOOL_COLORS.get(spell.school, "") if color else ""
+            rc = RARITIES.get(spell.rarity, {}).get("color", "") if color else ""
+            rst = RESET if color else ""
+            level_str = SPELL_LEVELS[spell.level]
+            rarity_str = spell.rarity
+            mana_str = str(spell.mana_cost)
+            list_lines.append(
+                f"  {rc}{rarity_str:<12}{rst} {level_str:<8} {mana_str:<6} "
+                f"{sc}{spell.school:<14}{rst} {sc}{BOLD}{spell.name:<30}{rst}"
+            )
+
+        output = "\n".join(list_lines)
+        if not color:
+            output = strip_ansi(output)
     else:
         # Generate one or more individual spells
         num = max(args.count, 1)
@@ -1819,15 +1939,8 @@ Examples:
 
     # Save spells if requested
     if args.save and not args.synergies and not args.compare:
-        # Collect the generated spells for saving
-        # For the individual mode, we have spells_list
-        try:
-            save_spells(spells_list, args.save)
-            print(f"Saved {len(spells_list)} spells to {args.save}")
-        except NameError:
-            # spells_list not defined (grimoire/list mode) — regenerate with same seed
-            print(f"Note: Spell data not available for saving in grimoire/list mode. "
-                  f"Use --count with --save instead.", file=sys.stderr)
+        save_spells(spells_list, args.save)
+        print(f"Saved {len(spells_list)} spells to {args.save}")
 
 
 if __name__ == "__main__":
