@@ -212,6 +212,7 @@ class StockExchange:
         self.market_phase: MarketPhase = MarketPhase.NEUTRAL
         self.index_history: List[float] = []  # TSE Index closing values
         self.index_value: float = 100.0  # Starting index value
+        self._index_base_value: float = 100.0  # Index base for current period
 
         self._generate_companies(num_companies)
         self._recalculate_index()  # Set initial index value
@@ -290,21 +291,26 @@ class StockExchange:
     def _recalculate_index(self):
         """Recalculate the TSE Index as a market-cap-weighted composite.
 
-        The index is normalized so its initial value is 100.0, then tracks
-        percentage changes weighted by each company's market cap.
+        The index is computed directly from the weighted average of current
+        prices relative to their reference (previous close), avoiding
+        compounding of intraday tick-by-tick changes.
         """
         if not self.companies:
             return
         total_weight = sum(c.market_cap for c in self.companies.values())
         if total_weight == 0:
             return
-        # Weighted average price change from previous day
-        weighted_change = 0.0
+        # Weighted average price ratio relative to previous close
+        weighted_ratio = 0.0
+        total_applied_weight = 0.0
         for c in self.companies.values():
-            weight = c.market_cap / total_weight
             if c.prev_close > 0:
-                weighted_change += weight * (c.price / c.prev_close - 1)
-        self.index_value = self.index_value * (1 + weighted_change)
+                weight = c.market_cap / total_weight
+                weighted_ratio += weight * (c.price / c.prev_close)
+                total_applied_weight += weight
+        # Normalize by the weight that actually contributed (skip zero-prev_close)
+        if total_applied_weight > 0:
+            self.index_value = self._index_base_value * weighted_ratio / total_applied_weight
 
     def get_market_phase(self) -> MarketPhase:
         """Determine current market phase from aggregate sentiment."""

@@ -11,12 +11,17 @@ Controls:
   D       Drop a big stone
   F       Place / remove a continuous wave source
   I       Interference demo (two symmetric drops)
+  V       Vortex demo (spiral drop pattern)
   R       Toggle rain mode (auto-drops)
   P       Cycle preset wall patterns
   T       Toggle color-cycling mode
   W       Add a random wall segment
   C       Clear all walls
   X       Reset water (clear simulation)
+  E       Toggle energy display in HUD
+  B       Toggle boundary mode (reflective / absorbing)
+  S       Save snapshot to JSON file
+  L       Load snapshot from JSON file
   +/-     Increase / decrease damping
   [/]     Decrease / increase simulation speed
   1-5     Switch colour palette
@@ -33,11 +38,12 @@ import math
 import json
 import os
 from typing import List, Optional, Tuple
+from array import array as pyarray
 
 # ---------------------------------------------------------------------------
 # Version
 # ---------------------------------------------------------------------------
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 # ---------------------------------------------------------------------------
 # Grid dimensions (character cells)
@@ -100,6 +106,13 @@ BLOCK_CHARS = " ░▒▓█"
 # Source emission interval (frames between pulses)
 SOURCE_INTERVAL = 6
 
+# Boundary modes
+BOUNDARY_REFLECTIVE = "reflective"
+BOUNDARY_ABSORBING = "absorbing"
+
+# Default snapshot file
+DEFAULT_SNAPSHOT_FILE = "ripple_snapshot.json"
+
 
 def clamp(v: float, lo: float, hi: float) -> float:
     """Clamp value between lo and hi."""
@@ -128,9 +141,22 @@ class WaveSource:
         self.amplitude = amplitude
         self.radius = radius
 
+    def to_dict(self) -> dict:
+        """Serialize to a dict for JSON snapshot."""
+        return {"x": self.x, "y": self.y, "amplitude": self.amplitude, "radius": self.radius}
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "WaveSource":
+        """Deserialize from a dict (from JSON snapshot)."""
+        return cls(d["x"], d["y"], d.get("amplitude", 5.0), d.get("radius", 1))
+
 
 class RippleSimulator:
-    """2D wave equation simulation with terminal rendering."""
+    """2D wave equation simulation with terminal rendering.
+
+    Supports reflective and absorbing boundary modes, continuous wave sources,
+    wall obstacles, multiple colour palettes, and snapshot save/load.
+    """
 
     def __init__(self, cols: int = COLS, rows: int = ROWS):
         if cols < 3 or rows < 3:
@@ -140,6 +166,7 @@ class RippleSimulator:
         n = cols * rows
 
         # Two buffers for the wave equation (current and previous)
+        # Using array('d') for better performance than plain Python lists
         self.current: List[float] = [0.0] * n
         self.previous: List[float] = [0.0] * n
 
@@ -162,6 +189,10 @@ class RippleSimulator:
         self.wall_preset_idx: int = -1  # -1 means no preset active
         self.sim_speed: float = 1.0  # multiplier for steps per frame
         self.speed: float = SPEED  # wave propagation speed (per-instance)
+        self.boundary_mode: str = BOUNDARY_REFLECTIVE  # or BOUNDARY_ABSORBING
+        self.show_energy: bool = False  # display energy in HUD
+        self._save_msg: str = ""  # temporary HUD message for save/load feedback
+        self._save_counter: int = 0  # frames remaining to show save message
 
     # ------------------------------------------------------------------
     # Index helpers
@@ -176,6 +207,18 @@ class RippleSimulator:
         return 0 <= x < self.cols and 0 <= y < self.rows
 
     # ------------------------------------------------------------------
+    # Energy calculation
+    # ------------------------------------------------------------------
+
+    def total_energy(self) -> float:
+        """Compute total wave energy (sum of squared amplitudes).
+
+        This is proportional to the physical energy in the system.
+        Useful for observing wave decay and conservation properties.
+        """
+        return sum(v * v for v in self.current)
+
+    # ------------------------------------------------------------------
     # Wave simulation
     # ------------------------------------------------------------------
 
@@ -186,7 +229,11 @@ class RippleSimulator:
         radius: int = 2,
         amplitude: float = 8.0,
     ) -> None:
-        """Create a circular disturbance centred at (cx, cy)."""
+        """Create a circular disturbance centred at (cx, cy).
+
+        The disturbance has a smooth falloff from center to edge,
+        producing a natural-looking wave pattern.
+        """
         r2 = radius * radius
         for dy in range(-radius, radius + 1):
             for dx in range(-radius, radius + 1):
@@ -203,7 +250,16 @@ class RippleSimulator:
         self.drop_count += 1
 
     def step(self) -> None:
-        """Advance the simulation by one time step using the discrete wave equation."""
+        """Advance the simulation by one time step using the discrete wave equation.
+
+        The update rule is:
+            u(t+1) = (2*u(t) - u(t-1) + c^2 * laplacian(u(t))) * damping
+
+        Boundary handling:
+          - Reflective (default): boundary cells are held at 0, causing wave reflection.
+          - Absorbing: boundary cells use a simple one-way wave approximation that
+            absorbs outgoing waves, reducing reflections at the edges.
+        """
         c2 = self.speed * self.speed
         damping = self.damping
         cols = self.cols
@@ -211,9 +267,11 @@ class RippleSimulator:
         prev = self.previous
         walls = self.walls
         rows = self.rows
+        absorbing = (self.boundary_mode == BOUNDARY_ABSORBING)
 
         next_buf = [0.0] * (cols * rows)
 
+        # Interior cells (standard wave equation)
         for y in range(1, rows - 1):
             row_off = y * cols
             for x in range(1, cols - 1):
@@ -229,6 +287,31 @@ class RippleSimulator:
                     - 4.0 * cur[i]
                 )
                 next_buf[i] = (2.0 * cur[i] - prev[i] + c2 * laplacian) * damping
+
+        # Boundary handling
+        if absorbing:
+            # Absorbing boundaries: use first-order approximation to reduce reflections.
+            # At edges, we approximate the outgoing wave by setting the boundary value
+            # to the value just inside the grid, scaled by (1 - c).
+            for x in range(cols):
+                # Top row (y=0): copy from y=1
+                if not walls[x]:
+                    next_buf[x] = cur[x + cols] * (1.0 - self.speed) * damping
+                # Bottom row (y=rows-1): copy from y=rows-2
+                bot = (rows - 1) * cols + x
+                bot_inner = (rows - 2) * cols + x
+                if not walls[bot]:
+                    next_buf[bot] = cur[bot_inner] * (1.0 - self.speed) * damping
+            for y in range(1, rows - 1):
+                # Left column (x=0): copy from x=1
+                left = y * cols
+                if not walls[left]:
+                    next_buf[left] = cur[left + 1] * (1.0 - self.speed) * damping
+                # Right column (x=cols-1): copy from x=cols-2
+                right = y * cols + cols - 1
+                if not walls[right]:
+                    next_buf[right] = cur[right - 1] * (1.0 - self.speed) * damping
+        # else: reflective — boundary cells stay 0 (already initialised)
 
         self.previous = cur
         self.current = next_buf
@@ -269,7 +352,15 @@ class RippleSimulator:
     # ------------------------------------------------------------------
 
     def apply_wall_preset(self, preset_idx: int) -> None:
-        """Apply a preset wall pattern, replacing any existing walls."""
+        """Apply a preset wall pattern, replacing any existing walls.
+
+        Available presets:
+          0: rectangle   — a hollow rectangle with gaps on left/right
+          1: diamond     — a diamond shape
+          2: cross       — a plus sign with a small gap in the center
+          3: circle      — a circle with an opening at the top
+          4: double_slit — classic double-slit interference demonstration
+        """
         self.clear_walls()
         self.wall_preset_idx = preset_idx
         cx, cy = self.cols // 2, self.rows // 2
@@ -353,11 +444,71 @@ class RippleSimulator:
             self.clear_walls()
 
     # ------------------------------------------------------------------
+    # Snapshot save/load
+    # ------------------------------------------------------------------
+
+    def save_snapshot(self, filepath: str = DEFAULT_SNAPSHOT_FILE) -> str:
+        """Save the current simulation state to a JSON file.
+
+        Returns the path where the snapshot was saved.
+        """
+        data = {
+            "version": __version__,
+            "cols": self.cols,
+            "rows": self.rows,
+            "current": self.current,
+            "previous": self.previous,
+            "walls": self.walls,
+            "sources": [s.to_dict() for s in self.sources],
+            "damping": self.damping,
+            "speed": self.speed,
+            "sim_speed": self.sim_speed,
+            "palette_id": self.palette_id,
+            "boundary_mode": self.boundary_mode,
+            "frame": self.frame,
+            "drop_count": self.drop_count,
+            "wall_preset_idx": self.wall_preset_idx,
+        }
+        with open(filepath, "w") as f:
+            json.dump(data, f)
+        return filepath
+
+    @classmethod
+    def load_snapshot(cls, filepath: str = DEFAULT_SNAPSHOT_FILE) -> "RippleSimulator":
+        """Load a simulation state from a JSON snapshot file.
+
+        Raises FileNotFoundError if the file doesn't exist.
+        Raises ValueError if the file format is invalid.
+        """
+        with open(filepath, "r") as f:
+            data = json.load(f)
+
+        sim = cls(cols=data["cols"], rows=data["rows"])
+        sim.current = data["current"]
+        sim.previous = data["previous"]
+        sim.walls = data["walls"]
+        sim.sources = [WaveSource.from_dict(s) for s in data.get("sources", [])]
+        sim.damping = data.get("damping", DAMPING_DEFAULT)
+        sim.speed = data.get("speed", SPEED)
+        sim.sim_speed = data.get("sim_speed", 1.0)
+        sim.palette_id = data.get("palette_id", 1)
+        sim.boundary_mode = data.get("boundary_mode", BOUNDARY_REFLECTIVE)
+        sim.frame = data.get("frame", 0)
+        sim.drop_count = data.get("drop_count", 0)
+        sim.wall_preset_idx = data.get("wall_preset_idx", -1)
+        return sim
+
+    # ------------------------------------------------------------------
     # Rendering
     # ------------------------------------------------------------------
 
     def render(self) -> List[str]:
-        """Return a list of strings (one per row) with ANSI-coloured block characters."""
+        """Return a list of strings (one per row) with ANSI-coloured block characters.
+
+        Wave heights are mapped to 10 intensity levels. Walls show a textured
+        brick pattern. Sources are marked with yellow ◉ symbols. NaN and Inf
+        values are handled gracefully (shown as mid-intensity).
+        """
         palette = PALETTES[self.palette_id]
         cur = self.current
         walls = self.walls
@@ -443,6 +594,27 @@ def interference_drop(sim: RippleSimulator) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Vortex demo: drop stones in a spiral pattern
+# ---------------------------------------------------------------------------
+def vortex_drop(sim: RippleSimulator) -> None:
+    """Create a vortex/spiral pattern by dropping stones in a spiral.
+
+    This produces a visually striking interference pattern that
+    demonstrates constructive and destructive interference in a
+    circular arrangement.
+    """
+    cx, cy = sim.cols // 2, sim.rows // 2
+    num_drops = 8
+    for i in range(num_drops):
+        angle = 2 * math.pi * i / num_drops
+        radius = min(sim.cols, sim.rows) // 4
+        x = int(cx + radius * math.cos(angle))
+        y = int(cy + radius * math.sin(angle) * 0.6)  # Slightly squished vertically
+        if sim.in_bounds(x, y):
+            sim.drop_stone(x, y, radius=2, amplitude=8.0)
+
+
+# ---------------------------------------------------------------------------
 # Color cycling: smoothly transition between palettes
 # ---------------------------------------------------------------------------
 def get_cycled_palette(frame: int) -> List[Tuple[int, int, int]]:
@@ -463,7 +635,10 @@ def get_cycled_palette(frame: int) -> List[Tuple[int, int, int]]:
 
 
 def render_with_custom_palette(sim: RippleSimulator, palette: List[Tuple[int, int, int]]) -> List[str]:
-    """Render using a custom palette (for color cycling mode)."""
+    """Render using a custom palette (for color cycling mode).
+
+    If the palette has fewer than 10 entries, it is extended by repeating.
+    """
     cur = sim.current
     walls = sim.walls
     cols = sim.cols
@@ -509,7 +684,7 @@ def render_with_custom_palette(sim: RippleSimulator, palette: List[Tuple[int, in
                 val = cur[i]
                 # Guard against NaN/Inf which can crash int()
                 if val != val or val == float('inf') or val == float('-inf'):
-                    intensity = 4  # Show as mid-level for anomalies
+                    intensity = 4
                 else:
                     intensity = int(clamp(int((val + 4.0) / 8.0 * 9), 0, 9))
                 if intensity <= 1:
@@ -570,6 +745,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--rain", action="store_true",
         help="start with rain mode enabled",
     )
+    p.add_argument(
+        "--absorbing", action="store_true",
+        help="use absorbing boundary conditions (reduces edge reflections)",
+    )
+    p.add_argument(
+        "--load", type=str, default=None, metavar="FILE",
+        help="load a snapshot from a JSON file to resume a previous session",
+    )
+    p.add_argument(
+        "--energy", action="store_true",
+        help="display total wave energy in the HUD",
+    )
     return p
 
 
@@ -588,11 +775,23 @@ def main() -> None:
     speed = max(0.01, min(0.49, args.speed))
     damping = max(0.0, min(1.0, args.damping))
 
-    sim = RippleSimulator(cols=cols, rows=rows)
-    sim.speed = speed
-    sim.damping = damping
-    sim.palette_id = args.palette
-    sim.rain_mode = args.rain
+    # Load snapshot if requested
+    if args.load:
+        try:
+            sim = RippleSimulator.load_snapshot(args.load)
+            print(f"Loaded snapshot from {args.load}")
+        except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
+            print(f"Error loading snapshot: {e}", file=sys.stderr)
+            sys.exit(1)
+    else:
+        sim = RippleSimulator(cols=cols, rows=rows)
+        sim.speed = speed
+        sim.damping = damping
+        sim.palette_id = args.palette
+        sim.rain_mode = args.rain
+
+    sim.boundary_mode = BOUNDARY_ABSORBING if args.absorbing else BOUNDARY_REFLECTIVE
+    sim.show_energy = args.energy
 
     # Hide cursor
     HIDE_CURSOR = "\033[?25l"
@@ -623,7 +822,10 @@ def main() -> None:
                 pass
 
     # Initial splash: drop a stone in the center
-    sim.drop_stone(sim.cols // 2, sim.rows // 2, radius=3, amplitude=10.0)
+    if not args.load:
+        sim.drop_stone(sim.cols // 2, sim.rows // 2, radius=3, amplitude=10.0)
+
+    snapshot_dir = os.path.dirname(os.path.abspath(__file__))
 
     try:
         while True:
@@ -664,6 +866,9 @@ def main() -> None:
             elif ch in ('i', 'I'):
                 # Interference demo
                 interference_drop(sim)
+            elif ch in ('v', 'V'):
+                # Vortex demo
+                vortex_drop(sim)
             elif ch in ('r', 'R'):
                 sim.rain_mode = not sim.rain_mode
                 sim.rain_timer = 0
@@ -691,6 +896,44 @@ def main() -> None:
                 sim.clear_water()
                 # Re-drop initial stone
                 sim.drop_stone(sim.cols // 2, sim.rows // 2, radius=3, amplitude=10.0)
+            elif ch in ('e', 'E'):
+                sim.show_energy = not sim.show_energy
+            elif ch in ('b', 'B'):
+                # Toggle boundary mode
+                if sim.boundary_mode == BOUNDARY_REFLECTIVE:
+                    sim.boundary_mode = BOUNDARY_ABSORBING
+                else:
+                    sim.boundary_mode = BOUNDARY_REFLECTIVE
+            elif ch in ('s', 'S'):
+                # Save snapshot
+                filepath = os.path.join(snapshot_dir, DEFAULT_SNAPSHOT_FILE)
+                try:
+                    path = sim.save_snapshot(filepath)
+                    sim._save_msg = f"Saved to {path}"
+                    sim._save_counter = 30  # Show for ~30 frames
+                except Exception as ex:
+                    sim._save_msg = f"Save error: {ex}"
+                    sim._save_counter = 30
+            elif ch in ('l', 'L'):
+                # Load snapshot
+                filepath = os.path.join(snapshot_dir, DEFAULT_SNAPSHOT_FILE)
+                try:
+                    loaded = RippleSimulator.load_snapshot(filepath)
+                    # Transfer loaded state into current sim
+                    sim.current = loaded.current
+                    sim.previous = loaded.previous
+                    sim.walls = loaded.walls
+                    sim.sources = loaded.sources
+                    sim.damping = loaded.damping
+                    sim.speed = loaded.speed
+                    sim.frame = loaded.frame
+                    sim.drop_count = loaded.drop_count
+                    sim.wall_preset_idx = loaded.wall_preset_idx
+                    sim._save_msg = f"Loaded from {filepath}"
+                    sim._save_counter = 30
+                except Exception as ex:
+                    sim._save_msg = f"Load error: {ex}"
+                    sim._save_counter = 30
             elif ch in ('+', '='):
                 sim.damping = min(0.995, sim.damping + 0.01)
             elif ch in ('-', '_'):
@@ -728,20 +971,34 @@ def main() -> None:
             preset_name = ""
             if 0 <= sim.wall_preset_idx < len(WALL_PRESETS):
                 preset_name = f"  │  Wall: {WALL_PRESETS[sim.wall_preset_idx]}"
+            energy_str = ""
+            if sim.show_energy:
+                energy = sim.total_energy()
+                energy_str = f"  │  Energy: {energy:.1f}"
+            boundary_str = f"  │  Boundary: {sim.boundary_mode[:3].upper()}"
+            save_msg = ""
+            if sim._save_msg and sim._save_counter > 0:
+                save_msg = f"  │  {sim._save_msg}"
+                sim._save_counter -= 1
+                if sim._save_counter <= 0:
+                    sim._save_msg = ""
+
             hud = (
-                f"  🌊 Water Ripple Simulator  │  "
+                f"  🌊 Water Ripple Simulator v{__version__}  │  "
                 f"Drops: {sim.drop_count}  │  "
                 f"Palette: {PALETTE_NAMES[sim.palette_id]}"
                 f"{'(cycle)' if sim.color_cycle else ''}  │  "
                 f"Damping: {sim.damping:.2f}  │  "
                 f"Rain: {'ON' if sim.rain_mode else 'OFF'}"
                 f"{source_indicator}{speed_indicator}{preset_name}"
+                f"{energy_str}{boundary_str}{save_msg}"
                 f"  │  Frame: {sim.frame}"
             )
             controls = (
                 "  [SPACE] drop  [D] big  [F] source  [I] interfere  "
-                "[R] rain  [P] preset  [T] color-cycle  "
-                "[W] wall  [C] clear walls  [X] reset  [+/-] damping  "
+                "[V] vortex  [R] rain  [P] preset  [T] color-cycle  "
+                "[W] wall  [C] clear walls  [X] reset  [E] energy  "
+                "[B] boundary  [S] save  [L] load  [+/-] damping  "
                 "[/] speed  [1-5] palette  [Q] quit"
             )
 
