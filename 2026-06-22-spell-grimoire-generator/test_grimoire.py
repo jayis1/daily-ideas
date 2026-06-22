@@ -14,6 +14,7 @@ from grimoire import (
     render_grimoire_page, render_plaintext_page, strip_ansi,
     ordinal, choose_rarity, SPELL_LEVELS, SCHOOLS, RARITIES,
     generate_incantation, generate_sigil, generate_spell_diagram,
+    wrap_text, pluralize,
     __version__,
 )
 
@@ -101,6 +102,26 @@ class TestGenerateSpell:
         # Allow a small number of collisions but not many
         assert len(names) >= 40, f"Too many name collisions: {50 - len(names)}"
 
+    def test_grammar_singular_count(self):
+        """Descriptions with count=1 should use singular nouns."""
+        import random
+        random.seed(42)
+        for _ in range(200):
+            spell = generate_spell()
+            desc = spell.description
+            # "1 undead servants" should be "1 undead servant"
+            assert "1 undead servants" not in desc, f"Singular bug: {desc}"
+            # "1 creatures" should not appear (should be "1 creature")
+            assert "1 creatures become" not in desc, f"Singular bug: {desc}"
+            # "1 allies" should be "1 ally"
+            assert "1 allies" not in desc, f"Singular bug: {desc}"
+            # "1 hidden objects" should be "1 hidden object"
+            assert "1 hidden objects" not in desc, f"Singular bug: {desc}"
+            # "1 days" should be "1 day"
+            assert "1 days" not in desc, f"Singular bug: {desc}"
+            # "1 yes/no questions" should be "1 yes/no question"
+            assert "1 yes/no questions" not in desc, f"Singular bug: {desc}"
+
 
 class TestRarity:
     """Test rarity system."""
@@ -169,6 +190,47 @@ class TestRendering:
         assert "School" in output
         assert "Spell Name" in output
 
+    def test_box_alignment_plaintext(self):
+        """All lines with ║ should be exactly 64 chars wide in plaintext."""
+        import random
+        random.seed(42)
+        for _ in range(20):
+            spell = generate_spell()
+            page = render_plaintext_page(spell)
+            for line in page.split('\n'):
+                if '║' in line:
+                    assert len(line) == 64, f"Line width {len(line)} != 64: {line}"
+
+    def test_box_alignment_colored(self):
+        """All lines with ║ should be exactly 64 chars wide (visible) when colored."""
+        import random
+        random.seed(42)
+        for _ in range(10):
+            spell = generate_spell()
+            page = render_grimoire_page(spell, color=True)
+            clean = strip_ansi(page)
+            for line in clean.split('\n'):
+                if '║' in line:
+                    assert len(line) == 64, f"Line width {len(line)} != 64: {line}"
+
+    def test_grimoire_header_alignment(self):
+        """Grimoire header lines should be 64 chars wide."""
+        output = generate_grimoire(num_spells=1, color=False)
+        for line in output.split('\n'):
+            if '║' in line:
+                assert len(line) == 64, f"Header line width {len(line)} != 64: {line}"
+
+    def test_higher_levels_wrapping(self):
+        """'At Higher Levels' text should not overflow the box."""
+        import random
+        random.seed(42)
+        for level in range(1, 9):
+            spell = generate_spell(level=level)
+            page = render_plaintext_page(spell)
+            for line in page.split('\n'):
+                if '║' in line:
+                    assert len(line) == 64, f"HL overflow at level {level}: {line}"
+
 
 class TestSigil:
     """Test sigil generation."""
@@ -220,6 +282,39 @@ class TestIncantation:
             inc = generate_incantation(school)
             assert inc.startswith('"'), f"Incantation should start with quote: {inc}"
             assert inc.endswith('"'), f"Incantation should end with quote: {inc}"
+
+class TestPluralize:
+    """Test the pluralize helper."""
+
+    def test_singular(self):
+        from grimoire import pluralize
+        assert pluralize(1, "undead servant", "undead servants") == "1 undead servant"
+        assert pluralize(1, "ally", "allies") == "1 ally"
+        assert pluralize(1, "creature", "creatures") == "1 creature"
+        assert pluralize(1, "hidden object", "hidden objects") == "1 hidden object"
+        assert pluralize(1, "day", "days") == "1 day"
+
+    def test_plural(self):
+        from grimoire import pluralize
+        assert pluralize(2, "undead servant", "undead servants") == "2 undead servants"
+        assert pluralize(3, "ally", "allies") == "3 allies"
+        assert pluralize(5, "creature", "creatures") == "5 creatures"
+
+class TestWrapText:
+    """Test the wrap_text function."""
+
+    def test_basic_wrap(self):
+        result = wrap_text("hello world", width=5)
+        assert result == ["hello", "world"]
+
+    def test_first_line_width(self):
+        """wrap_text with first_line_width should wrap the first line shorter."""
+        text = "When cast using a spell slot of 4th level or higher, the number increases"
+        result = wrap_text(text, width=56, first_line_width=38)
+        assert len(result[0]) <= 38, f"First line too long: {len(result[0])} > 38"
+        # Subsequent lines should be <= 56
+        for line in result[1:]:
+            assert len(line) <= 56, f"Subsequent line too long: {len(line)}"
 
 
 class TestJsonExport:

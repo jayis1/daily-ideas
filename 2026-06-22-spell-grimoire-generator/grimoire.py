@@ -181,13 +181,13 @@ EFFECT_TEMPLATES = {
     ],
     "Necromancy": [
         "Drains {dice}d{sides} hit points from the target, healing the caster by half.",
-        "Animates {count} undead servants for {duration}, each with {hp} HP.",
+        "Animates {count_undead_servant} for {duration}, each with {hp} HP.",
         "Target must make a WIS save or take {dice}d{sides} necrotic damage and be frightened.",
         "Creates a {area}-foot zone of negative energy. Living creatures take {dice}d{sides} damage.",
     ],
     "Enchantment": [
         "Target must make a WIS save or become {condition} for {duration}.",
-        "Up to {count} creatures become {condition} for {duration}.",
+        "Up to {count_creature_become} {condition} for {duration}.",
         "Target creature regards the caster as a trusted ally for {duration}.",
         "The caster can issue a {count}-word command that the target must follow.",
     ],
@@ -198,22 +198,22 @@ EFFECT_TEMPLATES = {
         "Target sees a terrifying phantasm; WIS save or take {dice}d{sides} psychic damage.",
     ],
     "Conjuration": [
-        "Summons {count} {creature_type} for {duration}.",
+        "Summons {count_creature_summoned} for {duration}.",
         "Opens a portal to {plane} lasting {duration}.",
-        "Teleports the caster and up to {count} allies to a location within {area} miles.",
+        "Teleports the caster and up to {count_ally} to a location within {area} miles.",
         "Conjures a {area}-foot dome of {material_to} lasting {duration_short}.",
     ],
     "Abjuration": [
         "Creates a {area}-foot radius anti-magic field for {duration}.",
-        "Grants {count} creatures resistance to {damage_type} for {duration}.",
+        "Grants {count_creature_resistance} resistance to {damage_type} for {duration}.",
         "Dispels all magical effects of level {level} or lower in a {area}-foot radius.",
         "Creates a magical barrier with {hp} HP that lasts for {duration} or until destroyed.",
     ],
     "Divination": [
-        "Reveals the location of {count} hidden objects within {area} feet.",
-        "The caster receives a vision of events up to {count} days in the future.",
+        "Reveals the location of {count_hidden_object} within {area} feet.",
+        "The caster receives a vision of events up to {count_day} in the future.",
         "For {duration}, the caster can see through walls and illusions within {area} feet.",
-        "Answers {count} yes/no questions about the future with 90% accuracy.",
+        "Answers {count_question} about the future with 90% accuracy.",
     ],
     "Transmutation": [
         "Transforms {area} cubic feet of {material_from} into {material_to} for {duration}.",
@@ -618,6 +618,16 @@ def ordinal(n: int) -> str:
     return f"{n}{suffix}"
 
 
+def pluralize(count: int, singular: str, plural: str) -> str:
+    """Return singular or plural form based on count.
+
+    Examples: pluralize(1, "servant", "servants") → "1 servant"
+              pluralize(3, "servant", "servants") → "3 servants"
+    """
+    word = singular if count == 1 else plural
+    return f"{count} {word}"
+
+
 # ──────────────────────────────────────────────
 # Rarity selection
 # ──────────────────────────────────────────────
@@ -727,12 +737,34 @@ def generate_spell(school: Optional[str] = None, level: Optional[int] = None,
     duration_short = duration.split(",")[-1].strip().rstrip(".") if "," in duration else duration
     level_word = SPELL_LEVELS[level]
 
+    # Pluralized count+Noun strings for grammar-correct descriptions
+    count_undead_servant = pluralize(count, "undead servant", "undead servants")
+    count_creature_become = pluralize(count, "creature becomes", "creatures become")
+    CREATURE_PLURALS = {
+        "elemental": "elementals", "fiend": "fiends", "celestial": "celestials",
+        "fey": "fey", "construct": "constructs", "beast": "beasts",
+    }
+    count_creature_summoned = pluralize(count, creature_type, CREATURE_PLURALS.get(creature_type, f"{creature_type}s"))
+    count_ally = pluralize(count, "ally", "allies")
+    count_creature_resistance = pluralize(count, "creature", "creatures")
+    count_hidden_object = pluralize(count, "hidden object", "hidden objects")
+    count_day = pluralize(count, "day", "days")
+    count_question = pluralize(count, "yes/no question", "yes/no questions")
+
     description = template.format(
         dice=dice, sides=sides, damage_type=damage_type, area=area,
         condition=condition, duration=duration_short, duration_short=duration_short, count=count,
         hp=hp, illusion=illusion, creature_type=creature_type,
         plane=plane, material_from=material_from, material_to=material_to,
         size=size, ability=ability, level=level,
+        count_undead_servant=count_undead_servant,
+        count_creature_become=count_creature_become,
+        count_creature_summoned=count_creature_summoned,
+        count_ally=count_ally,
+        count_creature_resistance=count_creature_resistance,
+        count_hidden_object=count_hidden_object,
+        count_day=count_day,
+        count_question=count_question,
     )
 
     # Verbal detail
@@ -797,15 +829,26 @@ UNDERLINE = "\033[4m"
 RST = RESET
 
 
-def wrap_text(text: str, width: int = 58) -> List[str]:
-    """Word-wrap text to a given width."""
+def wrap_text(text: str, width: int = 58, first_line_width: Optional[int] = None) -> List[str]:
+    """Word-wrap text to a given width.
+
+    Args:
+        text: The text to wrap.
+        width: Maximum line width for all lines.
+        first_line_width: If given, the first line has a shorter max width
+            (useful when a prefix will be added to the first line).
+    """
+    if first_line_width is None:
+        first_line_width = width
     words = text.split()
     lines = []
     current = ""
+    max_w = first_line_width
     for word in words:
-        if current and len(current) + 1 + len(word) > width:
+        if current and len(current) + 1 + len(word) > max_w:
             lines.append(current)
             current = word
+            max_w = width  # subsequent lines use full width
         else:
             current = f"{current} {word}" if current else word
     if current:
@@ -858,7 +901,7 @@ def render_grimoire_page(spell: Spell, color: bool = True) -> str:
     # Metadata
     def meta_line(label: str, value: str) -> str:
         actual_content = f"{BOLD}{label}:{rst} {value}" if color else f"{label}: {value}"
-        visible_len = len(label) + 2 + len(value) + 1
+        visible_len = len(label) + 2 + len(value)  # label + ": " + value
         pad = page_width - 6 - visible_len
         return f"  ║ {actual_content}{' ' * max(pad, 0)} ║"
 
@@ -882,8 +925,8 @@ def render_grimoire_page(spell: Spell, color: bool = True) -> str:
     if spell.material != "None":
         mat_lines = wrap_text(f"({spell.material})", width=page_width - 8)
         for ml in mat_lines:
-            ml_pad = page_width - 6 - len(ml)
-            lines.append(f"  ║   {DIM}{ml}{rst}{' ' * max(ml_pad - 3, 0)} ║")
+            ml_pad = page_width - 8 - len(ml)  # 8 = "  ║   " (6) + " ║" (2)
+            lines.append(f"  ║   {DIM}{ml}{rst}{' ' * max(ml_pad, 0)} ║")
 
     lines.append(f"  ╠{'─' * (page_width - 4)}╣")
 
@@ -916,13 +959,18 @@ def render_grimoire_page(spell: Spell, color: bool = True) -> str:
 
     if spell.higher_levels:
         lines.append(f"  ║{' ' * (page_width - 4)}║")
-        hl_lines = wrap_text(spell.higher_levels, width=page_width - 8)
+        # The prefix "At Higher Levels. " is 20 visible chars.
+        # First line has: "  ║ " (4) + prefix (20) + hl + padding + " ║" (2) = 64
+        # So first line content (prefix + hl) must be ≤ 58 visible chars,
+        # meaning hl ≤ 38. Subsequent lines wrap at 58.
+        hl_prefix = "At Higher Levels. "
+        hl_lines = wrap_text(spell.higher_levels, width=page_width - 8,
+                              first_line_width=page_width - 8 - len(hl_prefix))
         for idx, hl in enumerate(hl_lines):
             if idx == 0:
                 prefix = f"  ║ {BOLD}At Higher Levels.{rst} " if color else "  ║ At Higher Levels. "
-                # Account for the bold prefix in padding
-                visible_text = f"At Higher Levels. {hl}"
-                visible_len = len(visible_text)
+                # visible content = "At Higher Levels. " + hl
+                visible_len = len(hl_prefix) + len(hl)
                 hl_pad = page_width - 6 - visible_len
                 lines.append(f"{prefix}{hl}{' ' * max(hl_pad, 0)} ║")
             else:
@@ -957,7 +1005,7 @@ def render_grimoire_page(spell: Spell, color: bool = True) -> str:
 
     inc_lines = wrap_text(spell.incantation, width=page_width - 10)
     for il in inc_lines:
-        il_pad = page_width - 6 - len(il) - 2
+        il_pad = page_width - 7 - len(il)  # 7 = "  ║  " (5) + " ║" (2)
         lines.append(f"  ║  {sc}{ITALIC}{il}{rst}{' ' * max(il_pad, 0)} ║")
 
     lines.append(f"  ║{' ' * (page_width - 4)}║")
@@ -999,22 +1047,35 @@ def generate_grimoire(num_spells: int = 5, school: Optional[str] = None,
         sc = SCHOOL_COLORS[school]
         rst = RESET
 
-    header = f"""
-  {sc}╔════════════════════════════════════════════════════════════╗{rst}
-  {sc}║                                                          ║{rst}
-  {sc}║           G R I M O I R E   O F   S P E L L S            ║{rst}
-  {sc}║                                                          ║{rst}
-  {sc}║     {'─' * 50}     ║{rst}
-  {sc}║                                                          ║{rst}"""
+    # Build header programmatically to ensure consistent 64-char width
+    pw = 64  # page_width
+    # "  ║" (3) + content (60) + "║" (1) = 64
+    title = "G R I M O I R E   O F   S P E L L S"
+    # Center the title within the 60-char content area
+    content_width = pw - 4  # 60 chars between ║ and ║
+    title_pad_left = (content_width - len(title)) // 2
+    title_pad_right = content_width - len(title) - title_pad_left
+
+    lines = []
+    lines.append(f"  {sc}╔{'═' * (pw - 4)}╗{rst}")
+    lines.append(f"  {sc}║{' ' * (pw - 4)}║{rst}")
+    lines.append(f"  {sc}║{' ' * title_pad_left}{title}{' ' * title_pad_right}║{rst}")
+    lines.append(f"  {sc}║{' ' * (pw - 4)}║{rst}")
+
+    # Separator line with dashes
+    sep = f"{'─' * 50}"
+    sep_pad = pw - 6 - len(sep)
+    lines.append(f"  {sc}║ {sep}{' ' * max(sep_pad, 0)} ║{rst}")
 
     if school:
-        header += f"""
-  {sc}║     {BOLD}School of {school}{rst}{sc}                                       ║{rst}"""
+        school_line = f"School of {school}"
+        school_pad = pw - 6 - len(school_line)
+        lines.append(f"  {sc}║ {BOLD}{school_line}{rst}{sc}{' ' * max(school_pad, 0)} ║{rst}")
 
-    header += f"""
-  {sc}║                                                          ║{rst}
-  {sc}╚════════════════════════════════════════════════════════════╝{rst}
-"""
+    lines.append(f"  {sc}║{' ' * (pw - 4)}║{rst}")
+    lines.append(f"  {sc}╚{'═' * (pw - 4)}╝{rst}")
+
+    header = "\n".join(lines)
 
     pages.append(header)
 
