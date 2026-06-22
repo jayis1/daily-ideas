@@ -1137,19 +1137,36 @@ class Spell:
 
 
 def _latex_escape(text: str) -> str:
-    """Escape special LaTeX characters in a string."""
-    return (text
-            .replace("\\", "\\textbackslash{}")
-            .replace("{", "\\{")
-            .replace("}", "\\}")
-            .replace("$", "\\$")
-            .replace("&", "\\&")
-            .replace("#", "\\#")
-            .replace("^", "\\^{}")
-            .replace("_", "\\_")
-            .replace("~", "\\~{}")
-            .replace("%", "\\%")
-            )
+    """Escape special LaTeX characters in a string.
+
+    Uses a placeholder approach to avoid double-encoding:
+    backslash must become \\textbackslash{} which contains { and },
+    but those braces must NOT be re-escaped by the subsequent { and }
+    replacements.
+    """
+    # Replace backslash first, using a unique placeholder to protect
+    # the {} from the curly-brace replacement that follows.
+    BACKSLASH_PLACEHOLDER = "\x00BS\x00"
+    CARET_PLACEHOLDER = "\x00CT\x00"
+    TILDE_PLACEHOLDER = "\x00TL\x00"
+
+    result = (text
+              .replace("\\", BACKSLASH_PLACEHOLDER)
+              .replace("{", "\\{")
+              .replace("}", "\\}")
+              .replace("$", "\\$")
+              .replace("&", "\\&")
+              .replace("#", "\\#")
+              .replace("^", CARET_PLACEHOLDER)
+              .replace("_", "\\_")
+              .replace("~", TILDE_PLACEHOLDER)
+              .replace("%", "\\%"))
+    # Now restore the placeholders with their proper LaTeX commands
+    result = (result
+              .replace(BACKSLASH_PLACEHOLDER, "\\textbackslash{}")
+              .replace(CARET_PLACEHOLDER, "\\^{}")
+              .replace(TILDE_PLACEHOLDER, "\\~{}"))
+    return result
 
 
 # ──────────────────────────────────────────────
@@ -2027,7 +2044,10 @@ def render_grimoire_page(spell: Spell, color: bool = True) -> str:
         mat_lines = wrap_text(f"({spell.material})", width=page_width - 8)
         for ml in mat_lines:
             ml_pad = page_width - 8 - len(ml)  # 8 = "  ║   " (6) + " ║" (2)
-            lines.append(f"  ║   {DIM}{ml}{rst}{' ' * max(ml_pad, 0)} ║")
+            if color:
+                lines.append(f"  ║   {DIM}{ml}{rst}{' ' * max(ml_pad, 0)} ║")
+            else:
+                lines.append(f"  ║   {ml}{' ' * max(ml_pad, 0)} ║")
 
     lines.append(f"  ╠{'─' * (page_width - 4)}╣")
 
@@ -2101,7 +2121,10 @@ def render_grimoire_page(spell: Spell, color: bool = True) -> str:
         tag_lines = wrap_text(tags_str, width=page_width - 8)
         for tl in tag_lines:
             t_pad = page_width - 6 - len(tl)
-            lines.append(f"  ║ {DIM}{tl}{rst}{' ' * max(t_pad, 0)} ║")
+            if color:
+                lines.append(f"  ║ {DIM}{tl}{rst}{' ' * max(t_pad, 0)} ║")
+            else:
+                lines.append(f"  ║ {tl}{' ' * max(t_pad, 0)} ║")
 
     lines.append(f"  ║{' ' * (page_width - 4)}║")
 
@@ -2112,7 +2135,10 @@ def render_grimoire_page(spell: Spell, color: bool = True) -> str:
     inc_lines = wrap_text(spell.incantation, width=page_width - 10)
     for il in inc_lines:
         il_pad = page_width - 7 - len(il)  # 7 = "  ║  " (5) + " ║" (2)
-        lines.append(f"  ║  {sc}{ITALIC}{il}{rst}{' ' * max(il_pad, 0)} ║")
+        if color:
+            lines.append(f"  ║  {sc}{ITALIC}{il}{rst}{' ' * max(il_pad, 0)} ║")
+        else:
+            lines.append(f"  ║  {il}{' ' * max(il_pad, 0)} ║")
 
     lines.append(f"  ║{' ' * (page_width - 4)}║")
 
@@ -2123,7 +2149,10 @@ def render_grimoire_page(spell: Spell, color: bool = True) -> str:
     lore_lines = wrap_text(spell.backstory, width=page_width - 8)
     for ll in lore_lines:
         ll_pad = page_width - 6 - len(ll)
-        lines.append(f"  ║ {DIM}{ll}{rst}{' ' * max(ll_pad, 0)} ║")
+        if color:
+            lines.append(f"  ║ {DIM}{ll}{rst}{' ' * max(ll_pad, 0)} ║")
+        else:
+            lines.append(f"  ║ {ll}{' ' * max(ll_pad, 0)} ║")
 
     lines.append(f"  ║{' ' * (page_width - 4)}║")
 
@@ -2134,7 +2163,10 @@ def render_grimoire_page(spell: Spell, color: bool = True) -> str:
     bar_empty = "░" * (20 - spell.power_rating // 5)
     pr_bar = f"{pr_label}  {bar_filled}{bar_empty}"
     pr_pad = page_width - 6 - len(pr_bar)
-    lines.append(f"  ║ {BOLD}{pr_bar}{rst}{' ' * max(pr_pad, 0)} ║")
+    if color:
+        lines.append(f"  ║ {BOLD}{pr_bar}{rst}{' ' * max(pr_pad, 0)} ║")
+    else:
+        lines.append(f"  ║ {pr_bar}{' ' * max(pr_pad, 0)} ║")
 
     lines.append(f"  ║{' ' * (page_width - 4)}║")
 

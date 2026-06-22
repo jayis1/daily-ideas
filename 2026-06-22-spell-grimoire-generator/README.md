@@ -16,6 +16,7 @@
 - **Spell diagrams**: Visual casting diagrams with range, area, and orientation
 - **Colorful terminal rendering**: School-colored headers, dim lore text, bold key info
 - **Box-drawing character pages**: Beautiful framed grimoire pages
+- **`--no-color` support**: Clean plaintext output free of ANSI escape sequences
 
 ### Detailed Spell Components
 - **Casting time, range, duration**: All procedurally generated and internally consistent
@@ -29,16 +30,16 @@
 ### Power & Value Systems
 - **Mana cost calculation**: Weighted formula based on level, school, rarity, casting time, and duration
 - **Scroll value**: Gold piece price scaled by level and rarity
-- **Power rating** *(new!)*: 0–100 composite score based on level, rarity, mana cost, range, and components
-- **Casting recipe** *(new!)*: Step-by-step ritual instructions themed by magic school
-- **Compatibility scoring** *(new!)*: How well two spells work together based on school alignment and rarity
+- **Power rating**: 0–100 composite score based on level, rarity, mana cost, range, and components
+- **Casting recipe**: Step-by-step ritual instructions themed by magic school
+- **Compatibility scoring**: How well two spells work together based on school alignment and rarity
 
 ### Output Formats
 - **Terminal** (default): Colorful boxed grimoire pages
 - **JSON**: Structured data export with all fields
 - **Markdown**: GitHub-flavored markdown with headers and tables
 - **HTML**: Standalone styled HTML document
-- **LaTeX** *(new!)*: Full standalone `.tex` document ready for PDF compilation
+- **LaTeX**: Full standalone `.tex` document ready for PDF compilation
 - **Plain text**: Stripped of ANSI codes for piping/logging
 
 ### Comparison & Analysis Modes
@@ -46,9 +47,9 @@
 - **Synergy detection**: Find complementary spell pairs
 - **Conflict detection**: Identify opposing school combinations
 - **Statistics**: Aggregate stats across multiple spells
-- **Power ranking** *(new!)*: Rank spells by power rating with visual bars
-- **All-schools overview** *(new!)*: Generate one spell per school in a summary table
-- **Compatibility check** *(new!)*: Score and describe how two spells interact
+- **Power ranking**: Rank spells by power rating with visual bars
+- **All-schools overview**: Generate one spell per school in a summary table
+- **Compatibility check**: Score and describe how two spells interact
 
 ### Interactive Mode
 - Full menu-driven interface with 15+ options
@@ -66,7 +67,7 @@
 | `--json` | Output as JSON |
 | `--markdown` | Output as Markdown |
 | `--html` | Output as HTML |
-| `--latex` | Output as LaTeX *(new!)* |
+| `--latex` | Output as LaTeX |
 | `--no-color` | Disable ANSI colors |
 | `--output <file>` | Write output to file |
 | `--save <file>` | Save spells to JSON file |
@@ -75,9 +76,9 @@
 | `--synergies <n>` | Find synergies among n spells |
 | `--conflicts <n>` | Find conflicts among n spells |
 | `--stats <n>` | Show statistics for n spells |
-| `--power-ranking <n>` | Generate n spells and rank by power *(new!)* |
-| `--all-schools` | One spell per school overview *(new!)* |
-| `--compatibility` | Score compatibility of two spells *(new!)* |
+| `--power-ranking <n>` | Generate n spells and rank by power |
+| `--all-schools` | One spell per school overview |
+| `--compatibility` | Score compatibility of two spells |
 | `--seed <int>` | Set random seed for reproducibility |
 | `--interactive` | Launch interactive menu mode |
 | `--version` | Show version |
@@ -132,7 +133,14 @@ python3 -m pytest test_grimoire.py -v
 # Or: python3 test_grimoire.py
 ```
 
-163 tests covering spell generation, rendering, exports, CLI flags, and all new features.
+165 tests covering spell generation, rendering, exports, CLI flags, LaTeX escaping, ANSI handling, and all features.
+
+## Changelog
+
+### v5.0.1 — Bug Fixes
+- **Fixed LaTeX `_latex_escape` double-encoding bug**: The `\`, `^`, and `~` characters were being double-encoded. A backslash `\` would become `\textbackslash\{\}` instead of `\textbackslash{}` because the `{` and `}` from the textbackslash replacement were being re-escaped by the subsequent `{`/`}` replacement steps. Fixed by using placeholder tokens to protect the braces in `\textbackslash{}`, `\^{}`, and `\~{}` from re-escaping.
+- **Fixed ANSI codes leaking into `--no-color` output**: Five rendering lines in `render_grimoire_page` used `DIM`, `ITALIC`, `BOLD`, and `rst` ANSI escape sequences without checking the `color` flag. This caused ANSI codes (`\x1b[2m` dim, `\x1b[3m` italic, `\x1b[1m` bold) to appear in plaintext/no-color output, affecting material details, tags, incantations, lore text, and power rating display. All five lines now properly gate ANSI codes behind the `color` parameter.
+- **Added regression tests**: `test_render_page_no_ansi_with_color_false` and `test_latex_escape_no_double_encoding` to prevent these bugs from recurring.
 
 ## What It Does
 

@@ -353,6 +353,17 @@ class TestRendering:
         page = render_plaintext_page(spell)
         assert "\033[" not in page, "Plaintext page should not contain ANSI codes"
 
+    def test_render_page_no_ansi_with_color_false(self):
+        """Bug fix: render_grimoire_page(color=False) must not emit ANSI codes.
+
+        Previously, DIM/ITALIC/BOLD were used unconditionally in several
+        rendering lines (material detail, tags, incantation, lore, power
+        rating), causing ANSI escape sequences to leak into --no-color output.
+        """
+        spell = generate_spell()
+        page = render_grimoire_page(spell, color=False)
+        assert "\033[" not in page, "color=False page should not contain ANSI codes"
+
     def test_strip_ansi(self):
         text = "\033[38;5;196mHello\033[0m World"
         assert strip_ansi(text) == "Hello World"
@@ -1419,6 +1430,22 @@ class TestLatexExport:
         assert "\\&" in _latex_escape("A & B")
         assert "\\#" in _latex_escape("#tag")
         assert "\\%" in _latex_escape("50%")
+
+    def test_latex_escape_no_double_encoding(self):
+        """Bug fix: _latex_escape must not double-encode {} in \\textbackslash{}.
+
+        Previously, replacing '\\' with '\\textbackslash{}' and then
+        '{' with '\\{' would corrupt the braces, producing
+        '\\textbackslash\\{\\}' instead of '\\textbackslash{}'.
+        Similarly, \\^{} and \\~{} must not have their braces re-escaped.
+        """
+        result = _latex_escape("\\")
+        assert result == "\\textbackslash{}", f"Got: {repr(result)}"
+        # Curly braces alone should still be escaped
+        assert _latex_escape("{test}") == "\\{test\\}"
+        # Caret and tilde should use {} correctly
+        assert "\\^{}" in _latex_escape("x^2")
+        assert "\\~{}" in _latex_escape("~home")
 
     def test_latex_cli_flag(self):
         """--latex CLI flag should work."""
