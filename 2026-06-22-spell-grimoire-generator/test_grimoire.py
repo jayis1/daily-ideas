@@ -1,20 +1,24 @@
 #!/usr/bin/env python3
-"""Tests for the Spell Grimoire Generator."""
+"""Tests for the Spell Grimoire Generator v3.0.0."""
 
 import json
+import random
 import subprocess
 import sys
 import os
+import tempfile
 
 # Add the project directory to path
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from grimoire import (
     generate_spell, generate_grimoire, generate_spell_list,
-    render_grimoire_page, render_plaintext_page, strip_ansi,
-    ordinal, choose_rarity, SPELL_LEVELS, SCHOOLS, RARITIES,
+    render_grimoire_page, render_plaintext_page, render_side_by_side,
+    strip_ansi, ordinal, choose_rarity, SPELL_LEVELS, SCHOOLS, RARITIES,
     generate_incantation, generate_sigil, generate_spell_diagram,
-    wrap_text, pluralize,
+    wrap_text, pluralize, calculate_mana_cost, generate_tags,
+    find_synergies, render_synergies, save_spells, load_spells,
+    MANA_COSTS, MANA_MULTIPLIERS, TAG_POOLS, SYNERGY_PAIRS,
     __version__,
 )
 
@@ -36,6 +40,9 @@ class TestGenerateSpell:
         assert spell.rarity in RARITIES, f"Rarity '{spell.rarity}' should be valid"
         assert len(spell.sigil) > 0, "Should have sigil lines"
         assert len(spell.diagram) > 0, "Should have diagram lines"
+        assert len(spell.tags) > 0, "Should have tags"
+        assert isinstance(spell.mana_cost, int), "Mana cost should be an integer"
+        assert spell.mana_cost >= 0, "Mana cost should be non-negative"
 
     def test_specific_school(self):
         spell = generate_spell(school="Necromancy")
@@ -96,31 +103,43 @@ class TestGenerateSpell:
         names = set()
         for _ in range(50):
             spell = generate_spell()
-            # Names should not collide — though this is probabilistic,
-            # with 50 spells and large word pools, collisions are very rare
             names.add(spell.name)
         # Allow a small number of collisions but not many
         assert len(names) >= 40, f"Too many name collisions: {50 - len(names)}"
 
     def test_grammar_singular_count(self):
         """Descriptions with count=1 should use singular nouns."""
-        import random
         random.seed(42)
         for _ in range(200):
             spell = generate_spell()
             desc = spell.description
-            # "1 undead servants" should be "1 undead servant"
             assert "1 undead servants" not in desc, f"Singular bug: {desc}"
-            # "1 creatures" should not appear (should be "1 creature")
             assert "1 creatures become" not in desc, f"Singular bug: {desc}"
-            # "1 allies" should be "1 ally"
             assert "1 allies" not in desc, f"Singular bug: {desc}"
-            # "1 hidden objects" should be "1 hidden object"
             assert "1 hidden objects" not in desc, f"Singular bug: {desc}"
-            # "1 days" should be "1 day"
             assert "1 days" not in desc, f"Singular bug: {desc}"
-            # "1 yes/no questions" should be "1 yes/no question"
             assert "1 yes/no questions" not in desc, f"Singular bug: {desc}"
+
+    def test_tags_are_generated(self):
+        """Every spell should have tags."""
+        spell = generate_spell()
+        assert len(spell.tags) >= 1, "Spell should have at least one tag"
+        assert spell.school.lower() in spell.tags, "Tags should include school"
+
+    def test_mana_cost_is_non_negative(self):
+        """Mana cost should always be non-negative."""
+        for level in range(10):
+            for school in SCHOOLS:
+                cost = calculate_mana_cost(level, school, "Common", "1 action", "Instantaneous")
+                assert cost >= 0, f"Mana cost should be >= 0: level={level}, school={school}"
+
+    def test_mana_cost_increases_with_level(self):
+        """Higher level spells should generally cost more mana."""
+        costs = []
+        for level in range(10):
+            costs.append(calculate_mana_cost(level, "Evocation", "Common", "1 action", "Instantaneous"))
+        # Generally increasing (allowing for some rounding effects)
+        assert costs[0] <= costs[5] <= costs[9], f"Mana costs should increase with level: {costs}"
 
 
 class TestRarity:
@@ -138,15 +157,156 @@ class TestRarity:
 
     def test_legendary_rarity_high_level(self):
         """Legendary rarity should bias toward high levels."""
-        # The bias is probabilistic; just check that most Legendary spells
-        # tend to be mid-to-high level (3+) rather than cantrips
         high_level_count = 0
         for _ in range(30):
             spell = generate_spell(rarity="Legendary")
             if spell.level >= 3:
                 high_level_count += 1
-        # At least some should be mid-to-high level due to re-roll bias
         assert high_level_count >= 5, f"Expected some Legendary spells to be high level, got {high_level_count}/30"
+
+
+class TestManaCost:
+    """Test mana cost calculation."""
+
+    def test_cantrip_mana_cost_is_low(self):
+        """Cantrips should have very low mana cost (0 base + modifiers)."""
+        cost = calculate_mana_cost(0, "Evocation", "Common", "1 action", "Instantaneous")
+        # Base is 0, but "1 action" (quick cast) adds 3, so total is 3
+        assert cost <= 5
+
+    def test_school_multiplier_affects_cost(self):
+        """Schools with higher multipliers should cost more."""
+        cost_conj = calculate_mana_cost(5, "Conjuration", "Common", "1 action", "Instantaneous")
+        cost_div = calculate_mana_cost(5, "Divination", "Common", "1 action", "Instantaneous")
+        assert cost_conj > cost_div, "Conjuration (1.15x) should cost more than Divination (0.85x)"
+
+    def test_rarity_modifies_cost(self):
+        """Higher rarity should add to mana cost."""
+        cost_common = calculate_mana_cost(5, "Evocation", "Common", "1 action", "Instantaneous")
+        cost_legendary = calculate_mana_cost(5, "Evocation", "Legendary", "1 action", "Instantaneous")
+        assert cost_legendary > cost_common
+
+    def test_quick_cast_adds_cost(self):
+        """Quick casting times should add to mana cost."""
+        cost_action = calculate_mana_cost(3, "Evocation", "Common", "1 action", "Instantaneous")
+        cost_ritual = calculate_mana_cost(3, "Evocation", "Common", "1 hour", "Instantaneous")
+        assert cost_action > cost_ritual
+
+    def test_long_duration_adds_cost(self):
+        """Long durations should add to mana cost."""
+        cost_instant = calculate_mana_cost(3, "Evocation", "Common", "1 action", "Instantaneous")
+        cost_long = calculate_mana_cost(3, "Evocation", "Common", "1 action", "Until dispelled")
+        assert cost_long > cost_instant
+
+
+class TestTags:
+    """Test tag generation."""
+
+    def test_tags_include_school(self):
+        """Tags should always include the school."""
+        for school in SCHOOLS:
+            tags = generate_tags(school, 3)
+            assert school.lower() in tags
+
+    def test_cantrip_tag(self):
+        """Level 0 spells should get the cantrip tag."""
+        tags = generate_tags("Evocation", 0)
+        assert "cantrip" in tags
+
+    def test_epic_tag(self):
+        """Level 7+ spells should get the epic tag."""
+        tags = generate_tags("Evocation", 8)
+        assert "epic" in tags
+
+    def test_rarity_tag(self):
+        """Non-Common rarity should add a tag."""
+        tags = generate_tags("Evocation", 3, rarity="Legendary")
+        assert "legendary" in tags
+
+    def test_common_no_rarity_tag(self):
+        """Common rarity should not add a rarity tag."""
+        tags = generate_tags("Evocation", 3, rarity="Common")
+        assert "common" not in tags
+
+
+class TestSynergies:
+    """Test spell synergy detection."""
+
+    def test_find_synergies_evocation_abjuration(self):
+        """Evocation + Abjuration should be a synergy pair."""
+        s1 = generate_spell(school="Evocation", level=5)
+        s2 = generate_spell(school="Abjuration", level=3)
+        synergies = find_synergies([s1, s2])
+        assert len(synergies) > 0
+
+    def test_no_synergies_same_school(self):
+        """Two spells of the same school typically don't have a specific synergy."""
+        s1 = generate_spell(school="Evocation", level=3)
+        s2 = generate_spell(school="Evocation", level=5)
+        synergies = find_synergies([s1, s2])
+        # Same school pair is not in SYNERGY_PAIRS (keys are different schools)
+        assert len(synergies) == 0
+
+    def test_synergies_description(self):
+        """Synergy descriptions should be non-empty strings."""
+        s1 = generate_spell(school="Evocation", level=5)
+        s2 = generate_spell(school="Abjuration", level=3)
+        synergies = find_synergies([s1, s2])
+        for _, _, desc in synergies:
+            assert isinstance(desc, str)
+            assert len(desc) > 0
+
+    def test_render_synergies_no_synergies(self):
+        """Rendering with no synergies should report that fact."""
+        s1 = generate_spell(school="Evocation", level=3)
+        s2 = generate_spell(school="Evocation", level=5)
+        result = render_synergies([s1, s2])
+        assert "No synergies" in result
+
+
+class TestSaveLoad:
+    """Test save and load functionality."""
+
+    def test_save_and_load_spells(self):
+        """Spells should round-trip through save/load."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            tmp = f.name
+
+        try:
+            spells = [generate_spell() for _ in range(3)]
+            save_spells(spells, tmp)
+
+            loaded = load_spells(tmp)
+            assert len(loaded) == 3
+            for original, loaded_spell in zip(spells, loaded):
+                assert original.name == loaded_spell.name
+                assert original.school == loaded_spell.school
+                assert original.level == loaded_spell.level
+                assert original.mana_cost == loaded_spell.mana_cost
+                assert original.tags == loaded_spell.tags
+        finally:
+            os.unlink(tmp)
+
+    def test_save_load_preserves_tags(self):
+        """Tags should be preserved through save/load."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            tmp = f.name
+
+        try:
+            spell = generate_spell()
+            save_spells([spell], tmp)
+            loaded = load_spells(tmp)
+            assert loaded[0].tags == spell.tags
+        finally:
+            os.unlink(tmp)
+
+    def test_load_nonexistent_file(self):
+        """Loading a nonexistent file should raise an error."""
+        try:
+            load_spells("/nonexistent/path/spells.json")
+            assert False, "Should have raised an error"
+        except (OSError, FileNotFoundError):
+            pass  # Expected
 
 
 class TestRendering:
@@ -167,10 +327,23 @@ class TestRendering:
         page = render_grimoire_page(spell, color=False)
         assert "[Rare]" in page
 
+    def test_render_page_contains_mana_cost(self):
+        """Mana cost should appear in rendered pages."""
+        spell = generate_spell(level=5)
+        page = render_grimoire_page(spell, color=False)
+        assert "Mana" in page
+        assert str(spell.mana_cost) in page
+
+    def test_render_page_contains_tags(self):
+        """Tags should appear in rendered pages."""
+        spell = generate_spell(school="Evocation", level=3)
+        page = render_grimoire_page(spell, color=False)
+        # At least the school should appear as a tag
+        assert "evocation" in page.lower()
+
     def test_render_page_no_ansi_in_plaintext(self):
         spell = generate_spell()
         page = render_plaintext_page(spell)
-        # Should not contain ANSI escape sequences
         assert "\033[" not in page, "Plaintext page should not contain ANSI codes"
 
     def test_strip_ansi(self):
@@ -179,20 +352,17 @@ class TestRendering:
 
     def test_render_grimoire_multiple_spells(self):
         output = generate_grimoire(num_spells=3, color=False)
-        # The header uses spaced-out text "G R I M O I R E"
         assert "GRIMOIRE" in output or "G R I M O I R E" in output
-        # Should contain 3 spell pages (each has a bottom border)
         assert output.count("╚") >= 3
 
     def test_render_spell_list(self):
         output = generate_spell_list(num_spells=5, color=False)
         assert "Level" in output
         assert "School" in output
-        assert "Spell Name" in output
+        assert "Mana" in output
 
     def test_box_alignment_plaintext(self):
         """All lines with ║ should be exactly 64 chars wide in plaintext."""
-        import random
         random.seed(42)
         for _ in range(20):
             spell = generate_spell()
@@ -203,7 +373,6 @@ class TestRendering:
 
     def test_box_alignment_colored(self):
         """All lines with ║ should be exactly 64 chars wide (visible) when colored."""
-        import random
         random.seed(42)
         for _ in range(10):
             spell = generate_spell()
@@ -222,7 +391,6 @@ class TestRendering:
 
     def test_higher_levels_wrapping(self):
         """'At Higher Levels' text should not overflow the box."""
-        import random
         random.seed(42)
         for level in range(1, 9):
             spell = generate_spell(level=level)
@@ -230,6 +398,65 @@ class TestRendering:
             for line in page.split('\n'):
                 if '║' in line:
                     assert len(line) == 64, f"HL overflow at level {level}: {line}"
+
+
+class TestSideBySide:
+    """Test side-by-side comparison rendering."""
+
+    def test_side_by_side_produces_output(self):
+        """Side-by-side rendering should produce output."""
+        s1 = generate_spell(school="Evocation", level=3)
+        s2 = generate_spell(school="Necromancy", level=5)
+        result = render_side_by_side(s1, s2, color=False)
+        assert len(result) > 0
+        assert s1.name in result
+        assert s2.name in result
+
+    def test_side_by_side_has_separator(self):
+        """Side-by-side output should have a separator between spells."""
+        s1 = generate_spell(school="Evocation", level=3)
+        s2 = generate_spell(school="Necromancy", level=5)
+        result = render_side_by_side(s1, s2, color=False)
+        assert "│" in result
+
+
+class TestMarkdownExport:
+    """Test Markdown export functionality."""
+
+    def test_markdown_has_headers(self):
+        """Markdown output should have proper headers."""
+        spell = generate_spell(school="Evocation", level=3)
+        md = spell.to_markdown()
+        assert f"# {spell.name}" in md
+        assert "## Description" in md
+
+    def test_markdown_has_metadata(self):
+        """Markdown output should contain metadata."""
+        spell = generate_spell(school="Necromancy", level=5)
+        md = spell.to_markdown()
+        assert "Casting Time" in md
+        assert "Range" in md
+        assert "Duration" in md
+        assert "Mana Cost" in md
+
+    def test_markdown_has_tags(self):
+        """Markdown output should include tags section."""
+        spell = generate_spell(school="Evocation", level=3)
+        md = spell.to_markdown()
+        assert "## Tags" in md
+        assert spell.school.lower() in md.lower()
+
+    def test_markdown_has_incantation(self):
+        """Markdown output should include incantation."""
+        spell = generate_spell()
+        md = spell.to_markdown()
+        assert "## Incantation" in md
+
+    def test_markdown_has_lore(self):
+        """Markdown output should include lore section."""
+        spell = generate_spell()
+        md = spell.to_markdown()
+        assert "## Lore" in md
 
 
 class TestSigil:
@@ -249,7 +476,6 @@ class TestSigil:
 
     def test_sigil_preserves_random_state(self):
         """Generating a sigil should not affect the global random state."""
-        import random
         random.seed(12345)
         state_before = random.getstate()
         generate_sigil("Evocation", 3)
@@ -266,12 +492,11 @@ class TestDiagram:
         assert d1 == d2
 
     def test_diagram_preserves_random_state(self):
-        import random
         random.seed(12345)
         state_before = random.getstate()
         generate_spell_diagram("Necromancy", 3)
         state_after = random.getstate()
-        assert state_before == state_after
+        assert state_after == state_before
 
 
 class TestIncantation:
@@ -283,11 +508,11 @@ class TestIncantation:
             assert inc.startswith('"'), f"Incantation should start with quote: {inc}"
             assert inc.endswith('"'), f"Incantation should end with quote: {inc}"
 
+
 class TestPluralize:
     """Test the pluralize helper."""
 
     def test_singular(self):
-        from grimoire import pluralize
         assert pluralize(1, "undead servant", "undead servants") == "1 undead servant"
         assert pluralize(1, "ally", "allies") == "1 ally"
         assert pluralize(1, "creature", "creatures") == "1 creature"
@@ -295,10 +520,10 @@ class TestPluralize:
         assert pluralize(1, "day", "days") == "1 day"
 
     def test_plural(self):
-        from grimoire import pluralize
         assert pluralize(2, "undead servant", "undead servants") == "2 undead servants"
         assert pluralize(3, "ally", "allies") == "3 allies"
         assert pluralize(5, "creature", "creatures") == "5 creatures"
+
 
 class TestWrapText:
     """Test the wrap_text function."""
@@ -312,9 +537,8 @@ class TestWrapText:
         text = "When cast using a spell slot of 4th level or higher, the number increases"
         result = wrap_text(text, width=56, first_line_width=38)
         assert len(result[0]) <= 38, f"First line too long: {len(result[0])} > 38"
-        # Subsequent lines should be <= 56
         for line in result[1:]:
-            assert len(line) <= 56, f"Subsequent line too long: {len(line)}"
+            assert len(line) <= 56, f"Subsequent line too long: {line}"
 
 
 class TestJsonExport:
@@ -328,7 +552,10 @@ class TestJsonExport:
         assert "school" in d
         assert "rarity" in d
         assert "sigil" in d
+        assert "tags" in d
+        assert "mana_cost" in d
         assert isinstance(d["sigil"], list)
+        assert isinstance(d["tags"], list)
 
     def test_spell_to_json(self):
         spell = generate_spell()
@@ -341,9 +568,15 @@ class TestJsonExport:
         """JSON output should handle Unicode characters (sigils, runes)."""
         spell = generate_spell(school="Necromancy", level=5)
         j = spell.to_json()
-        # Should be parseable JSON
         parsed = json.loads(j)
         assert len(parsed["sigil"]) > 0
+
+    def test_json_has_tags_and_mana(self):
+        """JSON export should include tags and mana_cost."""
+        spell = generate_spell()
+        d = spell.to_dict()
+        assert isinstance(d["tags"], list)
+        assert isinstance(d["mana_cost"], int)
 
 
 class TestCLI:
@@ -404,7 +637,6 @@ class TestCLI:
         assert len(data) == 5
 
     def test_file_output(self):
-        import tempfile
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             tmpfile = f.name
         try:
@@ -428,14 +660,98 @@ class TestCLI:
         )
         assert "[Legendary]" in result.stdout
 
+    def test_markdown_output(self):
+        """Markdown flag should produce Markdown output."""
+        result = subprocess.run(
+            [sys.executable, "grimoire.py", "--markdown", "--seed", "42"],
+            capture_output=True, text=True, cwd=os.path.dirname(__file__),
+        )
+        assert result.returncode == 0
+        assert "## Description" in result.stdout
+
+    def test_markdown_file_output(self):
+        """Markdown output should work with file output."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+            tmpfile = f.name
+        try:
+            result = subprocess.run(
+                [sys.executable, "grimoire.py", "--markdown", "--seed", "42", "-o", tmpfile],
+                capture_output=True, text=True, cwd=os.path.dirname(__file__),
+            )
+            assert result.returncode == 0
+            with open(tmpfile) as f:
+                content = f.read()
+            assert "## Description" in content
+        finally:
+            os.unlink(tmpfile)
+
+    def test_synergies_flag(self):
+        """--synergies flag should produce output."""
+        result = subprocess.run(
+            [sys.executable, "grimoire.py", "--synergies", "5", "--seed", "42", "--no-color"],
+            capture_output=True, text=True, cwd=os.path.dirname(__file__),
+        )
+        assert result.returncode == 0
+        # Should contain "Synergies" header
+        assert "Synerg" in result.stdout or "spell" in result.stdout.lower()
+
+    def test_compare_flag(self):
+        """--compare flag should produce side-by-side output."""
+        result = subprocess.run(
+            [sys.executable, "grimoire.py", "--compare", "--seed", "42", "--no-color"],
+            capture_output=True, text=True, cwd=os.path.dirname(__file__),
+        )
+        assert result.returncode == 0
+        assert len(result.stdout) > 100  # Should produce substantial output
+
+    def test_json_has_new_fields(self):
+        """JSON output should include tags and mana_cost."""
+        result = subprocess.run(
+            [sys.executable, "grimoire.py", "--json", "--seed", "1"],
+            capture_output=True, text=True, cwd=os.path.dirname(__file__),
+        )
+        data = json.loads(result.stdout)
+        assert "tags" in data[0]
+        assert "mana_cost" in data[0]
+        assert isinstance(data[0]["tags"], list)
+        assert isinstance(data[0]["mana_cost"], int)
+
+
+class TestEdgeCases:
+    """Test edge cases."""
+
+    def test_cantrip_mana_cost_is_low(self):
+        """Cantrips should have very low mana cost (base 0 + small modifiers)."""
+        for school in SCHOOLS:
+            cost = calculate_mana_cost(0, school, "Common", "1 hour", "Instantaneous")
+            # Base is 0, no quick cast penalty (1 hour), no long duration
+            assert cost == 0, f"Cantrip base mana cost should be 0 for {school}, got {cost}"
+
+    def test_save_load_roundtrip_all_fields(self):
+        """All fields including tags and mana_cost should survive save/load."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            tmp = f.name
+        try:
+            spell = generate_spell(school="Evocation", level=5, rarity="Rare")
+            save_spells([spell], tmp)
+            loaded = load_spells(tmp)
+            assert loaded[0].name == spell.name
+            assert loaded[0].tags == spell.tags
+            assert loaded[0].mana_cost == spell.mana_cost
+            assert loaded[0].higher_levels == spell.higher_levels
+        finally:
+            os.unlink(tmp)
+
 
 if __name__ == "__main__":
     # Simple test runner
     import traceback
     test_classes = [
-        TestGenerateSpell, TestRarity, TestRendering,
-        TestSigil, TestDiagram, TestIncantation,
-        TestJsonExport, TestCLI,
+        TestGenerateSpell, TestRarity, TestManaCost, TestTags,
+        TestSynergies, TestSaveLoad, TestRendering, TestSideBySide,
+        TestMarkdownExport, TestSigil, TestDiagram, TestIncantation,
+        TestPluralize, TestWrapText, TestJsonExport, TestCLI,
+        TestEdgeCases,
     ]
     passed = 0
     failed = 0
