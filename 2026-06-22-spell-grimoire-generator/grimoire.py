@@ -4,14 +4,20 @@ Procedural Spell Grimoire Generator
 =====================================
 Generates beautifully formatted grimoire pages for fantasy RPG spells
 with procedural names, ASCII art, incantations, reagents, and metadata.
+
+Version: 2.0.0
 """
 
 import random
 import math
 import argparse
+import json
 import sys
-from dataclasses import dataclass, field
-from typing import List, Optional
+import re
+from dataclasses import dataclass, field, asdict
+from typing import List, Optional, Dict
+
+__version__ = "2.0.0"
 
 # ──────────────────────────────────────────────
 # Data pools for procedural generation
@@ -39,6 +45,23 @@ SCHOOL_DESCRIPTIONS = {
     "Abjuration": "Spells that protect, ward, or dispel other magical effects.",
     "Divination": "Spells that reveal hidden knowledge or foretell the future.",
     "Transmutation": "Spells that change the physical properties of creatures or objects.",
+}
+
+# Rarity system: name, display color, and weight for random selection
+RARITIES = {
+    "Common":    {"color": "\033[37m",    "weight": 40},
+    "Uncommon":  {"color": "\033[32m",    "weight": 30},
+    "Rare":      {"color": "\033[34m",    "weight": 18},
+    "Very Rare": {"color": "\033[35m",    "weight": 9},
+    "Legendary": {"color": "\033[38;5;220m", "weight": 3},
+}
+
+RARITY_LEVEL_MODIFIERS = {
+    "Common":    (-1, 3),    # levels 0-2 bias
+    "Uncommon":  (1, 4),     # levels 1-3 bias
+    "Rare":      (3, 6),     # levels 3-5 bias
+    "Very Rare": (5, 8),     # levels 5-7 bias
+    "Legendary": (7, 9),    # levels 7-9 bias
 }
 
 PREFIXES = [
@@ -258,6 +281,14 @@ BACKSTORY_TEMPLATES = [
     "This spell was a closely guarded secret of the Order of the {order}, passed "
     "down from master to apprentice during the {era}. {archmage} broke their oath "
     "by recording it in the Codex of {city}.",
+
+    "A wandering sage named {archmage} is said to have received this spell in a vision "
+    "during the {era}. It was later inscribed on a tablet of {material} in the ruins of "
+    "{city}, where it lay hidden for centuries until the Order of the {order} unearthed it.",
+
+    "The Council of {city} outlawed this spell during the {era} after {archmage} used it "
+    "to devastating effect against the {enemy} invasion. Copies were ordered destroyed, "
+    "but a single parchment survived in the archives of the Temple of {temple}.",
 ]
 
 TEMPLES = [
@@ -294,6 +325,8 @@ ORDERS = [
     "Silver Flame", "Crimson Eye", "Ebon Star", "Golden Wand",
     "Twilight Watch", "Crystal Dawn",
 ]
+
+MATERIALS_TABLET = ["obsidian", "granite", "crystal", "adamantine", "iron", "marble"]
 
 # ──────────────────────────────────────────────
 # Incantation generation
@@ -351,10 +384,17 @@ def generate_incantation(school: str) -> str:
 # ──────────────────────────────────────────────
 
 def generate_sigil(school: str, level: int, width: int = 21, height: int = 11) -> List[str]:
-    """Generate a procedural arcane sigil based on school and level."""
-    lines = []
-    random.seed(hash(school) + level * 137)  # Deterministic per school+level
+    """Generate a procedural arcane sigil based on school and level.
 
+    Uses a deterministic seed derived from school and level so the same
+    school+level always produces the same sigil. The global random state
+    is saved and restored to avoid side effects.
+    """
+    # Save and restore random state so we don't disrupt other generation
+    state = random.getstate()
+    random.seed(hash(school) + level * 137)
+
+    lines = []
     center_x = width // 2
     center_y = height // 2
 
@@ -416,12 +456,13 @@ def generate_sigil(school: str, level: int, width: int = 21, height: int = 11) -
     for row in grid:
         lines.append("".join(row))
 
-    random.seed()  # Reset random seed
+    random.setstate(state)  # Restore random state
     return lines
 
 
 def generate_border(width: int, school: str) -> str:
     """Generate a decorative border line."""
+    state = random.getstate()
     random.seed(hash(school) + 42)
     motifs = {
         "Evocation": ("═", "⚡", "◆"),
@@ -439,12 +480,18 @@ def generate_border(width: int, school: str) -> str:
     pattern += f" {fill}{motif}{fill} " * (mid // 4)
     pattern = pattern[:mid]
     pattern += f" {corner}"
-    random.seed()
+    random.setstate(state)
     return pattern
 
 
 def generate_spell_diagram(school: str, level: int) -> List[str]:
-    """Generate a procedural geometric spell diagram."""
+    """Generate a procedural geometric spell diagram.
+
+    Saves and restores random state to avoid side effects.
+    """
+    state = random.getstate()
+    random.seed(hash(school) * 1000 + level * 7 + 999)
+
     lines = []
     width = 35
     height = 13
@@ -452,8 +499,6 @@ def generate_spell_diagram(school: str, level: int) -> List[str]:
     center_y = height // 2
 
     grid = [[" " for _ in range(width)] for _ in range(height)]
-
-    random.seed(hash(school) * 1000 + level * 7 + 999)
 
     # Base circle
     radius = 5
@@ -521,7 +566,7 @@ def generate_spell_diagram(school: str, level: int) -> List[str]:
     for row in grid:
         lines.append("".join(row).rstrip())
 
-    random.seed()
+    random.setstate(state)  # Restore random state
     return lines
 
 
@@ -548,24 +593,95 @@ class Spell:
     sigil: List[str]
     diagram: List[str]
     higher_levels: str = ""
+    rarity: str = "Common"
+
+    def to_dict(self) -> Dict:
+        """Convert spell to a JSON-serializable dictionary."""
+        d = asdict(self)
+        return d
+
+    def to_json(self, indent: int = 2) -> str:
+        """Serialize spell to JSON string."""
+        return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False)
+
+
+# ──────────────────────────────────────────────
+# Helper: ordinal suffix for level strings
+# ──────────────────────────────────────────────
+
+def ordinal(n: int) -> str:
+    """Return the ordinal string for a number: 1 → '1st', 2 → '2nd', 3 → '3rd', etc."""
+    if 11 <= (n % 100) <= 13:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
+# ──────────────────────────────────────────────
+# Rarity selection
+# ──────────────────────────────────────────────
+
+def choose_rarity(level: Optional[int] = None) -> str:
+    """Choose a rarity, optionally influenced by spell level."""
+    names = list(RARITIES.keys())
+    weights = [RARITIES[r]["weight"] for r in names]
+    rarity = random.choices(names, weights=weights, k=1)[0]
+
+    # If a level is given, sometimes bump rarity toward appropriate range
+    if level is not None and random.random() < 0.5:
+        low, high = RARITY_LEVEL_MODIFIERS[rarity]
+        # If the chosen level falls outside the rarity's typical range,
+        # 50% of the time re-pick from a more appropriate rarity
+        if level < low or level > high:
+            # Find a rarity whose range contains this level
+            for r in ["Legendary", "Very Rare", "Rare", "Uncommon", "Common"]:
+                lo, hi = RARITY_LEVEL_MODIFIERS[r]
+                if lo <= level <= hi:
+                    rarity = r
+                    break
+    return rarity
 
 
 # ──────────────────────────────────────────────
 # Generation
 # ──────────────────────────────────────────────
 
-def generate_spell(school: Optional[str] = None, level: Optional[int] = None) -> Spell:
-    """Generate a complete procedural spell."""
+# Track generated names to avoid duplicates within a session
+_generated_names: set = set()
+
+
+def generate_spell(school: Optional[str] = None, level: Optional[int] = None,
+                   rarity: Optional[str] = None) -> Spell:
+    """Generate a complete procedural spell.
+
+    Args:
+        school: School of magic. Random if None.
+        level: Spell level 0-9. Random if None.
+        rarity: Spell rarity. Auto-selected based on level if None.
+
+    Returns:
+        A fully populated Spell dataclass.
+    """
     if school is None:
         school = random.choice(SCHOOLS)
     if level is None:
         level = random.randint(0, 9)
+    if rarity is None:
+        rarity = choose_rarity(level)
 
-    # Generate name
-    if random.random() < 0.6 or level == 0:
-        name = f"{random.choice(PREFIXES)} {random.choice(ROOTS[school])}"
-    else:
-        name = f"{random.choice(PREFIXES)} {random.choice(ROOTS[school])} of {random.choice(PREFIXES)} {random.choice(ROOTS[school])}"
+    # Generate name — ensure uniqueness
+    max_attempts = 50
+    name = f"{random.choice(PREFIXES)} {random.choice(ROOTS[school])}"  # fallback default
+    for _ in range(max_attempts):
+        if random.random() < 0.6 or level == 0:
+            candidate = f"{random.choice(PREFIXES)} {random.choice(ROOTS[school])}"
+        else:
+            candidate = f"{random.choice(PREFIXES)} {random.choice(ROOTS[school])} of {random.choice(PREFIXES)} {random.choice(ROOTS[school])}"
+        if candidate not in _generated_names:
+            _generated_names.add(candidate)
+            name = candidate
+            break
 
     casting_time = random.choice(CASTING_TIMES)
     rng = random.choice(RANGES)
@@ -631,10 +747,10 @@ def generate_spell(school: Optional[str] = None, level: Optional[int] = None) ->
     else:
         somatic_detail = "N/A"
 
-    # Higher levels
-    if level > 0 and level < 9:
+    # Higher levels — with correct ordinal suffix
+    if 0 < level < 9:
         higher_levels = (
-            f"When cast using a spell slot of {level + 1}th level or higher, "
+            f"When cast using a spell slot of {ordinal(level + 1)} level or higher, "
             f"the {random.choice(['damage increases', 'duration doubles', 'area of effect doubles', 'number of targets increases'])} "
             f"for each slot level above {level}."
         )
@@ -655,10 +771,11 @@ def generate_spell(school: Optional[str] = None, level: Optional[int] = None) ->
         city=random.choice(CITIES),
         plane=random.choice(PLANES),
         order=random.choice(ORDERS),
+        material=random.choice(MATERIALS_TABLET),
     )
 
     return Spell(
-        name=name, school=school, level=level,
+        name=name, school=school, level=level, rarity=rarity,
         casting_time=casting_time, rng=rng, duration=duration,
         verbal=verbal, somatic=somatic, material=material,
         description=description, incantation=incantation,
@@ -679,6 +796,7 @@ ITALIC = "\033[3m"
 UNDERLINE = "\033[4m"
 RST = RESET
 
+
 def wrap_text(text: str, width: int = 58) -> List[str]:
     """Word-wrap text to a given width."""
     words = text.split()
@@ -695,12 +813,18 @@ def wrap_text(text: str, width: int = 58) -> List[str]:
     return lines
 
 
+def strip_ansi(text: str) -> str:
+    """Remove ANSI escape sequences from text."""
+    return re.sub(r'\033\[[0-9;]*m', '', text)
+
+
 def render_grimoire_page(spell: Spell, color: bool = True) -> str:
     """Render a full grimoire page for a spell."""
     page_width = 64
 
     sc = SCHOOL_COLORS.get(spell.school, "") if color else ""
     rst = RST if color else ""
+    rc = RARITIES.get(spell.rarity, {}).get("color", "") if color else ""
 
     lines = []
 
@@ -711,11 +835,15 @@ def render_grimoire_page(spell: Spell, color: bool = True) -> str:
     # School and level header
     level_str = SPELL_LEVELS[spell.level]
     header = f"{spell.school} — {level_str} Level"
-    if len(spell.school) > 0:
-        pad = page_width - 6 - len(header)
-        # account for ANSI codes
-        header_display = f"{sc}{header}{rst}" if color else header
-        lines.append(f"  ║ {header_display}{' ' * (pad)} ║")
+    pad = page_width - 6 - len(header)
+    header_display = f"{sc}{header}{rst}" if color else header
+    lines.append(f"  ║ {header_display}{' ' * pad} ║")
+
+    # Rarity badge on next line
+    rarity_label = f"[{spell.rarity}]"
+    rarity_display = f"{rc}{BOLD}{rarity_label}{rst}" if color else rarity_label
+    rarity_pad = page_width - 6 - len(rarity_label)
+    lines.append(f"  ║ {rarity_display}{' ' * rarity_pad} ║")
 
     lines.append(f"  ╠{'═' * (page_width - 4)}╣")
 
@@ -729,12 +857,7 @@ def render_grimoire_page(spell: Spell, color: bool = True) -> str:
 
     # Metadata
     def meta_line(label: str, value: str) -> str:
-        lbl = f"{BOLD}{label}:{rst}" if color else f"{label}:"
-        content = f"{lbl} {value}"
-        content_pad = page_width - 6 - len(label) - 2 - len(value)
-        # We need to handle ANSI codes length
         actual_content = f"{BOLD}{label}:{rst} {value}" if color else f"{label}: {value}"
-        # Calculate padding based on visible width
         visible_len = len(label) + 2 + len(value) + 1
         pad = page_width - 6 - visible_len
         return f"  ║ {actual_content}{' ' * max(pad, 0)} ║"
@@ -785,7 +908,7 @@ def render_grimoire_page(spell: Spell, color: bool = True) -> str:
     lines.append(f"  ║{' ' * (page_width - 4)}║")
 
     desc_lines = wrap_text(spell.description, width=page_width - 8)
-    for i, dl in enumerate(desc_lines):
+    for dl in desc_lines:
         prefix = f"  ║ {ITALIC}" if color else "  ║ "
         suffix = f"{rst}" if color else ""
         dl_pad = page_width - 6 - len(dl)
@@ -794,10 +917,17 @@ def render_grimoire_page(spell: Spell, color: bool = True) -> str:
     if spell.higher_levels:
         lines.append(f"  ║{' ' * (page_width - 4)}║")
         hl_lines = wrap_text(spell.higher_levels, width=page_width - 8)
-        for hl in hl_lines:
-            prefix = f"  ║ {BOLD}At Higher Levels.{rst} " if hl == hl_lines[0] and color else f"  ║ "
-            hl_pad = page_width - 6 - len(hl)
-            lines.append(f"{prefix}{hl}{' ' * max(hl_pad - len(prefix) + 6, 0)} ║")
+        for idx, hl in enumerate(hl_lines):
+            if idx == 0:
+                prefix = f"  ║ {BOLD}At Higher Levels.{rst} " if color else "  ║ At Higher Levels. "
+                # Account for the bold prefix in padding
+                visible_text = f"At Higher Levels. {hl}"
+                visible_len = len(visible_text)
+                hl_pad = page_width - 6 - visible_len
+                lines.append(f"{prefix}{hl}{' ' * max(hl_pad, 0)} ║")
+            else:
+                hl_pad = page_width - 6 - len(hl)
+                lines.append(f"  ║ {hl}{' ' * max(hl_pad, 0)} ║")
 
     lines.append(f"  ║{' ' * (page_width - 4)}║")
 
@@ -806,13 +936,9 @@ def render_grimoire_page(spell: Spell, color: bool = True) -> str:
     lines.append(f"  ║{' ' * (page_width - 4)}║")
 
     if spell.verbal:
-        v_label = f"{BOLD}Verbal:{rst} " if color else "Verbal: "
         v_text = spell.verbal_detail
-        v_all = v_label + v_text
-        v_lines = wrap_text(v_all, width=page_width - 8)
-        # Remove ANSI from wrap calculation
-        v_lines_plain = wrap_text(f"Verbal: {v_text}", width=page_width - 8)
-        for vl in v_lines_plain:
+        v_lines = wrap_text(f"Verbal: {v_text}", width=page_width - 8)
+        for vl in v_lines:
             v_pad = page_width - 6 - len(vl)
             lines.append(f"  ║ {vl}{' ' * max(v_pad, 0)} ║")
 
@@ -854,19 +980,18 @@ def render_grimoire_page(spell: Spell, color: bool = True) -> str:
 
 
 def render_plaintext_page(spell: Spell) -> str:
-    """Render a grimoire page without ANSI color codes."""
-    return render_grimoire_page(spell, color=False)
+    """Render a grimoire page without any ANSI escape codes."""
+    return strip_ansi(render_grimoire_page(spell, color=True))
 
 
 # ──────────────────────────────────────────────
 # Grimoire (collection of spells)
 # ──────────────────────────────────────────────
 
-def generate_grimoire(num_spells: int = 5, school: Optional[str] = None, color: bool = True) -> str:
+def generate_grimoire(num_spells: int = 5, school: Optional[str] = None,
+                      color: bool = True) -> str:
     """Generate a full grimoire with multiple spells."""
     pages = []
-    title = "═══════════════════════════════════════════"
-    subtitle = "        G R I M O I R E        "
 
     sc = ""
     rst = ""
@@ -900,27 +1025,39 @@ def generate_grimoire(num_spells: int = 5, school: Optional[str] = None, color: 
         if i < num_spells - 1:
             pages.append("\n")
 
-    return "\n".join(pages)
+    result = "\n".join(pages)
+    if not color:
+        result = strip_ansi(result)
+    return result
 
 
 # ──────────────────────────────────────────────
 # Spell list mode (compact table)
 # ──────────────────────────────────────────────
 
-def generate_spell_list(num_spells: int = 10, school: Optional[str] = None, color: bool = True) -> str:
+def generate_spell_list(num_spells: int = 10, school: Optional[str] = None,
+                        color: bool = True) -> str:
     """Generate a compact spell list."""
     lines = []
-    lines.append(f"  {'Level':<8} {'School':<14} {'Spell Name':<30}")
-    lines.append(f"  {'─' * 8} {'─' * 14} {'─' * 30}")
+    lines.append(f"  {'Rarity':<12} {'Level':<8} {'School':<14} {'Spell Name':<30}")
+    lines.append(f"  {'─' * 12} {'─' * 8} {'─' * 14} {'─' * 30}")
 
     for _ in range(num_spells):
         spell = generate_spell(school=school)
         sc = SCHOOL_COLORS.get(spell.school, "") if color else ""
+        rc = RARITIES.get(spell.rarity, {}).get("color", "") if color else ""
         rst = RESET if color else ""
         level_str = SPELL_LEVELS[spell.level]
-        lines.append(f"  {level_str:<8} {sc}{spell.school:<14}{rst} {sc}{BOLD}{spell.name:<30}{rst}")
+        rarity_str = spell.rarity
+        lines.append(
+            f"  {rc}{rarity_str:<12}{rst} {level_str:<8} "
+            f"{sc}{spell.school:<14}{rst} {sc}{BOLD}{spell.name:<30}{rst}"
+        )
 
-    return "\n".join(lines)
+    result = "\n".join(lines)
+    if not color:
+        result = strip_ansi(result)
+    return result
 
 
 # ──────────────────────────────────────────────
@@ -929,34 +1066,35 @@ def generate_spell_list(num_spells: int = 10, school: Optional[str] = None, colo
 
 def interactive_mode():
     """Run an interactive grimoire browser."""
-    print(f"\n{BOLD}{UNDERLINE}📜 Procedural Spell Grimoire Generator{rst}")
-    print(f"{DIM}Generate unique spells for your fantasy RPG campaigns{rst}\n")
+    print(f"\n{BOLD}{UNDERLINE}📜 Procedural Spell Grimoire Generator v{__version__}{RST}")
+    print(f"{DIM}Generate unique spells for your fantasy RPG campaigns{RST}\n")
 
     while True:
-        print(f"\n{BOLD}Options:{rst}")
+        print(f"\n{BOLD}Options:{RST}")
         print("  1. Generate a random spell")
         print("  2. Generate a spell from a specific school")
         print("  3. Generate a grimoire (5 spells)")
         print("  4. Generate a spell list (10 spells)")
         print("  5. Browse spells by level")
+        print("  6. Browse spells by rarity")
         print("  q. Quit")
         print()
 
-        choice = input(f"{BOLD}Choose [1-5/q]:{rst} ").strip().lower()
+        choice = input(f"{BOLD}Choose [1-6/q]:{RST} ").strip().lower()
 
         if choice == "q":
-            print(f"\n{DIM}May your spells always find their mark!{rst}\n")
+            print(f"\n{DIM}May your spells always find their mark!{RST}\n")
             break
         elif choice == "1":
             spell = generate_spell()
             print("\n" + render_grimoire_page(spell))
         elif choice == "2":
-            print(f"\n{BOLD}Schools:{rst}")
+            print(f"\n{BOLD}Schools:{RST}")
             for i, school in enumerate(SCHOOLS, 1):
                 sc = SCHOOL_COLORS.get(school, "")
-                print(f"  {i}. {sc}{school}{rst}")
+                print(f"  {i}. {sc}{school}{RST}")
             try:
-                s_choice = int(input(f"\n{BOLD}Choose school [1-8]:{rst} ").strip())
+                s_choice = int(input(f"\n{BOLD}Choose school [1-8]:{RST} ").strip())
                 if 1 <= s_choice <= 8:
                     spell = generate_spell(school=SCHOOLS[s_choice - 1])
                     print("\n" + render_grimoire_page(spell))
@@ -970,7 +1108,7 @@ def interactive_mode():
             print("\n" + generate_spell_list(num_spells=10))
         elif choice == "5":
             try:
-                level = int(input(f"{BOLD}Spell level [0-9]:{rst} ").strip())
+                level = int(input(f"{BOLD}Spell level [0-9]:{RST} ").strip())
                 if 0 <= level <= 9:
                     spell = generate_spell(level=level)
                     print("\n" + render_grimoire_page(spell))
@@ -978,6 +1116,22 @@ def interactive_mode():
                     print("Level must be 0-9.")
             except (ValueError, EOFError):
                 print("Invalid input.")
+        elif choice == "6":
+            print(f"\n{BOLD}Rarities:{RST}")
+            rarity_names = list(RARITIES.keys())
+            for i, r in enumerate(rarity_names, 1):
+                rc = RARITIES[r]["color"]
+                print(f"  {i}. {rc}{BOLD}{r}{RST}")
+            try:
+                r_choice = int(input(f"\n{BOLD}Choose rarity [1-5]:{RST} ").strip())
+                if 1 <= r_choice <= len(rarity_names):
+                    rarity = rarity_names[r_choice - 1]
+                    spell = generate_spell(rarity=rarity)
+                    print("\n" + render_grimoire_page(spell))
+                else:
+                    print("Invalid choice.")
+            except (ValueError, EOFError):
+                print("Invalid choice.")
 
 
 # ──────────────────────────────────────────────
@@ -988,30 +1142,41 @@ def main():
     parser = argparse.ArgumentParser(
         description="Procedural Spell Grimoire Generator — Create unique fantasy RPG spells",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog=f"""
 Examples:
   %(prog)s                           Generate a random spell
   %(prog)s --grimoire                Generate a full 5-spell grimoire
   %(prog)s --school Necromancy       Generate a Necromancy spell
   %(prog)s --level 5                 Generate a 5th-level spell
+  %(prog)s --rarity Legendary        Generate a Legendary-rarity spell
   %(prog)s --list 20                 Show a list of 20 spells
+  %(prog)s --json                    Output spell as JSON
   %(prog)s --no-color                Disable colored output
   %(prog)s --interactive             Enter interactive mode
   %(prog)s --grimoire --school Evocation --output grimoire.txt
-        """,
+  %(prog)s --version                 Show version number
+""",
     )
+    parser.add_argument("--version", "-v", action="version",
+                        version=f"%(prog)s {__version__}")
     parser.add_argument("--school", "-s", choices=SCHOOLS,
                         help="School of magic for the spell(s)")
     parser.add_argument("--level", "-l", type=int, choices=range(10),
-                        help="Spell level (0-9)")
+                        metavar="{0..9}", help="Spell level (0-9)")
+    parser.add_argument("--rarity", "-r", choices=list(RARITIES.keys()),
+                        help="Spell rarity (Common, Uncommon, Rare, Very Rare, Legendary)")
     parser.add_argument("--grimoire", "-g", action="store_true",
                         help="Generate a full grimoire (5 spells)")
+    parser.add_argument("--count", "-c", type=int, default=1,
+                        help="Number of individual spells to generate (default: 1)")
     parser.add_argument("--list", "-n", type=int, metavar="COUNT",
                         help="Generate a compact list of COUNT spells")
     parser.add_argument("--no-color", action="store_true",
                         help="Disable colored output")
     parser.add_argument("--output", "-o", type=str,
                         help="Write output to file instead of stdout")
+    parser.add_argument("--json", "-j", action="store_true",
+                        help="Output spell data as JSON (for --count or single spell)")
     parser.add_argument("--interactive", "-i", action="store_true",
                         help="Enter interactive mode")
     parser.add_argument("--seed", type=int,
@@ -1029,22 +1194,59 @@ Examples:
         return
 
     output = ""
+    json_spells = []
+
+    if args.json:
+        # JSON output mode
+        num = args.count if args.count > 1 or not args.grimoire else 1
+        if args.grimoire:
+            num = 5
+        elif args.list:
+            num = args.list
+        else:
+            num = max(args.count, 1)
+
+        for _ in range(num):
+            spell = generate_spell(school=args.school, level=args.level, rarity=args.rarity)
+            json_spells.append(spell.to_dict())
+
+        output = json.dumps(json_spells, indent=2, ensure_ascii=False)
+
+        if args.output:
+            try:
+                with open(args.output, "w", encoding="utf-8") as f:
+                    f.write(output)
+                print(f"JSON written to {args.output}")
+            except OSError as e:
+                print(f"Error writing to {args.output}: {e}", file=sys.stderr)
+                sys.exit(1)
+        else:
+            print(output)
+        return
 
     if args.grimoire:
         output = generate_grimoire(num_spells=5, school=args.school, color=color)
     elif args.list:
         output = generate_spell_list(num_spells=args.list, school=args.school, color=color)
     else:
-        spell = generate_spell(school=args.school, level=args.level)
-        output = render_grimoire_page(spell, color=color)
+        # Generate one or more individual spells
+        num = max(args.count, 1)
+        pages = []
+        for _ in range(num):
+            spell = generate_spell(school=args.school, level=args.level, rarity=args.rarity)
+            pages.append(render_grimoire_page(spell, color=color))
+        output = "\n\n".join(pages)
 
     if args.output:
         # Strip ANSI for file output
-        import re
-        clean_output = re.sub(r'\033\[[0-9;]*m', '', output)
-        with open(args.output, "w") as f:
-            f.write(clean_output)
-        print(f"Grimoire written to {args.output}")
+        clean_output = strip_ansi(output)
+        try:
+            with open(args.output, "w", encoding="utf-8") as f:
+                f.write(clean_output)
+            print(f"Grimoire written to {args.output}")
+        except OSError as e:
+            print(f"Error writing to {args.output}: {e}", file=sys.stderr)
+            sys.exit(1)
     else:
         print(output)
 
