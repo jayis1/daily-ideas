@@ -1,189 +1,128 @@
-# Spell Grimoire Generator v4.0.0
+# Spell Grimoire Generator
 
-A procedurally-generated D&D 5e-style spell grimoire creator. Generate unique spells with names, descriptions, incantations, sigils, mana costs, scroll values, tags, synergies, and conflicts — all from random seeds.
+**Version 4.0.1** — A procedural D&D 5e–style spell generator that creates unique spells with names, descriptions, stats, sigils, diagrams, and incantations. Outputs in color terminal, Markdown, JSON, or HTML.
 
 ## Features
 
-### Core Generation
-- **Procedural Spell Generation** — Every spell has a unique name, school, level, description, casting time, range, duration, components, incantation, sigil, diagram, and lore
-- **8 Schools of Magic** — Abjuration, Conjuration, Divination, Enchantment, Evocation, Illusion, Necromancy, Transmutation
-- **9 Spell Levels** — Cantrip (0) through 9th level, with rarity scaling
-- **5 Rarity Tiers** — Common, Uncommon, Rare, Very Rare, Legendary (with weighted random selection)
-
-### Calculations & Metadata
-- **Mana Cost System** — Calculated from level, school, rarity, casting time, and duration
-- **Scroll GP Values** — D&D-style gold piece pricing for spell scrolls, based on level and rarity
-- **Spell Tags** — Thematic tags based on school, level, rarity, and damage type
-- **Spell Synergies** — Detect pairs of spells from different schools that complement each other
-- **Spell Conflicts** — Detect pairs of spells whose schools clash or interfere with each other
-
-### Output Formats
-- **Terminal Output** — ANSI-colored grimoire pages with box-drawing characters and Unicode sigils
-- **Markdown Export** — Clean Markdown output with headers, metadata, tags, and lore (`--markdown`)
-- **JSON Export** — Structured JSON output for programmatic use (`--json`)
-- **HTML Export** — Standalone styled HTML document with dark theme (`--html`)
-- **Plaintext** — Stripped of ANSI codes (`--no-color`)
-
-### Display Modes
-- **Single Spell** — Generate and display one spell
-- **Grimoire Mode** — Generate a full 5-spell grimoire with decorative header (`--grimoire`)
-- **Spell Lists** — Tabular overview with rarity, level, mana, scroll value, school, and name (`--list N`)
-- **Side-by-Side Comparison** — Render two spells in parallel columns (`--compare`)
-- **Synergies** — Find complementary school pairings among N spells (`--synergies N`)
-- **Conflicts** — Find incompatible school pairings among N spells (`--conflicts N`)
-- **Statistics** — Aggregate analysis of generated spells (`--stats N`)
-- **Interactive Mode** — Menu-driven spell generation and exploration (`--interactive`)
-
-### Persistence
-- **Save/Load** — Persist spells to JSON files and recall them later
-- **Deterministic Seeds** — Use `--seed` for reproducible output
+- **Procedural Spell Generation** — Creates unique spells with names, schools, levels, rarities, mana costs, casting times, ranges, durations, descriptions, lore, tags, sigils, diagrams, and incantations
+- **8 Magic Schools** — Abjuration, Conjuration, Divination, Enchantment, Evocation, Illusion, Necromancy, Transmutation — each with unique templates, creatures, and effects
+- **10 Spell Levels** — Cantrip through 9th level, with appropriate stats scaling
+- **5 Rarity Tiers** — Common, Uncommon, Rare, Very Rare, Legendary — affecting stats and scroll values
+- **Scroll GP Values** — Every spell includes a gold-piece value for purchasing spell scrolls, calculated from level and rarity
+- **Spell Conflict Detection** — `--conflicts N` identifies pairs of spells whose schools clash (e.g., Evocation ↔ Illusion, Necromancy ↔ Abjuration)
+- **Statistical Analysis** — `--stats N` shows breakdown of N spells by school, level, rarity, plus average/total mana cost and scroll value
+- **Grimoire Mode** — `--grimoire` generates a beautifully formatted multi-spell grimoire with borders and headers
+- **Spell List Mode** — `--list N` generates a compact table with Rarity, Level, Mana, Scroll value, School, and Spell Name columns
+- **Side-by-Side Comparison** — `--compare` shows two spells side by side
+- **Synergy Detection** — `--synergies` finds and describes synergies between spells
+- **Markdown Export** — `--markdown` outputs formatted Markdown with headers, tables, and spell details
+- **JSON Export** — `--json` outputs structured JSON data for programmatic use
+- **HTML Export** — `--html` generates a standalone dark-fantasy-themed HTML document with school-colored badges
+- **Save & Load** — `--save` writes spells to JSON file; `--load` reads them back
+- **Deterministic Seeding** — `--seed N` produces reproducible results
+- **Color Output** — Rich ANSI terminal colors with school-themed palettes (disable with `--no-color`)
+- **Interactive Mode** — Run without flags for an interactive menu
 
 ## Installation
 
 ```bash
-# No external dependencies — uses only Python standard library
-git clone <repo-url> ~/daily-ideas
-cd ~/daily-ideas/2026-06-22-spell-grimoire-generator
-
+# No dependencies needed — uses only Python standard library
+cd 2026-06-22-spell-grimoire-generator
 python3 grimoire.py --help
 ```
 
-Requires Python 3.7+.
-
 ## Usage
 
-### Basic Spell Generation
+### Basic
 
 ```bash
 # Generate a random spell
 python3 grimoire.py
 
-# Generate 3 spells
-python3 grimoire.py --count 3
-
-# Generate with a specific seed (deterministic)
+# Generate with a specific seed for reproducibility
 python3 grimoire.py --seed 42
 
-# Generate a spell from a specific school
-python3 grimoire.py --school Necromancy
+# Generate a specific school
+python3 grimoire.py --school Evocation
 
-# Generate a spell at a specific level (0-9)
+# Generate a specific level
 python3 grimoire.py --level 5
 
-# Generate with a specific rarity
+# Generate a specific rarity
 python3 grimoire.py --rarity Legendary
+
+# Generate multiple spells
+python3 grimoire.py --count 10
 ```
 
 ### Output Formats
 
 ```bash
 # JSON output
-python3 grimoire.py --json
-
-# JSON with multiple spells
-python3 grimoire.py --json --count 5
+python3 grimoire.py --json --seed 42
 
 # Markdown output
-python3 grimoire.py --markdown
+python3 grimoire.py --markdown --seed 42
 
-# HTML output (standalone dark-themed page)
-python3 grimoire.py --html
+# HTML output
+python3 grimoire.py --html --count 3
 
-# HTML with multiple spells
-python3 grimoire.py --html --count 3 -o grimoire.html
+# Save to file
+python3 grimoire.py --json --seed 42 --output spells.json
 
-# Write to file
-python3 grimoire.py --output grimoire.txt
-
-# No color (plain text)
-python3 grimoire.py --no-color
+# Plain text (no ANSI colors)
+python3 grimoire.py --no-color --seed 42
 ```
 
-### Grimoire & Lists
+### Grimoire Mode
 
 ```bash
 # Generate a 5-spell grimoire
-python3 grimoire.py --grimoire
+python3 grimoire.py --grimoire --seed 42
 
-# Generate a school-specific grimoire
-python3 grimoire.py --grimoire --school Evocation
+# Filter by school
+python3 grimoire.py --grimoire --school Necromancy --seed 42
 
-# Generate a spell list (tabular)
+# Filter by level
+python3 grimoire.py --grimoire --level 5 --seed 42
+
+# Filter by rarity
+python3 grimoire.py --grimoire --rarity Legendary --seed 42
+```
+
+### Spell List Mode
+
+```bash
+# Generate a table of 10 spells
 python3 grimoire.py --list 10
 
-# School-filtered list
-python3 grimoire.py --list 5 --school Abjuration
+# List with filters
+python3 grimoire.py --list 5 --school Evocation --level 3 --seed 42
+python3 grimoire.py --list 3 --rarity Rare --seed 42
 ```
 
-### Synergies, Conflicts & Comparison
+### Analysis
 
 ```bash
-# Find synergies between 5 spells
-python3 grimoire.py --synergies 5
+# Conflict detection
+python3 grimoire.py --conflicts 10 --seed 42
 
-# Find conflicts between 5 spells
-python3 grimoire.py --conflicts 5
+# Statistical analysis
+python3 grimoire.py --stats 20 --seed 42
 
-# Compare two spells side-by-side
-python3 grimoire.py --compare
-
-# Compare with a specific school
-python3 grimoire.py --compare --school Necromancy
+# Side-by-side comparison
+python3 grimoire.py --compare --seed 42
 ```
 
-### Statistics
+### Saving & Loading
 
 ```bash
-# Show statistics for 20 random spells
-python3 grimoire.py --stats 20
-
-# Statistics for a specific school
-python3 grimoire.py --stats 20 --school Evocation
-
-# Statistics for high-level spells
-python3 grimoire.py --stats 15 --level 7
-```
-
-### Save & Load
-
-```bash
-# Save generated spells to a JSON file
-python3 grimoire.py --count 5 --save spells.json
-
-# Save from grimoire mode
-python3 grimoire.py --grimoire --save grimoire_spells.json
-
-# Save from list mode
-python3 grimoire.py --list 3 --save list_spells.json
+# Save spells to JSON
+python3 grimoire.py --count 5 --json --save my_spells.json --seed 42
 
 # Load and display saved spells
-python3 grimoire.py --load spells.json
-
-# Load and export as HTML
-python3 grimoire.py --load spells.json --html -o loaded.html
+python3 grimoire.py --load my_spells.json
 ```
-
-### Interactive Mode
-
-```bash
-python3 grimoire.py --interactive
-```
-
-Interactive menu options:
-1. Generate random spell
-2. Generate spell from specific school
-3. Generate a grimoire (5 spells)
-4. Generate a spell list (10 spells)
-5. Browse spells by level
-6. Browse spells by rarity
-7. Compare two spells side-by-side
-8. Find synergies in recent spells
-9. View spell history
-c. Find conflicts in recent spells
-t. View statistics
-s. Save spells to file
-l. Load spells from file
-q. Quit
 
 ## Running Tests
 
@@ -191,32 +130,17 @@ q. Quit
 python3 -m pytest test_grimoire.py -v
 ```
 
-The test suite includes 124 tests covering spell generation, mana costs, scroll values, tags, synergies, conflicts, stats, HTML export, save/load, rendering, grammar, seed determinism, and all CLI flags.
+135 tests covering spell generation, rarity, mana costs, tags, synergies, save/load, rendering, Markdown/JSON/HTML export, CLI flags, scroll values, conflicts, stats, and bug-fix regressions.
 
-## What's New in v4.0.0
+## Bug Fixes in v4.0.1
 
-### New Features
-- **Scroll GP Values** — Every spell now includes a gold-piece value for purchasing spell scrolls, based on D&D 5e-style pricing (level × base price × rarity multiplier). Displayed in grimoire pages, spell lists, Markdown output, and JSON output.
-- **Spell Conflicts** — `--conflicts N` flag and interactive option `c` detect pairs of spells whose schools clash (e.g., Evocation vs. Illusion, Necromancy vs. Abjuration), with 8 conflict pairings and descriptive explanations.
-- **Statistical Analysis** — `--stats N` flag and interactive option `t` display a breakdown of N spells by school, level, rarity, plus average/total mana cost and scroll value metrics.
-- **HTML Export** — `--html` flag generates a fully styled standalone HTML document with a dark fantasy theme, school-colored badges, and proper structure. Works with `--count`, `--output`, and `--load`.
-- **Interactive Mode** — New options `c` (conflicts) and `t` (statistics) added to the interactive menu. Spell info lines now show scroll values.
+- **CLI `--list` missing Scroll column** — The `--list` CLI mode had a different column layout than `generate_spell_list()`, omitting the Scroll (gold piece) column. Fixed to include scroll values, matching the function output.
+- **CLI `--grimoire` ignoring `--level` and `--rarity`** — The `--grimoire` mode only passed `school` to `generate_spell()`, silently ignoring `--level` and `--rarity` flags. Both are now forwarded correctly.
+- **CLI `--list` ignoring `--level` and `--rarity`** — The `--list` mode had the same issue. Both flags are now forwarded to `generate_spell()`.
+- **`generate_grimoire()` and `generate_spell_list()` missing `level`/`rarity` parameters** — Both functions only accepted `school` for filtering. Added `level` and `rarity` parameters to match the CLI behavior and `generate_spell()`'s signature.
 
-### Improvements
-- Scroll value column added to spell list output (`--list`)
-- Markdown export now includes scroll value in the header
-- Save/load now properly round-trips the `scroll_value` field (backward-compatible with old files)
-- Version bumped to 4.0.0
+## Changelog
 
-## Project Structure
-
-```
-2026-06-22-spell-grimoire-generator/
-├── grimoire.py          # Main script (spell generator, renderer, CLI)
-├── test_grimoire.py     # Test suite (124 tests)
-└── README.md            # This file
-```
-
-## License
-
-MIT
+- **v4.0.1** — Bug fixes: added Scroll column to CLI `--list`, forwarded `--level`/`--rarity` in `--grimoire` and `--list` CLI modes, added `level`/`rarity` parameters to `generate_grimoire()` and `generate_spell_list()`, added 11 regression tests
+- **v4.0.0** — Added scroll GP values, spell conflict detection, statistical analysis, HTML export
+- **v1.0.0** — Initial release with procedural spell generation, Markdown/JSON export, grimoire mode, CLI

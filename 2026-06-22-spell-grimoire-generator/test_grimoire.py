@@ -1117,6 +1117,90 @@ class TestCLIConflictsStats:
             os.unlink(tmp)
 
 
+class TestBugFixes:
+    """Tests for bugs found and fixed in v4.0.1."""
+
+    def test_list_mode_has_scroll_column(self):
+        """CLI --list mode should include the Scroll column in its header."""
+        result = subprocess.run(
+            [sys.executable, "grimoire.py", "--list", "3", "--seed", "42", "--no-color"],
+            capture_output=True, text=True, cwd=os.path.dirname(os.path.abspath(__file__)),
+        )
+        assert result.returncode == 0
+        assert "Scroll" in result.stdout, "CLI --list should include Scroll column"
+
+    def test_list_mode_passes_level(self):
+        """CLI --list --level should filter by level."""
+        result = subprocess.run(
+            [sys.executable, "grimoire.py", "--list", "5", "--level", "7", "--seed", "42", "--no-color"],
+            capture_output=True, text=True, cwd=os.path.dirname(os.path.abspath(__file__)),
+        )
+        assert result.returncode == 0
+        assert "7th" in result.stdout, "--list --level 7 should produce 7th-level spells"
+
+    def test_list_mode_passes_rarity(self):
+        """CLI --list --rarity should filter by rarity."""
+        result = subprocess.run(
+            [sys.executable, "grimoire.py", "--list", "3", "--rarity", "Legendary", "--seed", "42", "--no-color"],
+            capture_output=True, text=True, cwd=os.path.dirname(os.path.abspath(__file__)),
+        )
+        assert result.returncode == 0
+        assert "Legendary" in result.stdout, "--list --rarity Legendary should produce Legendary spells"
+
+    def test_grimoire_mode_passes_level(self):
+        """CLI --grimoire --level should filter by level."""
+        result = subprocess.run(
+            [sys.executable, "grimoire.py", "--grimoire", "--level", "5", "--seed", "42", "--no-color"],
+            capture_output=True, text=True, cwd=os.path.dirname(os.path.abspath(__file__)),
+        )
+        assert result.returncode == 0
+        assert "5th Level" in result.stdout, "--grimoire --level 5 should produce 5th-level spells"
+
+    def test_grimoire_mode_passes_rarity(self):
+        """CLI --grimoire --rarity should filter by rarity."""
+        result = subprocess.run(
+            [sys.executable, "grimoire.py", "--grimoire", "--rarity", "Legendary", "--seed", "42", "--no-color"],
+            capture_output=True, text=True, cwd=os.path.dirname(os.path.abspath(__file__)),
+        )
+        assert result.returncode == 0
+        assert result.stdout.count("[Legendary]") >= 3, "--grimoire --rarity Legendary should produce Legendary spells"
+
+    def test_generate_grimoire_with_level(self):
+        """generate_grimoire should support level parameter."""
+        grimoire = generate_grimoire(num_spells=3, level=5, color=False)
+        assert "5th Level" in grimoire
+
+    def test_generate_grimoire_with_rarity(self):
+        """generate_grimoire should support rarity parameter."""
+        grimoire = generate_grimoire(num_spells=3, rarity="Rare", color=False)
+        assert "[Rare]" in grimoire
+
+    def test_generate_spell_list_with_level(self):
+        """generate_spell_list should support level parameter."""
+        output = generate_spell_list(num_spells=5, level=3, color=False)
+        assert "3rd" in output
+
+    def test_generate_spell_list_with_rarity(self):
+        """generate_spell_list should support rarity parameter."""
+        output = generate_spell_list(num_spells=5, rarity="Legendary", color=False)
+        assert "Legendary" in output
+
+    def test_generate_spell_list_scroll_column(self):
+        """generate_spell_list should include scroll value column."""
+        output = generate_spell_list(num_spells=3, color=False)
+        assert "Scroll" in output, "Spell list should have Scroll column"
+        assert "gp" in output, "Spell list should include gold piece values"
+
+    def test_list_mode_scroll_column_data(self):
+        """CLI --list mode should include scroll values in data rows."""
+        result = subprocess.run(
+            [sys.executable, "grimoire.py", "--list", "3", "--seed", "42", "--no-color"],
+            capture_output=True, text=True, cwd=os.path.dirname(os.path.abspath(__file__)),
+        )
+        assert result.returncode == 0
+        assert "gp" in result.stdout, "CLI --list should include gp scroll values"
+
+
 if __name__ == "__main__":
     # Simple test runner
     import traceback
@@ -1128,7 +1212,7 @@ if __name__ == "__main__":
         TestEdgeCases, TestDurationPhrase, TestDescriptionGrammar,
         TestSeedDeterminism, TestGrimoireSave,
         TestScrollValue, TestConflicts, TestStats, TestHTMLExport,
-        TestCLIConflictsStats,
+        TestCLIConflictsStats, TestBugFixes,
     ]
     passed = 0
     failed = 0

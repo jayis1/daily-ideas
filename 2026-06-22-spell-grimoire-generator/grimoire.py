@@ -34,7 +34,7 @@ from dataclasses import dataclass, field, asdict
 from typing import List, Optional, Dict, Tuple
 from pathlib import Path
 
-__version__ = "4.0.0"
+__version__ = "4.0.1"
 
 # ──────────────────────────────────────────────
 # Data pools for procedural generation
@@ -1619,6 +1619,7 @@ def render_side_by_side(spell1: Spell, spell2: Spell, color: bool = True) -> str
 # ──────────────────────────────────────────────
 
 def generate_grimoire(num_spells: int = 5, school: Optional[str] = None,
+                      level: Optional[int] = None, rarity: Optional[str] = None,
                       color: bool = True) -> str:
     """Generate a full grimoire with multiple spells."""
     pages = []
@@ -1659,7 +1660,7 @@ def generate_grimoire(num_spells: int = 5, school: Optional[str] = None,
     pages.append(header)
 
     for i in range(num_spells):
-        spell = generate_spell(school=school)
+        spell = generate_spell(school=school, level=level, rarity=rarity)
         page = render_grimoire_page(spell, color=color)
         pages.append(page)
         if i < num_spells - 1:
@@ -1676,6 +1677,7 @@ def generate_grimoire(num_spells: int = 5, school: Optional[str] = None,
 # ──────────────────────────────────────────────
 
 def generate_spell_list(num_spells: int = 10, school: Optional[str] = None,
+                        level: Optional[int] = None, rarity: Optional[str] = None,
                         color: bool = True) -> str:
     """Generate a compact spell list."""
     lines = []
@@ -1684,7 +1686,7 @@ def generate_spell_list(num_spells: int = 10, school: Optional[str] = None,
     lines.append(f"  {'─' * 12} {'─' * 8} {'─' * 6} {'─' * 10} {'─' * 14} {'─' * 30}")
 
     for _ in range(num_spells):
-        spell = generate_spell(school=school)
+        spell = generate_spell(school=school, level=level, rarity=rarity)
         sc = SCHOOL_COLORS.get(spell.school, "") if color else ""
         rc = RARITIES.get(spell.rarity, {}).get("color", "") if color else ""
         rst = RESET if color else ""
@@ -2398,7 +2400,7 @@ Examples:
         pages.append(header)
 
         for i in range(num_spells):
-            spell = generate_spell(school=grimoire_school)
+            spell = generate_spell(school=grimoire_school, level=args.level, rarity=args.rarity)
             spells_list.append(spell)
             page = render_grimoire_page(spell, color=color)
             pages.append(page)
@@ -2414,11 +2416,11 @@ Examples:
         num_spells = args.list
         spells_list = []
         list_lines = []
-        list_lines.append(f"  {'Rarity':<12} {'Level':<8} {'Mana':<6} {'School':<14} {'Spell Name':<30}")
-        list_lines.append(f"  {'─' * 12} {'─' * 8} {'─' * 6} {'─' * 14} {'─' * 30}")
+        list_lines.append(f"  {'Rarity':<12} {'Level':<8} {'Mana':<6} {'Scroll':<10} {'School':<14} {'Spell Name':<30}")
+        list_lines.append(f"  {'─' * 12} {'─' * 8} {'─' * 6} {'─' * 10} {'─' * 14} {'─' * 30}")
 
         for _ in range(num_spells):
-            spell = generate_spell(school=args.school)
+            spell = generate_spell(school=args.school, level=args.level, rarity=args.rarity)
             spells_list.append(spell)
             sc = SCHOOL_COLORS.get(spell.school, "") if color else ""
             rc = RARITIES.get(spell.rarity, {}).get("color", "") if color else ""
@@ -2426,8 +2428,9 @@ Examples:
             level_str = SPELL_LEVELS[spell.level]
             rarity_str = spell.rarity
             mana_str = str(spell.mana_cost)
+            scroll_str = f"{spell.scroll_value:,} gp"
             list_lines.append(
-                f"  {rc}{rarity_str:<12}{rst} {level_str:<8} {mana_str:<6} "
+                f"  {rc}{rarity_str:<12}{rst} {level_str:<8} {mana_str:<6} {scroll_str:<10} "
                 f"{sc}{spell.school:<14}{rst} {sc}{BOLD}{spell.name:<30}{rst}"
             )
 
