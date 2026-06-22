@@ -5,7 +5,7 @@ Procedural Spell Grimoire Generator
 Generates beautifully formatted grimoire pages for fantasy RPG spells
 with procedural names, ASCII art, incantations, reagents, and metadata.
 
-Version: 3.0.0
+Version: 4.0.0
 
 Features:
   - 8 schools of magic with school-specific content
@@ -13,8 +13,11 @@ Features:
   - Arcane sigils and spell diagrams (procedural ASCII art)
   - Spell tags for thematic categorization
   - Mana cost calculation
+  - Scroll GP value calculation (D&D-style gold piece pricing)
   - Spell synergy detection
-  - Markdown export, JSON export, plaintext export
+  - Spell conflict detection (incompatible school pairings)
+  - Markdown, JSON, HTML, and plaintext export
+  - Statistical analysis mode (--stats)
   - Interactive browser mode
   - Save/load spells to JSON files
   - Seed support for reproducible generation
@@ -31,7 +34,7 @@ from dataclasses import dataclass, field, asdict
 from typing import List, Optional, Dict, Tuple
 from pathlib import Path
 
-__version__ = "3.1.0"
+__version__ = "4.0.0"
 
 # ──────────────────────────────────────────────
 # Data pools for procedural generation
@@ -130,6 +133,41 @@ SYNERGY_PAIRS = {
     ("Illusion", "Conjuration"): "Illusory disguises enhance summoned creatures' effectiveness.",
     ("Necromancy", "Divination"): "Communing with the dead reveals hidden knowledge of the past.",
     ("Enchantment", "Transmutation"): "Altering both mind and body creates complete transformations.",
+}
+
+# Conflict matrix: schools that clash or interfere with each other
+CONFLICT_PAIRS = {
+    ("Evocation", "Illusion"): "Raw destructive force shatters delicate illusory constructs.",
+    ("Necromancy", "Abjuration"): "Death magic undermines protective wards meant to preserve life.",
+    ("Necromancy", "Enchantment"): "Undeath's cold void dampens the warmth needed for enchantment.",
+    ("Evocation", "Divination"): "Chaotic elemental energy disrupts the calm focus needed for scrying.",
+    ("Conjuration", "Necromancy"): "Planar portals can be contaminated by necrotic energy, causing miscasts.",
+    ("Illusion", "Divination"): "False visions and true sight are inherently at odds.",
+    ("Transmutation", "Necromancy"): "Changing living forms conflicts with the stasis of undeath.",
+    ("Enchantment", "Abjuration"): "Mental domination clashes with wards designed to resist influence.",
+}
+
+# Scroll GP values by spell level (D&D 5e-style pricing)
+# Based on: level × base_price, with rarity multiplier
+SCROLL_BASE_PRICES = {
+    0: 50,     # Cantrip scroll
+    1: 100,    # 1st level
+    2: 200,    # 2nd level
+    3: 300,    # 3rd level
+    4: 500,    # 4th level
+    5: 1000,   # 5th level
+    6: 2500,   # 6th level
+    7: 5000,   # 7th level
+    8: 10000,  # 8th level
+    9: 25000,  # 9th level
+}
+
+RARITY_GOLD_MULTIPLIERS = {
+    "Common": 1.0,
+    "Uncommon": 1.5,
+    "Rare": 2.5,
+    "Very Rare": 5.0,
+    "Legendary": 10.0,
 }
 
 PREFIXES = [
@@ -664,6 +702,7 @@ class Spell:
     rarity: str = "Common"
     tags: List[str] = field(default_factory=list)
     mana_cost: int = 0
+    scroll_value: int = 0
 
     def to_dict(self) -> Dict:
         """Convert spell to a JSON-serializable dictionary."""
@@ -689,7 +728,7 @@ class Spell:
         md_lines = [
             f"# {self.name}",
             f"",
-            f"**{self.school} — {level_str} Level** | **[{self.rarity}]** | **Mana Cost: {self.mana_cost}**",
+            f"**{self.school} — {level_str} Level** | **[{self.rarity}]** | **Mana Cost: {self.mana_cost}** | **Scroll: {self.scroll_value:,} gp**",
             f"",
             f"- **Casting Time:** {self.casting_time}",
             f"- **Range:** {self.rng}",
@@ -729,6 +768,165 @@ class Spell:
             ])
 
         return "\n".join(md_lines)
+
+    def to_html(self) -> str:
+        """Render the spell as a standalone HTML document."""
+        level_str = SPELL_LEVELS[self.level]
+        components = []
+        if self.verbal:
+            components.append("V")
+        if self.somatic:
+            components.append("S")
+        if self.material != "None":
+            components.append(f"M ({html_escape(self.material)})")
+        comp_str = ", ".join(components)
+
+        sigil_html = "<pre>\n" + "\n".join(html_escape(line) for line in self.sigil) + "\n</pre>"
+        diagram_html = "<pre>\n" + "\n".join(html_escape(line) for line in self.diagram) + "\n</pre>"
+
+        higher_levels_html = ""
+        if self.higher_levels:
+            higher_levels_html = f"""
+      <div class="section">
+        <h3>At Higher Levels</h3>
+        <p>{html_escape(self.higher_levels)}</p>
+      </div>"""
+
+        tags_html = ""
+        if self.tags:
+            tag_items = "\n".join(f'          <li>{html_escape(t)}</li>' for t in self.tags)
+            tags_html = f"""
+      <div class="section">
+        <h3>Tags</h3>
+        <ul class="tags">
+{tag_items}
+        </ul>
+      </div>"""
+
+        return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{html_escape(self.name)}</title>
+  <style>
+    body {{
+      font-family: 'Georgia', 'Times New Roman', serif;
+      max-width: 700px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      background: #1a1a2e;
+      color: #e0e0e0;
+    }}
+    h1 {{
+      color: #f0c040;
+      border-bottom: 2px solid #f0c040;
+      padding-bottom: 0.5rem;
+    }}
+    h2 {{
+      color: #a0a0ff;
+      margin-top: 1.5rem;
+    }}
+    h3 {{
+      color: #c0c0c0;
+    }}
+    .meta {{
+      background: #252540;
+      border-radius: 8px;
+      padding: 1rem;
+      margin: 1rem 0;
+    }}
+    .meta dt {{
+      font-weight: bold;
+      color: #f0c040;
+    }}
+    .meta dd {{
+      margin-left: 1rem;
+      margin-bottom: 0.3rem;
+    }}
+    .badge {{
+      display: inline-block;
+      background: #404080;
+      color: #ffffff;
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }}
+    .badge.legendary {{ background: #f0c040; color: #1a1a2e; }}
+    .badge.very-rare {{ background: #a020f0; color: #ffffff; }}
+    .badge.rare {{ background: #4060e0; color: #ffffff; }}
+    .badge.uncommon {{ background: #20a020; color: #ffffff; }}
+    .badge.common {{ background: #808080; color: #ffffff; }}
+    .section {{
+      margin: 1rem 0;
+    }}
+    pre {{
+      background: #101020;
+      padding: 1rem;
+      border-radius: 4px;
+      overflow-x: auto;
+      color: #c0ffc0;
+      font-size: 0.85rem;
+    }}
+    .tags li {{
+      display: inline-block;
+      background: #303060;
+      padding: 0.15rem 0.5rem;
+      border-radius: 12px;
+      margin: 0.2rem;
+      font-size: 0.85rem;
+    }}
+    .incantation {{
+      font-style: italic;
+      color: #d0a0ff;
+      border-left: 3px solid #d0a0ff;
+      padding-left: 1rem;
+      margin: 1rem 0;
+    }}
+    .lore {{
+      color: #a0a0a0;
+      font-style: italic;
+    }}
+    .gold {{ color: #f0c040; }}
+    .mana {{ color: #40c0ff; }}
+  </style>
+</head>
+<body>
+  <h1>{html_escape(self.name)}</h1>
+  <p>
+    <strong>{html_escape(self.school)}</strong> — {html_escape(level_str)} Level
+    <span class="badge {self.rarity.lower().replace(' ', '-')}">{html_escape(self.rarity)}</span>
+    <span class="mana">Mana: {self.mana_cost}</span>
+    <span class="gold">Scroll: {self.scroll_value:,} gp</span>
+  </p>
+  <dl class="meta">
+    <dt>Casting Time</dt><dd>{html_escape(self.casting_time)}</dd>
+    <dt>Range</dt><dd>{html_escape(self.rng)}</dd>
+    <dt>Duration</dt><dd>{html_escape(self.duration)}</dd>
+    <dt>Components</dt><dd>{html_escape(comp_str)}</dd>
+  </dl>
+  <div class="section">
+    <h2>Sigil</h2>
+    {sigil_html}
+  </div>
+  <div class="section">
+    <h2>Spell Diagram</h2>
+    {diagram_html}
+  </div>
+  <div class="section">
+    <h2>Description</h2>
+    <p>{html_escape(self.description)}</p>
+  </div>{higher_levels_html}
+  <div class="section">
+    <h2>Incantation</h2>
+    <p class="incantation">{html_escape(self.incantation)}</p>
+  </div>
+  <div class="section">
+    <h2>Lore</h2>
+    <p class="lore">{html_escape(self.backstory)}</p>
+  </div>{tags_html}
+</body>
+</html>"""
 
 
 # ──────────────────────────────────────────────
@@ -830,6 +1028,89 @@ def calculate_mana_cost(level: int, school: str, rarity: str, casting_time: str,
         cost += 2
 
     return max(cost, 0)
+
+
+# ──────────────────────────────────────────────
+# Scroll GP value calculation
+# ──────────────────────────────────────────────
+
+def calculate_scroll_value(level: int, rarity: str) -> int:
+    """Calculate the gold piece value of a spell scroll.
+
+    Uses D&D 5e-style pricing: base price from level, multiplied
+    by the rarity multiplier.  The result is rounded to the nearest
+    standard denomination (5 gp for values under 100, 25 gp for
+    values under 1,000, and 100 gp otherwise).
+
+    Args:
+        level: Spell level (0-9).
+        rarity: Rarity tier (Common through Legendary).
+
+    Returns:
+        Gold piece value as an integer.
+    """
+    base = SCROLL_BASE_PRICES.get(level, 50)
+    mult = RARITY_GOLD_MULTIPLIERS.get(rarity, 1.0)
+    value = int(base * mult)
+    # Round to a sensible denomination
+    if value < 100:
+        value = max(5, round(value / 5) * 5)
+    elif value < 1000:
+        value = round(value / 25) * 25
+    else:
+        value = round(value / 100) * 100
+    return value
+
+
+# ──────────────────────────────────────────────
+# Conflict detection
+# ──────────────────────────────────────────────
+
+def find_conflicts(spells: List[Spell]) -> List[Tuple[Spell, Spell, str]]:
+    """Find pairs of spells whose schools conflict with each other.
+
+    Returns a list of (spell1, spell2, description) tuples.
+    """
+    conflicts = []
+    for i in range(len(spells)):
+        for j in range(i + 1, len(spells)):
+            s1, s2 = spells[i], spells[j]
+            key1 = (s1.school, s2.school)
+            key2 = (s2.school, s1.school)
+            desc = CONFLICT_PAIRS.get(key1) or CONFLICT_PAIRS.get(key2)
+            if desc:
+                conflicts.append((s1, s2, desc))
+    return conflicts
+
+
+def render_conflicts(spells: List[Spell], color: bool = True) -> str:
+    """Render a conflict report for a list of spells."""
+    conflicts = find_conflicts(spells)
+    if not conflicts:
+        return f"  No conflicts found between these spells."
+
+    lines = [f"  {BOLD}⚠ Spell Conflicts{RST if color else ''}", ""]
+    for s1, s2, desc in conflicts:
+        sc1 = SCHOOL_COLORS.get(s1.school, "") if color else ""
+        sc2 = SCHOOL_COLORS.get(s2.school, "") if color else ""
+        rst = RST if color else ""
+        lines.append(f"  {sc1}{BOLD if color else ''}{s1.name}{rst} × {sc2}{BOLD if color else ''}{s2.name}{rst}")
+        lines.append(f"    {DIM if color else ''}{desc}{rst}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+# ──────────────────────────────────────────────
+# HTML export helper
+# ──────────────────────────────────────────────
+
+def html_escape(text: str) -> str:
+    """Escape special HTML characters in a string."""
+    return (text
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;"))
 
 
 # ──────────────────────────────────────────────
@@ -1068,6 +1349,9 @@ def generate_spell(school: Optional[str] = None, level: Optional[int] = None,
     # Mana cost
     mana_cost = calculate_mana_cost(level, school, rarity, casting_time, duration)
 
+    # Scroll value (gold piece price)
+    scroll_value = calculate_scroll_value(level, rarity)
+
     return Spell(
         name=name, school=school, level=level, rarity=rarity,
         casting_time=casting_time, rng=rng, duration=duration,
@@ -1076,6 +1360,7 @@ def generate_spell(school: Optional[str] = None, level: Optional[int] = None,
         verbal_detail=verbal_detail, somatic_detail=somatic_detail,
         backstory=backstory, sigil=sigil, diagram=diagram,
         higher_levels=higher_levels, tags=tags, mana_cost=mana_cost,
+        scroll_value=scroll_value,
     )
 
 
@@ -1147,8 +1432,9 @@ def render_grimoire_page(spell: Spell, color: bool = True) -> str:
     # Rarity badge and mana cost on next line
     rarity_label = f"[{spell.rarity}]"
     mana_label = f"Mana: {spell.mana_cost}"
-    rarity_mana = f"{rarity_label}  {mana_label}"
-    rarity_display = f"{rc}{BOLD}{rarity_label}{rst}  {BOLD}Mana:{rst} {spell.mana_cost}" if color else rarity_mana
+    gold_label = f"Scroll: {spell.scroll_value:,} gp"
+    rarity_mana = f"{rarity_label}  {mana_label}  {gold_label}"
+    rarity_display = f"{rc}{BOLD}{rarity_label}{rst}  {BOLD}Mana:{rst} {spell.mana_cost}  {BOLD}Scroll:{rst} {spell.scroll_value:,} gp" if color else rarity_mana
     rarity_pad = page_width - 6 - len(rarity_mana)
     lines.append(f"  ║ {rarity_display}{' ' * rarity_pad} ║")
 
@@ -1393,9 +1679,9 @@ def generate_spell_list(num_spells: int = 10, school: Optional[str] = None,
                         color: bool = True) -> str:
     """Generate a compact spell list."""
     lines = []
-    # Updated header to include Mana column
-    lines.append(f"  {'Rarity':<12} {'Level':<8} {'Mana':<6} {'School':<14} {'Spell Name':<30}")
-    lines.append(f"  {'─' * 12} {'─' * 8} {'─' * 6} {'─' * 14} {'─' * 30}")
+    # Updated header to include Scroll Value column
+    lines.append(f"  {'Rarity':<12} {'Level':<8} {'Mana':<6} {'Scroll':<10} {'School':<14} {'Spell Name':<30}")
+    lines.append(f"  {'─' * 12} {'─' * 8} {'─' * 6} {'─' * 10} {'─' * 14} {'─' * 30}")
 
     for _ in range(num_spells):
         spell = generate_spell(school=school)
@@ -1406,7 +1692,7 @@ def generate_spell_list(num_spells: int = 10, school: Optional[str] = None,
         rarity_str = spell.rarity
         mana_str = str(spell.mana_cost)
         lines.append(
-            f"  {rc}{rarity_str:<12}{rst} {level_str:<8} {mana_str:<6} "
+            f"  {rc}{rarity_str:<12}{rst} {level_str:<8} {mana_str:<6} {f'{spell.scroll_value:,} gp':<10} "
             f"{sc}{spell.school:<14}{rst} {sc}{BOLD}{spell.name:<30}{rst}"
         )
 
@@ -1456,6 +1742,95 @@ def render_synergies(spells: List[Spell], color: bool = True) -> str:
 
 
 # ──────────────────────────────────────────────
+# Statistical analysis
+# ──────────────────────────────────────────────
+
+def render_stats(spells: List[Spell], color: bool = True) -> str:
+    """Render a statistical summary of a list of spells.
+
+    Shows breakdown by school, level, rarity; average mana cost,
+    total scroll value, and other aggregate metrics.
+    """
+    if not spells:
+        return "  No spells to analyze."
+
+    rst = RST if color else ""
+    bold = BOLD if color else ""
+    dim = DIM if color else ""
+    sc_cache = SCHOOL_COLORS if color else {s: "" for s in SCHOOLS}
+
+    total = len(spells)
+
+    # School breakdown
+    school_counts: Dict[str, int] = {}
+    for s in spells:
+        school_counts[s.school] = school_counts.get(s.school, 0) + 1
+
+    # Level breakdown
+    level_counts: Dict[int, int] = {}
+    for s in spells:
+        level_counts[s.level] = level_counts.get(s.level, 0) + 1
+
+    # Rarity breakdown
+    rarity_counts: Dict[str, int] = {}
+    for s in spells:
+        rarity_counts[s.rarity] = rarity_counts.get(s.rarity, 0) + 1
+
+    # Mana cost stats
+    mana_costs = [s.mana_cost for s in spells]
+    avg_mana = sum(mana_costs) / len(mana_costs)
+    min_mana = min(mana_costs)
+    max_mana = max(mana_costs)
+
+    # Scroll value stats
+    scroll_values = [s.scroll_value for s in spells]
+    total_scroll = sum(scroll_values)
+    avg_scroll = total_scroll / len(scroll_values)
+
+    lines = [
+        f"  {bold}📊 Spell Statistics{rst}",
+        f"  {dim}{'─' * 50}{rst}",
+        "",
+        f"  {bold}Total Spells:{rst}      {total}",
+        "",
+        f"  {bold}By School:{rst}",
+    ]
+    for school in SCHOOLS:
+        cnt = school_counts.get(school, 0)
+        if cnt > 0:
+            bar = "█" * cnt + "░" * (max(school_counts.values()) - cnt)
+            lines.append(f"    {sc_cache.get(school, '')}{school:<14}{rst} {cnt:>2}  {bar}")
+
+    lines.extend([
+        "",
+        f"  {bold}By Level:{rst}",
+    ])
+    for lvl in range(10):
+        cnt = level_counts.get(lvl, 0)
+        if cnt > 0:
+            bar = "█" * cnt + "░" * (max(level_counts.values()) - cnt)
+            lines.append(f"    {SPELL_LEVELS[lvl]:<8} {cnt:>2}  {bar}")
+
+    lines.extend([
+        "",
+        f"  {bold}By Rarity:{rst}",
+    ])
+    for rarity in RARITIES:
+        cnt = rarity_counts.get(rarity, 0)
+        if cnt > 0:
+            rc = RARITIES[rarity]["color"] if color else ""
+            lines.append(f"    {rc}{rarity:<12}{rst} {cnt:>2}")
+
+    lines.extend([
+        "",
+        f"  {bold}Mana Cost:{rst}       avg {avg_mana:.1f}  (min {min_mana}, max {max_mana})",
+        f"  {bold}Scroll Value:{rst}     total {total_scroll:,} gp  (avg {avg_scroll:,.0f} gp)",
+    ])
+
+    return "\n".join(lines)
+
+
+# ──────────────────────────────────────────────
 # Save/Load spells
 # ──────────────────────────────────────────────
 
@@ -1499,6 +1874,7 @@ def load_spells(filepath: str) -> List[Spell]:
             rarity=d.get("rarity", "Common"),
             tags=d.get("tags", []),
             mana_cost=d.get("mana_cost", 0),
+            scroll_value=d.get("scroll_value", calculate_scroll_value(d.get("level", 0), d.get("rarity", "Common"))),
         )
         spells.append(spell)
     return spells
@@ -1526,12 +1902,14 @@ def interactive_mode():
         print("  7. Compare two spells side-by-side")
         print("  8. Find synergies in recent spells")
         print("  9. View spell history")
+        print("  c. Find conflicts in recent spells")
+        print("  t. View statistics")
         print("  s. Save spells to file")
         print("  l. Load spells from file")
         print("  q. Quit")
         print()
 
-        choice = input(f"{BOLD}Choose [1-9/s/l/q]:{RST} ").strip().lower()
+        choice = input(f"{BOLD}Choose [1-9/c/t/s/l/q]:{RST} ").strip().lower()
 
         if choice == "q":
             print(f"\n{DIM}May your spells always find their mark!{RST}\n")
@@ -1540,7 +1918,7 @@ def interactive_mode():
             spell = generate_spell()
             history.append(spell)
             print("\n" + render_grimoire_page(spell))
-            print(f"\n{DIM}Tags: {', '.join(spell.tags)} | Mana Cost: {spell.mana_cost}{RST}")
+            print(f"\n{DIM}Tags: {', '.join(spell.tags)} | Mana: {spell.mana_cost} | Scroll: {spell.scroll_value:,} gp{RST}")
         elif choice == "2":
             print(f"\n{BOLD}Schools:{RST}")
             for i, school in enumerate(SCHOOLS, 1):
@@ -1552,7 +1930,7 @@ def interactive_mode():
                     spell = generate_spell(school=SCHOOLS[s_choice - 1])
                     history.append(spell)
                     print("\n" + render_grimoire_page(spell))
-                    print(f"\n{DIM}Tags: {', '.join(spell.tags)} | Mana Cost: {spell.mana_cost}{RST}")
+                    print(f"\n{DIM}Tags: {', '.join(spell.tags)} | Mana: {spell.mana_cost} | Scroll: {spell.scroll_value:,} gp{RST}")
                 else:
                     print("Invalid choice.")
             except (ValueError, EOFError):
@@ -1568,7 +1946,7 @@ def interactive_mode():
                     spell = generate_spell(level=level)
                     history.append(spell)
                     print("\n" + render_grimoire_page(spell))
-                    print(f"\n{DIM}Tags: {', '.join(spell.tags)} | Mana Cost: {spell.mana_cost}{RST}")
+                    print(f"\n{DIM}Tags: {', '.join(spell.tags)} | Mana: {spell.mana_cost} | Scroll: {spell.scroll_value:,} gp{RST}")
                 else:
                     print("Level must be 0-9.")
             except (ValueError, EOFError):
@@ -1586,7 +1964,7 @@ def interactive_mode():
                     spell = generate_spell(rarity=rarity)
                     history.append(spell)
                     print("\n" + render_grimoire_page(spell))
-                    print(f"\n{DIM}Tags: {', '.join(spell.tags)} | Mana Cost: {spell.mana_cost}{RST}")
+                    print(f"\n{DIM}Tags: {', '.join(spell.tags)} | Mana: {spell.mana_cost} | Scroll: {spell.scroll_value:,} gp{RST}")
                 else:
                     print("Invalid choice.")
             except (ValueError, EOFError):
@@ -1627,7 +2005,19 @@ def interactive_mode():
                 rc = RARITIES.get(spell.rarity, {}).get("color", "")
                 print(f"  {i}. {sc}{BOLD}{spell.name}{RST} — "
                       f"{rc}[{spell.rarity}]{RST} {SPELL_LEVELS[spell.level]} "
-                      f"{spell.school} (Mana: {spell.mana_cost})")
+                      f"{spell.school} (Mana: {spell.mana_cost}, Scroll: {spell.scroll_value:,} gp)")
+        elif choice == "c":
+            # Find conflicts
+            if len(history) < 2:
+                print("Generate at least 2 spells first to find conflicts.")
+                continue
+            print("\n" + render_conflicts(history[-10:]))
+        elif choice == "t":
+            # View statistics
+            if not history:
+                print("No spells to analyze. Generate some first!")
+                continue
+            print("\n" + render_stats(history))
         elif choice == "s":
             # Save spells
             if not history:
@@ -1676,8 +2066,11 @@ Examples:
   %(prog)s --list 20                 Show a list of 20 spells
   %(prog)s --json                    Output spell as JSON
   %(prog)s --markdown                Output spell as Markdown
+  %(prog)s --html                    Output spell as a standalone HTML page
   %(prog)s --compare                 Compare two random spells
   %(prog)s --synergies 5             Find synergies among 5 random spells
+  %(prog)s --conflicts 5             Find conflicts among 5 random spells
+  %(prog)s --stats 20               Show statistics for 20 random spells
   %(prog)s --no-color                Disable colored output
   %(prog)s --interactive             Enter interactive mode
   %(prog)s --grimoire --school Evocation --output grimoire.txt
@@ -1712,6 +2105,12 @@ Examples:
                         help="Compare two random spells side by side")
     parser.add_argument("--synergies", type=int, metavar="N",
                         help="Find synergies among N random spells")
+    parser.add_argument("--conflicts", type=int, metavar="N",
+                        help="Find conflicts among N random spells")
+    parser.add_argument("--stats", type=int, metavar="N",
+                        help="Show statistics for N random spells")
+    parser.add_argument("--html", action="store_true",
+                        help="Output spell as a standalone HTML document")
     parser.add_argument("--save", type=str, metavar="FILE",
                         help="Save generated spells to a JSON file")
     parser.add_argument("--load", type=str, metavar="FILE",
@@ -1742,6 +2141,9 @@ Examples:
                 for spell in loaded:
                     print(spell.to_markdown())
                     print()
+            elif args.html:
+                for spell in loaded:
+                    print(spell.to_html())
             else:
                 for spell in loaded:
                     print(render_grimoire_page(spell, color=color))
@@ -1810,6 +2212,89 @@ Examples:
             print(f"Saved {len(spells_list)} spells to {args.save}")
         return
 
+    # HTML output mode
+    if args.html:
+        num = max(args.count, 1)
+        html_parts = []
+        spells_list = []
+        for i in range(num):
+            spell = generate_spell(school=args.school, level=args.level, rarity=args.rarity)
+            spells_list.append(spell)
+            html_parts.append(spell.to_html())
+        if num == 1:
+            output = html_parts[0]
+        else:
+            # Multiple spells: combine into a single HTML document
+            level_str = SPELL_LEVELS[args.level] if args.level is not None else "Various"
+            school_str = args.school or "All Schools"
+            combined = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grimoire — {html_escape(school_str)} Spells</title>
+  <style>
+    body {{
+      font-family: 'Georgia', 'Times New Roman', serif;
+      max-width: 700px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      background: #1a1a2e;
+      color: #e0e0e0;
+    }}
+    h1 {{ color: #f0c040; border-bottom: 2px solid #f0c040; padding-bottom: 0.5rem; }}
+    h2 {{ color: #a0a0ff; margin-top: 1.5rem; }}
+    h3 {{ color: #c0c0c0; }}
+    hr {{ border: 1px solid #404060; margin: 2rem 0; }}
+    .meta {{ background: #252540; border-radius: 8px; padding: 1rem; margin: 1rem 0; }}
+    .meta dt {{ font-weight: bold; color: #f0c040; }}
+    .meta dd {{ margin-left: 1rem; margin-bottom: 0.3rem; }}
+    .badge {{ display: inline-block; background: #404080; color: #ffffff; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.9rem; }}
+    .badge.legendary {{ background: #f0c040; color: #1a1a2e; }}
+    .badge.very-rare {{ background: #a020f0; color: #ffffff; }}
+    .badge.rare {{ background: #4060e0; color: #ffffff; }}
+    .badge.uncommon {{ background: #20a020; color: #ffffff; }}
+    .badge.common {{ background: #808080; color: #ffffff; }}
+    .section {{ margin: 1rem 0; }}
+    pre {{ background: #101020; padding: 1rem; border-radius: 4px; overflow-x: auto; color: #c0ffc0; font-size: 0.85rem; }}
+    .tags li {{ display: inline-block; background: #303060; padding: 0.15rem 0.5rem; border-radius: 12px; margin: 0.2rem; font-size: 0.85rem; }}
+    .incantation {{ font-style: italic; color: #d0a0ff; border-left: 3px solid #d0a0ff; padding-left: 1rem; margin: 1rem 0; }}
+    .lore {{ color: #a0a0a0; font-style: italic; }}
+    .gold {{ color: #f0c040; }}
+    .mana {{ color: #40c0ff; }}
+  </style>
+</head>
+<body>
+  <h1>Grimoire — {html_escape(school_str)} Spells</h1>
+"""
+            for i, (spell, html) in enumerate(zip(spells_list, html_parts)):
+                # Extract just the <body> content from each spell's HTML
+                import re as _re
+                body_match = _re.search(r'<body>(.*)</body>', html, _re.DOTALL)
+                body_content = body_match.group(1) if body_match else html
+                if i > 0:
+                    combined += "\n  <hr>\n"
+                combined += f"\n{body_content}\n"
+            combined += "\n</body>\n</html>"
+            output = combined
+
+        if args.output:
+            try:
+                with open(args.output, "w", encoding="utf-8") as f:
+                    f.write(output)
+                print(f"HTML written to {args.output}")
+            except OSError as e:
+                print(f"Error writing to {args.output}: {e}", file=sys.stderr)
+                sys.exit(1)
+        else:
+            print(output)
+
+        # Save if requested
+        if args.save:
+            save_spells(spells_list, args.save)
+            print(f"Saved {len(spells_list)} spells to {args.save}")
+        return
+
     # Compare mode
     if args.compare:
         spell1 = generate_spell(school=args.school, level=args.level, rarity=args.rarity)
@@ -1837,6 +2322,42 @@ Examples:
 
         # Show synergies
         print(render_synergies(spells_list, color=color))
+
+        if args.save:
+            save_spells(spells_list, args.save)
+            print(f"Saved {len(spells_list)} spells to {args.save}")
+        return
+
+    # Conflict mode
+    if args.conflicts:
+        num = args.conflicts
+        spells_list = []
+        for _ in range(num):
+            spell = generate_spell(school=args.school, level=args.level, rarity=args.rarity)
+            spells_list.append(spell)
+
+        # Show each spell
+        for spell in spells_list:
+            print(render_grimoire_page(spell, color=color))
+            print()
+
+        # Show conflicts
+        print(render_conflicts(spells_list, color=color))
+
+        if args.save:
+            save_spells(spells_list, args.save)
+            print(f"Saved {len(spells_list)} spells to {args.save}")
+        return
+
+    # Stats mode
+    if args.stats:
+        num = args.stats
+        spells_list = []
+        for _ in range(num):
+            spell = generate_spell(school=args.school, level=args.level, rarity=args.rarity)
+            spells_list.append(spell)
+
+        print(render_stats(spells_list, color=color))
 
         if args.save:
             save_spells(spells_list, args.save)

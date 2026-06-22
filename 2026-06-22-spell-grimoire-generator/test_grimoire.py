@@ -20,6 +20,8 @@ from grimoire import (
     find_synergies, render_synergies, save_spells, load_spells,
     MANA_COSTS, MANA_MULTIPLIERS, TAG_POOLS, SYNERGY_PAIRS,
     format_duration_phrase, format_duration_phrase_cap, format_hp_phrase,
+    calculate_scroll_value, find_conflicts, render_conflicts,
+    render_stats, html_escape,
     _reset_generated_names,
     __version__,
 )
@@ -707,7 +709,7 @@ class TestCLI:
         assert len(result.stdout) > 100  # Should produce substantial output
 
     def test_json_has_new_fields(self):
-        """JSON output should include tags and mana_cost."""
+        """JSON output should include tags, mana_cost, and scroll_value."""
         result = subprocess.run(
             [sys.executable, "grimoire.py", "--json", "--seed", "1"],
             capture_output=True, text=True, cwd=os.path.dirname(__file__),
@@ -715,8 +717,10 @@ class TestCLI:
         data = json.loads(result.stdout)
         assert "tags" in data[0]
         assert "mana_cost" in data[0]
+        assert "scroll_value" in data[0]
         assert isinstance(data[0]["tags"], list)
         assert isinstance(data[0]["mana_cost"], int)
+        assert isinstance(data[0]["scroll_value"], int)
 
 
 class TestEdgeCases:
@@ -730,7 +734,7 @@ class TestEdgeCases:
             assert cost == 0, f"Cantrip base mana cost should be 0 for {school}, got {cost}"
 
     def test_save_load_roundtrip_all_fields(self):
-        """All fields including tags and mana_cost should survive save/load."""
+        """All fields including tags, mana_cost, and scroll_value should survive save/load."""
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
             tmp = f.name
         try:
@@ -741,6 +745,7 @@ class TestEdgeCases:
             assert loaded[0].tags == spell.tags
             assert loaded[0].mana_cost == spell.mana_cost
             assert loaded[0].higher_levels == spell.higher_levels
+            assert loaded[0].scroll_value == spell.scroll_value
         finally:
             os.unlink(tmp)
 
@@ -881,6 +886,237 @@ class TestGrimoireSave:
             os.unlink(tmp)
 
 
+class TestScrollValue:
+    """Test scroll GP value calculation."""
+
+    def test_scroll_value_basic(self):
+        """Cantrip Common scroll should cost 50 gp."""
+        assert calculate_scroll_value(0, "Common") == 50
+
+    def test_scroll_value_increases_with_level(self):
+        """Higher level scrolls should cost more."""
+        cantrip = calculate_scroll_value(0, "Common")
+        fifth = calculate_scroll_value(5, "Common")
+        ninth = calculate_scroll_value(9, "Common")
+        assert cantrip < fifth < ninth
+
+    def test_scroll_value_increases_with_rarity(self):
+        """Higher rarity should increase scroll value."""
+        common = calculate_scroll_value(5, "Common")
+        uncommon = calculate_scroll_value(5, "Uncommon")
+        rare = calculate_scroll_value(5, "Rare")
+        very_rare = calculate_scroll_value(5, "Very Rare")
+        legendary = calculate_scroll_value(5, "Legendary")
+        assert common < uncommon < rare < very_rare < legendary
+
+    def test_scroll_value_on_spell(self):
+        """Generated spell should have a scroll_value field."""
+        spell = generate_spell(level=3, rarity="Rare")
+        assert isinstance(spell.scroll_value, int)
+        assert spell.scroll_value > 0
+
+    def test_scroll_value_in_dict(self):
+        """to_dict() should include scroll_value."""
+        spell = generate_spell()
+        d = spell.to_dict()
+        assert "scroll_value" in d
+        assert isinstance(d["scroll_value"], int)
+
+    def test_scroll_value_in_json(self):
+        """JSON output should include scroll_value."""
+        spell = generate_spell(level=5, rarity="Legendary")
+        j = spell.to_json()
+        parsed = json.loads(j)
+        assert "scroll_value" in parsed
+        assert parsed["scroll_value"] > 0
+
+    def test_scroll_value_rounding(self):
+        """Scroll values should be rounded to sensible denominations."""
+        # All values should be multiples of 5 (for values under 100)
+        for level in range(10):
+            val = calculate_scroll_value(level, "Common")
+            assert val % 5 == 0, f"Scroll value {val} not rounded to 5 gp for level {level}"
+
+
+class TestConflicts:
+    """Test spell conflict detection."""
+
+    def test_evocation_illusion_conflict(self):
+        """Evocation + Illusion should be a conflict pair."""
+        s1 = generate_spell(school="Evocation", level=3)
+        s2 = generate_spell(school="Illusion", level=3)
+        conflicts = find_conflicts([s1, s2])
+        assert len(conflicts) > 0
+
+    def test_no_conflicts_same_school(self):
+        """Two spells of the same school should have no conflict."""
+        s1 = generate_spell(school="Evocation", level=3)
+        s2 = generate_spell(school="Evocation", level=5)
+        conflicts = find_conflicts([s1, s2])
+        assert len(conflicts) == 0
+
+    def test_render_conflicts_no_conflicts(self):
+        """Rendering with no conflicts should report that fact."""
+        s1 = generate_spell(school="Evocation", level=3)
+        s2 = generate_spell(school="Evocation", level=5)
+        result = render_conflicts([s1, s2], color=False)
+        assert "No conflicts" in result
+
+    def test_render_conflicts_with_conflicts(self):
+        """Rendering with conflicts should show them."""
+        s1 = generate_spell(school="Evocation", level=3)
+        s2 = generate_spell(school="Illusion", level=5)
+        result = render_conflicts([s1, s2], color=False)
+        assert "Conflict" in result
+
+    def test_conflict_symmetry(self):
+        """Conflicts should be bidirectional."""
+        s1 = generate_spell(school="Necromancy", level=3)
+        s2 = generate_spell(school="Abjuration", level=5)
+        c1 = find_conflicts([s1, s2])
+        c2 = find_conflicts([s2, s1])
+        # Both orderings should find the same conflict
+        assert len(c1) == len(c2)
+
+
+class TestStats:
+    """Test statistical analysis rendering."""
+
+    def test_stats_empty_list(self):
+        """Empty spell list should report no spells."""
+        result = render_stats([], color=False)
+        assert "No spells" in result
+
+    def test_stats_with_spells(self):
+        """Stats should include key metrics."""
+        random.seed(42)
+        spells = [generate_spell() for _ in range(20)]
+        result = render_stats(spells, color=False)
+        assert "Total Spells" in result
+        assert "By School" in result
+        assert "By Level" in result
+        assert "By Rarity" in result
+        assert "Mana Cost" in result
+        assert "Scroll Value" in result
+
+    def test_stats_school_counts(self):
+        """Stats should show all schools that appear."""
+        s1 = generate_spell(school="Evocation", level=3)
+        s2 = generate_spell(school="Necromancy", level=5)
+        result = render_stats([s1, s2], color=False)
+        assert "Evocation" in result
+        assert "Necromancy" in result
+
+
+class TestHTMLExport:
+    """Test HTML export functionality."""
+
+    def test_html_has_title(self):
+        """HTML output should have a title."""
+        spell = generate_spell(school="Evocation", level=3)
+        html = spell.to_html()
+        assert f"<title>{spell.name}</title>" in html
+
+    def test_html_has_description(self):
+        """HTML output should contain the spell description."""
+        spell = generate_spell()
+        html = spell.to_html()
+        assert "Description" in html
+        assert html_escape(spell.description) in html
+
+    def test_html_has_scroll_value(self):
+        """HTML output should include scroll value."""
+        spell = generate_spell(level=5, rarity="Rare")
+        html = spell.to_html()
+        assert "Scroll" in html
+        assert f"{spell.scroll_value:,} gp" in html
+
+    def test_html_has_mana_cost(self):
+        """HTML output should include mana cost."""
+        spell = generate_spell(level=5)
+        html = spell.to_html()
+        assert "Mana" in html
+        assert str(spell.mana_cost) in html
+
+    def test_html_is_valid(self):
+        """HTML output should be well-formed."""
+        spell = generate_spell()
+        html = spell.to_html()
+        assert html.startswith("<!DOCTYPE html>")
+        assert "</html>" in html
+        assert "<body>" in html
+        assert "</body>" in html
+
+    def test_html_escapes_special_chars(self):
+        """HTML should escape special characters."""
+        assert html_escape("A & B < C > D \"E\"") == "A &amp; B &lt; C &gt; D &quot;E&quot;"
+
+    def test_html_cli_flag(self):
+        """--html flag should produce HTML output."""
+        result = subprocess.run(
+            [sys.executable, "grimoire.py", "--html", "--seed", "42"],
+            capture_output=True, text=True, cwd=os.path.dirname(os.path.abspath(__file__)),
+        )
+        assert result.returncode == 0
+        assert "<!DOCTYPE html>" in result.stdout
+
+    def test_html_file_output(self):
+        """--html with -o should write HTML to file."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False) as f:
+            tmpfile = f.name
+        try:
+            result = subprocess.run(
+                [sys.executable, "grimoire.py", "--html", "--seed", "42", "-o", tmpfile],
+                capture_output=True, text=True, cwd=os.path.dirname(os.path.abspath(__file__)),
+            )
+            assert result.returncode == 0
+            with open(tmpfile) as f:
+                content = f.read()
+            assert "<!DOCTYPE html>" in content
+        finally:
+            os.unlink(tmpfile)
+
+
+class TestCLIConflictsStats:
+    """Test CLI flags for conflicts and stats."""
+
+    def test_conflicts_flag(self):
+        """--conflicts flag should produce output."""
+        result = subprocess.run(
+            [sys.executable, "grimoire.py", "--conflicts", "5", "--seed", "42", "--no-color"],
+            capture_output=True, text=True, cwd=os.path.dirname(os.path.abspath(__file__)),
+        )
+        assert result.returncode == 0
+
+    def test_stats_flag(self):
+        """--stats flag should produce output."""
+        result = subprocess.run(
+            [sys.executable, "grimoire.py", "--stats", "10", "--seed", "42", "--no-color"],
+            capture_output=True, text=True, cwd=os.path.dirname(os.path.abspath(__file__)),
+        )
+        assert result.returncode == 0
+        assert "Total Spells" in result.stdout
+
+    def test_conflicts_with_save(self):
+        """--conflicts --save should save spells to JSON."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            tmp = f.name
+        try:
+            result = subprocess.run(
+                [sys.executable, "grimoire.py", "--conflicts", "3", "--no-color",
+                 "--seed", "42", "--save", tmp],
+                capture_output=True, text=True,
+                cwd=os.path.dirname(os.path.abspath(__file__)),
+            )
+            assert result.returncode == 0
+            with open(tmp) as f:
+                data = json.load(f)
+            assert len(data) == 3
+            assert all("scroll_value" in s for s in data)
+        finally:
+            os.unlink(tmp)
+
+
 if __name__ == "__main__":
     # Simple test runner
     import traceback
@@ -891,6 +1127,8 @@ if __name__ == "__main__":
         TestPluralize, TestWrapText, TestJsonExport, TestCLI,
         TestEdgeCases, TestDurationPhrase, TestDescriptionGrammar,
         TestSeedDeterminism, TestGrimoireSave,
+        TestScrollValue, TestConflicts, TestStats, TestHTMLExport,
+        TestCLIConflictsStats,
     ]
     passed = 0
     failed = 0
