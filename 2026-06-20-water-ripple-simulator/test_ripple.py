@@ -774,6 +774,218 @@ def test_save_msg_attribute():
     assert sim._save_counter == 0
 
 
+# -----------------------------------------------------------------------
+# New tests for v1.4.0 bug fixes
+# -----------------------------------------------------------------------
+
+def test_damping_property_clamps():
+    """Test that the damping property clamps values to [0.0, 1.0]."""
+    sim = RippleSimulator(cols=20, rows=10)
+    # Values > 1.0 should be clamped to 1.0
+    sim.damping = 1.5
+    assert sim.damping == 1.0, f"Expected 1.0, got {sim.damping}"
+    # Values < 0.0 should be clamped to 0.0
+    sim.damping = -0.5
+    assert sim.damping == 0.0, f"Expected 0.0, got {sim.damping}"
+    # Values within range should be accepted
+    sim.damping = 0.96
+    assert sim.damping == 0.96, f"Expected 0.96, got {sim.damping}"
+
+
+def test_nan_does_not_propagate():
+    """Test that NaN values in the wave buffer are cleaned up during step()."""
+    sim = RippleSimulator(cols=20, rows=10)
+    sim.current[sim.idx(10, 5)] = float('nan')
+    sim.step()
+    # NaN should be replaced with 0.0
+    has_nan = any(v != v for v in sim.current)
+    assert not has_nan, "NaN should be cleaned up during step()"
+
+
+def test_inf_does_not_propagate():
+    """Test that Inf values in the wave buffer are cleaned up during step()."""
+    sim = RippleSimulator(cols=20, rows=10)
+    sim.current[sim.idx(10, 5)] = float('inf')
+    sim.step()
+    has_inf = any(v == float('inf') or v == float('-inf') for v in sim.current)
+    assert not has_inf, "Inf should be cleaned up during step()"
+
+
+def test_extreme_values_clamped_in_step():
+    """Test that extreme wave values are clamped during step() to prevent blowup."""
+    sim = RippleSimulator(cols=20, rows=10)
+    sim.damping = 1.0  # No damping
+    sim.current[sim.idx(10, 5)] = 1e8  # Very large value
+    for _ in range(10):
+        sim.step()
+    max_val = max(abs(v) for v in sim.current)
+    assert max_val < 1e7, f"Values should be clamped, got max {max_val}"
+
+
+def test_snapshot_preserves_show_energy():
+    """Test that show_energy is saved and loaded in snapshots."""
+    sim = RippleSimulator(cols=20, rows=10)
+    sim.show_energy = True
+    filepath = tempfile.mktemp(suffix=".json")
+    try:
+        sim.save_snapshot(filepath)
+        loaded = RippleSimulator.load_snapshot(filepath)
+        assert loaded.show_energy == True, f"Expected True, got {loaded.show_energy}"
+    finally:
+        os.unlink(filepath)
+
+
+def test_snapshot_preserves_color_cycle():
+    """Test that color_cycle is saved and loaded in snapshots."""
+    sim = RippleSimulator(cols=20, rows=10)
+    sim.color_cycle = True
+    filepath = tempfile.mktemp(suffix=".json")
+    try:
+        sim.save_snapshot(filepath)
+        loaded = RippleSimulator.load_snapshot(filepath)
+        assert loaded.color_cycle == True, f"Expected True, got {loaded.color_cycle}"
+    finally:
+        os.unlink(filepath)
+
+
+def test_snapshot_preserves_rain_mode():
+    """Test that rain_mode is saved and loaded in snapshots."""
+    sim = RippleSimulator(cols=20, rows=10)
+    sim.rain_mode = True
+    filepath = tempfile.mktemp(suffix=".json")
+    try:
+        sim.save_snapshot(filepath)
+        loaded = RippleSimulator.load_snapshot(filepath)
+        assert loaded.rain_mode == True, f"Expected True, got {loaded.rain_mode}"
+    finally:
+        os.unlink(filepath)
+
+
+def test_snapshot_validates_missing_fields():
+    """Test that load_snapshot raises ValueError for missing required fields."""
+    filepath = tempfile.mktemp(suffix=".json")
+    try:
+        with open(filepath, "w") as f:
+            json.dump({"cols": 20}, f)  # Missing required fields
+        try:
+            RippleSimulator.load_snapshot(filepath)
+            assert False, "Should have raised ValueError for missing fields"
+        except ValueError:
+            pass  # Expected
+    finally:
+        os.unlink(filepath)
+
+
+def test_snapshot_validates_array_lengths():
+    """Test that load_snapshot raises ValueError for wrong array lengths."""
+    sim = RippleSimulator(cols=20, rows=10)
+    filepath = tempfile.mktemp(suffix=".json")
+    try:
+        sim.save_snapshot(filepath)
+        with open(filepath, "r") as f:
+            data = json.load(f)
+        # Corrupt array length
+        data["current"] = data["current"][:50]
+        with open(filepath, "w") as f:
+            json.dump(data, f)
+        try:
+            RippleSimulator.load_snapshot(filepath)
+            assert False, "Should have raised ValueError for wrong array length"
+        except ValueError:
+            pass  # Expected
+    finally:
+        os.unlink(filepath)
+
+
+def test_snapshot_validates_grid_dimensions():
+    """Test that load_snapshot rejects too-small grid dimensions."""
+    sim = RippleSimulator(cols=20, rows=10)
+    filepath = tempfile.mktemp(suffix=".json")
+    try:
+        sim.save_snapshot(filepath)
+        with open(filepath, "r") as f:
+            data = json.load(f)
+        # Corrupt dimensions to be too small
+        data["cols"] = 2
+        data["rows"] = 2
+        data["current"] = [0.0] * 4
+        data["previous"] = [0.0] * 4
+        data["walls"] = [False] * 4
+        with open(filepath, "w") as f:
+            json.dump(data, f)
+        try:
+            RippleSimulator.load_snapshot(filepath)
+            assert False, "Should have raised ValueError for small dimensions"
+        except ValueError:
+            pass  # Expected
+    finally:
+        os.unlink(filepath)
+
+
+def test_empty_palette_does_not_hang():
+    """Test that render_with_custom_palette doesn't infinite loop on empty palette."""
+    sim = RippleSimulator(cols=10, rows=5)
+    sim.drop_stone(5, 2, radius=1, amplitude=5)
+    sim.step()
+    # Empty palette should fall back to Ocean, not hang
+    lines = render_with_custom_palette(sim, [])
+    assert len(lines) == 5, f"Expected 5 lines, got {len(lines)}"
+
+
+def test_damping_clamped_in_simulation():
+    """Test that damping > 1.0 doesn't cause blowup."""
+    sim = RippleSimulator(cols=20, rows=10)
+    # Try to set damping above 1.0 — property should clamp it
+    sim.damping = 1.5
+    assert sim.damping == 1.0, f"Damping should be clamped to 1.0, got {sim.damping}"
+    sim.drop_stone(10, 5, radius=2, amplitude=10)
+    for _ in range(50):
+        sim.step()
+    max_val = max(abs(v) for v in sim.current)
+    assert max_val < 1e6, f"Values should stay bounded, got max {max_val}"
+
+
+def test_negative_damping_clamped():
+    """Test that negative damping is clamped to 0.0."""
+    sim = RippleSimulator(cols=20, rows=10)
+    sim.damping = -0.5
+    assert sim.damping == 0.0, f"Damping should be clamped to 0.0, got {sim.damping}"
+
+
+def test_load_snapshot_preserves_all_state():
+    """Comprehensive test that load_snapshot preserves all state."""
+    sim = RippleSimulator(cols=20, rows=10)
+    sim.boundary_mode = BOUNDARY_ABSORBING
+    sim.show_energy = True
+    sim.color_cycle = True
+    sim.rain_mode = True
+    sim.sim_speed = 2.0
+    sim.damping = 0.98
+    sim.speed = 0.3
+    sim.palette_id = 3
+    sim.drop_stone(10, 5, radius=2, amplitude=10)
+    for _ in range(5):
+        sim.step()
+
+    filepath = tempfile.mktemp(suffix=".json")
+    try:
+        sim.save_snapshot(filepath)
+        loaded = RippleSimulator.load_snapshot(filepath)
+
+        assert loaded.boundary_mode == BOUNDARY_ABSORBING, f"Expected ABSORBING, got {loaded.boundary_mode}"
+        assert loaded.show_energy == True, f"Expected True, got {loaded.show_energy}"
+        assert loaded.color_cycle == True, f"Expected True, got {loaded.color_cycle}"
+        assert loaded.rain_mode == True, f"Expected True, got {loaded.rain_mode}"
+        assert loaded.sim_speed == 2.0, f"Expected 2.0, got {loaded.sim_speed}"
+        assert loaded.damping == 0.98, f"Expected 0.98, got {loaded.damping}"
+        assert loaded.speed == 0.3, f"Expected 0.3, got {loaded.speed}"
+        assert loaded.palette_id == 3, f"Expected 3, got {loaded.palette_id}"
+        assert loaded.frame == sim.frame, f"Frame mismatch"
+        assert loaded.drop_count == sim.drop_count, f"Drop count mismatch"
+    finally:
+        os.unlink(filepath)
+
+
 if __name__ == "__main__":
     # Run all tests
     test_functions = [
@@ -802,6 +1014,14 @@ if __name__ == "__main__":
         test_parser_help_and_version, test_parser_absorbing_flag,
         test_parser_load_flag, test_parser_energy_flag,
         test_boundary_toggle, test_save_msg_attribute,
+        # v1.4.0 bug fix tests
+        test_damping_property_clamps, test_nan_does_not_propagate,
+        test_inf_does_not_propagate, test_extreme_values_clamped_in_step,
+        test_snapshot_preserves_show_energy, test_snapshot_preserves_color_cycle,
+        test_snapshot_preserves_rain_mode, test_snapshot_validates_missing_fields,
+        test_snapshot_validates_array_lengths, test_snapshot_validates_grid_dimensions,
+        test_empty_palette_does_not_hang, test_damping_clamped_in_simulation,
+        test_negative_damping_clamped, test_load_snapshot_preserves_all_state,
     ]
 
     passed = 0

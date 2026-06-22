@@ -43,7 +43,7 @@ from array import array as pyarray
 # ---------------------------------------------------------------------------
 # Version
 # ---------------------------------------------------------------------------
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 
 # ---------------------------------------------------------------------------
 # Grid dimensions (character cells)
@@ -177,7 +177,7 @@ class RippleSimulator:
         self.sources: List[WaveSource] = []
 
         # State
-        self.damping: float = max(0.0, min(1.0, DAMPING_DEFAULT))
+        self._damping: float = DAMPING_DEFAULT
         self.palette_id: int = 1
         self.rain_mode: bool = False
         self.rain_timer: int = 0
@@ -193,6 +193,16 @@ class RippleSimulator:
         self.show_energy: bool = False  # display energy in HUD
         self._save_msg: str = ""  # temporary HUD message for save/load feedback
         self._save_counter: int = 0  # frames remaining to show save message
+
+    @property
+    def damping(self) -> float:
+        """Wave damping factor (0.0 to 1.0). Values outside this range are clamped."""
+        return self._damping
+
+    @damping.setter
+    def damping(self, value: float) -> None:
+        """Set damping, clamping to [0.0, 1.0] to prevent instability."""
+        self._damping = max(0.0, min(1.0, value))
 
     # ------------------------------------------------------------------
     # Index helpers
@@ -259,6 +269,9 @@ class RippleSimulator:
           - Reflective (default): boundary cells are held at 0, causing wave reflection.
           - Absorbing: boundary cells use a simple one-way wave approximation that
             absorbs outgoing waves, reducing reflections at the edges.
+
+        NaN and Inf values in the wave buffer are clamped to 0.0 to prevent
+        instability from propagating through the simulation.
         """
         c2 = self.speed * self.speed
         damping = self.damping
@@ -286,7 +299,16 @@ class RippleSimulator:
                     + cur[i - cols] + cur[i + cols]
                     - 4.0 * cur[i]
                 )
-                next_buf[i] = (2.0 * cur[i] - prev[i] + c2 * laplacian) * damping
+                val = (2.0 * cur[i] - prev[i] + c2 * laplacian) * damping
+                # Clamp extreme values to prevent blowup from damping > 1.0
+                # or numerical instability
+                if val != val or val == float('inf') or val == float('-inf'):
+                    val = 0.0
+                elif val > 1e6:
+                    val = 1e6
+                elif val < -1e6:
+                    val = -1e6
+                next_buf[i] = val
 
         # Boundary handling
         if absorbing:
@@ -468,6 +490,9 @@ class RippleSimulator:
             "frame": self.frame,
             "drop_count": self.drop_count,
             "wall_preset_idx": self.wall_preset_idx,
+            "show_energy": self.show_energy,
+            "color_cycle": self.color_cycle,
+            "rain_mode": self.rain_mode,
         }
         with open(filepath, "w") as f:
             json.dump(data, f)
@@ -483,10 +508,32 @@ class RippleSimulator:
         with open(filepath, "r") as f:
             data = json.load(f)
 
-        sim = cls(cols=data["cols"], rows=data["rows"])
-        sim.current = data["current"]
-        sim.previous = data["previous"]
-        sim.walls = data["walls"]
+        # Validate required fields
+        for key in ("cols", "rows", "current", "previous", "walls"):
+            if key not in data:
+                raise ValueError(f"Missing required field '{key}' in snapshot")
+
+        cols = data["cols"]
+        rows = data["rows"]
+        expected_len = cols * rows
+
+        # Validate array lengths match grid dimensions
+        for key in ("current", "previous", "walls"):
+            arr = data[key]
+            if len(arr) != expected_len:
+                raise ValueError(
+                    f"Snapshot field '{key}' has length {len(arr)}, "
+                    f"expected {expected_len} (cols={cols}, rows={rows})"
+                )
+
+        # Validate minimum grid dimensions
+        if cols < 3 or rows < 3:
+            raise ValueError(f"Grid dimensions must be at least 3x3, got {cols}x{rows}")
+
+        sim = cls(cols=cols, rows=rows)
+        sim.current = [float(v) for v in data["current"]]
+        sim.previous = [float(v) for v in data["previous"]]
+        sim.walls = [bool(w) for w in data["walls"]]
         sim.sources = [WaveSource.from_dict(s) for s in data.get("sources", [])]
         sim.damping = data.get("damping", DAMPING_DEFAULT)
         sim.speed = data.get("speed", SPEED)
@@ -496,6 +543,9 @@ class RippleSimulator:
         sim.frame = data.get("frame", 0)
         sim.drop_count = data.get("drop_count", 0)
         sim.wall_preset_idx = data.get("wall_preset_idx", -1)
+        sim.show_energy = data.get("show_energy", False)
+        sim.color_cycle = data.get("color_cycle", False)
+        sim.rain_mode = data.get("rain_mode", False)
         return sim
 
     # ------------------------------------------------------------------
@@ -638,7 +688,12 @@ def render_with_custom_palette(sim: RippleSimulator, palette: List[Tuple[int, in
     """Render using a custom palette (for color cycling mode).
 
     If the palette has fewer than 10 entries, it is extended by repeating.
+    An empty palette defaults to palette 1 (Ocean).
     """
+    # Guard against empty palette — would cause infinite loop
+    if not palette:
+        palette = PALETTES[1]  # Default to Ocean palette
+
     cur = sim.current
     walls = sim.walls
     cols = sim.cols
@@ -929,6 +984,12 @@ def main() -> None:
                     sim.frame = loaded.frame
                     sim.drop_count = loaded.drop_count
                     sim.wall_preset_idx = loaded.wall_preset_idx
+                    sim.boundary_mode = loaded.boundary_mode
+                    sim.show_energy = loaded.show_energy
+                    sim.color_cycle = loaded.color_cycle
+                    sim.rain_mode = loaded.rain_mode
+                    sim.sim_speed = loaded.sim_speed
+                    sim.palette_id = loaded.palette_id
                     sim._save_msg = f"Loaded from {filepath}"
                     sim._save_counter = 30
                 except Exception as ex:

@@ -25,7 +25,8 @@ Each frame, every cell computes a Laplacian from its four neighbours, propagatin
 - **Energy measurement** — press `E` to display total wave energy in the HUD
 - **Adjustable damping** — press `+`/`-` to tune wave persistence in real time (clamped to 0.80–0.995)
 - **Adjustable simulation speed** — press `[`/`]` to slow down or speed up the simulation
-- **Robust NaN/Inf handling** — wave values that become NaN or Inf render as mid-intensity instead of crashing
+- **NaN/Inf protection** — wave values that become NaN or Inf are reset to 0.0 to prevent instability propagation
+- **Extreme value clamping** — values exceeding ±1,000,000 are clamped to prevent exponential blowup
 
 ### Interactive Controls
 - **Drop stones** — press `SPACE` for a random drop
@@ -51,10 +52,12 @@ Each frame, every cell computes a Laplacian from its four neighbours, propagatin
 - **HUD display** — shows version, drop count, palette, damping, rain mode, sources, speed, wall preset, energy, boundary mode, and frame number
 
 ### Save & Load
-- **Save state** (`S`) — writes the entire simulation (wave buffers, walls, sources, settings) to `ripple_snapshot.json`
+- **Save state** (`S`) — writes the entire simulation (wave buffers, walls, sources, settings, UI flags) to `ripple_snapshot.json`
 - **Load state** (`L`) — restores from `ripple_snapshot.json`, resuming exactly where you left off
 - **CLI resume** (`--load FILE`) — start the simulator from a saved snapshot file
 - **Portable format** — snapshots are human-readable JSON, easy to inspect or modify
+- **Validation** — snapshot loading validates required fields, array lengths, and grid dimensions to prevent crashes from corrupted files
+- **All state preserved** — boundary mode, show energy, color cycle, rain mode, sim speed, and palette are all saved and restored
 
 ### CLI Options
 - **`--cols N`** — set grid width, minimum 3 (default: 72)
@@ -67,7 +70,7 @@ Each frame, every cell computes a Laplacian from its four neighbours, propagatin
 - **`--absorbing`** — use absorbing boundary conditions (reduces edge reflections)
 - **`--load FILE`** — load a snapshot from a JSON file to resume a previous session
 - **`--energy`** — display total wave energy in the HUD
-- **`--version`** — show version number (1.3.0)
+- **`--version`** — show version number (1.4.0)
 - **`--help`** — show usage information
 
 ## How to Install
@@ -143,7 +146,7 @@ Press `Q` or `Escape` to quit the simulator.
 
 1. **Wave Equation**: Each cell's next value is computed from its current value, previous value, and the Laplacian (sum of 4 neighbours minus 4× self). This is the standard finite-difference scheme for the 2D wave equation.
 
-2. **Damping**: A per-frame multiplicative damping factor (default 0.96) gradually reduces amplitude, simulating viscous energy loss. Lower damping = faster decay; higher = longer-lasting waves. The simulation clamps damping to 0.0–1.0 for stability.
+2. **Damping**: A per-frame multiplicative damping factor (default 0.96) gradually reduces amplitude, simulating viscous energy loss. Lower damping = faster decay; higher = longer-lasting waves. The damping property is now **clamped to [0.0, 1.0]** to prevent instability from values outside this range.
 
 3. **Boundaries**: In **reflective** mode (default), boundary cells are held at zero, causing waves to bounce back. In **absorbing** mode, boundary cells use a first-order approximation that absorbs outgoing waves, reducing edge reflections.
 
@@ -155,11 +158,13 @@ Press `Q` or `Escape` to quit the simulator.
 
 7. **Energy**: Total energy (sum of squared amplitudes) can be displayed in the HUD with `E`, letting you observe wave decay and interference in real time.
 
-8. **Snapshots**: Press `S` to save the full simulation state to `ripple_snapshot.json`. Press `L` to load it back. You can also start with `--load FILE` to resume from a saved state.
+8. **Snapshots**: Press `S` to save the full simulation state to `ripple_snapshot.json`. Press `L` to load it back. You can also start with `--load FILE` to resume from a saved state. **All UI state is preserved** — boundary mode, energy display, color cycling, rain mode, sim speed, and palette.
 
-9. **Rendering**: Wave height is mapped to 10 intensity levels (0–9), each assigned a color from the active palette. Unicode block characters provide visual density: ` ` (empty) through `█` (full block). NaN and Inf values are safely handled and rendered as mid-intensity.
+9. **Stability**: NaN and Inf values in the wave buffer are reset to 0.0 during each step to prevent cascading instability. Extreme values beyond ±1,000,000 are clamped to prevent exponential blowup even with unusual parameter settings.
 
-10. **Speed**: Wave propagation speed is stored per-instance (not as a global), so multiple simulators can have different speeds. The CLI `--speed` flag clamps values to 0.01–0.49 to maintain CFL stability.
+10. **Rendering**: Wave height is mapped to 10 intensity levels (0–9), each assigned a color from the active palette. Unicode block characters provide visual density: ` ` (empty) through `█` (full block). NaN and Inf values are safely handled and rendered as mid-intensity.
+
+11. **Speed**: Wave propagation speed is stored per-instance (not as a global), so multiple simulators can have different speeds. The CLI `--speed` flag clamps values to 0.01–0.49 to maintain CFL stability.
 
 ## Examples
 
@@ -191,6 +196,16 @@ Try enabling rain mode (`R`), adding wave sources (`F`), pressing `V` for vortex
 
 ## Changelog
 
+### v1.4.0 — Bug Fixes & Robustness
+- **Fixed: Damping not clamped on assignment** — `sim.damping = 1.5` previously caused exponential wave amplification and simulation blowup. Damping is now a property that clamps values to [0.0, 1.0].
+- **Fixed: NaN/Inf propagation in wave simulation** — NaN and Inf values in the wave buffer previously propagated through the entire grid, eventually crashing the render. Now reset to 0.0 during each step.
+- **Fixed: Extreme value blowup** — Wave values exceeding ±1,000,000 are now clamped to prevent exponential blowup from damping > 1.0 or numerical instability.
+- **Fixed: Snapshot missing fields** — `save_snapshot` was missing `show_energy`, `color_cycle`, and `rain_mode`. These are now saved and restored properly.
+- **Fixed: Load snapshot state loss** — The `L` key handler in the main loop was not transferring `boundary_mode`, `show_energy`, `color_cycle`, `rain_mode`, `sim_speed`, or `palette_id` from the loaded state. All fields are now properly transferred.
+- **Fixed: Empty palette infinite loop** — `render_with_custom_palette([])` caused an infinite loop due to the `while len(palette) < 10` doubling strategy failing on empty lists. Empty palettes now fall back to the Ocean palette.
+- **Fixed: Snapshot validation** — `load_snapshot` now validates required fields, checks array lengths match `cols × rows`, and rejects grids smaller than 3×3. Corrupted snapshots now raise `ValueError` instead of causing `IndexError` later.
+- **Added: 14 new tests** — covering all bug fixes plus comprehensive snapshot round-trip validation. Total: 70 tests passing.
+
 ### v1.3.0 — New Features & Improvements
 - **Absorbing boundary mode**: Press `B` to toggle between reflective and absorbing boundaries. Absorbing mode reduces edge reflections for a more natural open-water feel. CLI flag: `--absorbing`.
 - **Vortex demo**: Press `V` to drop 8 stones in a circular spiral, creating mesmerizing interference patterns.
@@ -200,7 +215,6 @@ Try enabling rain mode (`R`), adding wave sources (`F`), pressing `V` for vortex
 - **Boundary mode constants**: `BOUNDARY_REFLECTIVE` and `BOUNDARY_ABSORBING` constants for clarity.
 - **Improved comments**: Better docstrings on `apply_wall_preset()`, `drop_stone()`, `step()`, `total_energy()`, and the main loop.
 - **Added 22 new tests**: vortex drop, total energy, energy decay, absorbing boundaries, boundary toggle, snapshot save/load, WaveSource serialization, CLI parser flags, version validation, and more.
-- **Total: 56 tests passing**.
 
 ### v1.2.0 — Bug Fixes
 - Fixed NaN/Inf crash in `render()` and `render_with_custom_palette()`.
