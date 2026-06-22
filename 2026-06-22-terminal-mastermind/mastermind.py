@@ -283,7 +283,7 @@ def color_menu(num_colors: int) -> str:
         parts.append(f" {Ansi.bg(bg)} {sym} {Ansi.RESET}={name}")
     return "  ".join(parts)
 
-def draw_board(guesses: List[Guess], config: GameConfig, current_input: List[int],
+def draw_board(guesses: List[Guess], config: GameConfig, current_input: List[Optional[int]],
                cursor_pos: int, message: str = "", reveal_secret: bool = False) -> str:
     """Build the full game board as a string."""
     lines = []
@@ -314,18 +314,13 @@ def draw_board(guesses: List[Guess], config: GameConfig, current_input: List[int
     remaining = config.max_guesses - len(guesses)
     if remaining > 0 and not reveal_secret:
         num = f"{Ansi.BOLD}{Ansi.fg(213)} >.{Ansi.RESET}"
-        pegs = ""
-        for i in range(config.code_length):
-            if i < len(current_input):
-                pegs += f" {format_color_peg(current_input[i], config.num_colors)}"
-            else:
-                pegs += f" {Ansi.DIM}[ ]{Ansi.RESET}"
         
         # Add cursor indicator
         pegs_list = []
         for i in range(config.code_length):
-            if i < len(current_input):
-                pegs_list.append(format_color_peg(current_input[i], config.num_colors))
+            val = current_input[i] if i < len(current_input) else None
+            if val is not None:
+                pegs_list.append(format_color_peg(val, config.num_colors))
             elif i == cursor_pos:
                 pegs_list.append(f"{Ansi.REV}{Ansi.DIM}[ ]{Ansi.RESET}")
             else:
