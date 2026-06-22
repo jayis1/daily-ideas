@@ -5,14 +5,33 @@ Terminal Cocktail Mixologist — Procedural cocktail recipe generator.
 Generates unique, plausible cocktail recipes using spirit/liqueur/mixer/garnish
 combinations, names them with creative procedural names, and renders beautiful
 ASCII art menus and drink visualizations.
+
+Version: 2.0.0
+
+Features:
+  - 7 style profiles with weighted ingredient selection
+  - Flavor harmony system for balanced combinations
+  - Flavor balance scoring (Sweet/Sour/Bitter/Strong ratios)
+  - Cocktail pairing/compatibility scoring with explanations
+  - Ingredient substitution suggestions
+  - 12 naming templates for creative cocktail names
+  - ASCII art glassware (14 types)
+  - Visual ABV strength meters
+  - Full menu mode with shopping lists
+  - JSON export and save/load support
+  - Interactive menu mode
+  - Seed-based reproducible generation
 """
 
 import random
 import argparse
+import json
 import sys
 import os
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass, field, asdict
+from typing import Optional, List, Dict, Tuple
+
+__version__ = "2.0.0"
 
 # ─── Ingredient Databases ───────────────────────────────────────────────────
 
@@ -76,7 +95,7 @@ MIXERS = [
     ("bitters_peach", "Peach Bitters", 0, "stone fruit, aromatic"),
     ("soda_water", "Soda Water", 0, "carbonated, neutral"),
     ("tomato_juice", "Tomato Juice", 0, "savory, umami"),
-    (" Worcestershire", "Worcestershire Sauce", 0, "umami, savory"),
+    ("worcestershire", "Worcestershire Sauce", 0, "umami, savory"),
     ("celery_salt", "Celery Salt", 0, "savory, celery"),
     ("sugar_rim", "Sugar Rim", 0, "sweet, decorative"),
     ("salt_rim", "Salt Rim", 0, "salty, savory"),
@@ -323,6 +342,318 @@ STYLE_PROFILES = {
         "glass_weights": {"coupe": 3, "rocks": 2, "nick_nora": 2, "martini": 1},
     },
 }
+
+
+# ─── Flavor Balance Categories ──────────────────────────────────────────────
+# Maps flavor keywords to balance categories for scoring
+
+FLAVOR_BALANCE_MAP = {
+    "sweet": ["sweet", "honey", "vanilla", "caramel", "agave", "sugar", "grenadine"],
+    "sour": ["tart", "lime", "lemon", "grapefruit", "citrus", "sour"],
+    "bitter": ["bitter", "tonic", "campari", "aromatic"],
+    "strong": ["oak", "peat", "smoky", "roasted"],
+    "herbal": ["herbal", "juniper", "mint", "anise", "botanical", "floral"],
+    "fruity": ["fruit", "berry", "cherry", "raspberry", "blackberry", "tropical",
+               "pineapple", "coconut", "orange", "peach", "apple"],
+    "spicy": ["spicy", "ginger", "pepper", "hot"],
+    "creamy": ["cream", "dairy", "coconut cream", "rich"],
+}
+
+
+def compute_flavor_balance(cocktail: Cocktail) -> Dict[str, float]:
+    """Compute a flavor balance profile for a cocktail.
+
+    Returns a dict mapping flavor categories to their relative intensity (0-1).
+    A well-balanced cocktail typically has complementary flavors without any
+    single category overwhelming the others.
+    """
+    flavor_counts: Dict[str, float] = {}
+    total_weight = 0.0
+
+    for ing in cocktail.ingredients:
+        # Weight by volume — base spirits dominate flavor perception
+        weight = ing.amount_oz if ing.role == "base" else ing.amount_oz * 0.7
+        # Bitters add flavor intensity disproportionate to their volume
+        if ing.role == "bitters":
+            weight = 0.5
+        total_weight += weight
+
+        flavors = extract_flavors(ing.flavor_desc)
+        for keyword in ing.flavor_desc.lower().split(", "):
+            keyword = keyword.strip()
+            for category, keywords in FLAVOR_BALANCE_MAP.items():
+                if any(kw in keyword for kw in keywords):
+                    flavor_counts[category] = flavor_counts.get(category, 0) + weight
+                    break
+
+    # Normalize to 0-1 range
+    if total_weight > 0:
+        max_val = max(flavor_counts.values()) if flavor_counts else 1
+        return {k: round(v / max_val, 2) for k, v in flavor_counts.items()}
+    return {}
+
+
+def compute_balance_score(cocktail: Cocktail) -> Tuple[float, str]:
+    """Score how well-balanced a cocktail is (0-100).
+
+    Returns (score, description). A perfectly balanced cocktail has 3-4
+    complementary flavor categories without any single one dominating.
+    """
+    balance = compute_flavor_balance(cocktail)
+    if not balance:
+        return (0.0, "No discernible flavor profile")
+
+    categories = list(balance.values())
+    num_categories = len(balance)
+
+    # Ideal: 3-4 balanced categories
+    category_score = min(num_categories / 4.0, 1.0) * 40  # Up to 40 pts for variety
+
+    # Evenness: how evenly distributed are the flavors?
+    if len(categories) > 1:
+        mean_val = sum(categories) / len(categories)
+        variance = sum((c - mean_val) ** 2 for c in categories) / len(categories)
+        evenness = max(0, 1.0 - variance) * 30  # Up to 30 pts for evenness
+    else:
+        evenness = 0
+
+    # Harmony bonus: sweet+sour, sweet+bitter, herbal+fruity are classic combos
+    harmony_pairs = [
+        ("sweet", "sour"), ("sweet", "bitter"), ("herbal", "fruity"),
+        ("sweet", "spicy"), ("strong", "sweet"), ("creamy", "fruity"),
+    ]
+    harmony_bonus = 0
+    for a, b in harmony_pairs:
+        if a in balance and b in balance:
+            harmony_bonus += 5  # Up to 30 pts for harmony
+    harmony_bonus = min(harmony_bonus, 30)
+
+    score = min(category_score + evenness + harmony_bonus, 100)
+    score = round(score, 1)
+
+    # Description
+    if score >= 80:
+        desc = "Exceptionally balanced — a masterful blend of flavors"
+    elif score >= 60:
+        desc = "Well-balanced — harmonious flavor profile"
+    elif score >= 40:
+        desc = "Moderate balance — leans toward certain flavors"
+    elif score >= 20:
+        desc = "One-dimensional — dominated by a single flavor note"
+    else:
+        desc = "Minimal balance — lacks complexity"
+
+    return (score, desc)
+
+
+# ─── Cocktail Pairing ───────────────────────────────────────────────────────
+
+PAIRING_COMPATIBILITY = {
+    ("classic", "sour"): ("The citrus kick of a sour cuts through classic richness.", 90),
+    ("classic", "bitter"): ("Classic and bitter share a sophistication that pairs beautifully.", 85),
+    ("tropical", "strong"): ("A tropical starter followed by a strong nightcap — perfect progression.", 85),
+    ("fizzy", "bitter"): ("Effervescence refreshes the palate between bitter sips.", 80),
+    ("dessert", "classic"): ("A sweet finish after a classic sip — timeless.", 80),
+    ("sour", "dessert"): ("Sour whets the appetite; dessert satisfies it.", 75),
+    ("classic", "strong"): ("Two bold profiles that demand attention — not for the faint-hearted.", 70),
+    ("tropical", "fizzy"): ("Light, refreshing, and fun — a summer evening in two glasses.", 90),
+    ("tropical", "dessert"): ("Tropical sweetness into dessert decadence — a sweet progression.", 70),
+    ("bitter", "strong"): ("For the discerning palate — intense and rewarding.", 65),
+    ("classic", "fizzy"): ("Effervescence cleanses the palate between classic sips.", 75),
+    ("sour", "tropical"): ("Citrus meets island fruit — a vacation in two glasses.", 80),
+    ("strong", "dessert"): ("End with something bold and sweet.", 70),
+}
+
+
+def score_cocktail_pairing(c1: Cocktail, c2: Cocktail) -> Tuple[int, str, str]:
+    """Score how well two cocktails pair together.
+
+    Returns (score_0_100, compatibility_label, explanation).
+    """
+    # Get styles (determine from the method/glass/ingredient profile)
+    style1 = _infer_style(c1)
+    style2 = _infer_style(c2)
+
+    # Check compatibility table
+    pair = tuple(sorted([style1, style2]))
+    base_score = 50  # Default neutral
+    explanation = f"A {style1} cocktail paired with a {style2} cocktail."
+
+    for (a, b), (desc, score) in PAIRING_COMPATIBILITY.items():
+        if (a, b) == pair or (b, a) == pair:
+            base_score = score
+            explanation = desc
+            break
+
+    # ABV complementarity bonus: one light, one strong is good for progression
+    abv_diff = abs(c1.abv - c2.abv)
+    if 5 <= abv_diff <= 20:
+        base_score = min(base_score + 5, 100)
+        explanation += " The ABV progression works well."
+
+    # Flavor overlap penalty — too much overlap is boring
+    flavors1 = set()
+    flavors2 = set()
+    for ing in c1.ingredients:
+        flavors1 |= extract_flavors(ing.flavor_desc)
+    for ing in c2.ingredients:
+        flavors2 |= extract_flavors(ing.flavor_desc)
+    overlap = flavors1 & flavors2
+    if len(overlap) > 3 and len(flavors1) > 0:
+        base_score = max(base_score - 10, 0)
+        explanation += " Significant flavor overlap makes the pairing feel repetitive."
+
+    # Same base spirit penalty
+    if c1.ingredients[0].key == c2.ingredients[0].key:
+        base_score = max(base_score - 5, 0)
+        explanation += " Both use the same base spirit."
+
+    # Label
+    if base_score >= 85:
+        label = "★★★ Perfect Pairing"
+    elif base_score >= 70:
+        label = "★★☆ Great Match"
+    elif base_score >= 55:
+        label = "★☆☆ Good Together"
+    else:
+        label = "☆☆☆ Different Vibes"
+
+    return (base_score, label, explanation)
+
+
+def _infer_style(cocktail: Cocktail) -> str:
+    """Infer the cocktail style from its ingredients and method."""
+    method_key = cocktail.method[0]
+    num_ingredients = len(cocktail.ingredients)
+
+    # Check for known method-style associations
+    if method_key == "blended":
+        return "tropical"
+    if method_key == "layered":
+        return "dessert"
+    if method_key == "muddled":
+        return "sour"
+
+    # Check base spirit
+    base_key = cocktail.ingredients[0].key if cocktail.ingredients else ""
+    if base_key.startswith("rum") or base_key == "cachaca" or base_key == "mezcal":
+        return "tropical"
+    if base_key.startswith("whiskey"):
+        return "strong"
+
+    # Check for fizz (carbonated mixers)
+    for ing in cocktail.ingredients:
+        if ing.role == "mixer" and any(k in ing.key for k in ["soda", "tonic", "ginger", "cola"]):
+            return "fizzy"
+
+    # Check ABV
+    if cocktail.abv >= 30:
+        return "strong"
+    if cocktail.abv <= 15:
+        return "fizzy"
+
+    return "classic"
+
+
+# ─── Ingredient Substitution ────────────────────────────────────────────────
+
+SUBSTITUTIONS = {
+    # Base spirits
+    "gin": [("vodka", "Neutral spirit, less botanical"), ("white_rum", "Lighter, sweeter")],
+    "vodka": [("gin", "More botanical complexity"), ("white_rum", "Sweeter, more character")],
+    "whiskey_bourbon": [("whiskey_rye", "Spicier, drier"), ("brandy", "Fruity, smoother")],
+    "whiskey_rye": [("whiskey_bourbon", "Sweeter, rounder"), ("whiskey_scotch", "Smokier, maltier")],
+    "whiskey_scotch": [("whiskey_bourbon", "Sweeter, less smoke"), ("brandy", "Grape-based, elegant")],
+    "tequila_blanco": [("tequila_reposado", "More oak, smoother"), ("mezcal", "Smokier, earthier")],
+    "tequila_reposado": [("tequila_blanco", "Brighter, more agave"), ("mezcal", "Smokier")],
+    "mezcal": [("tequila_blanco", "Cleaner, brighter"), ("whiskey_scotch", "Smoky alternative")],
+    "rum_light": [("rum_dark", "Richer, more depth"), ("cachaca", "Grassier, fresher")],
+    "rum_dark": [("rum_light", "Lighter, cleaner"), ("brandy", "Rounder, fruity")],
+    "brandy": [("whiskey_bourbon", "More warmth, vanilla"), ("rum_dark", "Sweeter, tropical")],
+    "cachaca": [("rum_light", "Similar but less grassy"), ("tequila_blanco", "Different but bright")],
+    # Liqueurs
+    "triple_sec": [("cointreau", "Higher quality orange"), ("blue_curacao", "Adds blue color")],
+    "cointreau": [("triple_sec", "More affordable orange"), ("grand_marnier", "Richer, cognac-based")],
+    "kahlua": [("drambuie", "Sweeter, herbal"), ("amaretto", "Nutty, almond")],
+    # Mixers
+    "lime_juice": [("lemon_juice", "Brighter, less tropical")],
+    "lemon_juice": [("lime_juice", "More tropical, rounder")],
+    "simple_syrup": [("honey_syrup", "Richer, floral"), ("agave_syrup", "More neutral, mild")],
+    "tonic_water": [("club_soda", "Less bitter"), ("soda_water", "Neutral carbonation")],
+    "ginger_beer": [("club_soda", "Less spicy"), ("cola", "Sweeter, darker")],
+}
+
+
+def suggest_substitutions(cocktail: Cocktail) -> List[Tuple[str, List[Tuple[str, str]]]]:
+    """Suggest ingredient substitutions for a cocktail.
+
+    Returns a list of (ingredient_name, [(sub_name, reason), ...]) tuples.
+    """
+    suggestions = []
+    for ing in cocktail.ingredients:
+        if ing.key in SUBSTITUTIONS:
+            subs = SUBSTITUTIONS[ing.key]
+            suggestions.append((ing.name, subs))
+    return suggestions
+
+
+# ─── Save/Load ───────────────────────────────────────────────────────────────
+
+def save_cocktails(cocktails: List[Cocktail], filepath: str):
+    """Save cocktails to a JSON file."""
+    data = []
+    for c in cocktails:
+        data.append({
+            "name": c.name,
+            "flavor_profile": c.flavor_profile,
+            "difficulty": c.difficulty,
+            "abv": c.abv,
+            "total_oz": c.total_oz,
+            "method": list(c.method),
+            "glass": list(c.glass),
+            "ice": list(c.ice),
+            "garnish": list(c.garnish),
+            "story": c.story,
+            "ingredients": [
+                {
+                    "key": i.key, "name": i.name, "abv": i.abv,
+                    "flavor_desc": i.flavor_desc, "amount_oz": i.amount_oz,
+                    "role": i.role,
+                }
+                for i in c.ingredients
+            ],
+        })
+    with open(filepath, "w") as f:
+        json.dump({"version": __version__, "cocktails": data}, f, indent=2)
+
+
+def load_cocktails(filepath: str) -> List[Cocktail]:
+    """Load cocktails from a JSON file."""
+    with open(filepath, "r") as f:
+        data = json.load(f)
+
+    cocktails = []
+    for cd in data.get("cocktails", []):
+        ings = [
+            Ingredient(i["key"], i["name"], i["abv"], i["flavor_desc"],
+                       i["amount_oz"], i["role"])
+            for i in cd.get("ingredients", [])
+        ]
+        c = Cocktail(
+            name=cd["name"],
+            ingredients=ings,
+            method=tuple(cd["method"]),
+            glass=tuple(cd["glass"]),
+            ice=tuple(cd["ice"]),
+            garnish=tuple(cd["garnish"]),
+            story=cd.get("story", ""),
+            flavor_profile=cd.get("flavor_profile", ""),
+            difficulty=cd.get("difficulty", ""),
+            abv=cd.get("abv", 0),
+            total_oz=cd.get("total_oz", 0),
+        )
+        cocktails.append(c)
+    return cocktails
 
 
 def weighted_choice(items, weights):
@@ -730,8 +1061,13 @@ def render_cocktail_menu(cocktails: list, title: str = "COCKTAIL MENU") -> str:
     return "\n".join(lines)
 
 
-def render_recipe_card(cocktail: Cocktail) -> str:
-    """Render a detailed recipe card for a single cocktail."""
+def render_recipe_card(cocktail: Cocktail, verbose: bool = False) -> str:
+    """Render a detailed recipe card for a single cocktail.
+
+    Args:
+        cocktail: The Cocktail object to render.
+        verbose: If True, include flavor balance breakdown and substitution suggestions.
+    """
     width = 58
     lines = []
 
@@ -751,6 +1087,26 @@ def render_recipe_card(cocktail: Cocktail) -> str:
     # Difficulty
     diff = f"  Difficulty: {cocktail.difficulty}"
     lines.append(f"│{diff.ljust(width)}│")
+
+    # Flavor balance score
+    balance_score, balance_desc = compute_balance_score(cocktail)
+    balance_line = f"  Balance: {balance_score}/100 — {balance_desc}"
+    if len(balance_line) > width:
+        balance_line = balance_line[:width - 3] + "..."
+    lines.append(f"│{balance_line.ljust(width)}│")
+
+    # Verbose: show flavor breakdown
+    if verbose:
+        balance = compute_flavor_balance(cocktail)
+        if balance:
+            sorted_flavors = sorted(balance.items(), key=lambda x: x[1], reverse=True)
+            flavor_bar_width = 20
+            for fname, fval in sorted_flavors:
+                filled = int(fval * flavor_bar_width)
+                bar = "█" * filled + "░" * (flavor_bar_width - filled)
+                fline = f"    {fname:>8} [{bar}] {fval:.0%}"
+                lines.append(f"│{fline.ljust(width)}│")
+
     lines.append("│" + " " * width + "│")
 
     # Glass & ice
@@ -775,6 +1131,20 @@ def render_recipe_card(cocktail: Cocktail) -> str:
         if ing.abv > 0:
             ing_line += f" — {ing.abv}%"
         lines.append(f"│{ing_line.ljust(width)}│")
+
+    # Verbose: substitution suggestions
+    if verbose:
+        subs = suggest_substitutions(cocktail)
+        if subs:
+            lines.append("│" + " " * width + "│")
+            lines.append(f"│{'  ── Substitutions ──'.ljust(width)}│")
+            for ing_name, options in subs:
+                for sub_key, reason in options:
+                    sub_display = _find_ingredient_name(sub_key)
+                    sub_line = f"  ↻ {ing_name} → {sub_display} ({reason})"
+                    if len(sub_line) > width - 2:
+                        sub_line = sub_line[:width - 5] + "..."
+                    lines.append(f"│{sub_line.ljust(width)}│")
 
     lines.append("│" + " " * width + "│")
 
@@ -812,6 +1182,65 @@ def render_recipe_card(cocktail: Cocktail) -> str:
     lines.append("")
     lines.append(render_glass_ascii(cocktail.glass[0]))
 
+    return "\n".join(lines)
+
+
+def _find_ingredient_name(key: str) -> str:
+    """Find the display name for an ingredient key."""
+    for pool in [SPIRITS, LIQUEURS, MIXERS]:
+        for item in pool:
+            if item[0] == key:
+                return item[1]
+    return key.replace("_", " ").title()
+
+
+def render_pairing_card(c1: Cocktail, c2: Cocktail) -> str:
+    """Render a pairing comparison card for two cocktails."""
+    score, label, explanation = score_cocktail_pairing(c1, c2)
+    width = 58
+    lines = []
+
+    lines.append("╔" + "═" * width + "╗")
+    lines.append(f"║{'COCKTAIL PAIRING'.center(width)}║")
+    lines.append("╠" + "═" * width + "╣")
+
+    # Score line
+    score_line = f"  {label} — {score}/100"
+    lines.append(f"║{score_line.ljust(width)}║")
+
+    # Explanation (word-wrapped)
+    words = explanation.split()
+    current = "  "
+    for word in words:
+        if len(current) + 1 + len(word) > width - 2:
+            lines.append(f"║{current.ljust(width)}║")
+            current = "  " + word
+        else:
+            current += " " + word
+    if current.strip():
+        lines.append(f"║{current.ljust(width)}║")
+
+    lines.append("╠" + "═" * width + "╣")
+
+    # Cocktail 1 summary
+    name1_line = f"  1. {c1.name} ({c1.abv}% ABV, {_infer_style(c1)})"
+    lines.append(f"║{name1_line.ljust(width)}║")
+    fp1 = f"     {c1.flavor_profile} · {c1.method[1].lower()}"
+    if len(fp1) > width - 2:
+        fp1 = fp1[:width - 5] + "..."
+    lines.append(f"║{fp1.ljust(width)}║")
+
+    lines.append("║" + " " * width + "║")
+
+    # Cocktail 2 summary
+    name2_line = f"  2. {c2.name} ({c2.abv}% ABV, {_infer_style(c2)})"
+    lines.append(f"║{name2_line.ljust(width)}║")
+    fp2 = f"     {c2.flavor_profile} · {c2.method[1].lower()}"
+    if len(fp2) > width - 2:
+        fp2 = fp2[:width - 5] + "..."
+    lines.append(f"║{fp2.ljust(width)}║")
+
+    lines.append("╚" + "═" * width + "╝")
     return "\n".join(lines)
 
 
@@ -938,15 +1367,57 @@ def interactive_menu():
             print(render_recipe_card(c2))
 
 
-def batch_generate(num: int = 5, style: str = None, json_output: bool = False):
-    """Generate cocktails in batch mode (non-interactive)."""
-    cocktails = []
-    for _ in range(num):
-        c = generate_cocktail(style)
-        cocktails.append(c)
+def batch_generate(num: int = 5, style: str = None, json_output: bool = False,
+                    pairing: bool = False, verbose: bool = False,
+                    save_file: str = None, load_file: str = None):
+    """Generate cocktails in batch mode (non-interactive).
+
+    Args:
+        num: Number of cocktails to generate.
+        style: Cocktail style profile to use.
+        json_output: If True, output as JSON.
+        pairing: If True, generate a cocktail pairing instead of individual cocktails.
+        verbose: If True, show detailed flavor breakdown and substitutions.
+        save_file: Path to save cocktails to JSON.
+        load_file: Path to load cocktails from JSON.
+    """
+    # Load from file if specified
+    if load_file:
+        try:
+            cocktails = load_cocktails(load_file)
+            print(f"Loaded {len(cocktails)} cocktail(s) from {load_file}")
+        except (OSError, json.JSONDecodeError) as e:
+            print(f"Error loading {load_file}: {e}", file=sys.stderr)
+            return
+    else:
+        cocktails = []
+        if pairing:
+            # Generate a complementary pair
+            c1 = generate_cocktail(style)
+            # Find a complementary style
+            complementary = {
+                "classic": "sour", "tropical": "strong", "strong": "fizzy",
+                "fizzy": "bitter", "dessert": "classic", "bitter": "tropical",
+                "sour": "dessert",
+            }
+            style1 = _infer_style(c1) if style is None else style
+            style2 = complementary.get(style1, random.choice(list(STYLE_PROFILES.keys())))
+            c2 = generate_cocktail(style2)
+            cocktails = [c1, c2]
+        else:
+            for _ in range(num):
+                c = generate_cocktail(style)
+                cocktails.append(c)
+
+    # Save if requested
+    if save_file:
+        try:
+            save_cocktails(cocktails, save_file)
+            print(f"Saved {len(cocktails)} cocktail(s) to {save_file}")
+        except OSError as e:
+            print(f"Error saving to {save_file}: {e}", file=sys.stderr)
 
     if json_output:
-        import json
         data = []
         for c in cocktails:
             data.append({
@@ -959,27 +1430,45 @@ def batch_generate(num: int = 5, style: str = None, json_output: bool = False):
                 "glass": c.glass[1],
                 "ice": c.ice[1],
                 "garnish": c.garnish[1],
+                "balance_score": compute_balance_score(c)[0],
                 "ingredients": [
                     {"name": i.name, "amount_oz": i.amount_oz, "abv": i.abv, "role": i.role}
                     for i in c.ingredients
                 ],
                 "story": c.story,
             })
-        print(json.dumps(data, indent=2))
+        # Include pairing info if applicable
+        if pairing and len(cocktails) == 2:
+            pair_score, pair_label, pair_explanation = score_cocktail_pairing(cocktails[0], cocktails[1])
+            output = {
+                "pairing": {"score": pair_score, "label": pair_label, "explanation": pair_explanation},
+                "cocktails": data,
+            }
+        else:
+            output = data
+        print(json.dumps(output, indent=2, ensure_ascii=False))
     else:
-        print("\n" + render_cocktail_menu(cocktails))
-        print("\n" + render_ingredient_shopping_list(cocktails))
-        print("\n--- Full Recipes ---\n")
-        for c in cocktails:
-            print(render_recipe_card(c))
+        if pairing and len(cocktails) == 2:
+            print("\n" + render_pairing_card(cocktails[0], cocktails[1]))
+            print("\n--- Full Recipes ---\n")
+            print(render_recipe_card(cocktails[0], verbose=verbose))
             print()
+            print(render_recipe_card(cocktails[1], verbose=verbose))
+        else:
+            print("\n" + render_cocktail_menu(cocktails))
+            if len(cocktails) > 1:
+                print("\n" + render_ingredient_shopping_list(cocktails))
+            print("\n--- Full Recipes ---\n")
+            for c in cocktails:
+                print(render_recipe_card(c, verbose=verbose))
+                print()
 
 
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(
-        description="🍹 Terminal Cocktail Mixologist — Procedural cocktail recipe generator",
+        description=f"🍹 Terminal Cocktail Mixologist v{__version__} — Procedural cocktail recipe generator",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -987,6 +1476,11 @@ Examples:
   %(prog)s -n 5                     Generate 5 random cocktails
   %(prog)s -n 3 -s tropical        Generate 3 tropical cocktails
   %(prog)s -n 5 --json              Output as JSON
+  %(prog)s --pairing                Generate a complementary cocktail pair
+  %(prog)s --pairing -s classic     Pair a classic with a complementary style
+  %(prog)s --verbose                Show flavor balance breakdown & substitutions
+  %(prog)s --save drinks.json       Save generated cocktails to JSON
+  %(prog)s --load drinks.json       Load and display cocktails from JSON
   %(prog)s --interactive            Interactive menu mode
         """
     )
@@ -998,7 +1492,17 @@ Examples:
                         help="Run in interactive menu mode")
     parser.add_argument("--json", action="store_true",
                         help="Output as JSON instead of ASCII")
+    parser.add_argument("--pairing", action="store_true",
+                        help="Generate a complementary cocktail pair with pairing score")
+    parser.add_argument("--verbose", "-v", action="store_true",
+                        help="Show flavor balance breakdown and substitution suggestions")
+    parser.add_argument("--save", metavar="FILE",
+                        help="Save generated cocktails to a JSON file")
+    parser.add_argument("--load", metavar="FILE",
+                        help="Load cocktails from a JSON file instead of generating")
     parser.add_argument("--seed", type=int, help="Random seed for reproducibility")
+    parser.add_argument("--version", action="version",
+                        version=f"%(prog)s {__version__}")
 
     args = parser.parse_args()
 
@@ -1008,7 +1512,15 @@ Examples:
     if args.interactive:
         interactive_menu()
     else:
-        batch_generate(args.number, args.style, args.json)
+        batch_generate(
+            num=args.number,
+            style=args.style,
+            json_output=args.json,
+            pairing=args.pairing,
+            verbose=args.verbose,
+            save_file=args.save,
+            load_file=args.load,
+        )
 
 
 if __name__ == "__main__":
