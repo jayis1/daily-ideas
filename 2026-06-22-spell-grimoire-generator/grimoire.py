@@ -31,7 +31,7 @@ from dataclasses import dataclass, field, asdict
 from typing import List, Optional, Dict, Tuple
 from pathlib import Path
 
-__version__ = "3.0.0"
+__version__ = "3.1.0"
 
 # ──────────────────────────────────────────────
 # Data pools for procedural generation
