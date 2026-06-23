@@ -90,9 +90,9 @@ MIXERS = [
     ("coconut_cream", "Coconut Cream", 0, "rich, coconut"),
     ("egg_white", "Egg White", 0, "frothy, protein"),
     ("hot_sauce", "Hot Sauce", 0, "spicy, vinegar"),
-    ("bitters_aromatic", "Aromatic Bitters", 0, "complex, spice"),
-    ("bitters_orange", "Orange Bitters", 0, "citrus, aromatic"),
-    ("bitters_peach", "Peach Bitters", 0, "stone fruit, aromatic"),
+    ("bitters_aromatic", "Aromatic Bitters", 44, "complex, spice"),
+    ("bitters_orange", "Orange Bitters", 40, "citrus, aromatic"),
+    ("bitters_peach", "Peach Bitters", 35, "stone fruit, aromatic"),
     ("soda_water", "Soda Water", 0, "carbonated, neutral"),
     ("tomato_juice", "Tomato Juice", 0, "savory, umami"),
     ("worcestershire", "Worcestershire Sauce", 0, "umami, savory"),
@@ -560,8 +560,8 @@ def _infer_style(cocktail: Cocktail) -> str:
 
 SUBSTITUTIONS = {
     # Base spirits
-    "gin": [("vodka", "Neutral spirit, less botanical"), ("white_rum", "Lighter, sweeter")],
-    "vodka": [("gin", "More botanical complexity"), ("white_rum", "Sweeter, more character")],
+    "gin": [("vodka", "Neutral spirit, less botanical"), ("rum_light", "Lighter, sweeter")],
+    "vodka": [("gin", "More botanical complexity"), ("rum_light", "Sweeter, more character")],
     "whiskey_bourbon": [("whiskey_rye", "Spicier, drier"), ("brandy", "Fruity, smoother")],
     "whiskey_rye": [("whiskey_bourbon", "Sweeter, rounder"), ("whiskey_scotch", "Smokier, maltier")],
     "whiskey_scotch": [("whiskey_bourbon", "Sweeter, less smoke"), ("brandy", "Grape-based, elegant")],
@@ -725,7 +725,7 @@ def generate_cocktail(style: str = None) -> Cocktail:
             break
         bit = random.choice(available)
         used_keys.add(bit[0])
-        bitter_ings.append(Ingredient(bit[0], bit[1], bit[2], bit[3], 1, "bitters"))
+        bitter_ings.append(Ingredient(bit[0], bit[1], bit[2], bit[3], 0.03, "bitters"))
 
     # Choose garnish
     garnish = random.choice(GARNISHES)
@@ -828,14 +828,16 @@ def generate_story(cocktail: Cocktail, style: str) -> str:
     adjs = ["cult", "beloved", "legendary", "cherished", "secret"]
 
     template = random.choice(STORY_TEMPLATES)
+    chosen_trait = random.choice(traits)
+    trait2 = random.choice([t for t in traits if t != chosen_trait])
     return template.format(
         venue=random.choice(venues),
         bartender=random.choice(bartenders),
         belief=random.choice(beliefs),
         era=random.choice(eras),
         vibe=random.choice(vibes),
-        trait=random.choice(traits),
-        trait2=random.choice([t for t in traits if t != random.choice(traits)]),
+        trait=chosen_trait,
+        trait2=trait2,
         mood=random.choice(moods),
         patrons=random.choice(patrons),
         inspiration=random.choice(inspirations),
@@ -1125,9 +1127,11 @@ def render_recipe_card(cocktail: Cocktail, verbose: bool = False) -> str:
     lines.append(f"│{'  ── Ingredients ──'.ljust(width)}│")
     for ing in cocktail.ingredients:
         role_icon = {"base": "◎", "liqueur": "◇", "mixer": "○", "bitters": "✦"}.get(ing.role, "·")
-        amount_str = f"{ing.amount_oz} oz" if ing.amount_oz != 1 else "1 dash"
         if ing.role == "bitters":
-            amount_str = "1 dash"
+            num_dashes = max(1, round(ing.amount_oz / 0.03))
+            amount_str = f"{num_dashes} dash{'es' if num_dashes > 1 else ''}"
+        else:
+            amount_str = f"{ing.amount_oz} oz"
         ing_line = f"  {role_icon} {ing.name} ({amount_str})"
         if ing.abv > 0:
             ing_line += f" — {ing.abv}%"
@@ -1253,7 +1257,7 @@ def render_ingredient_shopping_list(cocktails: list) -> str:
             key = ing.name
             if key not in all_ingredients:
                 all_ingredients[key] = []
-            all_ingredients[key].append(f"{ing.amount_oz} oz ({c.name})")
+            all_ingredients[key].append(c.name)
 
     lines = []
     lines.append("┌──────────────────────────────────────────────┐")
@@ -1271,12 +1275,11 @@ def render_ingredient_shopping_list(cocktails: list) -> str:
                 cat = "Bitters"
             else:
                 cat = "Mixers"
-            entry = f"  • {ing.name} (for {', '.join(set(x.split('(')[1].rstrip(')') for x in all_ingredients[ing.name]))})"
             categories[cat].append(ing.name)
 
     for cat, items in categories.items():
         if items:
-            lines.append(f"│  {cat}:                                     │")
+            lines.append(f"│  {cat}:{' ' * (44 - len(cat))}│")
             for item in sorted(set(items)):
                 count = items.count(item)
                 line = f"  • {item}"

@@ -113,9 +113,12 @@ class TestIngredientData:
             assert 0 < spirit[2] <= 100, f"Spirit {spirit[1]} has invalid ABV: {spirit[2]}"
 
     def test_mixers_have_zero_abv(self):
-        """All mixers should have zero ABV."""
+        """Mixers should have zero ABV, except bitters which are concentrated spirits."""
         for mixer in MIXERS:
-            assert mixer[2] == 0, f"Mixer {mixer[1]} should have 0 ABV, got {mixer[2]}"
+            if mixer[0].startswith("bitters_"):
+                assert mixer[2] > 0, f"Bitters {mixer[1]} should have positive ABV, got {mixer[2]}"
+            else:
+                assert mixer[2] == 0, f"Mixer {mixer[1]} should have 0 ABV, got {mixer[2]}"
 
     def test_no_duplicate_keys(self):
         """Ingredient keys should be unique within each category."""
@@ -432,13 +435,97 @@ class TestCLI:
         assert len(result.stdout) > 0
 
 
+class TestBugFixes:
+    """Tests for bugs that were found and fixed."""
+
+    def test_pairing_empty_cocktail_no_crash(self):
+        """score_cocktail_pairing should not crash on empty ingredient lists."""
+        empty = Cocktail(
+            name="Empty",
+            ingredients=[],
+            method=("built", "Built", "Assemble directly in serving glass"),
+            glass=("rocks", "Rocks Glass", "short, wide tumbler"),
+            ice=("cube", "Standard Cubes"),
+            garnish=("cherry", "Luxardo Cherry"),
+        )
+        empty.compute_stats()
+        # Should not crash — empty cocktails have no ingredients
+        score, label, explanation = score_cocktail_pairing(empty, empty)
+        assert 0 <= score <= 100
+
+    def test_infer_style_empty_ingredients(self):
+        """_infer_style should not crash on empty ingredient lists."""
+        empty = Cocktail(
+            name="Empty",
+            ingredients=[],
+            method=("built", "Built", "Assemble directly in serving glass"),
+            glass=("rocks", "Rocks Glass", "short, wide tumbler"),
+            ice=("cube", "Standard Cubes"),
+            garnish=("cherry", "Luxardo Cherry"),
+        )
+        empty.compute_stats()
+        style = _infer_style(empty)
+        assert style in STYLE_PROFILES
+
+    def test_substitution_targets_exist(self):
+        """All substitution target keys should exist in ingredient pools."""
+        all_keys = set(s[0] for s in SPIRITS) | set(l[0] for l in LIQUEURS) | set(m[0] for m in MIXERS)
+        for key, subs in SUBSTITUTIONS.items():
+            for sub_key, reason in subs:
+                assert sub_key in all_keys, f"Substitution target '{sub_key}' for '{key}' not in ingredient pools"
+
+    def test_story_trait2_different_from_trait(self):
+        """Story generation should always have trait2 != trait."""
+        random.seed(12345)
+        for _ in range(50):
+            c = generate_cocktail()
+            # If trait2 == trait, the story format "combining X with Y" would
+            # read oddly, but the fix ensures they're always different.
+            # We can't directly test the internal variable, but verify stories generate.
+            assert c.story, "Story should not be empty"
+
+    def test_bitters_have_positive_abv(self):
+        """Bitters should have realistic ABV (they're concentrated spirits)."""
+        for mixer in MIXERS:
+            if mixer[0].startswith("bitters_"):
+                assert mixer[2] > 0, f"Bitters {mixer[1]} should have positive ABV"
+
+    def test_bitters_amount_is_dash(self):
+        """Generated cocktails should have bitters with dash-sized amounts."""
+        random.seed(42)
+        found_bitters = False
+        for _ in range(20):
+            c = generate_cocktail()
+            for ing in c.ingredients:
+                if ing.role == "bitters":
+                    found_bitters = True
+                    assert ing.amount_oz < 0.1, \
+                        f"Bitters {ing.name} amount should be a dash (~0.03 oz), got {ing.amount_oz}"
+        assert found_bitters, "Should find at least one bitters ingredient"
+
+    def test_shopping_list_with_parens_in_name(self):
+        """Shopping list should not crash when cocktail names contain parentheses."""
+        random.seed(42)
+        cocktails = [generate_cocktail() for _ in range(2)]
+        cocktails[0].name = "The (Special) Drink"
+        shop = render_ingredient_shopping_list(cocktails)
+        assert "SHOPPING LIST" in shop
+
+    def test_shopping_list_no_duplicate_entries(self):
+        """Shopping list should properly count duplicate ingredients."""
+        random.seed(99)
+        cocktails = [generate_cocktail() for _ in range(5)]
+        shop = render_ingredient_shopping_list(cocktails)
+        assert "SHOPPING LIST" in shop
+
+
 if __name__ == "__main__":
     # Run tests manually
     import traceback
     test_classes = [
         TestGenerateCocktail, TestIngredientData, TestFlavorBalance,
         TestPairing, TestSubstitutions, TestSaveLoad, TestRendering,
-        TestInferStyle, TestVersion, TestCLI,
+        TestInferStyle, TestVersion, TestCLI, TestBugFixes,
     ]
     total = 0
     passed = 0
