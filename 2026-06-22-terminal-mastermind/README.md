@@ -1,6 +1,6 @@
 # Terminal Mastermind
 
-A beautiful, fully-featured **Mastermind code-breaking game** for the terminal, complete with colored pegs, multiple difficulty levels, an AI auto-solver using Knuth's minimax algorithm, game statistics tracking, and an interactive cursor-driven interface.
+A beautiful, fully-featured **Mastermind code-breaking game** for the terminal — with colored pegs, multiple difficulty levels, an AI auto-solver using Knuth's minimax algorithm, a scoring system, color-blind accessible mode, game timer, per-difficulty statistics, and an interactive cursor-driven interface.
 
 ## What It Does
 
@@ -15,17 +15,23 @@ Use deduction and elimination to crack the code within the allowed number of gue
 ## Features
 
 - 🎨 **Colored ANSI pegs** — vivid terminal colors for each code color
+- ♿ **Color-blind mode** (`--colorblind`) — distinct shape symbols for every color, no color reliance
 - 🎮 **Interactive play** — cursor-driven input with arrow keys, number keys, and letter keys
-- 🤖 **AI Auto-Solver** — watch Knuth's minimax algorithm crack the code step by step
-- 📊 **Benchmarking** — test the solver over hundreds of random games with statistics
-- 📈 **Persistent stats** — track your games played, win rate, streaks, and average guesses
-- 🔄 **Undo support** — take back your last guess
-- 💡 **Hint system** — get a hint about one position's color
+- 🤖 **AI Auto-Solver** (`--solve`) — watch Knuth's minimax algorithm crack the code step by step
+- 📊 **Benchmarking** (`--benchmark N`) — test the solver over hundreds of random games with guess distribution chart
+- 📈 **Persistent stats** (`--stats`) — track your games played, win rate, streaks, and average guesses
+- 📋 **Per-difficulty breakdown** — stats split by Easy/Medium/Hard/Expert
+- 🕐 **Game timer** — elapsed time shown during play, toggle with `T` key
+- 🏆 **Scoring system** — points based on guesses used, difficulty multiplier, and streak bonus
+- 📜 **Game history** (`--history`) — review your last 50 games with scores and times
+- 📖 **Rules display** (`--rules`) — in-terminal game rules and controls reference
+- 🔄 **Undo support** — take back your last guess with `U`
+- 💡 **Hint system** — get a hint about one position's color with `H`
 - ⚙️ **4 difficulty presets** — Easy, Medium, Hard, Expert
 - 🎛️ **Custom configuration** — set code length (1–10) and color count (2–10)
 - 🔒 **Custom secret codes** — set a specific code for challenges
 - 🌱 **Seed support** — reproducible games with `--seed`
-- ✅ **42 unit tests** — comprehensive test suite for game logic
+- ✅ **79 unit tests** — comprehensive test suite for game logic, scoring, and formatting
 
 ## How to Install
 
@@ -50,11 +56,14 @@ python3 mastermind.py
 
 # Choose a difficulty
 python3 mastermind.py --difficulty medium
-python3 mastermind.py --difficulty hard      # 5 pegs, 8 colors
-python3 mastermind.py --difficulty expert    # 6 pegs, 10 colors
+python3 mastermind.py --difficulty hard       # 5 pegs, 8 colors
+python3 mastermind.py --difficulty expert     # 6 pegs, 10 colors
 
 # Custom configuration
 python3 mastermind.py --code-length 5 --colors 7 --max-guesses 8
+
+# Color-blind accessible mode
+python3 mastermind.py --colorblind
 
 # Set a specific secret code (for challenges)
 python3 mastermind.py --secret "R G B Y"
@@ -90,14 +99,23 @@ python3 mastermind.py --benchmark 100
 python3 mastermind.py --benchmark 50 --difficulty hard
 ```
 
-### Statistics
+### Statistics & History
 
 ```bash
-# View your game statistics
+# View your game statistics (with per-difficulty breakdown)
 python3 mastermind.py --stats
+
+# View recent game history
+python3 mastermind.py --history
 
 # Reset statistics
 python3 mastermind.py --reset-stats
+```
+
+### View Rules
+
+```bash
+python3 mastermind.py --rules
 ```
 
 ### Run Tests
@@ -113,35 +131,42 @@ python3 test_mastermind.py
 | `1`–`9`, `0` | Place color at cursor position |
 | `A`–`J` | Alternative color input (for colors beyond 9) |
 | `←` / `→` | Move cursor left/right |
+| `↑` / `↓` | Jump to first/last position |
 | `Backspace` | Delete at cursor |
 | `Enter` | Submit guess |
 | `U` | Undo last guess |
 | `H` | Get a hint (reveals one position) |
+| `T` | Toggle timer display |
+| `D` | Delete at cursor |
 | `Q` | Quit game |
 
 ## Color Legend
 
-| Key | Color | Symbol |
-|-----|-------|--------|
-| 1 | Red | R |
-| 2 | Green | G |
-| 3 | Blue | B |
-| 4 | Yellow | Y |
-| 5 | Magenta | M |
-| 6 | Cyan | C |
-| 7 | Orange | O |
-| 8 | White | W |
-| 9 | Purple | P |
-| 0 | Pink | K |
+| Key | Color | Symbol | Color-blind |
+|-----|-------|--------|-------------|
+| 1 | Red | R | ▲ |
+| 2 | Green | G | ■ |
+| 3 | Blue | B | ● |
+| 4 | Yellow | Y | ★ |
+| 5 | Magenta | M | ◆ |
+| 6 | Cyan | C | ⬡ |
+| 7 | Orange | O | ► |
+| 8 | White | W | ○ |
+| 9 | Purple | P | ✦ |
+| 0 | Pink | K | ♦ |
 
-## Difficulty Presets
+## Scoring
 
-| Difficulty | Code Length | Colors | Max Guesses |
-|------------|-------------|--------|-------------|
-| Easy | 4 | 6 | 12 |
-| Medium | 4 | 8 | 10 |
-| Hard | 5 | 8 | 10 |
-| Expert | 6 | 10 | 10 |
+| Difficulty | Multiplier | Code Length | Colors | Max Guesses |
+|------------|------------|-------------|--------|-------------|
+| Easy | ×1.0 | 4 | 6 | 12 |
+| Medium | ×1.5 | 4 | 8 | 10 |
+| Hard | ×2.0 | 5 | 8 | 10 |
+| Expert | ×3.0 | 6 | 10 | 10 |
+
+**Score formula:** `(max_guesses − guesses_used + 1) × 100 × difficulty_multiplier × streak_bonus`
+
+Streak bonus: +10% per consecutive win (up to +100% at 10+ streak).
 
 ## Examples
 
@@ -162,7 +187,7 @@ $ python3 mastermind.py --solve --seed 42
   Turn 4:  C   R   R   R   ● ● ● ·
   Turn 5:  C   R   R   C   ● ● ● ●
 
-  ✓ Solved in 5 guesses!
+  ✓ Solved in 5 guesses!  Score: 800 pts
 ```
 
 ### Benchmark Results
@@ -176,6 +201,12 @@ $ python3 mastermind.py --benchmark 50
     Avg turns:  4.48
     Min turns:  3
     Max turns:  6
+
+  Guess Distribution:
+    3 guesses:    2 ██
+    4 guesses:   19 ███████████████████
+    5 guesses:   28 ██████████████████████████████
+    6 guesses:    1 █
 ```
 
 ## How It Works
@@ -197,7 +228,20 @@ The auto-solver uses Donald Knuth's 1977 minimax algorithm:
 
 ### Statistics
 
-Game statistics are stored in `~/.mastermind_stats.json` and persist between sessions, tracking wins, streaks, and guess counts.
+Game statistics are stored in `~/.mastermind_stats.json` and persist between sessions, tracking wins, streaks, scores, and guess counts broken down by difficulty level. The last 50 games are kept as detailed history.
+
+## What's New in v1.1.0
+
+- **Scoring system** — earn points based on guesses, difficulty, and streaks
+- **Color-blind mode** (`--colorblind`) — accessible symbols instead of color-only pegs
+- **Game timer** — tracks and displays elapsed time during play
+- **Per-difficulty stats** — breakdown of performance by difficulty level
+- **Game history** (`--history`) — review your last 50 games
+- **Rules display** (`--rules`) — in-terminal reference for controls and scoring
+- **Input validation** — better error handling for invalid configs and secret codes
+- **Up/Down arrow keys** — jump to first/last cursor position
+- **Guess distribution** — benchmark mode now shows a histogram of guesses needed
+- **Expanded test suite** — 79 tests covering all new features
 
 ## License
 

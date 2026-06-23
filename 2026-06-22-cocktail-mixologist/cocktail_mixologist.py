@@ -504,7 +504,8 @@ def score_cocktail_pairing(c1: Cocktail, c2: Cocktail) -> Tuple[int, str, str]:
         explanation += " Significant flavor overlap makes the pairing feel repetitive."
 
     # Same base spirit penalty
-    if c1.ingredients[0].key == c2.ingredients[0].key:
+    if (c1.ingredients and c2.ingredients and
+            c1.ingredients[0].key == c2.ingredients[0].key):
         base_score = max(base_score - 5, 0)
         explanation += " Both use the same base spirit."
 
