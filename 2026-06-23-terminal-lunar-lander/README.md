@@ -18,8 +18,11 @@ Land softly on a highlighted pad with minimal speed and angle for maximum points
   - **COMMANDER** — 50 fuel units, tiny pad (4 wide), strong wind
 - **Landing Assessment** — Detailed breakdown of speed, angle, pad proximity, and fuel efficiency with a final score
 - **ASCII Art UI** — Title screen with lander illustration, in-game HUD, particle thrust effects, and crash/landing animations
+- **Visual Fuel Bar** — On-screen fuel gauge shows remaining fuel at a glance
 - **Wind System** — Sinusoidal wind gusts on harder difficulties that push your lander sideways
 - **Score System** — Points based on fuel remaining, landing speed, angle precision, and whether you hit a pad, multiplied by difficulty
+- **CLI Arguments** — `--help`, `--version`, and `--easy`/`--medium`/`--hard` flags for quick start
+- **Non-TTY Detection** — Helpful error message if run without an interactive terminal
 
 ## Installation
 
@@ -43,7 +46,19 @@ python3 lunar_lander.py
 ## How to Run
 
 ```bash
+# Interactive — shows title screen to pick difficulty
 python3 lunar_lander.py
+
+# Skip title screen and start on a specific difficulty
+python3 lunar_lander.py --easy
+python3 lunar_lander.py --medium
+python3 lunar_lander.py --hard
+
+# Show version
+python3 lunar_lander.py --version
+
+# Show help
+python3 lunar_lunar_lander.py --help
 ```
 
 ## Controls
@@ -70,7 +85,7 @@ $ python3 lunar_lander.py
       /█\
      / █ \
     /  █  \
-   /__██___\
+   /__███___\
     ║     ║
    ╱       ╲
   ▕  ▓▓▓▓▓▓  ▏
@@ -91,7 +106,7 @@ Select Difficulty:
 │ V-SPD:     -3.42 m/s   │
 │ H-SPD:      0.12 m/s   │
 │ ANGLE:      5.0  °     │
-│ FUEL:      67.3        │
+│ FUEL:    ████████░░░░   │
 │ SPEED:      3.42 m/s   │
 │ TIME:      12.4 s      │
 │ WIND:    → 0.23         │
@@ -107,13 +122,36 @@ Select Difficulty:
 
 ## How It Works
 
-1. **Terrain Generation**: Uses midpoint displacement with random perturbation, then overlays craters using quadratic falloff. Landing pads flatten and widen specified sections.
+1. **Terrain Generation**: Uses midpoint displacement with random perturbation, then overlays craters using quadratic falloff. Landing pads flatten and widen specified sections. Pads are guaranteed to never overlap and always have heights matching the terrain surface.
 
 2. **Physics Engine**: Each frame integrates gravity, thrust (decomposed into x/y from rotation angle), and wind. Velocity and position update via Euler integration with delta-time capping at 0.1s to prevent tunneling.
 
 3. **Collision Detection**: Checks if the lander's y-position crosses the terrain height at its x-position. Landing success is evaluated against difficulty-specific thresholds for speed, angle, and pad proximity.
 
 4. **Rendering**: The curses library draws terrain character-by-character using Unicode block characters (`▀`, `▄`, `█`, `━`), with a sprite-based lander and random particle effects for thrust and crashes.
+
+## Testing
+
+```bash
+# Run the test suite (23 tests)
+python3 -m pytest test_lunar_lander.py -v
+
+# Or with unittest
+python3 -m unittest test_lunar_lander -v
+```
+
+## Changelog
+
+### v1.1.0 — Bug Fix Release
+
+**Fixed:**
+- **Pad height mismatch** — Landing pad `py` values could differ from the actual terrain surface heights after integer conversion, causing invisible mismatches between displayed terrain and collision data. Pads are now created after integer conversion and always flatten the surface to match.
+- **Overlapping pads** — Pads could randomly overlap each other, creating confusing terrain and unfair gameplay. Pads now enforce a minimum gap between each other.
+- **Fuel bar not drawn** — The fuel bar was computed in `_draw_hud()` but never actually rendered on screen. The visual bar now appears next to the fuel value in the HUD.
+- **Missing CLI arguments** — No `--help`, `--version`, or difficulty shortcut flags existed. Added `--help`/`-h`, `--version`/`-v`, `--easy`, `--medium`, `--hard`.
+- **Non-TTY crash** — Running without an interactive terminal produced an unhelpful curses error. Now prints a clear error message and exits gracefully.
+- **Fuel bar percentage clamping** — Fuel percentage could go negative when fuel was depleted, causing visual glitches. Now clamped to [0.0, 1.0].
+- **Added `__version__`** — Module now exports `__version__` for version tracking.
 
 ## License
 

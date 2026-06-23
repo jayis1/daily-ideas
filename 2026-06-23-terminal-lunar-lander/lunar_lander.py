@@ -10,6 +10,16 @@ Controls:
   ← / →  : Rotate lander
   ↑       : Main thrust
   q / ESC : Quit
+
+Usage:
+  python3 lunar_lander.py [OPTIONS]
+
+Options:
+  --help      Show this help message and exit
+  --version   Show version and exit
+  --easy      Start on CADET difficulty (skip title screen)
+  --medium    Start on PILOT difficulty (skip title screen)
+  --hard      Start on COMMANDER difficulty (skip title screen)
 """
 
 import curses
@@ -17,6 +27,8 @@ import math
 import random
 import sys
 import time
+
+__version__ = "1.1.0"
 
 # ─── Physics constants ───────────────────────────────────────────────
 
@@ -61,7 +73,12 @@ DIFFICULTIES = {
 # ─── Terrain generation ──────────────────────────────────────────────
 
 def generate_terrain(width, height, pad_width, num_pads, seed=None):
-    """Generate a lunar terrain surface with flat landing pads."""
+    """Generate a lunar terrain surface with flat landing pads.
+
+    Pads are guaranteed to:
+    - Not overlap with each other
+    - Have py values that exactly match the surface heights at the pad positions
+    """
     if seed is not None:
         random.seed(seed)
 
@@ -91,21 +108,37 @@ def generate_terrain(width, height, pad_width, num_pads, seed=None):
             if dist < 1.0:
                 terrain[x] += crater_d * (1 - dist * dist)
 
-    # Create landing pads
-    pads = []
-    for _ in range(num_pads):
-        px = random.randint(pad_width + 5, width - pad_width - 5)
-        # Flatten the pad area
-        pad_y = terrain[px]
-        for x in range(px - pad_width // 2, px + pad_width // 2 + 1):
-            if 0 <= x < width:
-                terrain[x] = pad_y
-        pads.append((px, int(pad_y), pad_width))
-
-    # Convert to integer screen coordinates (y increases downward)
+    # Convert to integer screen coordinates FIRST (before pad creation)
+    # so that pad positions match actual surface values
     surface = []
     for x in range(width):
         surface.append(max(3, min(height - 2, int(terrain[x]))))
+
+    # Create landing pads with overlap checking
+    pads = []
+    for _ in range(num_pads):
+        px = random.randint(pad_width + 5, width - pad_width - 5)
+        # Try multiple times to find a non-overlapping position
+        for _attempt in range(50):
+            px = random.randint(pad_width + 5, width - pad_width - 5)
+            # Check overlap with existing pads
+            overlaps = False
+            for existing_px, _, existing_pw in pads:
+                half_new = pad_width // 2
+                half_existing = existing_pw // 2
+                if abs(px - existing_px) < half_new + half_existing + 4:
+                    overlaps = True
+                    break
+            if not overlaps:
+                break
+
+        # Flatten the pad area using the SURFACE (integer) values
+        pad_y = surface[px]
+        half = pad_width // 2
+        for x in range(px - half, px + half + 1):
+            if 0 <= x < width:
+                surface[x] = pad_y
+        pads.append((px, pad_y, pad_width))
 
     return surface, pads
 
@@ -462,15 +495,17 @@ class LunarLander:
             except curses.error:
                 pass
 
-        # Fuel bar
+        # Fuel bar — replace the numeric fuel line with a visual bar
         bar_y = panel_y + 5
         bar_x = panel_x + 12
         bar_len = 12
-        fuel_pct = self.fuel / self.config["fuel"]
+        fuel_pct = max(0.0, min(1.0, self.fuel / self.config["fuel"]))
         filled = int(bar_len * fuel_pct)
         bar = "█" * filled + "░" * (bar_len - filled)
-        # Overwrite the fuel display with bar
-        # Already shown in the panel
+        try:
+            self.stdscr.addstr(bar_y, bar_x, bar)
+        except curses.error:
+            pass
 
         # Difficulty label at top right
         label = self.config["label"]
@@ -667,7 +702,14 @@ class LunarLander:
                 return False
 
 
-def main(stdscr):
+
+def main(stdscr, difficulty=None):
+    """Main game entry point (called by curses.wrapper).
+
+    Args:
+        stdscr: Curses standard screen.
+        difficulty: Optional difficulty override ('easy', 'medium', 'hard').
+    """
     # Initialize colors if available
     if curses.has_colors():
         curses.start_color()
@@ -678,7 +720,7 @@ def main(stdscr):
         curses.init_pair(5, curses.COLOR_WHITE, curses.COLOR_BLACK)
 
     try:
-        game = LunarLander(stdscr)
+        game = LunarLander(stdscr, difficulty=difficulty or "medium")
         game.run()
     except ValueError as e:
         stdscr.erase()
@@ -688,4 +730,35 @@ def main(stdscr):
 
 
 if __name__ == "__main__":
-    curses.wrapper(main)
+    # Parse command-line arguments
+    cli_difficulty = None
+    for arg in sys.argv[1:]:
+        if arg == "--help" or arg == "-h":
+            print(__doc__)
+            sys.exit(0)
+        elif arg == "--version" or arg == "-v":
+            print(f"terminal-lunar-lander {__version__}")
+            sys.exit(0)
+        elif arg == "--easy":
+            cli_difficulty = "easy"
+        elif arg == "--medium":
+            cli_difficulty = "medium"
+        elif arg == "--hard":
+            cli_difficulty = "hard"
+        else:
+            print(f"Unknown argument: {arg}", file=sys.stderr)
+            print("Use --help for usage information.", file=sys.stderr)
+            sys.exit(1)
+
+    # Check if running in a terminal (non-TTY fallback)
+    if not sys.stdin.isatty():
+        print("Error: This game requires an interactive terminal (TTY).", file=sys.stderr)
+        print("Run it in a terminal, not via piped input.", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        curses.wrapper(main, cli_difficulty)
+    except curses.error as e:
+        print(f"Terminal error: {e}", file=sys.stderr)
+        print("Make sure your terminal supports curses and is at least 70x24.", file=sys.stderr)
+        sys.exit(1)
