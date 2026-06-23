@@ -796,9 +796,9 @@ def generate_cocktail(style: str = None) -> Cocktail:
 
 
 STORY_TEMPLATES = [
-    "Legend has it this drink was first mixed at {venue} by a {bartender} who believed that {belief}.",
+    "Legend has it this drink was first mixed at {venue} by {bartender} who believed that {belief}.",
     "Born in the {era} at {venue}, this cocktail carries the spirit of {vibe} — {trait}.",
-    "A {bartender} at {venue} created this in a moment of {mood}, combining {trait} with {trait2}.",
+    "{bartender} at {venue} created this in a moment of {mood}, combining {trait} with {trait2}.",
     "This cocktail emerged from the {era} speakeasy scene, where {bartender} would serve it to {patrons}.",
     "Inspired by {inspiration}, this drink captures the essence of {vibe} in every sip.",
     "The story goes that {bartender} invented this at {venue} when {event}, and it's been a {adj} favorite ever since.",

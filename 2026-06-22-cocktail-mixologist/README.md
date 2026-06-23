@@ -7,16 +7,16 @@
 ### Core Generation
 - **7 style profiles**: Classic, Tropical, Strong, Fizzy, Dessert, Bitter, Sour — each with weighted method, glass, and ingredient distributions
 - **12 base spirits**: Gin, vodka, rums, whiskeys, tequilas, mezcal, brandy, cachaça
-- **18 liqueurs** and **27 mixers** with flavor harmony rules for balanced combinations
+- **18 liqueurs** and **27 mixers** (including 3 bitters varieties) with flavor harmony rules for balanced combinations
 - **12 naming templates** + 48 adjectives + 48 nouns = thousands of unique cocktail names
 - **Atmospheric origin stories** procedurally generated from template pools
 
-### Flavor Intelligence (v2.0 NEW)
+### Flavor Intelligence
 - **Flavor balance scoring** (0–100): Rates how well-balanced a cocktail's flavor profile is across sweet/sour/bitter/herbal/fruity/spicy/strong/creamy dimensions
 - **Verbose mode** (`--verbose`): Shows detailed flavor breakdown with bar charts and ingredient substitution suggestions
 - **Ingredient substitution system**: Suggests alternatives for base spirits, liqueurs, and mixers with flavor reasoning
 
-### Cocktail Pairing (v2.0 NEW)
+### Cocktail Pairing
 - **`--pairing` mode**: Generates a complementary cocktail pair with a compatibility score (0–100), star rating, and explanation
 - **Pairing algorithm**: Considers style compatibility, ABV progression, flavor overlap, and base spirit diversity
 - **13 style compatibility rules** with flavor-based explanations
@@ -68,7 +68,7 @@ python3 cocktail_mixologist.py -n 3 -s bitter
 python3 cocktail_mixologist.py --seed 42
 ```
 
-### Verbose Mode (v2.0)
+### Verbose Mode
 ```bash
 # Show flavor balance breakdown and substitution suggestions
 python3 cocktail_mixologist.py --verbose
@@ -79,7 +79,7 @@ Verbose mode adds:
 - **Flavor balance bars**: Visual breakdown of sweet/sour/bitter/herbal/etc. intensity
 - **Substitution suggestions**: Alternative ingredients with flavor reasoning (e.g., "↻ London Dry Gin → Premium Vodka (Neutral spirit, less botanical)")
 
-### Pairing Mode (v2.0)
+### Pairing Mode
 ```bash
 # Generate a complementary cocktail pair
 python3 cocktail_mixologist.py --pairing
@@ -105,7 +105,7 @@ python3 cocktail_mixologist.py -n 3 --json
 python3 cocktail_mixologist.py --pairing --json --seed 42
 ```
 
-### Save & Load (v2.0)
+### Save & Load
 ```bash
 # Save cocktails to a JSON file
 python3 cocktail_mixologist.py -n 5 --save cocktails.json
@@ -150,11 +150,11 @@ Options:
 2. **Base Spirit**: Randomly selected from 12 spirits (gin, vodka, rums, whiskeys, tequilas, mezcal, brandy, cachaça)
 3. **Liqueur Selection**: 0–2 liqueurs chosen based on style profile
 4. **Mixer Selection**: 0–3 mixers selected with a 70% bias toward harmonious flavor pairings
-5. **Bitters**: 0–2 dashes of bitters for depth
+5. **Bitters**: 0–2 dashes of bitters for depth (each dash = 0.03 oz of 35–44% ABV spirit)
 6. **Garnish**: Randomly paired from 20 garnish options
 7. **Naming**: A random naming template combines adjectives and nouns
 8. **Story**: Procedural backstory fills in venue, bartender, era, and mood
-9. **Stats**: ABV and total volume calculated from ingredient data
+9. **Stats**: ABV and total volume calculated from ingredient data (including bitters alcohol content)
 10. **Balance Score**: Flavor harmony scored across 8 flavor dimensions
 11. **Pairing**: Style compatibility, ABV progression, and flavor overlap analyzed
 
@@ -167,20 +167,28 @@ python3 -m pytest test_cocktail_mixologist.py -v
 # Or: python3 test_cocktail_mixologist.py
 ```
 
-40 tests covering cocktail generation, flavor balance, pairing, substitutions, save/load, rendering, CLI flags, and all features.
+48 tests covering cocktail generation, flavor balance, pairing, substitutions, save/load, rendering, CLI flags, bug fixes, and all features.
 
-## What's New in v2.0
+## Changelog
 
-- **Flavor balance scoring**: Every cocktail gets a 0–100 balance score with descriptive rating
-- **Cocktail pairing mode**: `--pairing` generates complementary drink pairs with compatibility analysis
-- **Ingredient substitutions**: `--verbose` shows alternatives for base spirits, liqueurs, and mixers
-- **Save/load support**: `--save` and `--load` for JSON persistence
-- **`--version` flag**: Shows v2.0.0
-- **`--verbose` flag**: Detailed flavor breakdown with bar charts
-- **Balance scores in JSON export**: `balance_score` field in JSON output
-- **Pairing data in JSON**: `--pairing --json` includes pairing score and explanation
-- **Bug fix**: Worcestershire Sauce key had a leading space — now fixed
-- **40 comprehensive tests**: Full coverage of new features
+### v2.0.1 — Bug Fixes
+- **Fixed `score_cocktail_pairing` crash on empty ingredient lists** — accessing `c.ingredients[0].key` without bounds check caused `IndexError` on empty cocktails
+- **Fixed invalid substitution target keys** — `"white_rum"` was referenced in substitutions but doesn't exist in any ingredient pool; changed to `"rum_light"` (the actual key)
+- **Fixed story generation `trait2` bug** — `random.choice(traits)` was evaluated per-iteration in the list comprehension, causing `trait2` to equal `trait` ~17% of the time; now correctly ensures they're always different
+- **Fixed story double-article bug** — Templates "by a {bartender}" and "A {bartender}" produced "by a a retired sailor" since bartender strings already include articles; removed redundant articles
+- **Fixed bitters ABV** — Bitters (Aromatic, Orange, Peach) had ABV=0% but real bitters are 35–44% ABV concentrated spirits; now correctly set to 44%, 40%, 35% respectively, producing accurate cocktail ABV calculations
+- **Fixed bitters amount** — Bitters were assigned amount_oz=1 (1 oz!) instead of 0.03 oz (a proper dash); this inflated total volume and understated cocktail ABV significantly
+- **Fixed bitters display** — Recipe cards now show "1 dash" / "2 dashes" for bitters instead of fractional ounces
+- **Fixed shopping list entry parsing** — Removed dead code that used `split('(')` to parse cocktail names from entries, which would break on names containing parentheses; now stores names directly
+- **Fixed shopping list category alignment** — Category labels now dynamically padded instead of using a hardcoded 37-char pad that could misalign
+
+### v2.0.0 — Initial Enhanced Release
+- Flavor balance scoring (0–100)
+- Cocktail pairing mode with compatibility analysis
+- Ingredient substitution suggestions
+- Save/load support for JSON persistence
+- Verbose mode with flavor breakdown bars
+- 40 comprehensive tests
 
 ## License
 
