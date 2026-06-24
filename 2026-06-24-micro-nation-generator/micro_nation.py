@@ -3,7 +3,23 @@
 Procedural Micro-Nation Generator
 ===================================
 Generates complete fictional micro-nations with flags, government,
-culture, economy, and diplomatic relations.
+culture, economy, diplomatic relations, national anthems, and more.
+
+Usage:
+  python3 micro_nation.py [OPTIONS]
+
+Options:
+  -n, --nations NUM    Number of nations to generate (default: 5)
+  -s, --seed SEED      Random seed for reproducibility
+  --no-color           Disable ANSI color output
+  --json               Output as JSON
+  --diplomacy           Always show diplomatic relations
+  --compact             One-line summary per nation
+  --compare             Compare all generated nations side-by-side
+  -o, --output FILE    Save output to a file
+  --list-TRAIT         List available options (e.g., --list-governments)
+  --version            Show version and exit
+  -h, --help           Show this help message and exit
 """
 
 import random
@@ -12,8 +28,11 @@ import time
 import argparse
 import json
 import re
+import sys
 from dataclasses import dataclass, field
 from typing import List, Optional
+
+__version__ = "1.1.0"
 
 # ── Data pools ──────────────────────────────────────────────────────────
 
@@ -133,7 +152,6 @@ COLORS = {
     "purple":  "\033[38;5;129m",
 }
 
-# Different ASCII chars for no-color mode so flag patterns are visible
 NO_COLOR_CHARS = {
     "red":     "█",
     "blue":    "▓",
@@ -165,21 +183,140 @@ PERSONALITIES = [
     "whimsical", "pragmatic", "idealistic", "cunning", "serene",
 ]
 
+# National anthem opening lines (paired with personality)
+ANTHEM_OPENINGS = {
+    "stoic": [
+        "O mountains that guard our eternal rest,",
+        "Beneath iron skies we make our stand,",
+        "The stone remembers what flesh forgets,",
+    ],
+    "warm": [
+        "Beneath the golden sun we share our bread,",
+        "Come, gather near the hearth of home,",
+        "Our open doors shall never close,",
+    ],
+    "mysterious": [
+        "In twilight's shadow, secrets bloom,",
+        "The mists conceal what eyes can't find,",
+        "Whisper the words the wind has carried,",
+    ],
+    "boisterous": [
+        "Raise high the cup, the feast goes on!",
+        "Let thunder ring and voices soar,",
+        "No quiet night shall claim our spirits,",
+    ],
+    "meticulous": [
+        "By measure true and balance kept,",
+        "Each grain of sand is counted here,",
+        "The architect of order stands,",
+    ],
+    "whimsical": [
+        "Where dreams dance on the morning dew,",
+        "A twist of fate, a turn of chance,",
+        "The stars spell out our strangest plans,",
+    ],
+    "pragmatic": [
+        "We build with what the land provides,",
+        "No need for crowns when work is done,",
+        "The harvest speaks what kings cannot,",
+    ],
+    "idealistic": [
+        "A brighter dawn forever calls,",
+        "We dream the world that yet could be,",
+        "Beyond the horizon, hope still shines,",
+    ],
+    "cunning": [
+        "The fox knows well which paths are blind,",
+        "What shadows hide, we navigate,",
+        "Between the lines, our fortune waits,",
+    ],
+    "serene": [
+        "Like water still, we find our peace,",
+        "The evening breeze carries no weight,",
+        "In silence, truth and beauty meet,",
+    ],
+}
+
+# Area ranges (sq km) by terrain
+TERRAIN_AREAS = {
+    "volcanic archipelago": (50, 500),
+    "mountainous highlands": (2000, 15000),
+    "coastal peninsula": (500, 8000),
+    "river delta": (100, 2000),
+    "floating sky-islands": (10, 200),
+    "underground cavern network": (5, 50),
+    "dense jungle basin": (3000, 25000),
+    "frozen tundra plateau": (5000, 40000),
+    "desert oasis cluster": (50, 500),
+    "coral atoll chain": (5, 100),
+    "floating sea platform": (1, 20),
+    "crater caldera": (100, 800),
+    "subterranean mushroom forest": (20, 200),
+    "glacial fjord region": (2000, 12000),
+    "sinkhole cavern system": (10, 100),
+    "mangrove swamp islands": (100, 3000),
+}
+
+# Leaders by government type
+LEADER_TITLES = {
+    "Constitutional Monarchy": ("King", "Queen"),
+    "Democratic Republic": ("President", "President"),
+    "Technocratic Directorate": ("Director", "Director"),
+    "Oligarchic Council": ("Councilor", "Councilor"),
+    "Theocratic Dominion": ("High Priest", "High Priestess"),
+    "Military Junta": ("General", "General"),
+    "Anarcho-Syndicalist Commune": ("Coordinator", "Coordinator"),
+    "Mage-ocracy": ("Archmage", "Archmage"),
+    "Pirate Republic": ("Captain", "Captain"),
+    "Cybernetic Meritocracy": ("Admin", "Admin"),
+    "Benevolent Dictatorship": ("Dictator", "Dictator"),
+    "Gerontocracy": ("Elder", "Elder"),
+    "Stratocracy": ("Marshal", "Marshal"),
+    "Timocracy": ("Champion", "Champion"),
+    "Noocracy": ("Sage", "Sage"),
+}
+
+LEADER_FIRST_NAMES = [
+    "Aldric", "Brenna", "Cassius", "Delia", "Elias", "Freya",
+    "Gareth", "Helena", "Ivan", "Jasmina", "Kael", "Liora",
+    "Magnus", "Nadia", "Orion", "Petra", "Quinn", "Rowena",
+    "Soren", "Thalia", "Ulric", "Vera", "Wolfram", "Xena",
+    "Yuri", "Zara",
+]
+
+LEADER_EPITHETS = [
+    "the Bold", "the Wise", "the Steadfast", "the Iron-willed",
+    "the Merciful", "the Unyielding", "the Visionary", "the Just",
+    "the Wanderer", "the Silent", "the Radiant", "the Swift",
+    "the Patient", "the Fierce", "the Enlightened", "the Resolute",
+]
+
+NATIONAL_HOLIDAYS = [
+    "Founding Day", "Harvest Moon Festival", "Liberation Day",
+    "Storm's End Remembrance", "New Dawn Celebration", "Ancestral Vigil",
+    "Tide Festival", "Crystal Night", "Iron Week", "Sky Market Opening",
+    "Frost's Departure", "Unity Day", "The Great Kindling",
+    "Remembrance of Tides", "Starfall Night",
+]
+
 RESET = "\033[0m"
 BOLD = "\033[1m"
 DIM = "\033[2m"
 CYAN = "\033[36m"
 GREEN = "\033[32m"
 YELLOW = "\033[33m"
+RED = "\033[31m"
 
 
 def make_rng(seed=None):
+    """Create a deterministic random number generator from a seed."""
     if seed is None:
         seed = str(time.time())
     return random.Random(hashlib.sha256(seed.encode()).hexdigest())
 
 
 def pick(rng, lst, n=1):
+    """Pick n items from a list. If n=1, return a single item."""
     if n == 1:
         return rng.choice(lst)
     return rng.sample(lst, min(n, len(lst)))
@@ -383,6 +520,7 @@ class MicroNation:
     gov_icon: str
     population: int
     terrain: str
+    area_sq_km: float
     capital: str
     currency: str
     national_animal: str
@@ -395,7 +533,18 @@ class MicroNation:
     flag_colors: List[str]
     emblem: str
     seed: str
+    leader_name: str = ""
+    leader_title: str = ""
+    national_holiday: str = ""
+    anthem_opening: str = ""
     relations: List[dict] = field(default_factory=list)
+
+    @property
+    def population_density(self) -> float:
+        """People per sq km."""
+        if self.area_sq_km > 0:
+            return self.population / self.area_sq_km
+        return 0.0
 
 
 class NationGenerator:
@@ -403,7 +552,7 @@ class NationGenerator:
         self.seed = seed or str(time.time())
         self.rng = make_rng(self.seed)
         self.flag_renderer = FlagRenderer(self.rng)
-        self.generated_nations = []
+        self.generated_nations: List[MicroNation] = []
 
     def generate(self, seed_override=None):
         rng = make_rng(seed_override or self.seed)
@@ -423,6 +572,10 @@ class NationGenerator:
         population = rng.randint(127, 8_500_000)
         founding_year = rng.randint(1800, 2024)
 
+        # Area based on terrain
+        area_range = TERRAIN_AREAS.get(terrain, (100, 10000))
+        area_sq_km = round(rng.uniform(area_range[0], area_range[1]), 1)
+
         capital_prefix = pick(rng, ["New", "Fort", "Old", "Port", "North", "South", "East", "West", "Mount", "Lake", "Grand", "Little", "Upper", "Lower", ""])
         capital_root = pick(rng, PREFIXES[:20] + ["haven", "holm", "bury", "wick", "ford", "bridge", "castle", "keep", "gate"])
         capital = f"{capital_prefix}{capital_root}" if capital_prefix else capital_root.capitalize()
@@ -434,19 +587,36 @@ class NationGenerator:
         flag_colors = pick(rng, FLAG_COLORS, 3)
         emblem = pick(rng, ["star", "diamond", "circle", "crescent", "cross", "triangle"])
 
+        # Leader
+        titles = LEADER_TITLES.get(gov, ("Leader", "Leader"))
+        leader_title = pick(rng, titles)
+        leader_first = pick(rng, LEADER_FIRST_NAMES)
+        leader_epithet = pick(rng, LEADER_EPITHETS)
+        leader_name = f"{leader_title} {leader_first} {leader_epithet}"
+
+        # National holiday
+        national_holiday = pick(rng, NATIONAL_HOLIDAYS)
+
+        # Anthem opening
+        anthem_pool = ANTHEM_OPENINGS.get(personality, ANTHEM_OPENINGS["stoic"])
+        anthem_opening = pick(rng, anthem_pool)
+
         nation = MicroNation(
             name=name, motto=motto, government=gov, gov_icon=gov_icon,
-            population=population, terrain=terrain, capital=capital,
-            currency=currency, national_animal=animal, exports=exports,
-            industries=industries, cultural_events=cultural_events,
+            population=population, terrain=terrain, area_sq_km=area_sq_km,
+            capital=capital, currency=currency, national_animal=animal,
+            exports=exports, industries=industries, cultural_events=cultural_events,
             personality=personality, founding_year=founding_year,
             flag_pattern=flag_pattern, flag_colors=flag_colors,
             emblem=emblem, seed=seed_override or self.seed,
+            leader_name=leader_name, leader_title=leader_title,
+            national_holiday=national_holiday, anthem_opening=anthem_opening,
         )
         self.generated_nations.append(nation)
         return nation
 
     def generate_relations(self, nations=None):
+        """Generate diplomatic relations between nations."""
         if nations is None:
             nations = self.generated_nations
         for i, nation in enumerate(nations):
@@ -464,13 +634,31 @@ class NationGenerator:
                 })
 
     def format_population(self, pop):
+        """Format population with K/M suffixes."""
         if pop >= 1_000_000:
             return f"{pop / 1_000_000:.1f}M"
         elif pop >= 1_000:
             return f"{pop / 1_000:.1f}K"
         return str(pop)
 
-    def display_nation(self, nation, use_color=True):
+    def format_area(self, area):
+        """Format area with appropriate units."""
+        if area >= 1_000_000:
+            return f"{area / 1_000_000:.1f}M km²"
+        elif area >= 1_000:
+            return f"{area / 1_000:.1f}K km²"
+        return f"{area:,.1f} km²"
+
+    def display_nation(self, nation, use_color=True, compact=False):
+        """Format a nation for display. If compact=True, output a one-line summary."""
+        if compact:
+            density = f"{nation.population_density:.0f}/km²" if nation.area_sq_km > 0 else "N/A"
+            return (f"{nation.gov_icon} {nation.name} | {nation.government} | "
+                    f"Pop: {self.format_population(nation.population)} | "
+                    f"Area: {self.format_area(nation.area_sq_km)} | "
+                    f"Terrain: {nation.terrain.title()} | "
+                    f"Founded: {nation.founding_year}")
+
         R = RESET if use_color else ""
         B = BOLD if use_color else ""
         D = DIM if use_color else ""
@@ -495,7 +683,6 @@ class NationGenerator:
         # Flag
         lines.append("  ┌" + "─" * 32 + "┐")
         for fl in flag_lines:
-            # Strip ANSI for width calculation, pad visible chars to 30
             if use_color:
                 visible_len = len(re.sub(r'\033\[[0-9;]*m', '', fl))
                 pad = 30 - visible_len
@@ -506,19 +693,26 @@ class NationGenerator:
         lines.append("")
 
         # Info block
+        density_str = f"{nation.population_density:.0f}/km²" if nation.area_sq_km > 0 else "N/A"
         info = [
             (f"{nation.gov_icon} Government", nation.government),
             ("Population", self.format_population(nation.population)),
+            ("Area", self.format_area(nation.area_sq_km)),
+            ("Density", density_str),
             ("Terrain", nation.terrain.capitalize()),
             ("Capital", nation.capital),
+            ("Leader", nation.leader_name),
             ("Currency", nation.currency),
             ("National Animal", nation.national_animal),
             ("Personality", nation.personality.capitalize()),
             ("Founded", str(nation.founding_year)),
+            ("National Holiday", nation.national_holiday),
         ]
         for label, value in info:
             lines.append(f"  {C}{label}:{R} {G}{value}{R}")
 
+        lines.append("")
+        lines.append(f"  {B}Anthem:{R} {D}\"{nation.anthem_opening}\"{R}")
         lines.append("")
 
         # Exports
@@ -542,14 +736,78 @@ class NationGenerator:
 
         return "\n".join(lines)
 
+    def display_comparison(self, nations, use_color=True):
+        """Display nations side-by-side in a comparison table."""
+        if not nations:
+            return "No nations to compare."
+
+        R = RESET if use_color else ""
+        B = BOLD if use_color else ""
+        C = CYAN if use_color else ""
+        G = GREEN if use_color else ""
+        Y = YELLOW if use_color else ""
+
+        lines = []
+        lines.append(f"\n  {B}═══ NATION COMPARISON ═══{R}\n")
+
+        attrs = [
+            ("Government", lambda n: f"{n.gov_icon} {n.government}"),
+            ("Population", lambda n: n.format_population(n.population) if hasattr(n, 'format_population') else f"{n.population:,}"),
+            ("Area", lambda n: f"{n.area_sq_km:,.1f} km²"),
+            ("Density", lambda n: f"{n.population_density:.0f}/km²" if n.area_sq_km > 0 else "N/A"),
+            ("Terrain", lambda n: n.terrain.title()),
+            ("Capital", lambda n: n.capital),
+            ("Founded", lambda n: str(n.founding_year)),
+            ("Currency", lambda n: n.currency),
+            ("Animal", lambda n: n.national_animal),
+            ("Personality", lambda n: n.personality.title()),
+            ("Holiday", lambda n: n.national_holiday),
+        ]
+
+        # Calculate column widths
+        name_widths = [len(n.name) for n in nations]
+        max_name = max(name_widths) + 2
+        attr_width = 14
+
+        # Header
+        header = f"  {C}{'Attribute':<14}{R} │ "
+        for i, n in enumerate(nations):
+            header += f"{B}{n.name:^{max_name}}{R} │ "
+        lines.append(header)
+        lines.append("  " + "─" * (attr_width + 3 + len(nations) * (max_name + 3)))
+
+        for attr_name, getter in attrs:
+            row = f"  {C}{attr_name:<14}{R} │ "
+            for n in nations:
+                val = getter(n)
+                row += f"{G}{val:^{max_name}}{R} │ "
+            lines.append(row)
+
+        # Diplomatic relations summary
+        if len(nations) > 1:
+            lines.append("")
+            lines.append(f"  {B}Diplomacy:{R}")
+            for i, n in enumerate(nations):
+                for rel in n.relations:
+                    for j, other in enumerate(nations):
+                        if rel['nation'] == other.name:
+                            strength_bar = "█" * (rel['strength'] // 10) + "░" * (10 - rel['strength'] // 10)
+                            lines.append(f"    {n.name} → {other.name}: {rel['icon']} {rel['type']} [{strength_bar}] {rel['strength']}")
+
+        return "\n".join(lines)
+
     def to_dict(self, nation):
+        """Convert a MicroNation to a dictionary for JSON output."""
         return {
             "name": nation.name,
             "motto": nation.motto,
             "government": nation.government,
             "population": nation.population,
+            "area_sq_km": nation.area_sq_km,
+            "population_density": round(nation.population_density, 1),
             "terrain": nation.terrain,
             "capital": nation.capital,
+            "leader": nation.leader_name,
             "currency": nation.currency,
             "national_animal": nation.national_animal,
             "exports": nation.exports,
@@ -557,6 +815,8 @@ class NationGenerator:
             "cultural_events": nation.cultural_events,
             "personality": nation.personality,
             "founding_year": nation.founding_year,
+            "national_holiday": nation.national_holiday,
+            "anthem_opening": nation.anthem_opening,
             "flag_pattern": nation.flag_pattern,
             "flag_colors": nation.flag_colors,
             "emblem": nation.emblem,
@@ -565,10 +825,44 @@ class NationGenerator:
         }
 
 
+def list_trait(trait_name):
+    """Print available options for a given trait category."""
+    trait_map = {
+        "governments": ("Governments", [f"{icon} {name}" for name, icon in GOVERNMENTS]),
+        "terrains": ("Terrains", TERRAINS),
+        "currencies": ("Currencies", [f"{adj} {name}" for adj in CURRENCY_ADJECTIVES for name in CURRENCIES]),
+        "animals": ("National Animals", NATIONAL_ANIMALS),
+        "mottos": ("Mottos", MOTTOS),
+        "exports": ("Exports", EXPORTS),
+        "industries": ("Industries", INDUSTRIES),
+        "cultures": ("Cultural Events", CULTURES),
+        "personalities": ("Personalities", PERSONALITIES),
+        "patterns": ("Flag Patterns", FLAG_PATTERNS),
+        "colors": ("Flag Colors", FLAG_COLORS),
+        "emblems": ("Flag Emblems", ["star", "diamond", "circle", "crescent", "cross", "triangle"]),
+    }
+
+    key = trait_name.lower().replace("--", "").replace("_", "").replace("-", "")
+    if key in trait_map:
+        title, items = trait_map[key]
+        print(f"\n{BOLD}{title}:{RESET}")
+        for item in items:
+            print(f"  • {item}")
+        print(f"\n  ({len(items)} options)")
+    else:
+        print(f"Unknown trait: {trait_name}")
+        print(f"Available: {', '.join(trait_map.keys())}")
+        sys.exit(1)
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Procedural Micro-Nation Generator")
+    parser = argparse.ArgumentParser(
+        description="Procedural Micro-Nation Generator",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__
+    )
     parser.add_argument("-n", "--nations", type=int, default=5,
-                        help="Number of nations to generate")
+                        help="Number of nations to generate (default: 5)")
     parser.add_argument("-s", "--seed", type=str, default=None,
                         help="Random seed for reproducibility")
     parser.add_argument("--no-color", action="store_true",
@@ -576,10 +870,44 @@ def main():
     parser.add_argument("--json", action="store_true",
                         help="Output as JSON")
     parser.add_argument("--diplomacy", action="store_true",
-                        help="Show diplomatic relations between nations")
+                        help="Always show diplomatic relations between nations")
+    parser.add_argument("--compact", action="store_true",
+                        help="One-line summary per nation")
+    parser.add_argument("--compare", action="store_true",
+                        help="Compare all generated nations side-by-side")
     parser.add_argument("-o", "--output", type=str, default=None,
-                        help="Save output to file")
+                        help="Save output to a file")
+    parser.add_argument("--version", action="version",
+                        version=f"micro-nation-generator {__version__}")
+
+    # List trait options
+    for trait in ["governments", "terrains", "currencies", "animals", "mottos",
+                   "exports", "industries", "cultures", "personalities",
+                   "patterns", "colors", "emblems"]:
+        parser.add_argument(f"--list-{trait}", action="store_true",
+                            help=f"List available {trait} and exit")
+
     args = parser.parse_args()
+
+    # Handle --list flags
+    for trait in ["governments", "terrains", "currencies", "animals", "mottos",
+                   "exports", "industries", "cultures", "personalities",
+                   "patterns", "colors", "emblems"]:
+        attr = f"list_{trait}"
+        if hasattr(args, attr.replace("-", "_")):
+            flag_val = getattr(args, attr.replace("-", "_"))
+        else:
+            flag_val = getattr(args, f"list_{trait.replace('-', '_')}", False)
+        if flag_val:
+            list_trait(trait)
+            return
+
+    # Validate --nations
+    if args.nations < 1:
+        print("Error: --nations must be at least 1.", file=sys.stderr)
+        sys.exit(1)
+    if args.nations > 50:
+        print("Warning: Generating more than 50 nations may produce a lot of output.", file=sys.stderr)
 
     use_color = not args.no_color
     gen = NationGenerator(seed=args.seed)
@@ -590,18 +918,46 @@ def main():
         nation = gen.generate(seed_override=seed)
         nations.append(nation)
 
+    # Always generate relations if more than 1 nation or --diplomacy flag
     if args.diplomacy or args.nations > 1:
         gen.generate_relations(nations)
 
+    # JSON output
     if args.json:
         data = [gen.to_dict(n) for n in nations]
-        output = json.dumps(data, indent=2)
+        output = json.dumps(data, indent=2, ensure_ascii=False)
         print(output)
         if args.output:
-            with open(args.output, "w") as f:
+            with open(args.output, "w", encoding="utf-8") as f:
                 f.write(output)
+            print(f"\n📄 Output saved to {args.output}")
         return
 
+    # Compact output
+    if args.compact:
+        for nation in nations:
+            print(gen.display_nation(nation, use_color=use_color, compact=True))
+        if args.seed:
+            print(f"\n🌱 Seed: {args.seed}")
+        if args.output:
+            lines = [gen.display_nation(n, use_color=False, compact=True) for n in nations]
+            with open(args.output, "w", encoding="utf-8") as f:
+                f.write("\n".join(lines))
+            print(f"\n📄 Output saved to {args.output}")
+        return
+
+    # Comparison output
+    if args.compare:
+        text = gen.display_comparison(nations, use_color=use_color)
+        print(text)
+        if args.output:
+            text_nocolor = gen.display_comparison(nations, use_color=False)
+            with open(args.output, "w", encoding="utf-8") as f:
+                f.write(text_nocolor)
+            print(f"\n📄 Output saved to {args.output}")
+        return
+
+    # Full display output
     for nation in nations:
         print()
         print(gen.display_nation(nation, use_color=use_color))
@@ -615,7 +971,7 @@ def main():
         for nation in nations:
             output_lines.append(gen.display_nation(nation, use_color=False))
             output_lines.append("")
-        with open(args.output, "w") as f:
+        with open(args.output, "w", encoding="utf-8") as f:
             f.write("\n".join(output_lines))
         print(f"📄 Output saved to {args.output}")
 
