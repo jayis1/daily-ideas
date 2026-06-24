@@ -32,7 +32,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # ── Data pools ──────────────────────────────────────────────────────────
 
@@ -312,6 +312,7 @@ def make_rng(seed=None):
     """Create a deterministic random number generator from a seed."""
     if seed is None:
         seed = str(time.time())
+    seed = str(seed)
     return random.Random(hashlib.sha256(seed.encode()).hexdigest())
 
 
@@ -569,16 +570,20 @@ class NationGenerator:
         currency_adj = pick(rng, CURRENCY_ADJECTIVES)
         currency_name = pick(rng, CURRENCIES)
         currency = f"{currency_adj} {currency_name}"
-        population = rng.randint(127, 8_500_000)
-        founding_year = rng.randint(1800, 2024)
-
         # Area based on terrain
         area_range = TERRAIN_AREAS.get(terrain, (100, 10000))
         area_sq_km = round(rng.uniform(area_range[0], area_range[1]), 1)
 
+        # Population scaled by area to keep density realistic (max ~5000/km² for city-states)
+        max_density = rng.randint(50, 5000)
+        min_pop = max(127, int(area_sq_km * 10))
+        max_pop = int(area_sq_km * max_density)
+        population = rng.randint(min_pop, max(min_pop + 1, max_pop))
+        founding_year = rng.randint(1800, 2024)
+
         capital_prefix = pick(rng, ["New", "Fort", "Old", "Port", "North", "South", "East", "West", "Mount", "Lake", "Grand", "Little", "Upper", "Lower", ""])
         capital_root = pick(rng, PREFIXES[:20] + ["haven", "holm", "bury", "wick", "ford", "bridge", "castle", "keep", "gate"])
-        capital = f"{capital_prefix}{capital_root}" if capital_prefix else capital_root.capitalize()
+        capital = f"{capital_prefix} {capital_root}" if capital_prefix else capital_root.capitalize()
 
         exports = pick(rng, EXPORTS, 3)
         industries = pick(rng, INDUSTRIES, 3)
@@ -638,7 +643,12 @@ class NationGenerator:
         if pop >= 1_000_000:
             return f"{pop / 1_000_000:.1f}M"
         elif pop >= 1_000:
-            return f"{pop / 1_000:.1f}K"
+            val = pop / 1_000
+            formatted = f"{val:.1f}K"
+            # If formatting rounds up to 1000.0K, show as 1.0M instead
+            if val >= 999.95:
+                return f"{pop / 1_000_000:.1f}M"
+            return formatted
         return str(pop)
 
     def format_area(self, area):
@@ -646,7 +656,12 @@ class NationGenerator:
         if area >= 1_000_000:
             return f"{area / 1_000_000:.1f}M km²"
         elif area >= 1_000:
-            return f"{area / 1_000:.1f}K km²"
+            val = area / 1_000
+            formatted = f"{val:.1f}K km²"
+            # If formatting rounds up to 1000.0K, show as 1.0M instead
+            if val >= 999.95:
+                return f"{area / 1_000_000:.1f}M km²"
+            return formatted
         return f"{area:,.1f} km²"
 
     def display_nation(self, nation, use_color=True, compact=False):
@@ -802,12 +817,14 @@ class NationGenerator:
             "name": nation.name,
             "motto": nation.motto,
             "government": nation.government,
+            "gov_icon": nation.gov_icon,
             "population": nation.population,
             "area_sq_km": nation.area_sq_km,
             "population_density": round(nation.population_density, 1),
             "terrain": nation.terrain,
             "capital": nation.capital,
             "leader": nation.leader_name,
+            "leader_title": nation.leader_title,
             "currency": nation.currency,
             "national_animal": nation.national_animal,
             "exports": nation.exports,
@@ -830,7 +847,9 @@ def list_trait(trait_name):
     trait_map = {
         "governments": ("Governments", [f"{icon} {name}" for name, icon in GOVERNMENTS]),
         "terrains": ("Terrains", TERRAINS),
-        "currencies": ("Currencies", [f"{adj} {name}" for adj in CURRENCY_ADJECTIVES for name in CURRENCIES]),
+        "currencies": ("Currencies (adjective + name, randomly combined)",
+            [f"Adjectives: {', '.join(CURRENCY_ADJECTIVES)}",
+             f"Names: {', '.join(CURRENCIES)}"]),
         "animals": ("National Animals", NATIONAL_ANIMALS),
         "mottos": ("Mottos", MOTTOS),
         "exports": ("Exports", EXPORTS),
@@ -914,7 +933,10 @@ def main():
 
     nations = []
     for i in range(args.nations):
-        seed = f"{args.seed or 'nation'}-{i}" if args.seed else None
+        if args.seed:
+            seed = f"{args.seed}-{i}"
+        else:
+            seed = f"nation-{i}-{time.time()}"
         nation = gen.generate(seed_override=seed)
         nations.append(nation)
 
@@ -930,7 +952,7 @@ def main():
         if args.output:
             with open(args.output, "w", encoding="utf-8") as f:
                 f.write(output)
-            print(f"\n📄 Output saved to {args.output}")
+            print(f"\n📄 Output saved to {args.output}", file=sys.stderr)
         return
 
     # Compact output
@@ -941,9 +963,11 @@ def main():
             print(f"\n🌱 Seed: {args.seed}")
         if args.output:
             lines = [gen.display_nation(n, use_color=False, compact=True) for n in nations]
+            if args.seed:
+                lines.append(f"\nSeed: {args.seed}")
             with open(args.output, "w", encoding="utf-8") as f:
                 f.write("\n".join(lines))
-            print(f"\n📄 Output saved to {args.output}")
+            print(f"\n📄 Output saved to {args.output}", file=sys.stderr)
         return
 
     # Comparison output
@@ -954,7 +978,7 @@ def main():
             text_nocolor = gen.display_comparison(nations, use_color=False)
             with open(args.output, "w", encoding="utf-8") as f:
                 f.write(text_nocolor)
-            print(f"\n📄 Output saved to {args.output}")
+            print(f"\n📄 Output saved to {args.output}", file=sys.stderr)
         return
 
     # Full display output
@@ -973,7 +997,7 @@ def main():
             output_lines.append("")
         with open(args.output, "w", encoding="utf-8") as f:
             f.write("\n".join(output_lines))
-        print(f"📄 Output saved to {args.output}")
+        print(f"📄 Output saved to {args.output}", file=sys.stderr)
 
 
 if __name__ == "__main__":

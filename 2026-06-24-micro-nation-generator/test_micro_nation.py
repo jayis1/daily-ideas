@@ -40,6 +40,18 @@ class TestMakeRng(unittest.TestCase):
         val = rng.random()
         self.assertIsInstance(val, float)
 
+    def test_integer_seed(self):
+        """Integer seed should be accepted and work like a string seed."""
+        rng1 = mn.make_rng(42)
+        rng2 = mn.make_rng("42")
+        self.assertEqual(rng1.random(), rng2.random())
+
+    def test_integer_seed_produces_rng(self):
+        """Integer seed should produce a valid RNG without crashing."""
+        rng = mn.make_rng(12345)
+        val = rng.random()
+        self.assertIsInstance(val, float)
+
 
 class TestPick(unittest.TestCase):
     """Tests for the pick utility function."""
@@ -155,6 +167,32 @@ class TestNationGenerator(unittest.TestCase):
                 self.assertLessEqual(nation.area_sq_km, hi,
                     f"Area {nation.area_sq_km} above maximum {hi} for {nation.terrain}")
 
+    def test_population_density_realistic(self):
+        """Population density should be within reasonable bounds."""
+        gen = mn.NationGenerator(seed="density")
+        for _ in range(100):
+            nation = gen.generate(seed_override=f"d-{_}")
+            # Max density should be under 10000/km² (reasonable for micro-nations)
+            self.assertLess(nation.population_density, 10000,
+                f"Density {nation.population_density:.0f}/km² too high for {nation.name} "
+                f"(pop={nation.population}, area={nation.area_sq_km})")
+            self.assertGreater(nation.population_density, 0)
+
+    def test_capital_names_have_spaces(self):
+        """Capital names with prefixes should have spaces between prefix and root."""
+        gen = mn.NationGenerator(seed="capital")
+        for _ in range(50):
+            nation = gen.generate(seed_override=f"cap-{_}")
+            # If capital starts with a known prefix, it should have a space
+            prefixes = ["New", "Fort", "Old", "Port", "North", "South", "East",
+                       "West", "Mount", "Lake", "Grand", "Little", "Upper", "Lower"]
+            for prefix in prefixes:
+                if nation.capital.startswith(prefix):
+                    # The character after the prefix should be a space
+                    rest = nation.capital[len(prefix):]
+                    self.assertTrue(rest.startswith(" "),
+                        f"Capital '{nation.capital}' has prefix '{prefix}' but no space")
+
 
 class TestGenerateRelations(unittest.TestCase):
     """Tests for diplomatic relations generation."""
@@ -250,6 +288,16 @@ class TestFormatHelpers(unittest.TestCase):
         gen = mn.NationGenerator(seed="fmt")
         self.assertEqual(gen.format_population(999), "999")
 
+    def test_format_population_boundary_million(self):
+        """999999 should be formatted as 1.0M not 1000.0K."""
+        gen = mn.NationGenerator(seed="fmt")
+        self.assertEqual(gen.format_population(999_999), "1.0M")
+
+    def test_format_population_just_under_million(self):
+        """999499 should be formatted as 999.5K."""
+        gen = mn.NationGenerator(seed="fmt")
+        self.assertEqual(gen.format_population(999_499), "999.5K")
+
     def test_format_area_large(self):
         """Should format large areas."""
         gen = mn.NationGenerator(seed="fmt")
@@ -267,6 +315,18 @@ class TestFormatHelpers(unittest.TestCase):
         gen = mn.NationGenerator(seed="fmt")
         result = gen.format_area(50.5)
         self.assertIn("50.5", result)
+
+    def test_format_area_boundary_million(self):
+        """999999 should be formatted as 1.0M km² not 1000.0K km²."""
+        gen = mn.NationGenerator(seed="fmt")
+        result = gen.format_area(999_999)
+        self.assertIn("M", result)
+
+    def test_format_area_zero(self):
+        """Zero area should format correctly."""
+        gen = mn.NationGenerator(seed="fmt")
+        result = gen.format_area(0)
+        self.assertIn("0", result)
 
 
 class TestDisplayNation(unittest.TestCase):
@@ -316,19 +376,21 @@ class TestToJson(unittest.TestCase):
     """Tests for JSON serialization."""
 
     def test_to_dict_has_all_fields(self):
-        """to_dict should include all nation fields."""
+        """to_dict should include all nation fields including gov_icon and leader_title."""
         gen = mn.NationGenerator(seed="json")
         nation = gen.generate(seed_override="json-test")
         d = gen.to_dict(nation)
         self.assertIn("name", d)
         self.assertIn("motto", d)
         self.assertIn("government", d)
+        self.assertIn("gov_icon", d)
         self.assertIn("population", d)
         self.assertIn("area_sq_km", d)
         self.assertIn("population_density", d)
         self.assertIn("terrain", d)
         self.assertIn("capital", d)
         self.assertIn("leader", d)
+        self.assertIn("leader_title", d)
         self.assertIn("currency", d)
         self.assertIn("national_animal", d)
         self.assertIn("exports", d)
@@ -389,6 +451,18 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(len(data), 2)
         self.assertIn("name", data[0])
 
+    def test_json_output_has_gov_icon(self):
+        """--json output should include gov_icon field."""
+        result = subprocess.run(
+            [sys.executable, "micro_nation.py", "-n", "1", "--json", "--seed", "jsongov"],
+            capture_output=True, text=True,
+            cwd="/root/daily-ideas/2026-06-24-micro-nation-generator"
+        )
+        self.assertEqual(result.returncode, 0)
+        data = json.loads(result.stdout)
+        self.assertIn("gov_icon", data[0])
+        self.assertIn("leader_title", data[0])
+
     def test_compact_output(self):
         """--compact should produce one-line-per-nation output."""
         result = subprocess.run(
@@ -400,6 +474,19 @@ class TestCLI(unittest.TestCase):
         lines = [l for l in result.stdout.strip().split("\n") if l.strip() and not l.startswith("🌱")]
         # Should have at least 3 nation lines
         self.assertGreaterEqual(len(lines), 3)
+
+    def test_default_run_unique_nations(self):
+        """Default run (no --seed) should produce different nations."""
+        result = subprocess.run(
+            [sys.executable, "micro_nation.py", "-n", "5", "--json"],
+            capture_output=True, text=True,
+            cwd="/root/daily-ideas/2026-06-24-micro-nation-generator"
+        )
+        self.assertEqual(result.returncode, 0)
+        data = json.loads(result.stdout)
+        names = [d["name"] for d in data]
+        # With time-based unique seeds, all 5 should be different
+        self.assertEqual(len(set(names)), 5, f"Expected 5 unique names, got: {names}")
 
     def test_default_run(self):
         """Default run should produce output."""
@@ -431,6 +518,20 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIn("Constitutional Monarchy", result.stdout)
 
+    def test_list_currencies(self):
+        """--list-currencies should show adjectives and names separately."""
+        result = subprocess.run(
+            [sys.executable, "micro_nation.py", "--list-currencies"],
+            capture_output=True, text=True,
+            cwd="/root/daily-ideas/2026-06-24-micro-nation-generator"
+        )
+        self.assertEqual(result.returncode, 0)
+        # Should show both adjectives and names, not a 280-item cartesian product
+        self.assertIn("Adjectives", result.stdout)
+        self.assertIn("Names", result.stdout)
+        # Should NOT list 280 individual currency combinations
+        self.assertLess(result.stdout.count("•"), 50)
+
     def test_no_color(self):
         """--no-color should produce output without ANSI codes."""
         result = subprocess.run(
@@ -446,6 +547,28 @@ class TestCLI(unittest.TestCase):
         """Module should have a __version__ attribute."""
         self.assertTrue(hasattr(mn, "__version__"))
         self.assertIn(".", mn.__version__)
+
+    def test_json_output_file_is_valid_json(self):
+        """--json with --output should write valid JSON to file and not corrupt stdout."""
+        import tempfile, os
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            tmpfile = f.name
+        try:
+            result = subprocess.run(
+                [sys.executable, "micro_nation.py", "-n", "1", "--json", "-o", tmpfile, "--seed", "jsonfiletest2"],
+                capture_output=True, text=True,
+                cwd="/root/daily-ideas/2026-06-24-micro-nation-generator"
+            )
+            self.assertEqual(result.returncode, 0)
+            # stdout should be valid JSON (the "saved" message goes to stderr now)
+            data = json.loads(result.stdout)
+            self.assertEqual(len(data), 1)
+            # File should also be valid JSON
+            with open(tmpfile) as f:
+                file_data = json.load(f)
+            self.assertEqual(len(file_data), 1)
+        finally:
+            os.unlink(tmpfile)
 
 
 class TestLeaderGeneration(unittest.TestCase):
@@ -505,6 +628,29 @@ class TestEdgeCases(unittest.TestCase):
         gen = mn.NationGenerator(seed="empty-comp")
         text = gen.display_comparison([], use_color=False)
         self.assertIn("No nations", text)
+
+    def test_make_rng_integer_seed(self):
+        """make_rng should accept integer seeds."""
+        rng = mn.make_rng(42)
+        self.assertIsNotNone(rng)
+        val = rng.random()
+        self.assertIsInstance(val, float)
+        # Should be same as string "42"
+        rng2 = mn.make_rng("42")
+        self.assertEqual(val, rng2.random())
+
+    def test_zero_area_density(self):
+        """Zero area should return 0 density without crash."""
+        nation = mn.MicroNation(
+            name="Test", motto="Test", government="Test", gov_icon="X",
+            population=10000, terrain="test", area_sq_km=0,
+            capital="Test", currency="Test", national_animal="Test",
+            exports=[], industries=[], cultural_events=[],
+            personality="stoic", founding_year=2000,
+            flag_pattern="cross", flag_colors=["red", "blue", "white"],
+            emblem="star", seed="test"
+        )
+        self.assertEqual(nation.population_density, 0.0)
 
 
 if __name__ == "__main__":

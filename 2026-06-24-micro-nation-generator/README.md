@@ -10,16 +10,16 @@ Every nation is procedurally created from seed data: name, motto, terrain, natio
 - **ASCII flag rendering** — 10 flag patterns (tricolor, diagonal, cross, canton, chevron, saltire, barrulets, quarterly, bend) with 6 emblem types (star, diamond, circle, crescent, cross, triangle)
 - **Colored output** — flags render with ANSI colors in the terminal; no-color mode uses distinct Unicode block characters
 - **Diplomatic relations** — when generating multiple nations, each gets randomized diplomatic ties with strength bars
-- **National leaders** — each nation gets a procedurally generated leader with title, name, and epithet
-- **National anthems** — personality-matched opening lines for each nation's anthem
+- **National leaders** — each nation gets a procedurally generated leader with title, name, and epithet (e.g., "King Aldric the Bold")
+- **National anthems** — personality-matched opening lines for each nation
 - **National holidays** — unique founding celebrations
-- **Area & population density** — area is generated based on terrain type; density is auto-calculated
+- **Area & population density** — area is generated based on terrain type; population scales with area for realistic densities; density is auto-calculated
 - **Seeded randomness** — use `--seed` for reproducible worlds
 - **JSON output** — machine-readable output for pipeline use (`--json`)
 - **Compact mode** — one-line summary per nation (`--compact`)
 - **Comparison mode** — side-by-side comparison table (`--compare`)
-- **File export** — save plaintext or JSON output to a file (`-o`)
-- **List traits** — browse all available options (`--list-governments`, `--list-terrains`, etc.)
+- **File export** — save plaintext or JSON output to a file (`-o`); save messages go to stderr so JSON output stays clean for piping
+- **List traits** — browse available options (`--list-governments`, `--list-terrains`, etc.)
 - **Version flag** — `--version` for version tracking
 
 ## Installation
@@ -53,8 +53,8 @@ python3 micro_nation.py --no-color
 # Export as JSON
 python3 micro_nation.py -n 5 --json
 
-# Save output to a file
-python3 micro_nation.py -n 10 --no-color -o nations.txt
+# Save output to a file (save message goes to stderr, keeping stdout clean)
+python3 micro_nation.py -n 10 --json -o nations.json
 
 # Show diplomatic relations between nations
 python3 micro_nation.py -n 4 --diplomacy
@@ -71,6 +71,7 @@ python3 micro_nation.py --version
 # List available trait options
 python3 micro_nation.py --list-governments
 python3 micro_nation.py --list-terrains
+python3 micro_nation.py --list-currencies
 python3 micro_nation.py --list-animals
 ```
 
@@ -82,7 +83,7 @@ python3 micro_nation.py --list-animals
 | `-s, --seed` | Random seed for reproducibility |
 | `--no-color` | Disable ANSI color output |
 | `--json` | Output as JSON |
-| `--diplomacy` | Always show diplomatic relations |
+| `--diplomacy` | Always show diplomatic relations between nations |
 | `--compact` | One-line summary per nation |
 | `--compare` | Compare all generated nations side-by-side |
 | `-o, --output` | Save output to a file |
@@ -98,8 +99,8 @@ python3 micro_nation.py --list-animals
   "Strength in Silence"
 
   ┌────────────────────────────────┐
-  │ ▓▓▓▓▓▓▓▓▓▓▓▓▓██▓▓▓▓▓▓▓▓▓▓▓▓▓▓ │
-  │ ▓▓▓▓▓▓░▓▓▓▓▓▓██▓▓▓▓▓▓▓▓▓▓▓▓▓ │
+  │ ▓▓▓▓▓▓▓▓▓▓▓██▓▓▓▓▓▓▓▓▓▓▓▓▓ │
+  │ ▓▓▓▓▓▓░▓▓▓▓▓██▓▓▓▓▓▓▓▓▓▓▓▓ │
   │ ...                              │
   └────────────────────────────────┘
 
@@ -108,7 +109,7 @@ python3 micro_nation.py --list-animals
   Area: 12,450.0 km²
   Density: 442/km²
   Terrain: Crater caldera
-  Capital: LittleBel
+  Capital: Mount Cor
   Leader: Sage Aldric the Wise
   Currency: Obsidian Chip
   National Animal: Wind Stag
@@ -157,11 +158,11 @@ Each micro-nation includes:
 - **Name** — procedurally combined prefix+suffix (e.g., "Galdor", "Caskeep", "Nevton")
 - **Motto** — inspirational national saying
 - **Government** — from Constitutional Monarchy to Pirate Republic to Mage-ocracy
-- **Population** — ranges from tiny (127) to substantial (8.5M)
+- **Population** — scaled by terrain area for realistic densities (10–5000/km²)
 - **Area** — terrain-appropriate land area (e.g., floating sky-islands: 10–200 km²)
 - **Population Density** — auto-calculated from population and area
 - **Terrain** — volcanic archipelago, floating sky-islands, underground cavern network, etc.
-- **Capital** — procedurally named city
+- **Capital** — procedurally named city with proper spacing (e.g., "New Haven", "Fort Cor")
 - **Leader** — procedurally generated leader with title, name, and epithet (e.g., "King Aldric the Bold")
 - **Currency** — e.g., "Golden Shard", "Storm Crown", "Jade Slate"
 - **National Animal** — fantasy creatures like Thunder Eagle, Crystal Fox, Tide Dragon
@@ -178,39 +179,31 @@ Each micro-nation includes:
 ## Testing
 
 ```bash
-# Run the full test suite (47 tests)
+# Run the full test suite (61 tests)
 python3 -m pytest test_micro_nation.py -v
 
 # Or with unittest
 python3 -m unittest test_micro_nation -v
 ```
 
-Tests cover RNG determinism, pick utility, nation generation (all fields, reproducibility, area validation), diplomatic relations (structure, no self-relations), flag rendering (all patterns, all emblems, color/no-color modes), formatting helpers, display output (compact, full, comparison), JSON serialization, CLI argument parsing, leader generation, anthem matching, and edge cases.
+Tests cover RNG determinism (including integer seeds), pick utility, nation generation (all fields, reproducibility, area validation, realistic population density, capital name spacing), diplomatic relations (structure, no self-relations), flag rendering (all patterns, all emblems, color/no-color modes), formatting helpers (boundary cases for population/area), display output (compact, full, comparison), JSON serialization (including gov_icon and leader_title fields), CLI argument parsing (unique nations without seed, JSON file output purity, currency list format), leader generation, anthem matching, and edge cases (zero area, empty relations).
 
 ## Changelog
 
-### v1.1.0 — Feature Release
+### v1.2.0 — Bug Fix Release
+
+**Fixed:**
+- **CRITICAL: All nations were identical without `--seed`** — The seed handling in `main()` produced `None` for every nation when no `--seed` was provided, causing `generate()` to create the same RNG from the same seed each iteration. Now uses unique time-based seeds per nation.
+- **`make_rng()` crashed with integer seeds** — Calling `make_rng(42)` raised `AttributeError` because `.encode()` was called on an int. Now converts seeds to strings before encoding.
+- **`format_population(999999)` showed "1000.0K" instead of "1.0M"** — Boundary values near unit transitions (999,999 → 1,000,000) were formatted as "1000.0K" instead of upgrading to "1.0M". Added overflow detection at the 999.95K boundary.
+- **`format_area(999999)` showed "1000.0K km²" instead of "1.0M km²"** — Same boundary overflow bug as population formatting.
+- **`--json --output` printed save message to stdout, corrupting JSON** — The "📄 Output saved" message was printed to stdout alongside JSON data, breaking `jq` and other pipe consumers. Now prints to stderr.
+- **`--compact --output` file didn't include seed** — Compact file output omitted the seed line. Now includes it when `--seed` is provided.
+- **`to_dict()` was missing `gov_icon` and `leader_title`** — JSON exports lacked the government emoji icon and the leader's title field. Both are now included.
+- **Capital names had no space between prefix and root** — "Fort Bel" appeared as "FortBel", "New Haven" as "NewHaven". Added space between prefix and root.
+- **Population density could reach millions/km²** — A nation on a 1 km² floating sea platform could have 8.5M people (8.5M/km²). Population now scales with terrain area, capped at realistic density limits (max ~5000/km² for city-states).
+- **`--list-currencies` showed 280 misleading cartesian product items** — Listed every adjective×name combination as if they were all possible, but the generator actually picks one adjective and one name separately. Now shows the adjective and name lists separately.
 
 **Added:**
-- **National leaders** — each nation gets a leader with title, name, and epithet (e.g., "King Aldric the Bold")
-- **National anthems** — personality-matched opening lines for each nation
-- **National holidays** — unique founding celebrations per nation
-- **Area & population density** — area generated based on terrain type; density auto-calculated
-- **`--compact` mode** — one-line summary per nation for quick scanning
-- **`--compare` mode** — side-by-side comparison table of generated nations
-- **`--list-TRAIT` flags** — browse all available options (governments, terrains, animals, etc.)
-- **`--version` flag** — show version number
-- **Type hints** — added throughout the codebase
-- **Docstrings** — comprehensive documentation on all public methods
-- **47 unit tests** — full test coverage for generation, rendering, formatting, CLI, and edge cases
-- **Input validation** — `--nations` must be ≥ 1; warning for > 50
-- **UTF-8 encoding** — file output uses `encoding="utf-8"` for emoji support
-
-**Improved:**
-- `to_dict()` now includes `area_sq_km`, `population_density`, `leader`, `national_holiday`, `anthem_opening`
-- Better variable naming and code organization
-- `NationGenerator.generated_nations` is now properly typed as `List[MicroNation]`
-
-## License
-
-MIT
+- 14 new tests covering all bug fixes (integer seeds, unique nations, format boundaries, JSON purity, capital spacing, realistic density, currency list format)
+- Version bumped to v1.2.0
