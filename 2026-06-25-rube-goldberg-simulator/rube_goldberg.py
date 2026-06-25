@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from typing import List, Tuple, Optional
 
 # ── Version ────────────────────────────────────────────────────────
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 # ── Display constants ──────────────────────────────────────────────
 FRAME_DELAY = 0.06  # seconds between frames
@@ -98,14 +98,16 @@ COMPONENT_COLORS = {
 
 # ── Stage descriptions (for --describe mode) ───────────────────────
 STAGE_DESCRIPTIONS = {
-    "domino_chain":    "A row of dominoes falls in sequence, each knocking into the next",
-    "seesaw_launch":   "A seesaw tips and flings a ball upward to the next contraption",
-    "bucket_dump":     "A bucket tips over, spilling its contents onto the next stage",
-    "hammer_smash":    "A hammer swings down with great force, triggering a spring below",
-    "fan_blow":        "A fan blows a gust of air, pushing a ball along a rail",
-    "spring_launch":   "A spring compresses and launches a ball skyward",
+    "starting_ball":  "A ball is released at the top to start the chain reaction",
+    "domino_chain":   "A row of dominoes falls in sequence, each knocking into the next",
+    "seesaw_launch":  "A seesaw tips and flings a ball upward to the next contraption",
+    "bucket_dump":    "A bucket tips over, spilling its contents onto the next stage",
+    "hammer_smash":   "A hammer swings down with great force, triggering a spring below",
+    "fan_blow":       "A fan blows a gust of air, pushing a ball along a rail",
+    "spring_launch":  "A spring compresses and launches a ball skyward",
     "funnel_redirect": "A funnel catches a ball and redirects it downward",
-    "pulley_lift":     "A pulley system lifts a ball up to a higher track",
+    "pulley_lift":    "A pulley system lifts a ball up to a higher track",
+    "final_ball":     "The final ball rolls toward the bell and flag to finish the machine",
 }
 
 # ── State tracking ─────────────────────────────────────────────────
@@ -276,10 +278,19 @@ class RubeGoldbergMachine:
         """Design a complete multi-stage machine.
 
         Returns a list of Component objects arranged in a cascading
-        layout from top-left to bottom-right.
+        layout from top-left to bottom-right. All component positions
+        are clamped to stay within the canvas bounds.
         """
         parts = []
-        y_levels = [4, 8, 12, 16, 20, 24]
+        # Adapt y_levels to canvas height so components stay in bounds
+        max_y = self.height - 3  # leave room for bell/flag + border
+        y_step = max(3, max_y // 6)
+        y_levels = [min(2 + y_step * i, max_y) for i in range(6)]
+        # Ensure y_levels are strictly non-decreasing
+        for i in range(1, len(y_levels)):
+            if y_levels[i] <= y_levels[i - 1]:
+                y_levels[i] = y_levels[i - 1] + 1
+
         num_stages = random.randint(4, 6)
 
         # Start with a ball at the top-left
@@ -306,6 +317,9 @@ class RubeGoldbergMachine:
         random.shuffle(stage_types)
         stage_funcs = stage_types[:num_stages]
 
+        # Maximum x position to keep components within canvas width
+        max_x = self.width - 8  # leave margin for bell/flag finale
+
         for i, (stage_name, stage_func) in enumerate(stage_funcs):
             self._stage_log.append(stage_name)
             next_y = y_levels[min(i + 1, len(y_levels) - 1)]
@@ -318,13 +332,27 @@ class RubeGoldbergMachine:
                     part.stage_name = stage_name.replace("_", " ").title()
             parts.extend(new_parts)
 
-        # End with a bell + flag
-        parts.append(Component(BELL, current_x + 3, current_y,
+            # If we've run out of horizontal space, wrap to next row
+            if current_x > max_x and i < len(stage_funcs) - 1:
+                current_x = 4
+
+        # End with a bell + flag — clamp to canvas bounds
+        bell_x = min(current_x + 3, self.width - 4)
+        bell_y = min(current_y, max_y)
+        flag_x = min(bell_x + 3, self.width - 2)
+        flag_y = max(1, bell_y - 1)
+        parts.append(Component(BELL, bell_x, bell_y,
                                 state=IDLE, timer=random.randint(8, 15),
                                 stage_name="Grand Finale Bell"))
-        parts.append(Component(FLAG, current_x + 6, current_y - 1,
+        parts.append(Component(FLAG, flag_x, flag_y,
                                 state=IDLE, timer=random.randint(3, 6),
                                 stage_name="Victory Flag"))
+
+        # Clamp all component positions to stay within canvas bounds
+        margin = 2
+        for comp in parts:
+            comp.x = max(margin, min(comp.x, self.width - margin))
+            comp.y = max(1, min(comp.y, self.height - margin))
 
         return parts
 
@@ -787,7 +815,7 @@ def create_preset_machine(width, height, color=False) -> RubeGoldbergMachine:
 
     The preset machine features 10 carefully placed stages with known
     timing that reliably produces a satisfying chain reaction from
-    start to finish.
+    start to finish. Positions are scaled to fit the canvas dimensions.
 
     Args:
         width: Canvas width in characters
@@ -799,60 +827,78 @@ def create_preset_machine(width, height, color=False) -> RubeGoldbergMachine:
     """
     machine = RubeGoldbergMachine(width, height, color=color)
     machine._stage_log = [
-        "Starting Ball", "Domino Chain", "Seesaw Launch", "Spring Launch",
-        "Bucket Dump", "Hammer Smash", "Fan Blow", "Pulley Lift",
-        "Funnel Redirect", "Final Ball"
+        "starting_ball", "domino_chain", "seesaw_launch", "spring_launch",
+        "bucket_dump", "hammer_smash", "fan_blow", "pulley_lift",
+        "funnel_redirect", "final_ball"
     ]
 
+    # Scale positions to fit the canvas — original design was for 90x35
+    sx = max(1.0, width / 90.0)   # horizontal scale factor
+    sy = max(1.0, height / 35.0)  # vertical scale factor
+
+    def X(x):
+        """Scale an x position to fit the canvas width."""
+        return min(int(x * sx), width - 4)
+
+    def Y(y):
+        """Scale a y position to fit the canvas height."""
+        return max(1, min(int(y * sy), height - 4))
+
     # Stage 1: Ball rolls down
-    machine.components.append(Component(BALL, 5, 5, state=ACTIVE, timer=2,
-                                        extra={"fall_to": 9},
+    machine.components.append(Component(BALL, X(5), Y(5), state=ACTIVE, timer=2,
+                                        extra={"fall_to": Y(9)},
                                         stage_name="Starting Ball"))
 
     # Stage 2: Domino chain
     for i in range(5):
-        machine.components.append(Component(DOMINO, 12 + i * 3, 9,
+        machine.components.append(Component(DOMINO, X(12 + i * 3), Y(9),
                                              state=IDLE, timer=3 + i * 3,
                                              stage_name="Domino Chain"))
 
     # Stage 3: Seesaw
-    machine.components.append(Component(SEESAW, 30, 9, state=IDLE, timer=18,
+    machine.components.append(Component(SEESAW, X(30), Y(9), state=IDLE, timer=18,
                                         stage_name="Seesaw Launch"))
 
     # Stage 4: Spring launch
-    machine.components.append(Component(SPRING, 38, 9, state=IDLE, timer=22,
+    machine.components.append(Component(SPRING, X(38), Y(9), state=IDLE, timer=22,
                                          stage_name="Spring Launch"))
 
     # Stage 5: Ball flies to bucket
-    machine.components.append(Component(BUCKET, 45, 12, state=IDLE, timer=28,
+    machine.components.append(Component(BUCKET, X(45), Y(12), state=IDLE, timer=28,
                                         stage_name="Bucket Dump"))
 
     # Stage 6: Hammer
-    machine.components.append(Component(HAMMER, 50, 12, state=IDLE, timer=34,
+    machine.components.append(Component(HAMMER, X(50), Y(12), state=IDLE, timer=34,
                                          stage_name="Hammer Smash"))
 
     # Stage 7: Fan blows ball
-    machine.components.append(Component(FAN, 55, 12, state=IDLE, timer=38,
+    machine.components.append(Component(FAN, X(55), Y(12), state=IDLE, timer=38,
                                          stage_name="Fan Blow"))
 
     # Stage 8: Ball rolls to pulley
-    machine.components.append(Component(PULLEY, 62, 10, state=IDLE, timer=42,
+    machine.components.append(Component(PULLEY, X(62), Y(10), state=IDLE, timer=42,
                                          stage_name="Pulley Lift"))
 
     # Stage 9: Funnel redirect
-    machine.components.append(Component(FUNNEL, 68, 14, state=IDLE, timer=48,
+    machine.components.append(Component(FUNNEL, X(68), Y(14), state=IDLE, timer=48,
                                          stage_name="Funnel Redirect"))
 
     # Stage 10: Final ball
-    machine.components.append(Component(BALL, 73, 14, state=IDLE, timer=52,
-                                        extra={"fall_to": 14},
+    machine.components.append(Component(BALL, X(73), Y(14), state=IDLE, timer=52,
+                                        extra={"fall_to": Y(14)},
                                         stage_name="Final Ball"))
 
     # Finale: Bell + Flag
-    machine.components.append(Component(BELL, 78, 14, state=IDLE, timer=58,
+    machine.components.append(Component(BELL, X(78), Y(14), state=IDLE, timer=58,
                                         stage_name="Grand Finale Bell"))
-    machine.components.append(Component(FLAG, 82, 13, state=IDLE, timer=62,
+    machine.components.append(Component(FLAG, X(82), Y(13), state=IDLE, timer=62,
                                          stage_name="Victory Flag"))
+
+    # Final safety clamp: ensure all components are within bounds
+    margin = 2
+    for comp in machine.components:
+        comp.x = max(margin, min(comp.x, width - margin))
+        comp.y = max(1, min(comp.y, height - margin))
 
     return machine
 

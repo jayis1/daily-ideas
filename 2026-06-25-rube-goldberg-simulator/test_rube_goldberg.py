@@ -502,12 +502,53 @@ def test_stage_descriptions_completeness():
     """All stage types used in generation should have descriptions."""
     # The stage types used in _design_machine
     stage_names = [
-        "domino_chain", "seesaw_launch", "bucket_dump",
+        "starting_ball", "domino_chain", "seesaw_launch", "bucket_dump",
         "hammer_smash", "fan_blow", "spring_launch",
-        "funnel_redirect", "pulley_lift",
+        "funnel_redirect", "pulley_lift", "final_ball",
     ]
     for name in stage_names:
         assert name in STAGE_DESCRIPTIONS, f"Stage {name} missing from STAGE_DESCRIPTIONS"
+
+
+def test_preset_describe_no_mysterious():
+    """Preset machine describe() should not show 'A mysterious mechanism'."""
+    machine = create_preset_machine(90, 35)
+    desc = machine.describe()
+    assert "A mysterious mechanism" not in desc, (
+        "Preset describe() should not contain 'A mysterious mechanism'"
+    )
+
+
+def test_random_describe_no_mysterious():
+    """Random machine describe() should not show 'A mysterious mechanism'."""
+    machine = create_random_machine(90, 35, seed=42)
+    desc = machine.describe()
+    assert "A mysterious mechanism" not in desc, (
+        "Random describe() should not contain 'A mysterious mechanism'"
+    )
+
+
+def test_component_bounds_preset():
+    """Preset machine components should stay within canvas bounds."""
+    for w, h in [(50, 20), (60, 25), (80, 30), (90, 35)]:
+        machine = create_preset_machine(w, h)
+        for comp in machine.components:
+            assert 0 <= comp.x < w, f"Preset {comp.kind} at x={comp.x} out of [0, {w})"
+            assert 0 <= comp.y < h, f"Preset {comp.kind} at y={comp.y} out of [0, {h})"
+
+
+def test_component_bounds_random():
+    """Random machine components should stay within canvas bounds."""
+    for w, h in [(50, 20), (60, 25)]:
+        for seed in range(1, 31):
+            machine = create_random_machine(w, h, seed=seed)
+            for comp in machine.components:
+                assert 0 <= comp.x < w, (
+                    f"Seed {seed}: {comp.kind} at x={comp.x} out of [0, {w})"
+                )
+                assert 0 <= comp.y < h, (
+                    f"Seed {seed}: {comp.kind} at y={comp.y} out of [0, {h})"
+                )
 
 
 # ── Run Tests ──────────────────────────────────────────────────────

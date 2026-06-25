@@ -14,17 +14,20 @@ Inspired by [Rube Goldberg machines](https://en.wikipedia.org/wiki/Rube_Goldberg
 - **`--seed` Option** — Use a specific random seed for reproducible machines
 - **`--speed` Option** — Control animation speed (lower = faster)
 - **`--color` Option** — Enable ANSI color output for a more vivid display
+- **`--width` / `--height`** — Override canvas dimensions (auto-scales for small terminals)
 - **`--version` / `--help`** — Standard CLI flags
+- **Adaptive Layout** — Both preset and random machines scale their component positions to fit any canvas size, from 50×20 up to 100×35
 - **Animated Chain Reactions** — Balls roll, dominoes fall, seesaws tip, buckets dump, springs bounce, fans blow, pulleys lift, hammers smash
 - **Particle Effects** — Sparkles, trails, and water drops for visual flair
 - **Real-time Status** — Frame counter, component count, projectile tracking
-- **51 Unit Tests** — Comprehensive test suite covering components, simulation, rendering, CLI parsing, and more
+- **55 Unit Tests** — Comprehensive test suite covering components, simulation, rendering, CLI parsing, bounds checking, and more
 - **No Dependencies** — Pure Python standard library, no pip installs needed
 
 ## Stage Types
 
 | Stage | What Happens |
 |-------|-------------|
+| **Starting Ball** | A ball is released at the top to start the chain reaction |
 | **Domino Chain** | Rows of dominoes falling in sequence |
 | **Seesaw Launch** | A seesaw tips and flings a ball upward |
 | **Bucket Dump** | A bucket tips over and spills water |
@@ -33,6 +36,7 @@ Inspired by [Rube Goldberg machines](https://en.wikipedia.org/wiki/Rube_Goldberg
 | **Spring Launch** | A spring bounces a ball skyward |
 | **Funnel Redirect** | A funnel catches a ball and redirects it down |
 | **Pulley Lift** | A pulley system lifts a ball up |
+| **Final Ball** | The final ball rolls toward the bell and flag |
 
 Each random machine selects 4–6 of these stages in a random order, so every run is unique.
 
@@ -84,8 +88,8 @@ python3 rube_goldberg.py --random --color
 # Print a description of the machine stages without animation
 python3 rube_goldberg.py --describe --random --seed 42
 
-# Custom canvas dimensions
-python3 rube_goldberg.py --random --width 80 --height 30
+# Custom canvas dimensions (positions scale automatically)
+python3 rube_goldberg.py --random --width 60 --height 25
 
 # Show version
 python3 rube_goldberg.py --version
@@ -99,42 +103,26 @@ Press `Ctrl+C` to exit at any time during animation.
 ### Describe Mode Example
 
 ```
-$ python3 rube_goldberg.py --describe --random --seed 42
+$ python3 rube_goldberg.py --describe --preset
 
 ⚙️  Rube Goldberg Machine — Stage Description
 ==================================================
 
 Canvas size: 78 × 20
 Total components: 16
-Seed: 42
+Seed: random
 
 Stages (in order):
 ----------------------------------------
-  1. Hammer Smash
-     A hammer swings down with great force, triggering a spring below
+  1. Starting Ball
+     A ball is released at the top to start the chain reaction
 
-  2. Fan Blow
-     A fan blows a gust of air, pushing a ball along a rail
+  2. Domino Chain
+     A row of dominoes falls in sequence, each knocking into the next
 
-  3. Funnel Redirect
-     A funnel catches a ball and redirects it downward
-
-  4. Pulley Lift
-     A pulley system lifts a ball up to a higher track
-
-  5. Bucket Dump
-     A bucket tips over, spilling its contents onto the next stage
-
-  6. Spring Launch
-     A spring compresses and launches a ball skyward
-
-Component summary:
-  ball: 7
-  spring: 2
-  hammer: 1
+  3. Seesaw Launch
+     A seesaw tips and flings a ball upward to the next contraption
   ...
-
-Finale: 🔔 Bell → ⚑ Flag raised!
 ```
 
 ## Running Tests
@@ -147,7 +135,7 @@ python3 -m pytest test_rube_goldberg.py -v
 python3 test_rube_goldberg.py
 ```
 
-The test suite includes 51 tests covering:
+The test suite includes 55 tests covering:
 
 - Component creation, state transitions, and display characters
 - Projectile types and trail behavior
@@ -155,8 +143,9 @@ The test suite includes 51 tests covering:
 - Seeded reproducibility
 - Simulation stepping and completion detection
 - Rendering with and without color
-- Describe mode output
+- Describe mode output (no "mysterious mechanism" fallback)
 - CLI argument parsing
+- **Bounds checking** — all components stay within canvas dimensions for preset and random machines at all tested sizes
 - Edge cases and completeness checks
 
 ## How It Works
@@ -169,13 +158,22 @@ The simulator uses a component-based architecture:
 4. Components progress through states: `idle → active → triggered → done`, changing their appearance
 5. The finale features a bell (🔔 DING!) and a flag (⚑) to signal completion
 
-The machine is rendered in real-time ASCII art with box-drawing borders, state indicators (✧ for active, ✶ for triggered), projectile trails, and sparkle effects.
+Both the preset and random machines adapt their layout to the canvas size — components are scaled and clamped to fit any terminal width and height.
 
 ## Architecture
 
 - **`Component`** — Dataclass for each mechanical part with state, timer, position, and visual representation
 - **`Projectile`** — Dataclass for moving objects (balls, water, air, sparks) with physics
 - **`RubeGoldbergMachine`** — Main simulation class handling generation, stepping, rendering, and description
-- **`create_preset_machine()`** — Builds the hand-designed 10-stage machine
-- **`create_random_machine()`** — Generates a random machine with seeded reproducibility
+- **`create_preset_machine()`** — Builds the hand-designed 10-stage machine, scaled to canvas dimensions
+- **`create_random_machine()`** — Generates a random machine with seeded reproducibility, clamped to canvas bounds
 - **CLI** — `argparse`-based interface with `--preset`, `--random`, `--marathon`, `--seed`, `--speed`, `--color`, `--describe`, `--width`, `--height`, `--version`
+
+## Changelog
+
+### v1.1.1 — Bug fixes
+
+- **Fixed: Components placed outside canvas bounds** — Random machine generation used hardcoded `y_levels` and unbounded x-positions, causing components to be placed off-screen on smaller terminals (50×20, 60×25, etc.). Now `y_levels` adapts to canvas height, x-positions wrap when exceeding width, and all components are clamped to stay within bounds.
+- **Fixed: Preset machine didn't scale to small canvases** — The preset machine used hardcoded positions designed for a 90×35 canvas, causing overflow on smaller terminals. Now positions scale proportionally to the canvas dimensions with a final safety clamp.
+- **Fixed: `--describe` showed "A mysterious mechanism" for preset stages** — The preset machine's `_stage_log` used title-case names (e.g., "Starting Ball") that didn't match the `STAGE_DESCRIPTIONS` keys (e.g., "starting_ball"). Changed `_stage_log` entries to use snake_case keys, and added "starting_ball" and "final_ball" entries to `STAGE_DESCRIPTIONS`.
+- **Added: 4 new tests** — Bounds checking for preset and random machines, and describe mode content validation. Test count: 51 → 55.
