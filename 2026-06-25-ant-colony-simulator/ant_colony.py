@@ -34,7 +34,7 @@ from typing import List, Tuple, Optional
 
 # ── Version ────────────────────────────────────────────────────────────────
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 # ── Configuration ──────────────────────────────────────────────────────────
 
@@ -269,6 +269,10 @@ class AntColonySimulation:
             raise ValueError(f"Grid too small: {width}x{height}. Minimum is 20x10.")
         if num_ants < 1:
             raise ValueError(f"Need at least 1 ant, got {num_ants}.")
+        if not (0.0 < evaporation_rate <= 1.0):
+            raise ValueError(f"Evaporation rate must be between 0 and 1, got {evaporation_rate}.")
+        if not (0.0 <= diffusion_rate <= 1.0):
+            raise ValueError(f"Diffusion rate must be between 0 and 1, got {diffusion_rate}.")
 
         self.width = width
         self.height = height
@@ -394,16 +398,31 @@ class AntColonySimulation:
             amount = FOOD_PER_SOURCE + random.randint(-20, 20)
             self.food_sources.append(FoodSource(fx, fy, amount))
 
-            # Spread food in a small cluster (avoiding walls)
+            # Spread food in a small cluster (avoiding walls and nest)
             for dy in range(-1, 2):
                 for dx in range(-1, 2):
                     nx, ny = fx + dx, fy + dy
                     if (0 <= nx < self.width and 0 <= ny < self.height
-                            and (nx, ny) not in self.walls):
+                            and (nx, ny) not in self.walls
+                            and (abs(nx - self.nest_x) > 1 or abs(ny - self.nest_y) > 1)):
                         cell_amount = max(1, amount // 9)
                         self.food_grid[ny][nx] += cell_amount
 
             self.total_food += amount
+
+    def _decrement_food_source(self, x: int, y: int):
+        """Decrement the amount of the nearest food source when food is picked up.
+
+        Finds the food source closest to (x, y) and decrements its amount by 1.
+        This keeps food_source.amount in sync with food_grid.
+        """
+        if not self.food_sources:
+            return
+        # Find the closest food source to this position
+        closest = min(self.food_sources,
+                     key=lambda f: (f.x - x) ** 2 + (f.y - y) ** 2)
+        if closest.amount > 0:
+            closest.amount -= 1
 
     def step(self):
         """Advance simulation by one tick.
@@ -437,8 +456,16 @@ class AntColonySimulation:
         """
         new_grid = [[0.0] * self.width for _ in range(self.height)]
 
+        # Pheromone cap to prevent runaway growth
+        max_pheromone = PHEROMONE_DEPOSIT * ANT_CARRY_PHEROMONE_BOOST * 20.0
+
         for y in range(self.height):
             for x in range(self.width):
+                # Wall cells never have pheromone
+                if (x, y) in self.walls:
+                    new_grid[y][x] = 0.0
+                    continue
+
                 val = self.pheromone[y][x]
                 if val < 0.01:
                     new_grid[y][x] = 0.0
@@ -448,12 +475,14 @@ class AntColonySimulation:
                 diffused = val * self.diffusion_rate
                 kept = val * (1.0 - self.diffusion_rate) * self.evaporation_rate
 
+                # Cap kept pheromone
+                kept = min(kept, max_pheromone)
                 new_grid[y][x] += kept
 
                 for dx, dy in DIRS_4:
                     nx, ny = x + dx, y + dy
                     if 0 <= nx < self.width and 0 <= ny < self.height:
-                        # Reduce diffusion into wall cells
+                        # Do not diffuse into wall cells
                         if (nx, ny) not in self.walls:
                             new_grid[ny][nx] += diffused / 4.0
 
@@ -475,11 +504,15 @@ class AntColonySimulation:
                 ant.food_delivered += 1
                 self.food_delivery_times.append(self.tick)
 
-        # Check if ant is on food and not carrying — pick up food
-        if not ant.carrying and self.food_grid[ant.y][ant.x] > 0:
+            # Check if ant is on food and not carrying — pick up food
+        # Skip pickup on nest cell to prevent immediate re-pickup after delivery
+        on_nest = (abs(ant.x - ant.home_x) <= 1 and abs(ant.y - ant.home_y) <= 1)
+        if not ant.carrying and self.food_grid[ant.y][ant.x] > 0 and not on_nest:
             ant.carrying = True
             self.food_grid[ant.y][ant.x] -= 1
             ant.steps_since_drop = 0
+            # Decrement the nearest food source's amount
+            self._decrement_food_source(ant.x, ant.y)
 
         # Choose direction
         direction = ant.choose_direction(
@@ -515,7 +548,9 @@ class AntColonySimulation:
         # Pheromone fades the further from nest the ant has gone
         ant.steps_since_drop += 1
         fade = max(0.1, 1.0 / (1.0 + ant.steps_since_drop * 0.005))
-        self.pheromone[ant.y][ant.x] += deposit * fade
+        max_pheromone = PHEROMONE_DEPOSIT * ANT_CARRY_PHEROMONE_BOOST * 20.0
+        self.pheromone[ant.y][ant.x] = min(
+            self.pheromone[ant.y][ant.x] + deposit * fade, max_pheromone)
 
     def get_stats(self) -> dict:
         """Return a dictionary of current simulation statistics."""
@@ -611,49 +646,22 @@ def run_headless(num_ants: int = NUM_ANTS_DEFAULT, max_ticks: int = 1000,
     return stats
 
 
-def main(stdscr):
-    """Main curses-based simulation loop with interactive controls."""
-    parser = argparse.ArgumentParser(
-        description='Terminal Ant Colony Simulator — watch emergent foraging behavior!',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""\
-Examples:
-  %(prog)s                      Run with defaults
-  %(prog)s --ants 120           More ants for denser trails
-  %(prog)s --walls 5            Add obstacle walls
-  %(prog)s --fps 30             Faster animation
-  %(prog)s --headless --ticks 2000 --seed 42   Batch mode for benchmarking
-  %(prog)s --version            Show version
-""")
-    parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}')
-    parser.add_argument('-a', '--ants', type=int, default=NUM_ANTS_DEFAULT,
-                        help=f'Number of ants (default: {NUM_ANTS_DEFAULT})')
-    parser.add_argument('-f', '--fps', type=int, default=FPS,
-                        help=f'Target FPS (default: {FPS})')
-    parser.add_argument('--evaporation', type=float, default=EVAPORATION_RATE,
-                        help=f'Pheromone evaporation rate (default: {EVAPORATION_RATE})')
-    parser.add_argument('-w', '--walls', type=int, default=NUM_WALLS_DEFAULT,
-                        help=f'Number of wall obstacles (default: {NUM_WALLS_DEFAULT})')
-    parser.add_argument('--no-walls', action='store_true',
-                        help='Disable wall obstacles entirely')
-    parser.add_argument('--headless', action='store_true',
-                        help='Run without terminal UI (batch mode)')
-    parser.add_argument('--ticks', type=int, default=1000,
-                        help='Max ticks for headless mode (default: 1000)')
-    parser.add_argument('--seed', type=int, default=None,
-                        help='Random seed for reproducibility')
-    parser.add_argument('--json', action='store_true',
-                        help='Output JSON in headless mode')
-    args = parser.parse_args()
+def main(stdscr, args=None):
+    """Main curses-based simulation loop with interactive controls.
+
+    Args:
+        stdscr: curses window object (provided by curses.wrapper).
+        args: Pre-parsed argparse namespace. If None, defaults are used.
+    """
+    if args is None:
+        # Use defaults if called without argparse (e.g., from tests)
+        import argparse
+        args = argparse.Namespace(
+            ants=NUM_ANTS_DEFAULT, fps=FPS, evaporation=EVAPORATION_RATE,
+            walls=NUM_WALLS_DEFAULT, no_walls=False, headless=False,
+            ticks=1000, seed=None, json=False)
 
     num_walls = 0 if args.no_walls else args.walls
-
-    # Headless mode — no curses needed
-    if args.headless:
-        run_headless(
-            num_ants=args.ants, max_ticks=args.ticks, num_walls=num_walls,
-            evaporation=args.evaporation, seed=args.seed, json_output=args.json)
-        return
 
     # Curses setup
     curses.curs_set(0)
@@ -840,25 +848,47 @@ Examples:
 
 
 if __name__ == '__main__':
-    # Check if we should run in headless mode before launching curses
+    # Parse args before launching curses so --version and --help work
+    # without requiring a terminal
     import sys
-    if '--headless' in sys.argv:
-        # Parse args without curses
-        parser = argparse.ArgumentParser()
-        parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}')
-        parser.add_argument('-a', '--ants', type=int, default=NUM_ANTS_DEFAULT)
-        parser.add_argument('-f', '--fps', type=int, default=FPS)
-        parser.add_argument('--evaporation', type=float, default=EVAPORATION_RATE)
-        parser.add_argument('-w', '--walls', type=int, default=NUM_WALLS_DEFAULT)
-        parser.add_argument('--no-walls', action='store_true')
-        parser.add_argument('--headless', action='store_true')
-        parser.add_argument('--ticks', type=int, default=1000)
-        parser.add_argument('--seed', type=int, default=None)
-        parser.add_argument('--json', action='store_true')
-        args = parser.parse_args()
-        num_walls = 0 if args.no_walls else args.walls
+    parser = argparse.ArgumentParser(
+        description='Terminal Ant Colony Simulator — watch emergent foraging behavior!',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  %(prog)s                      Run with defaults
+  %(prog)s --ants 120           More ants for denser trails
+  %(prog)s --walls 5            Add obstacle walls
+  %(prog)s --fps 30             Faster animation
+  %(prog)s --headless --ticks 2000 --seed 42   Batch mode for benchmarking
+  %(prog)s --version            Show version
+""")
+    parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}')
+    parser.add_argument('-a', '--ants', type=int, default=NUM_ANTS_DEFAULT,
+                        help=f'Number of ants (default: {NUM_ANTS_DEFAULT})')
+    parser.add_argument('-f', '--fps', type=int, default=FPS,
+                        help=f'Target FPS (default: {FPS})')
+    parser.add_argument('--evaporation', type=float, default=EVAPORATION_RATE,
+                        help=f'Pheromone evaporation rate (default: {EVAPORATION_RATE})')
+    parser.add_argument('-w', '--walls', type=int, default=NUM_WALLS_DEFAULT,
+                        help=f'Number of wall obstacles (default: {NUM_WALLS_DEFAULT})')
+    parser.add_argument('--no-walls', action='store_true',
+                        help='Disable wall obstacles entirely')
+    parser.add_argument('--headless', action='store_true',
+                        help='Run without terminal UI (batch mode)')
+    parser.add_argument('--ticks', type=int, default=1000,
+                        help='Max ticks for headless mode (default: 1000)')
+    parser.add_argument('--seed', type=int, default=None,
+                        help='Random seed for reproducibility')
+    parser.add_argument('--json', action='store_true',
+                        help='Output JSON in headless mode')
+    args = parser.parse_args()
+
+    num_walls = 0 if args.no_walls else args.walls
+
+    if args.headless:
         run_headless(
             num_ants=args.ants, max_ticks=args.ticks, num_walls=num_walls,
             evaporation=args.evaporation, seed=args.seed, json_output=args.json)
     else:
-        curses.wrapper(main)
+        curses.wrapper(lambda stdscr: main(stdscr, args))

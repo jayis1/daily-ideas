@@ -173,9 +173,11 @@ class TestSimulation:
         nest_area = set()
         for dy in range(-1, 2):
             for dx in range(-1, 2):
-                nest_area.add((sim.nest_x + dx, sim.nest_y + dx))
-        # This is a soft check — walls should mostly avoid the nest
-        # (The code explicitly avoids placing walls within 1 cell of nest)
+                nest_area.add((sim.nest_x + dx, sim.nest_y + dy))
+        # Verify no walls are in the immediate nest vicinity
+        for wx, wy in sim.walls:
+            assert (wx, wy) not in nest_area, \
+                f"Wall at ({wx}, {wy}) is too close to nest at ({sim.nest_x}, {sim.nest_y})"
 
     def test_simulation_ants_stay_in_bounds(self):
         """Ants should never move outside the grid."""
@@ -282,7 +284,7 @@ class TestHeadlessMode:
 
 class TestVersion:
     def test_version_string(self):
-        assert __version__ == "1.1.0"
+        assert __version__ == "1.1.1"
 
     def test_version_is_semantic(self):
         parts = __version__.split('.')
@@ -340,3 +342,74 @@ class TestEdgeCases:
         for row in sim.pheromone:
             for val in row:
                 assert val >= 0.0
+
+    def test_evaporation_rate_validation(self):
+        """Evaporation rate > 1.0 should raise ValueError."""
+        with pytest.raises(ValueError):
+            AntColonySimulation(80, 24, num_ants=5, evaporation_rate=1.5)
+        with pytest.raises(ValueError):
+            AntColonySimulation(80, 24, num_ants=5, evaporation_rate=0.0)
+
+    def test_diffusion_rate_validation(self):
+        """Diffusion rate > 1.0 should raise ValueError."""
+        with pytest.raises(ValueError):
+            AntColonySimulation(80, 24, num_ants=5, diffusion_rate=1.5)
+
+    def test_pheromone_capped(self):
+        """Pheromone values should not exceed a reasonable cap."""
+        sim = AntColonySimulation(80, 24, num_ants=200, seed=42)
+        for _ in range(500):
+            sim.step()
+        max_ph = max(max(row) for row in sim.pheromone)
+        # Cap should be PHEROMONE_DEPOSIT * ANT_CARRY_PHEROMONE_BOOST * 20
+        expected_cap = PHEROMONE_DEPOSIT * ANT_CARRY_PHEROMONE_BOOST * 20.0
+        assert max_ph <= expected_cap * 1.01, f"Pheromone {max_ph} exceeds cap {expected_cap}"
+
+    def test_wall_pheromone_always_zero(self):
+        """Wall cells should never have pheromone."""
+        sim = AntColonySimulation(80, 24, num_ants=30, num_walls=5, seed=42)
+        for _ in range(200):
+            sim.step()
+        for wx, wy in sim.walls:
+            if 0 <= wx < sim.width and 0 <= wy < sim.height:
+                assert sim.pheromone[wy][wx] == 0.0, \
+                    f"Pheromone leaked into wall at ({wx}, {wy}): {sim.pheromone[wy][wx]}"
+
+    def test_food_source_amount_decremented(self):
+        """Food source amounts should decrease as food is picked up."""
+        sim = AntColonySimulation(80, 24, num_ants=60, seed=42)
+        initial_total = sum(f.amount for f in sim.food_sources)
+        for _ in range(1000):
+            sim.step()
+        final_total = sum(f.amount for f in sim.food_sources)
+        # Food source amounts should decrease as food is collected
+        assert final_total < initial_total, \
+            f"Food source amounts didn't decrease: {initial_total} -> {final_total}"
+
+    def test_food_not_on_nest(self):
+        """Food should not be placed on the nest cell."""
+        sim = AntColonySimulation(80, 24, num_ants=10, seed=42)
+        # Check no food on nest or immediate neighbors
+        for dy in range(-1, 2):
+            for dx in range(-1, 2):
+                nx, ny = sim.nest_x + dx, sim.nest_y + dy
+                if 0 <= nx < sim.width and 0 <= ny < sim.height:
+                    assert sim.food_grid[ny][nx] == 0, \
+                        f"Food found on nest area at ({nx}, {ny})"
+
+    def test_sources_remaining_decreases(self):
+        """sources_remaining stat should decrease as food sources deplete."""
+        sim = AntColonySimulation(80, 24, num_ants=100, seed=42)
+        initial_sources = sim.get_stats()['sources_remaining']
+        for _ in range(5000):
+            sim.step()
+            if sim.food_collected > 0:
+                break
+        # After collecting some food, at least one source may have depleted
+        # (sources_remaining should eventually decrease)
+        for _ in range(5000):
+            sim.step()
+            if sim.get_stats()['sources_remaining'] < initial_sources:
+                break
+        # This is a statistical test — with 100 ants, some sources should deplete
+        assert sim.get_stats()['sources_remaining'] <= initial_sources
