@@ -5,8 +5,20 @@ Rube Goldberg Machine Simulator
 A terminal-based ASCII animation of absurdly complex chain-reaction machines.
 Watch as balls, dominoes, seesaws, buckets, pulleys, and more interact in
 a hilariously over-engineered contraption to accomplish a trivial task.
+
+Usage:
+    python3 rube_goldberg.py                  # Interactive menu
+    python3 rube_goldberg.py --preset         # Run preset machine
+    python3 rube_goldberg.py --random         # Run random machine
+    python3 rube_goldberg.py --marathon       # Run 3 random machines
+    python3 rube_goldberg.py --seed 42        # Use specific random seed
+    python3 rube_goldberg.py --speed 0.03     # Faster animation
+    python3 rube_goldberg.py --describe       # Print machine description, no animation
+    python3 rube_goldberg.py --version        # Show version
+    python3 rube_goldberg.py --help           # Show help
 """
 
+import argparse
 import random
 import time
 import sys
@@ -15,8 +27,24 @@ import math
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional
 
+# ── Version ────────────────────────────────────────────────────────
+__version__ = "1.1.0"
+
 # ── Display constants ──────────────────────────────────────────────
 FRAME_DELAY = 0.06  # seconds between frames
+MAX_FRAMES = 400    # safety limit per machine
+
+# ── ANSI color codes ──────────────────────────────────────────────
+ANSI_RESET = "\033[0m"
+ANSI_BOLD = "\033[1m"
+ANSI_DIM = "\033[2m"
+ANSI_RED = "\033[31m"
+ANSI_GREEN = "\033[32m"
+ANSI_YELLOW = "\033[33m"
+ANSI_BLUE = "\033[34m"
+ANSI_MAGENTA = "\033[35m"
+ANSI_CYAN = "\033[36m"
+ANSI_WHITE = "\033[37m"
 
 # Component type identifiers
 BALL = "ball"
@@ -51,6 +79,35 @@ COMPONENT_CHARS = {
     FLAG:       "⚑",
 }
 
+# ── Component color map (for --color mode) ────────────────────────
+COMPONENT_COLORS = {
+    BALL:    ANSI_CYAN,
+    DOMINO:  ANSI_YELLOW,
+    SEESAW:  ANSI_GREEN,
+    BUCKET:  ANSI_BLUE,
+    PULLEY:  ANSI_MAGENTA,
+    FAN:     ANSI_WHITE,
+    CANDLE:  ANSI_RED,
+    BALLOON: ANSI_RED,
+    HAMMER:  ANSI_YELLOW,
+    FUNNEL:  ANSI_GREEN,
+    SPRING:  ANSI_CYAN,
+    BELL:    ANSI_YELLOW,
+    FLAG:    ANSI_GREEN,
+}
+
+# ── Stage descriptions (for --describe mode) ───────────────────────
+STAGE_DESCRIPTIONS = {
+    "domino_chain":    "A row of dominoes falls in sequence, each knocking into the next",
+    "seesaw_launch":   "A seesaw tips and flings a ball upward to the next contraption",
+    "bucket_dump":     "A bucket tips over, spilling its contents onto the next stage",
+    "hammer_smash":    "A hammer swings down with great force, triggering a spring below",
+    "fan_blow":        "A fan blows a gust of air, pushing a ball along a rail",
+    "spring_launch":   "A spring compresses and launches a ball skyward",
+    "funnel_redirect": "A funnel catches a ball and redirects it downward",
+    "pulley_lift":     "A pulley system lifts a ball up to a higher track",
+}
+
 # ── State tracking ─────────────────────────────────────────────────
 IDLE = "idle"
 ACTIVE = "active"
@@ -60,16 +117,30 @@ DONE = "done"
 
 @dataclass
 class Component:
+    """A single mechanical component in the Rube Goldberg machine.
+
+    Attributes:
+        kind: The component type (ball, domino, seesaw, etc.)
+        x: Horizontal position on the canvas
+        y: Vertical position on the canvas
+        state: Current state (idle/active/triggered/done)
+        timer: Frames remaining until next state transition
+        direction: 1 for right, -1 for left
+        extra: Additional properties (e.g., fall_to target y coordinate)
+        stage_name: Optional name of the stage this component belongs to
+    """
     kind: str
     x: int
     y: int
     state: str = IDLE
     timer: int = 0
-    direction: int = 1        # 1=right, -1=left
+    direction: int = 1
     extra: dict = field(default_factory=dict)
+    stage_name: str = ""
 
     @property
     def char(self):
+        """Return the display character for this component based on its kind and state."""
         if self.kind == BUCKET and self.state == TRIGGERED:
             return "╘╤╛"
         if self.kind == BUCKET and self.state == DONE:
@@ -95,12 +166,34 @@ class Component:
 
     @property
     def triggered(self):
+        """Whether this component has been triggered or is done."""
         return self.state in (TRIGGERED, DONE)
+
+    def describe(self) -> str:
+        """Return a human-readable description of this component."""
+        label = self.stage_name or self.kind.replace("_", " ").title()
+        state_label = {
+            IDLE: "waiting",
+            ACTIVE: "activating",
+            TRIGGERED: "triggered",
+            DONE: "done",
+        }.get(self.state, self.state)
+        return f"{label} at ({self.x}, {self.y}) [{state_label}]"
 
 
 @dataclass
 class Projectile:
-    """A moving object (ball, water, air) that travels between components."""
+    """A moving object (ball, water, air, spark) that travels between components.
+
+    Attributes:
+        kind: Projectile type (ball/water/spark/air)
+        x: Current horizontal position (float for smooth motion)
+        y: Current vertical position (float for smooth motion)
+        dx: Horizontal velocity per frame
+        dy: Vertical velocity per frame
+        life: Frames remaining before the projectile disappears
+        trail: List of recent (x, y) positions for drawing trails
+    """
     kind: str
     x: float
     y: float
@@ -111,6 +204,7 @@ class Projectile:
 
     @property
     def char(self):
+        """Return the display character for this projectile type."""
         if self.kind == "ball":
             return "●"
         if self.kind == "water":
@@ -123,9 +217,25 @@ class Projectile:
 
 
 class RubeGoldbergMachine:
-    """Manages and simulates a complete Rube Goldberg machine."""
+    """Manages and simulates a complete Rube Goldberg machine.
 
-    def __init__(self, width=90, height=35):
+    The machine consists of components placed on a 2D canvas. Each component
+    has a timer that counts down; when it reaches zero, the component activates
+    and may spawn projectiles. The simulation advances frame by frame until
+    the flag component reaches the DONE state.
+
+    Attributes:
+        width: Canvas width in characters
+        height: Canvas height in characters
+        components: List of mechanical components
+        projectiles: List of moving objects
+        frame: Current simulation frame number
+        complete: Whether the machine has finished running
+        color: Whether to use ANSI color codes in rendering
+        seed: Random seed used for reproducibility (0 = not set)
+    """
+
+    def __init__(self, width=90, height=35, color=False, seed=0):
         self.width = width
         self.height = height
         self.components: List[Component] = []
@@ -135,13 +245,25 @@ class RubeGoldbergMachine:
         self.message = ""
         self.message_timer = 0
         self.sparkles: List[Tuple[int, int, int]] = []  # x, y, ttl
+        self.color = color
+        self.seed = seed
+        self._stage_log: List[str] = []  # tracks which stages were used
 
     # ── Machine generation ─────────────────────────────────────────
 
     def generate_machine(self):
-        """Generate a random Rube Goldberg machine layout."""
+        """Generate a random Rube Goldberg machine layout.
+
+        Uses the instance's seed if set for reproducible results.
+        The machine consists of 4-6 randomly selected stages, plus
+        a start ball and a finale (bell + flag).
+        """
+        if self.seed:
+            random.seed(self.seed)
+
         self.components.clear()
         self.projectiles.clear()
+        self._stage_log.clear()
 
         machine_parts = self._design_machine()
         for part in machine_parts:
@@ -151,7 +273,11 @@ class RubeGoldbergMachine:
         self.components.sort(key=lambda c: (c.y, c.x))
 
     def _design_machine(self) -> List[Component]:
-        """Design a complete multi-stage machine."""
+        """Design a complete multi-stage machine.
+
+        Returns a list of Component objects arranged in a cascading
+        layout from top-left to bottom-right.
+        """
         parts = []
         y_levels = [4, 8, 12, 16, 20, 24]
         num_stages = random.randint(4, 6)
@@ -160,37 +286,45 @@ class RubeGoldbergMachine:
         start_x = 4
         start_y = y_levels[0]
         parts.append(Component(BALL, start_x, start_y, state=ACTIVE, timer=1,
-                               extra={"fall_to": y_levels[1]}))
+                               extra={"fall_to": y_levels[1]},
+                               stage_name="Starting Ball"))
 
         current_x = start_x
         current_y = y_levels[0]
 
         stage_types = [
-            self._stage_domino_chain,
-            self._stage_seesaw_launch,
-            self._stage_bucket_dump,
-            self._stage_hammer_smash,
-            self._stage_fan_blow,
-            self._stage_spring_launch,
-            self._stage_funnel_redirect,
-            self._stage_pulley_lift,
+            ("domino_chain",    self._stage_domino_chain),
+            ("seesaw_launch",   self._stage_seesaw_launch),
+            ("bucket_dump",     self._stage_bucket_dump),
+            ("hammer_smash",    self._stage_hammer_smash),
+            ("fan_blow",        self._stage_fan_blow),
+            ("spring_launch",   self._stage_spring_launch),
+            ("funnel_redirect", self._stage_funnel_redirect),
+            ("pulley_lift",     self._stage_pulley_lift),
         ]
 
         random.shuffle(stage_types)
         stage_funcs = stage_types[:num_stages]
 
-        for i, stage_func in enumerate(stage_funcs):
+        for i, (stage_name, stage_func) in enumerate(stage_funcs):
+            self._stage_log.append(stage_name)
             next_y = y_levels[min(i + 1, len(y_levels) - 1)]
             new_parts, current_x, current_y = stage_func(
                 current_x, current_y, next_y
             )
+            # Tag components with their stage name
+            for part in new_parts:
+                if not part.stage_name:
+                    part.stage_name = stage_name.replace("_", " ").title()
             parts.extend(new_parts)
 
         # End with a bell + flag
         parts.append(Component(BELL, current_x + 3, current_y,
-                                state=IDLE, timer=random.randint(8, 15)))
+                                state=IDLE, timer=random.randint(8, 15),
+                                stage_name="Grand Finale Bell"))
         parts.append(Component(FLAG, current_x + 6, current_y - 1,
-                                state=IDLE, timer=random.randint(3, 6)))
+                                state=IDLE, timer=random.randint(3, 6),
+                                stage_name="Victory Flag"))
 
         return parts
 
@@ -276,7 +410,12 @@ class RubeGoldbergMachine:
     # ── Simulation ─────────────────────────────────────────────────
 
     def step(self):
-        """Advance one frame of simulation."""
+        """Advance one frame of simulation.
+
+        Updates component timers and state transitions, moves projectiles
+        with gravity physics, decays sparkle effects, and checks for
+        machine completion (flag reaching DONE state).
+        """
         self.frame += 1
 
         # Update component timers
@@ -332,7 +471,11 @@ class RubeGoldbergMachine:
             self.message_timer = 30
 
     def _activate_component(self, comp):
-        """Handle component activation effects."""
+        """Handle component activation effects.
+
+        When a component transitions to ACTIVE state, it may spawn
+        projectiles (balls, water, air) and sparkles for visual effect.
+        """
         if comp.kind == BALL:
             target_y = comp.extra.get("fall_to", comp.y + 5)
             dy = 0.3 if target_y > comp.y else -0.3
@@ -391,10 +534,61 @@ class RubeGoldbergMachine:
             self.message = "⚑ Task accomplished!"
             self.message_timer = 20
 
+    # ── Machine description ────────────────────────────────────────
+
+    def describe(self) -> str:
+        """Return a human-readable description of the machine's stages.
+
+        Lists each stage type and a brief explanation of what it does.
+        Useful for understanding what a randomly generated machine will do
+        before watching the animation.
+        """
+        lines = []
+        lines.append("⚙️  Rube Goldberg Machine — Stage Description")
+        lines.append("=" * 50)
+        lines.append("")
+        lines.append(f"Canvas size: {self.width} × {self.height}")
+        lines.append(f"Total components: {len(self.components)}")
+        lines.append(f"Seed: {self.seed or 'random'}")
+        lines.append("")
+
+        if self._stage_log:
+            lines.append("Stages (in order):")
+            lines.append("-" * 40)
+            for i, stage_name in enumerate(self._stage_log, 1):
+                desc = STAGE_DESCRIPTIONS.get(stage_name, "A mysterious mechanism")
+                lines.append(f"  {i}. {stage_name.replace('_', ' ').title()}")
+                lines.append(f"     {desc}")
+                lines.append("")
+        else:
+            # Preset machine — describe components directly
+            lines.append("Components (in order):")
+            lines.append("-" * 40)
+            for i, comp in enumerate(self.components, 1):
+                lines.append(f"  {i}. {comp.describe()}")
+            lines.append("")
+
+        # Count component types
+        type_counts = {}
+        for comp in self.components:
+            type_counts[comp.kind] = type_counts.get(comp.kind, 0) + 1
+        lines.append("Component summary:")
+        for kind, count in sorted(type_counts.items(), key=lambda x: -x[1]):
+            lines.append(f"  {kind}: {count}")
+
+        lines.append("")
+        lines.append("Finale: 🔔 Bell → ⚑ Flag raised!")
+        return "\n".join(lines)
+
     # ── Rendering ──────────────────────────────────────────────────
 
     def render(self) -> str:
-        """Render the current state as a string for terminal display."""
+        """Render the current state as a string for terminal display.
+
+        Draws the canvas with structural elements (ramps, rails, columns),
+        components with state indicators, projectile trails, sparkle effects,
+        a title bar, status line, and any active messages.
+        """
         # Create canvas
         canvas = [[' ' for _ in range(self.width)] for _ in range(self.height)]
 
@@ -440,38 +634,123 @@ class RubeGoldbergMachine:
                 idx = min(ttl, len(sparkle_chars) - 1)
                 canvas[sy][sx] = sparkle_chars[idx]
 
-        # Draw border
+        # Build the final display lines
         lines = []
-        lines.append("╔" + "═" * (self.width - 2) + "╗")
-        for row in canvas:
-            line = "║" + "".join(row) + "║"
-            lines.append(line)
-        lines.append("╚" + "═" * (self.width - 2) + "╝")
 
-        # Add title
+        # Title bar
         title = "⚙️  RUBE GOLDBERG MACHINE SIMULATOR  ⚙️"
         title_line = "║" + title.center(self.width - 2) + "║"
-        lines[0] = "╔" + "═" * (self.width - 2) + "╗"
-        lines[1] = title_line
+        lines.append("╔" + "═" * (self.width - 2) + "╗")
+        lines.append(title_line)
 
-        # Add status bar
+        # Status bar
         status = f"  Frame: {self.frame:04d}  │  Components: {len(self.components)}  │  Projectiles: {len(self.projectiles)}"
         if self.complete:
             status += "  │  ✅ COMPLETE!"
         else:
             status += "  │  ⏳ Running..."
         status_line = "║" + status.ljust(self.width - 2) + "║"
-        lines.insert(2, status_line)
+        lines.append(status_line)
 
-        # Add message if any
+        # Message line
         if self.message:
             msg_line = "║" + f"  {self.message}".center(self.width - 2) + "║"
-            lines.insert(3, msg_line)
+            lines.append(msg_line)
+
+        # Canvas rows
+        for row in canvas:
+            line = "║" + "".join(row) + "║"
+            lines.append(line)
+
+        # Bottom border
+        lines.append("╚" + "═" * (self.width - 2) + "╝")
+
+        # Apply colors if enabled
+        if self.color:
+            lines = self._apply_colors(lines)
 
         return "\n".join(lines)
 
+    def _apply_colors(self, lines: List[str]) -> List[str]:
+        """Apply ANSI color codes to the rendered lines.
+
+        Colors are applied based on component types, projectile types,
+        and special elements like the border, title, and status bar.
+        """
+        colored_lines = []
+        for i, line in enumerate(lines):
+            if i == 0 or i == len(lines) - 1:
+                # Border lines — dim
+                colored_lines.append(ANSI_DIM + line + ANSI_RESET)
+            elif i == 1:
+                # Title line — bold yellow
+                colored_lines.append(ANSI_BOLD + ANSI_YELLOW + line + ANSI_RESET)
+            elif i == 2:
+                # Status line — cyan
+                colored_lines.append(ANSI_CYAN + line + ANSI_RESET)
+            else:
+                # Canvas rows — apply per-component coloring
+                new_line = ""
+                for ch in line:
+                    colored = False
+                    # Check each component type's character
+                    if ch == "●":
+                        new_line += ANSI_CYAN + ch + ANSI_RESET
+                        colored = True
+                    elif ch == "▌" or ch == "▀":
+                        new_line += ANSI_YELLOW + ch + ANSI_RESET
+                        colored = True
+                    elif ch in ("/", "\\", "—"):
+                        new_line += ANSI_GREEN + ch + ANSI_RESET
+                        colored = True
+                    elif ch in ("╘", "╤", "╛", "═"):
+                        new_line += ANSI_BLUE + ch + ANSI_RESET
+                        colored = True
+                    elif ch == "⊙":
+                        new_line += ANSI_MAGENTA + ch + ANSI_RESET
+                        colored = True
+                    elif ch == "✦":
+                        new_line += ANSI_WHITE + ch + ANSI_RESET
+                        colored = True
+                    elif ch == "⌐":
+                        new_line += ANSI_YELLOW + ch + ANSI_RESET
+                        colored = True
+                    elif ch == "▽":
+                        new_line += ANSI_GREEN + ch + ANSI_RESET
+                        colored = True
+                    elif ch == "⌇":
+                        new_line += ANSI_CYAN + ch + ANSI_RESET
+                        colored = True
+                    elif ch == "♫":
+                        new_line += ANSI_BOLD + ANSI_YELLOW + ch + ANSI_RESET
+                        colored = True
+                    elif ch == "⚑" or ch == "⚐":
+                        new_line += ANSI_BOLD + ANSI_GREEN + ch + ANSI_RESET
+                        colored = True
+                    elif ch == "≈":
+                        new_line += ANSI_BLUE + ch + ANSI_RESET
+                        colored = True
+                    elif ch == "~":
+                        new_line += ANSI_DIM + ANSI_WHITE + ch + ANSI_RESET
+                        colored = True
+                    elif ch in ("✧", "✶", "✴", "*"):
+                        new_line += ANSI_YELLOW + ch + ANSI_RESET
+                        colored = True
+                    elif ch == "·":
+                        new_line += ANSI_DIM + ch + ANSI_RESET
+                        colored = True
+                    else:
+                        new_line += ch
+                colored_lines.append(new_line)
+        return colored_lines
+
     def _draw_structure(self, canvas):
-        """Draw ramps, rails, and structural elements."""
+        """Draw ramps, rails, and structural elements on the canvas.
+
+        Connects adjacent components with diagonal ramps, draws horizontal
+        rails under certain component types, and adds support columns
+        under heavy components.
+        """
         # Draw diagonal ramps connecting stages
         for i in range(len(self.components) - 1):
             c1 = self.components[i]
@@ -480,7 +759,7 @@ class RubeGoldbergMachine:
                 # Draw ramp going down-right
                 steps = max(abs(c2.x - c1.x), abs(c2.y - c1.y))
                 for s in range(steps):
-                    t = s / steps
+                    t = s / max(steps, 1)
                     rx = int(c1.x + t * (c2.x - c1.x))
                     ry = int(c1.y + t * (c2.y - c1.y))
                     if 0 <= ry < self.height and 0 <= rx < self.width:
@@ -503,75 +782,181 @@ class RubeGoldbergMachine:
                         canvas[ry][col_x] = "│"
 
 
-def create_preset_machine(width, height) -> RubeGoldbergMachine:
-    """Create a hand-designed preset machine for a guaranteed good show."""
-    machine = RubeGoldbergMachine(width, height)
+def create_preset_machine(width, height, color=False) -> RubeGoldbergMachine:
+    """Create a hand-designed preset machine for a guaranteed good show.
+
+    The preset machine features 10 carefully placed stages with known
+    timing that reliably produces a satisfying chain reaction from
+    start to finish.
+
+    Args:
+        width: Canvas width in characters
+        height: Canvas height in characters
+        color: Whether to enable ANSI color output
+
+    Returns:
+        A configured RubeGoldbergMachine ready to run.
+    """
+    machine = RubeGoldbergMachine(width, height, color=color)
+    machine._stage_log = [
+        "Starting Ball", "Domino Chain", "Seesaw Launch", "Spring Launch",
+        "Bucket Dump", "Hammer Smash", "Fan Blow", "Pulley Lift",
+        "Funnel Redirect", "Final Ball"
+    ]
 
     # Stage 1: Ball rolls down
     machine.components.append(Component(BALL, 5, 5, state=ACTIVE, timer=2,
-                                        extra={"fall_to": 9}))
+                                        extra={"fall_to": 9},
+                                        stage_name="Starting Ball"))
 
     # Stage 2: Domino chain
     for i in range(5):
         machine.components.append(Component(DOMINO, 12 + i * 3, 9,
-                                             state=IDLE, timer=3 + i * 3))
+                                             state=IDLE, timer=3 + i * 3,
+                                             stage_name="Domino Chain"))
 
     # Stage 3: Seesaw
-    machine.components.append(Component(SEESAW, 30, 9, state=IDLE, timer=18))
+    machine.components.append(Component(SEESAW, 30, 9, state=IDLE, timer=18,
+                                        stage_name="Seesaw Launch"))
 
     # Stage 4: Spring launch
-    machine.components.append(Component(SPRING, 38, 9, state=IDLE, timer=22))
+    machine.components.append(Component(SPRING, 38, 9, state=IDLE, timer=22,
+                                         stage_name="Spring Launch"))
 
     # Stage 5: Ball flies to bucket
-    machine.components.append(Component(BUCKET, 45, 12, state=IDLE, timer=28))
+    machine.components.append(Component(BUCKET, 45, 12, state=IDLE, timer=28,
+                                        stage_name="Bucket Dump"))
 
     # Stage 6: Hammer
-    machine.components.append(Component(HAMMER, 50, 12, state=IDLE, timer=34))
+    machine.components.append(Component(HAMMER, 50, 12, state=IDLE, timer=34,
+                                         stage_name="Hammer Smash"))
 
     # Stage 7: Fan blows ball
-    machine.components.append(Component(FAN, 55, 12, state=IDLE, timer=38))
+    machine.components.append(Component(FAN, 55, 12, state=IDLE, timer=38,
+                                         stage_name="Fan Blow"))
 
     # Stage 8: Ball rolls to pulley
-    machine.components.append(Component(PULLEY, 62, 10, state=IDLE, timer=42))
+    machine.components.append(Component(PULLEY, 62, 10, state=IDLE, timer=42,
+                                         stage_name="Pulley Lift"))
 
     # Stage 9: Funnel redirect
-    machine.components.append(Component(FUNNEL, 68, 14, state=IDLE, timer=48))
+    machine.components.append(Component(FUNNEL, 68, 14, state=IDLE, timer=48,
+                                         stage_name="Funnel Redirect"))
 
     # Stage 10: Final ball
     machine.components.append(Component(BALL, 73, 14, state=IDLE, timer=52,
-                                        extra={"fall_to": 14}))
+                                        extra={"fall_to": 14},
+                                        stage_name="Final Ball"))
 
     # Finale: Bell + Flag
-    machine.components.append(Component(BELL, 78, 14, state=IDLE, timer=58))
-    machine.components.append(Component(FLAG, 82, 13, state=IDLE, timer=62))
+    machine.components.append(Component(BELL, 78, 14, state=IDLE, timer=58,
+                                        stage_name="Grand Finale Bell"))
+    machine.components.append(Component(FLAG, 82, 13, state=IDLE, timer=62,
+                                         stage_name="Victory Flag"))
 
     return machine
 
 
-def create_random_machine(width, height) -> RubeGoldbergMachine:
-    """Create a randomly generated machine."""
-    machine = RubeGoldbergMachine(width, height)
+def create_random_machine(width, height, color=False, seed=0) -> RubeGoldbergMachine:
+    """Create a randomly generated machine.
+
+    Args:
+        width: Canvas width in characters
+        height: Canvas height in characters
+        color: Whether to enable ANSI color output
+        seed: Random seed for reproducibility (0 = random)
+
+    Returns:
+        A configured RubeGoldbergMachine ready to run.
+    """
+    machine = RubeGoldbergMachine(width, height, color=color, seed=seed)
     machine.generate_machine()
     return machine
 
 
 def clear_screen():
-    """Clear the terminal screen."""
+    """Clear the terminal screen using ANSI escape codes."""
     sys.stdout.write("\033[2J\033[H")
     sys.stdout.flush()
 
 
 def hide_cursor():
+    """Hide the terminal cursor using ANSI escape codes."""
     sys.stdout.write("\033[?25l")
     sys.stdout.flush()
 
 
 def show_cursor():
+    """Show the terminal cursor using ANSI escape codes."""
     sys.stdout.write("\033[?25h")
     sys.stdout.flush()
 
 
-def main():
+def get_terminal_size():
+    """Get terminal size with sensible defaults.
+
+    Returns:
+        Tuple of (width, height) in characters, clamped to
+        reasonable minimum and maximum values.
+    """
+    try:
+        size = shutil.get_terminal_size()
+        width = min(size.columns - 2, 100)
+        height = min(size.lines - 4, 35)
+    except Exception:
+        width, height = 80, 28
+
+    width = max(width, 50)
+    height = max(height, 20)
+    return width, height
+
+
+def run_machine(machine: RubeGoldbergMachine, speed: float = FRAME_DELAY):
+    """Run the animation loop for a single machine.
+
+    Args:
+        machine: The machine to animate
+        speed: Delay between frames in seconds (lower = faster)
+
+    Returns:
+        True if the machine completed successfully, False if it ran out of frames
+    """
+    max_frames = MAX_FRAMES
+
+    for _ in range(max_frames):
+        machine.step()
+        clear_screen()
+        print(machine.render())
+        print("\n  [Ctrl+C to exit]")
+
+        if machine.complete:
+            # Let the completion message linger
+            for _ in range(40):
+                time.sleep(speed)
+                machine.step()
+                clear_screen()
+                print(machine.render())
+                print("\n  ✅ Machine complete!")
+            return True
+
+        time.sleep(speed)
+
+    # Machine didn't complete within the frame limit
+    print("\n  ⏰ Machine ran out of frames (some parts didn't connect)")
+    return False
+
+
+def run_interactive(speed: float = FRAME_DELAY, color: bool = False, seed: int = 0):
+    """Run the interactive menu mode.
+
+    Presents the user with options to choose a preset, random, or marathon
+    machine, then runs the animation.
+
+    Args:
+        speed: Animation speed (seconds per frame)
+        color: Whether to enable ANSI colors
+        seed: Random seed (0 = random each time)
+    """
     print("\n⚙️  RUBE GOLDBERG MACHINE SIMULATOR ⚙️")
     print("=" * 40)
     print()
@@ -585,29 +970,27 @@ def main():
     print("  [q] Quit")
     print()
 
-    choice = input("Choose [1/2/3/q]: ").strip()
+    try:
+        choice = input("Choose [1/2/3/q]: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print("\nBye! Remember: the hard way is the best way.")
+        return
 
     if choice == 'q':
         print("Bye! Remember: the hard way is the best way.")
         return
 
-    # Get terminal size
-    try:
-        size = shutil.get_terminal_size()
-        width = min(size.columns - 2, 100)
-        height = min(size.lines - 4, 35)
-    except:
-        width, height = 80, 28
-
-    width = max(width, 50)
-    height = max(height, 20)
+    width, height = get_terminal_size()
 
     if choice == '1':
-        machines = [create_preset_machine(width, height)]
+        machines = [create_preset_machine(width, height, color=color)]
     elif choice == '3':
-        machines = [create_random_machine(width, height) for _ in range(3)]
+        machines = []
+        for i in range(3):
+            s = seed + i if seed else 0
+            machines.append(create_random_machine(width, height, color=color, seed=s))
     else:
-        machines = [create_random_machine(width, height)]
+        machines = [create_random_machine(width, height, color=color, seed=seed)]
 
     hide_cursor()
     try:
@@ -619,28 +1002,139 @@ def main():
 
             # Reset state for replay
             machine.complete = False
-            max_frames = 400  # safety limit
+            run_machine(machine, speed=speed)
 
-            for _ in range(max_frames):
-                machine.step()
+            if mi < len(machines) - 1:
+                time.sleep(3)
+
+    except KeyboardInterrupt:
+        pass
+    finally:
+        show_cursor()
+        clear_screen()
+        print("\n⚙️  Thanks for watching the Rube Goldberg Machine! ⚙️\n")
+        print("Remember: any sufficiently complicated task")
+        print("can be accomplished by an even more complicated machine.\n")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build and return the argument parser for CLI options.
+
+    Returns:
+        Configured ArgumentParser with all supported options.
+    """
+    parser = argparse.ArgumentParser(
+        prog="rube_goldberg",
+        description="⚙️  Rube Goldberg Machine Simulator — watch absurdly complex "
+                    "chain-reaction machines accomplish trivially simple tasks!",
+        epilog="Examples:\n"
+               "  python3 rube_goldberg.py                  # Interactive menu\n"
+               "  python3 rube_goldberg.py --preset           # Run preset machine\n"
+               "  python3 rube_goldberg.py --random --seed 42 # Reproducible random\n"
+               "  python3 rube_goldberg.py --marathon --color # Colorful marathon\n"
+               "  python3 rube_goldberg.py --describe --random # Print description only",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {__version__}",
+        help="Show version number and exit"
+    )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--preset", action="store_true",
+        help="Run the hand-designed preset machine (guaranteed good show)"
+    )
+    mode.add_argument(
+        "--random", action="store_true",
+        help="Run a randomly generated machine"
+    )
+    mode.add_argument(
+        "--marathon", action="store_true",
+        help="Run 3 random machines back-to-back"
+    )
+    parser.add_argument(
+        "--seed", type=int, default=0,
+        help="Random seed for reproducible machines (default: random each run)"
+    )
+    parser.add_argument(
+        "--speed", type=float, default=FRAME_DELAY,
+        help=f"Animation delay in seconds (default: {FRAME_DELAY}; lower = faster)"
+    )
+    parser.add_argument(
+        "--color", action="store_true",
+        help="Enable ANSI color output"
+    )
+    parser.add_argument(
+        "--describe", action="store_true",
+        help="Print a text description of the machine instead of animating"
+    )
+    parser.add_argument(
+        "--width", type=int, default=0,
+        help="Canvas width (default: auto-detect from terminal)"
+    )
+    parser.add_argument(
+        "--height", type=int, default=0,
+        help="Canvas height (default: auto-detect from terminal)"
+    )
+    return parser
+
+
+def main():
+    """Main entry point — parse CLI args and run the simulator."""
+    parser = build_parser()
+    args = parser.parse_args()
+
+    # Determine canvas dimensions
+    if args.width > 0 and args.height > 0:
+        width = max(args.width, 50)
+        height = max(args.height, 20)
+    else:
+        width, height = get_terminal_size()
+
+    # Clamp speed to reasonable range
+    speed = max(0.01, min(args.speed, 1.0))
+
+    # Build the machine(s)
+    seed = args.seed
+
+    if args.preset:
+        machines = [create_preset_machine(width, height, color=args.color)]
+    elif args.marathon:
+        machines = []
+        for i in range(3):
+            s = seed + i if seed else 0
+            machines.append(create_random_machine(width, height, color=args.color, seed=s))
+    elif args.random:
+        machines = [create_random_machine(width, height, color=args.color, seed=seed)]
+    else:
+        # No mode specified — go interactive
+        if args.describe:
+            # Describe mode without a specific machine type: default to random
+            machines = [create_random_machine(width, height, color=args.color, seed=seed)]
+        else:
+            return run_interactive(speed=speed, color=args.color, seed=seed)
+
+    # Describe mode: just print description and exit
+    if args.describe:
+        for i, machine in enumerate(machines):
+            if len(machines) > 1:
+                print(f"\n{'=' * 50}")
+                print(f"Machine {i + 1} of {len(machines)}")
+                print(f"{'=' * 50}")
+            print(machine.describe())
+        return
+
+    # Run animation
+    hide_cursor()
+    try:
+        for mi, machine in enumerate(machines):
+            if len(machines) > 1:
                 clear_screen()
-                print(machine.render())
-                print("\n  [Ctrl+C to exit]")
+                print(f"\n  🎬 Machine {mi + 1}/{len(machines)} 🎬\n")
+                time.sleep(2)
 
-                if machine.complete:
-                    # Let the completion message linger
-                    for _ in range(40):
-                        time.sleep(FRAME_DELAY)
-                        machine.step()
-                        clear_screen()
-                        print(machine.render())
-                        print("\n  ✅ Machine complete! ")
-                    break
-
-                time.sleep(FRAME_DELAY)
-
-            if not machine.complete:
-                print("\n  ⏰ Machine ran out of frames (some parts didn't connect)")
+            machine.complete = False
+            run_machine(machine, speed=speed)
 
             if mi < len(machines) - 1:
                 time.sleep(3)
