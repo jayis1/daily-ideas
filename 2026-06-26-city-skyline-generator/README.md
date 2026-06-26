@@ -17,7 +17,7 @@ Generates a full-color (or plain-text) city skyline including:
 - **Neon signs**: glowing sign characters on buildings at night and dusk
 - **Waterfront mode**: water with building reflections and wave effects
 - **SVG export**: generate scalable vector graphics of the skyline
-- **Save to file**: write text output to a file
+- **Save to file**: write plain-text output to a file (ANSI codes automatically stripped)
 - **Adjustable density**: from sparse suburbs to packed downtowns
 - **Reproducible output** via seed parameter
 - **Random city names and populations** in the stats footer
@@ -37,7 +37,7 @@ Generates a full-color (or plain-text) city skyline including:
 | 🐦 Sky Life | Birds during day/dawn, airplanes with contrails at night/dusk |
 | 🌊 Waterfront | Water with building reflections and wave effects (`--water`) |
 | 📊 SVG Export | Scalable vector graphics output (`--svg file.svg`) |
-| 💾 Save to File | Write text output to file (`--save file.txt`) |
+| 💾 Save to File | Write plain-text output to file (`--save file.txt`) |
 | 📋 Enhanced `--list` | Shows style descriptions and special options |
 
 ## Installation
@@ -80,7 +80,7 @@ python skyline.py --time dusk --style brutalist --density 0.9 --water --width 10
 # Export as SVG
 python skyline.py --seed 42 --svg city.svg
 
-# Save text output to file
+# Save plain text to file (ANSI codes are automatically stripped)
 python skyline.py --seed 42 --save skyline.txt
 
 # List all available options with descriptions
@@ -100,9 +100,9 @@ python skyline.py --list
 | `--no-color` | off | Disable ANSI color codes |
 | `--water` | off | Add waterfront with building reflections |
 | `--svg` FILE | — | Export skyline as SVG file |
-| `--save` FILE | — | Save text output to file |
+| `--save` FILE | — | Save plain-text output to file (always stripped of ANSI codes) |
 | `--list` | — | List available styles and options |
-| `--version` | — | Show version number (1.1.0) |
+| `--version` | — | Show version number (1.2.0) |
 
 ## Examples
 
@@ -137,12 +137,12 @@ python skyline.py --time dawn --weather fog --water --width 120 --seed 99
 python test_skyline.py
 ```
 
-Runs 42 tests covering: default output, color/no-color modes, all time options, all weather options, all style options, custom widths, width validation, density, seed reproducibility, different seed divergence, list/version/help flags, building detection, stats line format, waterfront mode, SVG export, save to file, neon signs, sky life (birds/planes), and edge case validation.
+Runs 47 tests covering: default output, color/no-color modes, all time options, all weather options, all style options, custom widths, width validation, density, seed reproducibility, different seed divergence, list/version/help flags, building detection, stats line format, waterfront mode, SVG export, save to file, neon signs, sky life (birds/planes), edge case validation, and regression tests for all fixed bugs.
 
 ## How It Works
 
 1. **Canvas creation**: A 2D grid (default 14 sky rows + 2 ground rows + optional 4 water rows × width cols) is initialized with sky gradients based on the chosen time of day
-2. **Building generation**: Buildings are placed left-to-right with height influenced by distance from center (taller downtown, shorter outskirts), following the `--density` parameter for spacing
+2. **Building generation**: Buildings are placed left-to-right with height influenced by distance from center (taller downtown, shorter outskirts), following the `--density` parameter for spacing. Buildings are constrained to never extend past the canvas width.
 3. **Each building** has: randomized height/width, window grid (lit/dim/dark/bright), optional antenna/spire, style-specific body and edge characters, and optional neon sign
 4. **Sky life**: Birds appear as small V-shaped flocks during day/dawn; airplanes with contrails appear at night/dusk
 5. **Weather overlay**: Rain drops (·˙), snowflakes (✻❄), fog patches (░▒), clouds, and lightning (⚡) are scattered across the sky
@@ -151,7 +151,17 @@ Runs 42 tests covering: default output, color/no-color modes, all time options, 
 8. **Waterfront**: When enabled, 4 rows of water appear below ground with wave characters and fading building reflections
 9. **ANSI colors**: Each time-of-day theme defines colors for sky gradients, building edges, window types, ground, water, and neon — creating atmospheric depth
 10. **Stats footer**: A randomly generated city name, population, building count, time, weather, and waterfront indicator are displayed below the skyline
-11. **SVG export**: The `--svg` option renders the skyline as a scalable vector graphic with sky gradients, building rectangles, and window details
+11. **SVG export**: The `--svg` option renders the skyline as a scalable vector graphic with sky gradients, building rectangles, window details, antennas, and spires positioned correctly relative to buildings
+12. **File saving**: The `--save` option always writes plain text (ANSI codes are stripped), ensuring saved files are clean and readable
+
+## Bug Fixes (v1.2.0)
+
+- **Building overflow fix**: Buildings no longer extend past the canvas width boundary. Building widths are clamped to remaining space, and buildings that would overflow are clipped or skipped.
+- **SVG spire position fix**: Gothic/art deco spires are now correctly positioned at the top of buildings in SVG output, instead of appearing at the bottom of the canvas.
+- **SVG window indexing fix**: SVG export now displays the correct interior window rows (rows 1 through h-2) instead of showing roof-level windows (row 0) as interior windows.
+- **SVG building clipping**: Buildings in SVG export are now clamped to the canvas width to prevent overflow.
+- **SVG city names fix**: SVG export now uses the same full list of 28 city names as the text output, ensuring consistency between the two formats.
+- **Save file ANSI stripping**: The `--save` option now always writes plain text without ANSI escape codes, regardless of whether `--no-color` is set. Terminal output still respects the color setting.
 
 ## License
 

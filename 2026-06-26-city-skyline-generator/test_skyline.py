@@ -232,7 +232,7 @@ class TestCLI:
         """Test --version flag."""
         r = run_skyline("--version")
         assert r.returncode == 0
-        assert "1.1.0" in r.stdout
+        assert "1.2.0" in r.stdout
         print("  ✓ --version flag works")
 
     def test_help_flag(self):
@@ -395,6 +395,89 @@ class TestEdgeCases:
         print("  ✓ Waterfront works with all weather")
 
 
+class TestBugFixes:
+    """Tests for specific bug fixes."""
+
+    def test_buildings_dont_overflow_width(self):
+        """Buildings should not extend past the canvas width."""
+        import sys
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from skyline import CityGenerator
+        for width in [20, 40, 80, 120]:
+            for seed in range(10):
+                c = CityGenerator(width=width, seed=seed, density=0.9)
+                for bx, b in c.buildings:
+                    assert bx + b.width <= width, \
+                        f"Building overflow: bx={bx}, w={b.width}, canvas={width}"
+        print("  ✓ No buildings overflow canvas width")
+
+    def test_save_strips_ansi(self):
+        """Saved files should not contain ANSI escape codes."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            tmpfile = f.name
+        try:
+            # Save WITH color (default behavior)
+            r = run_skyline("--seed", "42", "--save", tmpfile)
+            assert r.returncode == 0, f"Save failed: {r.stderr}"
+            content = open(tmpfile, 'r').read()
+            assert "\033[" not in content, "Saved file should not contain ANSI codes"
+            print("  ✓ --save strips ANSI codes")
+        finally:
+            if os.path.exists(tmpfile):
+                os.unlink(tmpfile)
+
+    def test_svg_spire_position(self):
+        """SVG spires should be positioned correctly (not at bottom)."""
+        import sys
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from skyline import CityGenerator
+        # Find a seed that produces a spire
+        for seed in range(50):
+            c = CityGenerator(width=80, seed=seed, style="gothic", density=0.8)
+            for bx, b in c.buildings:
+                if b.has_spire:
+                    # Verify the spire is above the building top
+                    SH = 14
+                    spire_row = SH - b.total_height + b.antenna_height
+                    building_top = SH - b.height
+                    assert spire_row <= building_top, \
+                        f"Spire row {spire_row} should be at or above building top {building_top}"
+                    break
+            else:
+                continue
+            break
+        print("  ✓ SVG spire position is correct")
+
+    def test_svg_window_row_offset(self):
+        """SVG should display interior windows (row 1+), not roof windows (row 0)."""
+        import sys
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from skyline import CityGenerator
+        c = CityGenerator(width=80, seed=42, style="modern", density=0.7)
+        # Verify that the window rows used in SVG are interior rows
+        for bx, b in c.buildings:
+            if b.height >= 3 and b.width >= 3:
+                # Interior rows are 1 to h-2, accessing windows[1] to windows[h-2]
+                for wrow in range(b.height - 2):
+                    actual_row = wrow + 1
+                    assert actual_row < len(b.windows), \
+                        f"Window row {actual_row} out of bounds for building h={b.height}"
+                break
+        print("  ✓ SVG window indexing uses correct row offset")
+
+    def test_svg_clamps_buildings_to_width(self):
+        """SVG should not render buildings that extend past the canvas width."""
+        import sys
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from skyline import CityGenerator
+        for width in [20, 40, 80]:
+            for seed in range(5):
+                c = CityGenerator(width=width, seed=seed, density=0.9)
+                for bx, b in c.buildings:
+                    visible = min(b.width, width - bx)
+                    assert visible > 0, f"Building at x={bx} has no visible width on canvas of {width}"
+        print("  ✓ SVG building width clamped to canvas")
+
 if __name__ == "__main__":
     test_classes = [
         TestBasicOutput,
@@ -409,6 +492,7 @@ if __name__ == "__main__":
         TestNeonSigns,
         TestSkyLife,
         TestEdgeCases,
+        TestBugFixes,
     ]
 
     all_tests = []

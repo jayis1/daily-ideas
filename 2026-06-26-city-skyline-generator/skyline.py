@@ -20,7 +20,7 @@ import argparse
 import sys
 import os
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 
 # ─── Character Sets ────────────────────────────────────────────────────────────
 
@@ -149,12 +149,13 @@ NEON_COLORS = [
 class Building:
     """A single building with height, width, windows, optional antenna/spire, and neon signs."""
 
-    def __init__(self, rng, style="mixed", min_height=3, max_height=18):
+    def __init__(self, rng, style="mixed", min_height=3, max_height=18, max_width=7):
         if style == "mixed":
             style = rng.choice(["modern", "art_deco", "gothic", "industrial", "brutalist", "residential"])
         self.style = style
         self.height = rng.randint(min_height, max_height)
-        self.width = rng.randint(2, 7)
+        actual_max_width = max(2, min(max_width, 7))
+        self.width = rng.randint(2, actual_max_width)
         self.has_antenna = rng.random() < 0.25
         self.antenna_height = rng.randint(1, 3) if self.has_antenna else 0
         self.has_spire = style in ("gothic", "art_deco") and rng.random() < 0.3
@@ -250,7 +251,25 @@ class CityGenerator:
                 center_dist = abs(x - self.width / 2) / (self.width / 2)
                 max_h = int(14 * (1 - center_dist * 0.5)) + 2
                 max_h = max(5, min(14, max_h))
-                b = Building(self.rng, style=self.style, min_height=3, max_height=max_h)
+                # Calculate remaining space to constrain building width
+                remaining = self.width - x
+                if remaining < 2:
+                    # Not enough room for even the smallest building; skip
+                    x += remaining
+                    continue
+                max_width = min(7, remaining)
+                b = Building(self.rng, style=self.style, min_height=3, max_height=max_h,
+                             max_width=max_width)
+                # Skip buildings that would extend past the canvas edge
+                if x + b.width > self.width:
+                    # Clip building to fit, adjusting windows to match
+                    b.width = self.width - x
+                    b.windows = [row[:b.width] for row in b.windows]
+                    # Re-evaluate neon sign eligibility
+                    b.has_neon = False if b.width < 3 else b.has_neon
+                    if b.width < 2:
+                        x += self.rng.randint(1, 2)
+                        continue
                 self.buildings.append((x, b))
                 x += b.width + self.rng.randint(0, 1)
             else:
@@ -650,8 +669,12 @@ class CityGenerator:
         window_lit_color = "#ffaf00" if self.time in ("night", "dusk") else "#87d7ff"
 
         for bx, b in self.buildings:
+            # Clamp building width to not exceed canvas boundary
+            visible_width = min(b.width, W - bx)
+            if visible_width <= 0:
+                continue
             bx_px = bx * cell_w
-            bw_px = b.width * cell_w
+            bw_px = visible_width * cell_w
             # Building body starts at sky_height - b.height
             by_px = (SH - b.height) * cell_h
             bh_px = b.height * cell_h
@@ -659,21 +682,24 @@ class CityGenerator:
             lines.append(f'<rect x="{bx_px}" y="{by_px}" width="{bw_px}" height="{bh_px}" '
                         f'fill="{bldg_fill}" stroke="{bldg_stroke}" stroke-width="1"/>')
 
-            # Windows
+            # Windows (interior rows only: skip roof row [0] and ground floor row [h-1])
             win_w = max(cell_w - 4, 3)
             win_h = max(cell_h - 6, 4)
-            for wrow in range(b.height - 2):  # skip roof and ground floor
-                for wcol in range(b.width - 2):  # skip edges
-                    if wrow < len(b.windows) and wcol < len(b.windows[wrow]):
-                        wtype = b.windows[wrow][wcol]
-                        wx = bx_px + (wcol + 1) * cell_w + 2
-                        wy = by_px + (wrow + 1) * cell_h + 3
-                        if wtype in ("lit", "bright"):
-                            lines.append(f'<rect x="{wx}" y="{wy}" width="{win_w}" height="{win_h}" '
-                                        f'fill="{window_lit_color}" opacity="{0.9 if wtype == "lit" else 1.0}"/>')
-                        elif wtype == "dim":
-                            lines.append(f'<rect x="{wx}" y="{wy}" width="{win_w}" height="{win_h}" '
-                                        f'fill="{bldg_fill}" opacity="0.6"/>')
+            interior_cols = min(b.width, visible_width) - 2
+            if interior_cols > 0:
+                for wrow in range(b.height - 2):  # skip roof and ground floor
+                    for wcol in range(interior_cols):  # skip edges
+                        actual_row = wrow + 1  # offset by 1 to skip roof row
+                        if actual_row < len(b.windows) and wcol < len(b.windows[actual_row]):
+                            wtype = b.windows[actual_row][wcol]
+                            wx = bx_px + (wcol + 1) * cell_w + 2
+                            wy = by_px + (wrow + 1) * cell_h + 3
+                            if wtype in ("lit", "bright"):
+                                lines.append(f'<rect x="{wx}" y="{wy}" width="{win_w}" height="{win_h}" '
+                                            f'fill="{window_lit_color}" opacity="{0.9 if wtype == "lit" else 1.0}"/>')
+                            elif wtype == "dim":
+                                lines.append(f'<rect x="{wx}" y="{wy}" width="{win_w}" height="{win_h}" '
+                                            f'fill="{bldg_fill}" opacity="0.6"/>')
 
             # Antenna
             if b.has_antenna:
@@ -685,7 +711,7 @@ class CityGenerator:
             # Spire
             if b.has_spire:
                 mid_x = bx_px + (b.width // 2) * cell_w + cell_w // 2
-                spire_top = (SH - b.antenna_height - 1) * cell_h
+                spire_top = (SH - b.total_height + b.antenna_height) * cell_h
                 spire_w = max(b.width // 2, 1) * cell_w
                 lines.append(f'<polygon points="{mid_x},{spire_top} '
                             f'{mid_x - spire_w//2},{spire_top + cell_h} '
@@ -694,8 +720,15 @@ class CityGenerator:
 
         # Stats text
         stats_y = total_h * cell_h + cell_h
-        city_names = ["Novapolis", "Arcadia Heights", "Duskholm", "Aether City"]
-        city_name = R.choice(city_names)
+        city_name = R.choice([
+            "Novapolis", "Arcadia Heights", "Duskholm", "Aether City",
+            "Steelhaven", "Neon Ridge", "Crescent Valley", "Iron Peak",
+            "Starfall Metro", "Obsidian Reach", "Lumen Bay", "Thunder Basin",
+            "Copper Spire", "Frost Gate", "Solaris Prime", "Echo Mesa",
+            "Midnight Citadel", "Chrome District", "Ember Falls", "Skyline Crossing",
+            "Vertigo City", "Prism Harbor", "Cobalt Ridge", "Amber District",
+            "Obsidian Terrace", "Zenith Park", "Mirage Flats", "Voltage Row",
+        ])
         stats_text = f"{city_name} | {self.time.title()} | {self.weather.title()} | {len(self.buildings)} buildings"
         lines.append(f'<text x="{svg_w // 2}" y="{stats_y}" text-anchor="middle" '
                     f'font-family="monospace" font-size="12" fill="#87d7ff">{stats_text}</text>')
@@ -813,11 +846,12 @@ Examples:
     print(output)
     print()
 
-    # Save to file if requested
+    # Save to file if requested (always plain text, no ANSI codes)
     if args.save:
         try:
+            plain_output = city.render(color=False)
             with open(args.save, 'w', encoding='utf-8') as f:
-                f.write(output)
+                f.write(plain_output)
                 f.write('\n')
             print(f"Saved to {args.save}")
         except OSError as e:
