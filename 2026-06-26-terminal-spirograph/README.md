@@ -1,168 +1,201 @@
 # Terminal Spirograph
 
-A command-line tool that generates stunning mathematical curve patterns directly in your terminal using ASCII/Unicode density characters. Supports four curve families — hypotrochoids, epitrochoids, rose curves, and Lissajous figures — with animated drawing, color palettes, SVG export, named presets, continuous loop mode, and seeded random generation.
+Generate beautiful hypotrochoid, epitrochoid, rose, and Lissajous curve patterns directly in your terminal using Unicode characters and ANSI colors.
 
 ## Features
 
-- **4 curve types**: Hypotrochoid, Epitrochoid, Rose, and Lissajous curves
-- **Animated drawing**: Watch the spirograph being drawn progressively with a progress indicator
-- **Color palettes**: Auto, rainbow, gradient, or monochrome rendering with ANSI colors
-- **Random generation**: Generate random aesthetically-pleasing parameters with `--random`
-- **Seeded randomness**: Reproduce any random curve with `--seed` for shareable results
-- **Named presets**: 13 built-in presets like `classic`, `starflower`, `infinity` — run `--list-presets`
-- **Gallery mode**: Showcase all four curve types in sequence with `--gallery`
-- **Loop mode**: Continuously generate random spirographs with `--loop` until Ctrl+C
-- **SVG export**: Save curves as vector SVG files with `--export-svg` for high-quality printing
-- **Density rendering**: Point density maps to Unicode characters (·:;+*#░▒▓█) for smooth visuals
-- **Two character sets**: Block (bold, high contrast) and fine (detailed, nuanced)
-- **`--version` and `--help`**: Full CLI documentation built in
-- **Input validation**: Catches division-by-zero and invalid parameters before rendering
-- **No dependencies**: Uses only the Python standard library
+- **4 curve families**: Hypotrochoid, Epitrochoid, Rose, and Lissajous
+- **13 built-in presets**: `classic`, `starflower`, `daisy`, `vortex`, `sunburst`, `pinwheel`, `lotus`, `pentarose`, `heptarose`, `trefoil`, `bowtie`, `infinity`, `butterfly`
+- **Animated drawing**: Watch curves being drawn progressively
+- **Rainbow & gradient colors**: Multiple color palettes (`auto`, `rainbow`, `gradient`, `none`)
+- **SVG export**: Export curves as high-quality vector SVG files
+- **Continuous loop mode**: `--loop` for endless random spirographs
+- **Seeded random generation**: `--seed N` for reproducible results
+- **Fine & block character sets**: Choose rendering density
+- **Input validation**: Clear error messages for invalid parameters
+- **Security**: SVG export blocks writes to system directories
 
-## How to Install
+## Installation
 
-No dependencies required — uses only Python standard library modules:
+No dependencies beyond Python 3.7+ and a standard library. Just clone and run:
 
 ```bash
-# Just clone and run
-git clone https://github.com/jayis1/daily-ideas.git
-cd daily-ideas/2026-06-26-terminal-spirograph
-chmod +x spirograph.py
-```
-
-Requires Python 3.6+ (uses `math`, `random`, `time`, `sys`, `argparse`, `collections`, `os`).
-
-## How to Run
-
-```bash
-# Random animated spirograph (default)
-python3 spirograph.py
-
-# Specific hypotrochoid (the classic spirograph)
-python3 spirograph.py --hypo --R 11 --r 4 --d 6
-
-# Epitrochoid
-python3 spirograph.py --epi --R 7 --r 3 --d 5
-
-# Rose curve
-python3 spirograph.py --rose --k 5 --n 3
-
-# Lissajous figure
-python3 spirograph.py --lissajous --a 3 --b 4 --delta 1.5708
-
-# Random curve of any type
-python3 spirograph.py --random
-
-# Reproducible random (same seed = same curve every time)
-python3 spirograph.py --random --seed 42
-
-# Named preset
-python3 spirograph.py --preset classic
-
-# List all presets
-python3 spirograph.py --list-presets
-
-# Gallery mode — shows all four curve types
-python3 spirograph.py --gallery
-
-# Loop mode — continuous random spirographs
-python3 spirograph.py --loop
-
-# Export as SVG
-python3 spirograph.py --preset starflower --export-svg output.svg
-
-# Rainbow-colored rendering
-python3 spirograph.py --hypo --random --palette rainbow
-
-# Static render (no animation, good for piping)
-python3 spirograph.py --hypo --R 21 --r 8 --d 5 --static
-
-# Fine character set for more detail
-python3 spirograph.py --lissajous --random --chars fine
-
-# Custom size and animation speed
-python3 spirograph.py --random --width 100 --height 40 --frames 60 --fps 20
-
-# Version info
-python3 spirograph.py --version
-
-# Full help
+git clone <repo-url>
+cd terminal-spirograph
 python3 spirograph.py --help
 ```
 
-## Usage Examples
+For running tests:
 
-### Classic Spirograph (Hypotrochoid)
-The hypotrochoid is the classic spirograph pattern — a small circle rolling inside a larger one:
-```
-python3 spirograph.py --hypo --R 21 --r 8 --d 5
-```
-
-### Star-like Epitrochoid
-Epitrochoids have the small circle rolling on the outside, creating star/flower shapes:
-```
-python3 spirograph.py --epi --R 9 --r 4 --d 7
+```bash
+pip install pytest
+pytest test_spirograph.py -v
 ```
 
-### Rose Curve
-Rose curves create petal-like patterns based on polar equations:
-```
-python3 spirograph.py --rose --k 7 --n 4
+## Usage
+
+### Basic examples
+
+```bash
+# Show a hypotrochoid with default parameters
+python3 spirograph.py --hypo --static
+
+# Specify custom parameters
+python3 spirograph.py --hypo --R 11 --r 4 --d 6 --static
+
+# Random epitrochoid
+python3 spirograph.py --epi --random
+
+# Rose curve
+python3 spirograph.py --rose --random
+
+# Lissajous figure
+python3 spirograph.py --lissajous --random
 ```
 
-### Lissajous Figure
-Lissajous curves create elegant looping patterns from two perpendicular oscillations:
-```
-python3 spirograph.py --lissajous --a 5 --b 6 --delta 1.5708
+### Presets
+
+```bash
+# Use a named preset
+python3 spirograph.py --preset classic --static
+
+# List all presets
+python3 spirograph.py --list-presets
 ```
 
-### Seeded Reproducibility
-Share exact curves with others using the `--seed` flag:
-```
-python3 spirograph.py --random --seed 42
+### Animation
+
+```bash
+# Animated drawing (default when terminal is available)
+python3 spirograph.py --preset starflower
+
+# Static render (no animation)
+python3 spirograph.py --preset daisy --static
+
+# Custom animation speed
+python3 spirograph.py --preset vortex --frames 60 --fps 30
 ```
 
-### SVG Export
-Save high-quality vector output for embedding in documents or printing:
-```
-python3 spirograph.py --preset infinity --export-svg infinity.svg
+### SVG export
+
+```bash
+# Export as SVG
+python3 spirograph.py --preset classic --export-svg output.svg
+
+# SVG export with custom dimensions
+python3 spirograph.py --preset starflower --export-svg star.svg
 ```
 
-## Built-in Presets
+### Reproducible generation
+
+```bash
+# Same seed always produces the same random curve
+python3 spirograph.py --random --seed 42 --static
+```
+
+### Loop mode
+
+```bash
+# Continuously generate random spirographs (Ctrl+C to stop)
+python3 spirograph.py --loop
+```
+
+### Color palettes
+
+```bash
+python3 spirograph.py --preset classic --palette rainbow --static
+python3 spirograph.py --preset classic --palette gradient --static
+python3 spirograph.py --preset classic --palette none --static
+```
+
+## All Command-Line Options
+
+| Option | Description |
+|--------|-------------|
+| `--hypo` | Use hypotrochoid curve |
+| `--epi` | Use epitrochoid curve |
+| `--rose` | Use rose curve |
+| `--lissajous` | Use Lissajous curve |
+| `--random` | Generate random parameters |
+| `--preset NAME` | Use a named preset |
+| `--list-presets` | List all available presets and exit |
+| `--R`, `--r`, `--d` | Outer radius, inner radius, pen distance (hypo/epi) |
+| `--k`, `--n` | Numerator/denominator parameters (rose) |
+| `--a`, `--b`, `--delta` | Frequencies and phase shift (lissajous) |
+| `--width N` | Output width (default: terminal width) |
+| `--height N` | Output height (default: terminal height - 4) |
+| `--points N` | Number of curve points (default: 20000) |
+| `--static` | Static render, no animation |
+| `--frames N` | Animation frames (default: 40) |
+| `--fps N` | Animation FPS (default: 15) |
+| `--palette` | Color palette: `auto`, `rainbow`, `gradient`, `none` |
+| `--chars` | Character set: `block` (default) or `fine` |
+| `--gallery` | Show gallery of different curves |
+| `--loop` | Continuous random spirographs |
+| `--seed N` | Random seed for reproducible generation |
+| `--export-svg FILE` | Export curve as SVG file |
+| `--version` | Show version |
+
+## Error Handling
+
+The program validates inputs and provides clear error messages:
+
+- **Negative dimensions**: `--width` and `--height` must be ≥ 1
+- **Zero/negative parameters**: R must be positive; r, d cannot be negative
+- **r ≥ R warning**: For hypotrochoids, warns when r ≥ R (small circle can't roll inside)
+- **Zero division**: Blocks r=0, n=0, and both a/b=0
+- **Degenerate curves**: Warns when Lissajous a=0 or b=0 (produces a line)
+- **Invalid dimensions**: `--frames`, `--fps`, and `--points` must be ≥ 1
+- **SVG security**: Blocks writes to system directories (`/etc`, `/usr`, etc.)
+- **Unknown curve types**: `compute_curve()` and `generate_params()` raise `ValueError` for unknown types
+- **Override warnings**: Warns when `--random` overrides explicit parameter values
+
+## Presets
 
 | Preset | Curve Type | Parameters |
 |--------|-----------|------------|
 | classic | Hypotrochoid | R=11, r=4, d=6 |
 | starflower | Hypotrochoid | R=21, r=8, d=5 |
 | daisy | Hypotrochoid | R=15, r=7, d=9 |
-| vortex | Hypotrochoid | R=19, r=6, d=8 |
-| sunburst | Epitrochoid | R=9, r=4, d=7 |
-| pinwheel | Epitrochoid | R=7, r=3, d=5 |
-| lotus | Epitrochoid | R=11, r=5, d=8 |
-| pentarose | Rose | k=5, n=3, d=10 |
-| heptarose | Rose | k=7, n=4, d=10 |
-| trefoil | Rose | k=3, n=1, d=10 |
-| bowtie | Lissajous | a=3, b=2, δ=π/4 |
-| infinity | Lissajous | a=3, b=4, δ=π/2 |
-| butterfly | Lissajous | a=5, b=6, δ=π/2 |
-
-## What It Does
-
-Terminal Spirograph computes mathematical spirograph curves by evaluating parametric equations at thousands of points, then maps those points onto a character grid. The density of overlapping points at each grid position determines which Unicode character is used — from spaces (empty) through `·:;+*#░▒▓█` (most dense).
-
-**Curve mathematics:**
-- **Hypotrochoid**: `(R-r)cos(t) + d·cos((R-r)t/r), (R-r)sin(t) - d·sin((R-r)t/r)` — circle rolling inside a circle
-- **Epitrochoid**: `(R+r)cos(t) - d·cos((R+r)t/r), (R+r)sin(t) - d·sin((R+r)t/r)` — circle rolling outside a circle
-- **Rose**: `d·cos(k/n·t)·cos(t), d·cos(k/n·t)·sin(t)` — polar rose in Cartesian form
-- **Lissajous**: `d·sin(at+δ), d·sin(bt)` — parametric oscillation curves
-
-The animation progressively reveals the curve by drawing more points each frame, creating a satisfying "watch it spin" experience reminiscent of a real spirograph pen.
+| vortex | Hypotrochoid | R=19, r=6, d=12 |
+| sunburst | Hypotrochoid | R=9, r=4, d=7 |
+| pinwheel | Hypotrochoid | R=7, r=3, d=5 |
+| lotus | Hypotrochoid | R=11, r=5, d=9 |
+| pentarose | Rose | k=5, n=3 |
+| heptarose | Rose | k=7, n=4 |
+| trefoil | Rose | k=3, n=1 |
+| bowtie | Lissajous | a=1, b=2 |
+| infinity | Lissajous | a=1, b=2, δ=π/2 |
+| butterfly | Lissajous | a=3, b=4, δ=π/4 |
 
 ## Running Tests
 
 ```bash
-cd 2026-06-26-terminal-spirograph
-python3 -m pytest test_spirograph.py -v
+pytest test_spirograph.py -v
 ```
 
-44 tests covering parametric math, rendering, colorization, parameter generation, presets, SVG export, and full pipeline integration.
+The test suite includes 62 tests covering:
+- Parametric math (hypotrochoid, epitrochoid, rose, Lissajous)
+- Curve computation and period correctness
+- Rendering and colorization
+- Input validation (negative dimensions, zero parameters, unknown types)
+- SVG export security (path traversal blocked)
+- Rose curve period computation (odd/even k·n)
+- Preset validity
+- End-to-end integration
+
+## Changelog
+
+### v1.2.0 — Bug fixes
+- **Fixed period over-draw**: Hypotrochoid and epitrochoid curves were being drawn R/gcd(R,r) times too many. Now correctly compute the single full period (2π·r/gcd(R,r))
+- **Fixed rose curve period**: Was using approximate formula `2π·max(n,2)`. Now uses exact period: `π·n/gcd(k,n)` for odd k·n, `2π·n/gcd(k,n)` for even k·n
+- **Fixed Lissajous period**: Was using `2π·max(a,b,2)`. Now uses `2π·lcm(a,b)` for more accurate closure
+- **Fixed SVG path traversal**: `--export-svg` now blocks writes to system directories (/etc, /usr, /bin, etc.) to prevent directory traversal attacks
+- **Fixed render_frame with negative/zero dimensions**: Now raises `ValueError` instead of producing garbage output
+- **Fixed render_frame with empty points**: Now returns a proper blank grid instead of empty list
+- **Added input validation**: Negative R/r/d, zero dimensions, zero frames/fps all produce clear error messages
+- **Added warning for r ≥ R in hypotrochoid**: Warns that the curve may not be meaningful
+- **Added warning for degenerate Lissajous**: Warns when a=0 or b=0
+- **Added warning for --random override**: Informs user when --random ignores explicit parameters
+- **Fixed division by zero**: animate_curve now validates frames ≥ 1 and fps ≥ 1
+- **Fixed unknown curve types**: compute_curve and generate_params now raise ValueError instead of silently returning empty results

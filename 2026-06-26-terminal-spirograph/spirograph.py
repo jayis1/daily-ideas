@@ -16,7 +16,7 @@ import time
 import argparse
 from collections import defaultdict
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # Unicode characters for density-based rendering, ordered by "brightness"
 DENSITY_CHARS = " .·:;+*#░▒▓█"
@@ -80,18 +80,28 @@ def compute_curve(curve_type, params, num_points):
 
     Calculates the appropriate parametric range so the curve completes
     one full period, then samples `num_points` evenly-spaced t values.
+
+    Raises ValueError for unknown curve types or invalid parameters.
     """
+    if num_points <= 0:
+        return []
+
     points = []
     if curve_type == "hypo":
         R, r, d = params["R"], params["r"], params["d"]
         if r == 0:
             return points
-        # Use integer GCD to compute the full period for closure
-        R_int, r_int = int(round(R)), int(round(r))
+        if R <= 0 or r < 0 or d < 0:
+            return points
+        # Correct period: a hypotrochoid closes after t = 2*pi*r/gcd(R,r)
+        R_int, r_int = int(round(abs(R))), int(round(abs(r)))
+        R_int = max(R_int, 1)
+        r_int = max(r_int, 1)
         g = math.gcd(R_int, r_int)
-        period = 2 * math.pi * r_int / g  # full period for curve to close
-        # Ensure we draw enough loops; minimum 2*pi worth
-        t_max = max(period, 2 * math.pi) * max(R_int // g, 1)
+        # Minimum full period to draw the complete closed curve
+        t_max = 2 * math.pi * r_int / g
+        # Ensure at least one full revolution
+        t_max = max(t_max, 2 * math.pi)
         for i in range(num_points):
             t = i / num_points * t_max
             x, y = hypotrochoid_point(R, r, d, t)
@@ -101,10 +111,15 @@ def compute_curve(curve_type, params, num_points):
         R, r, d = params["R"], params["r"], params["d"]
         if r == 0:
             return points
-        R_int, r_int = int(round(R)), int(round(r))
+        if R <= 0 or r < 0 or d < 0:
+            return points
+        # Correct period: an epitrochoid closes after t = 2*pi*r/gcd(R,r)
+        R_int, r_int = int(round(abs(R))), int(round(abs(r)))
+        R_int = max(R_int, 1)
+        r_int = max(r_int, 1)
         g = math.gcd(R_int, r_int)
-        period = 2 * math.pi * r_int / g
-        t_max = max(period, 2 * math.pi) * max(R_int // g, 1)
+        t_max = 2 * math.pi * r_int / g
+        t_max = max(t_max, 2 * math.pi)
         for i in range(num_points):
             t = i / num_points * t_max
             x, y = epitrochoid_point(R, r, d, t)
@@ -114,9 +129,17 @@ def compute_curve(curve_type, params, num_points):
         k, n, d = params["k"], params["n"], params["d"]
         if n == 0:
             return points
-        # Rose curve needs pi * n (if k*n odd) or 2*pi*n to close
-        loops_needed = max(n, 2)
-        t_max = 2 * math.pi * loops_needed
+        # Correct period for rose curve r = d*cos(k/n * t):
+        # If k*n is odd:  period = pi * n / gcd(k, n)
+        # If k*n is even: period = 2 * pi * n / gcd(k, n)
+        k_int, n_int = abs(int(k)), abs(int(n))
+        g = math.gcd(k_int, n_int) if k_int > 0 else 1
+        if (k_int * n_int) % 2 == 0:
+            t_max = 2 * math.pi * n_int / g
+        else:
+            t_max = math.pi * n_int / g
+        # Ensure at least one full revolution
+        t_max = max(t_max, 2 * math.pi)
         for i in range(num_points):
             t = i / num_points * t_max
             x, y = rose_point(k, n, d, t)
@@ -124,12 +147,28 @@ def compute_curve(curve_type, params, num_points):
 
     elif curve_type == "lissajous":
         a, b, delta, d = params["a"], params["b"], params["delta"], params["d"]
-        loops_needed = max(a, b, 2)
-        t_max = 2 * math.pi * loops_needed
+        # Lissajous closes when both sin(a*t+delta) and sin(b*t) complete
+        # full periods simultaneously: t_max = 2*pi * lcm(1,1) / gcd(a,b)
+        # Simplified: use 2*pi * lcm(a,b) / min(a,b) if both > 0
+        a_int, b_int = abs(int(a)), abs(int(b))
+        if a_int == 0 and b_int == 0:
+            return points
+        # Period is 2*pi * lcm(a,b) / 1 for integer a,b (when gcd=1)
+        # More precisely: 2*pi * lcm(a,b) / 1 = 2*pi * a*b / gcd(a,b)
+        if a_int > 0 and b_int > 0:
+            g = math.gcd(a_int, b_int)
+            loops_needed = a_int * b_int // g
+        else:
+            loops_needed = max(a_int, b_int, 2)
+        t_max = 2 * math.pi * max(loops_needed, 1)
         for i in range(num_points):
             t = i / num_points * t_max
             x, y = lissajous_point(a, b, delta, d, t)
             points.append((x, y))
+
+    else:
+        raise ValueError(f"Unknown curve type: '{curve_type}'. "
+                         f"Must be one of: hypo, epi, rose, lissajous")
 
     return points
 
@@ -140,9 +179,15 @@ def render_frame(points, width, height, chars=DENSITY_CHARS, color_mode=False, f
     Maps each (x, y) point to a grid cell, counts density per cell,
     then maps density to a character from `chars`. Higher density
     (more overlapping points) maps to "heavier" characters.
+
+    Raises ValueError if width or height is less than 1.
     """
+    if width < 1 or height < 1:
+        raise ValueError(f"Invalid dimensions: width={width}, height={height}. "
+                         f"Both must be at least 1.")
+
     if not points:
-        return []
+        return [" " * width] * height
 
     # Find bounds
     xs = [p[0] for p in points]
@@ -278,7 +323,9 @@ def generate_params(curve_type, seed=None):
         delta = rng.choice([0, math.pi / 6, math.pi / 4, math.pi / 3, math.pi / 2])
         d = rng.randint(8, 15)
         return {"a": a, "b": b, "delta": delta, "d": d}
-    return {}
+
+    raise ValueError(f"Unknown curve type: '{curve_type}'. "
+                     f"Must be one of: hypo, epi, rose, lissajous")
 
 
 def get_curve_label(curve_type, params):
@@ -327,10 +374,21 @@ def export_svg(points, curve_type, params, filepath, width=800, height=800):
 
     Generates an SVG document with a polyline of the computed points,
     suitable for printing or embedding in documents.
+
+    Sanitizes the file path to prevent directory traversal attacks.
     """
     if not points:
         print(f"Warning: no points to export for {filepath}", file=sys.stderr)
         return
+
+    # Sanitize file path: resolve and ensure it's under a safe directory
+    filepath = os.path.abspath(filepath)
+    # Block writing to system directories
+    blocked_prefixes = ["/etc", "/usr", "/bin", "/sbin", "/boot", "/dev", "/proc", "/sys", "/var"]
+    for prefix in blocked_prefixes:
+        if filepath.startswith(prefix + "/") or filepath == prefix:
+            print(f"Error: Cannot write to system directory: {filepath}", file=sys.stderr)
+            return
 
     xs = [p[0] for p in points]
     ys = [p[1] for p in points]
@@ -379,6 +437,13 @@ def export_svg(points, curve_type, params, filepath, width=800, height=800):
 
 def animate_curve(curve_type, params, width, height, num_points, frames, fps, palette, chars):
     """Animate a spirograph being drawn progressively."""
+    if frames < 1:
+        print("Error: Number of frames must be at least 1.", file=sys.stderr)
+        return
+    if fps < 1:
+        print("Error: FPS must be at least 1.", file=sys.stderr)
+        return
+
     all_points = compute_curve(curve_type, params, num_points)
     if not all_points:
         print("Error: Could not compute curve points.")
@@ -657,6 +722,24 @@ Examples:
               file=sys.stderr)
         sys.exit(1)
 
+    # Validate params for hypo: r should be less than R for meaningful curves
+    if curve_type == "hypo" and params.get("r", 0) >= params.get("R", 1):
+        print(f"Warning: For hypotrochoid, r ({params['r']}) >= R ({params['R']}). "
+              f"The small circle should roll inside the larger one (r < R).",
+              file=sys.stderr)
+
+    # Validate params for hypo/epi: R, r, d should be positive
+    if curve_type in ("hypo", "epi"):
+        for pname in ("R", "r", "d"):
+            if params.get(pname, 0) < 0:
+                print(f"Error: Parameter '{pname}' cannot be negative (got {params[pname]}).",
+                      file=sys.stderr)
+                sys.exit(1)
+        if params.get("R", 0) <= 0:
+            print(f"Error: Outer radius R must be positive (got {params.get('R', 0)}).",
+                  file=sys.stderr)
+            sys.exit(1)
+
     # Validate params for rose: n must not be 0
     if curve_type == "rose" and params.get("n", 0) == 0:
         print("Error: Denominator parameter n cannot be 0 (division by zero in rose curve).",
@@ -669,9 +752,40 @@ Examples:
               file=sys.stderr)
         sys.exit(1)
 
+    # Validate lissajous: a=0 or b=0 produces degenerate output
+    if curve_type == "lissajous" and (params.get("a", 1) == 0 or params.get("b", 1) == 0):
+        which = "a" if params.get("a", 1) == 0 else "b"
+        print(f"Warning: Frequency {which}=0 produces a degenerate Lissajous figure "
+              f"(a straight line). Consider using non-zero values.",
+              file=sys.stderr)
+
+    # Warn if --random overrides explicit parameters
+    if args.random and any([args.R is not None, args.r is not None, args.d is not None,
+                           args.k is not None, args.n is not None,
+                           args.a is not None, args.b is not None, args.delta is not None]):
+        print("Warning: --random overrides explicit parameter values.",
+              file=sys.stderr)
+
+    # Validate display dimensions
     tw, th = get_terminal_size()
-    w = args.width or (tw - 2)
-    h = args.height or (th - 6)
+    w = args.width if args.width is not None else (tw - 2)
+    h = args.height if args.height is not None else (th - 6)
+    if w < 1 or h < 1:
+        print(f"Error: Invalid dimensions width={w}, height={h}. Both must be at least 1.",
+              file=sys.stderr)
+        sys.exit(1)
+    if args.points < 1:
+        print(f"Error: Number of points must be at least 1 (got {args.points}).",
+              file=sys.stderr)
+        sys.exit(1)
+    if args.frames < 1:
+        print(f"Error: Number of frames must be at least 1 (got {args.frames}).",
+              file=sys.stderr)
+        sys.exit(1)
+    if args.fps < 1:
+        print(f"Error: FPS must be at least 1 (got {args.fps}).",
+              file=sys.stderr)
+        sys.exit(1)
     chars = DENSITY_CHARS if args.chars == "block" else DENSITY_CHARS_FINE
 
     # Gallery mode

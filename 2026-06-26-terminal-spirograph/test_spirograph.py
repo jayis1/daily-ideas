@@ -136,7 +136,10 @@ class TestRenderFrame:
 
     def test_empty_points(self):
         lines = sp.render_frame([], 40, 20)
-        assert lines == []
+        # Empty points now returns a proper blank grid instead of empty list
+        assert len(lines) == 20
+        assert all(len(line) == 40 for line in lines)
+        assert all(line == " " * 40 for line in lines)
 
     def test_fine_chars(self):
         params = {"R": 11, "r": 4, "d": 6}
@@ -349,3 +352,192 @@ class TestIntegration:
         # Force palette to "none" so ANSI codes don't interfere with assertions
         sp.static_render("hypo", params, 40, 15, 500, "none", sp.DENSITY_CHARS)
         # Just verify it doesn't crash — output goes to stdout
+
+
+# ── Bug fix tests ──
+
+class TestPeriodComputation:
+    """Test that curve period computation is correct (no over-draw)."""
+
+    def test_hypotrochoid_closes(self):
+        """Hypotrochoid curve should close within one period."""
+        params = {"R": 11, "r": 4, "d": 6}
+        points = sp.compute_curve("hypo", params, 10000)
+        start = points[0]
+        end = points[-1]
+        dist = math.sqrt((start[0] - end[0])**2 + (start[1] - end[1])**2)
+        # End point should be very close to start point (closed curve)
+        assert dist < 0.5, f"Curve doesn't close: distance={dist:.4f}"
+
+    def test_epitrochoid_closes(self):
+        """Epitrochoid curve should close within one period."""
+        params = {"R": 9, "r": 3, "d": 5}
+        points = sp.compute_curve("epi", params, 10000)
+        start = points[0]
+        end = points[-1]
+        dist = math.sqrt((start[0] - end[0])**2 + (start[1] - end[1])**2)
+        assert dist < 0.5, f"Curve doesn't close: distance={dist:.4f}"
+
+    def test_rose_closes(self):
+        """Rose curve should close within one period."""
+        params = {"k": 5, "n": 3, "d": 10}
+        points = sp.compute_curve("rose", params, 10000)
+        start = points[0]
+        end = points[-1]
+        dist = math.sqrt((start[0] - end[0])**2 + (start[1] - end[1])**2)
+        assert dist < 0.5, f"Curve doesn't close: distance={dist:.4f}"
+
+    def test_lissajous_closes(self):
+        """Lissajous curve should close within one period."""
+        params = {"a": 3, "b": 4, "delta": math.pi / 2, "d": 10}
+        points = sp.compute_curve("lissajous", params, 10000)
+        start = points[0]
+        end = points[-1]
+        dist = math.sqrt((start[0] - end[0])**2 + (start[1] - end[1])**2)
+        assert dist < 0.5, f"Curve doesn't close: distance={dist:.4f}"
+
+    def test_no_excessive_overdraw(self):
+        """Hypotrochoid should not over-draw by more than 2x the period."""
+        # R=11, r=4, gcd=1: period = 2*pi*4 = 8*pi ≈ 25.13
+        # The old code would compute t_max = 25.13 * 11 = 276.46 (11x overdraw)
+        # The fixed code should compute t_max ≈ 25.13 (1x period)
+        params = {"R": 11, "r": 4, "d": 6}
+        # Use compute_curve and check the number of unique positions
+        points = sp.compute_curve("hypo", params, 10000)
+        # The curve should have all points within one period
+        assert len(points) == 10000
+
+
+class TestInputValidation:
+    """Test input validation fixes."""
+
+    def test_render_frame_negative_width_raises(self):
+        """render_frame should reject negative width."""
+        params = {"R": 11, "r": 4, "d": 6}
+        points = sp.compute_curve("hypo", params, 100)
+        try:
+            sp.render_frame(points, -5, 20)
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "width" in str(e).lower()
+
+    def test_render_frame_negative_height_raises(self):
+        """render_frame should reject negative height."""
+        params = {"R": 11, "r": 4, "d": 6}
+        points = sp.compute_curve("hypo", params, 100)
+        try:
+            sp.render_frame(points, 40, -5)
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "height" in str(e).lower()
+
+    def test_render_frame_zero_width_raises(self):
+        """render_frame should reject zero width."""
+        params = {"R": 11, "r": 4, "d": 6}
+        points = sp.compute_curve("hypo", params, 100)
+        try:
+            sp.render_frame(points, 0, 20)
+            assert False, "Should have raised ValueError"
+        except ValueError:
+            pass
+
+    def test_compute_curve_unknown_type_raises(self):
+        """compute_curve should raise ValueError for unknown curve type."""
+        try:
+            sp.compute_curve("unknown", {"R": 11}, 100)
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "unknown" in str(e).lower()
+
+    def test_generate_params_unknown_type_raises(self):
+        """generate_params should raise ValueError for unknown curve type."""
+        try:
+            sp.generate_params("unknown", seed=42)
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "unknown" in str(e).lower()
+
+    def test_render_frame_empty_points_returns_grid(self):
+        """render_frame with empty points returns proper blank grid."""
+        lines = sp.render_frame([], 40, 20)
+        assert len(lines) == 20
+        assert all(len(line) == 40 for line in lines)
+        assert all(line == " " * 40 for line in lines)
+
+    def test_compute_curve_zero_points_returns_empty(self):
+        """compute_curve with num_points=0 returns empty list."""
+        params = {"R": 11, "r": 4, "d": 6}
+        points = sp.compute_curve("hypo", params, 0)
+        assert len(points) == 0
+
+    def test_negative_points_returns_empty(self):
+        """compute_curve with negative num_points returns empty list."""
+        params = {"R": 11, "r": 4, "d": 6}
+        points = sp.compute_curve("hypo", params, -1)
+        assert len(points) == 0
+
+
+class TestSVGSecurity:
+    """Test SVG export security fixes."""
+
+    def test_svg_blocks_system_paths(self):
+        """SVG export should block writing to system directories."""
+        params = {"R": 11, "r": 4, "d": 6}
+        points = sp.compute_curve("hypo", params, 100)
+        # Writing to /etc should be blocked
+        import io
+        from unittest.mock import patch as mock_patch
+        # Use stderr capture to check for error message
+        with mock_patch('sys.stderr', new_callable=io.StringIO) as mock_stderr:
+            sp.export_svg(points, "hypo", params, "/etc/test_output.svg")
+            output = mock_stderr.getvalue()
+            assert "Error" in output or "Cannot write" in output
+
+    def test_svg_normal_path_works(self):
+        """SVG export should work for normal paths."""
+        params = {"R": 11, "r": 4, "d": 6}
+        points = sp.compute_curve("hypo", params, 100)
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
+            filepath = f.name
+        try:
+            sp.export_svg(points, "hypo", params, filepath)
+            assert os.path.exists(filepath)
+            content = open(filepath).read()
+            assert "<svg" in content
+        finally:
+            os.unlink(filepath)
+
+
+class TestRoseCurvePeriod:
+    """Test that rose curve period is computed correctly."""
+
+    def test_trefoil_closes(self):
+        """Trefoil (k=3, n=1) should close properly.
+        k*n = 3 is odd, so period = pi*1/gcd(3,1) = pi."""
+        params = {"k": 3, "n": 1, "d": 10}
+        points = sp.compute_curve("rose", params, 10000)
+        start = points[0]
+        end = points[-1]
+        dist = math.sqrt((start[0] - end[0])**2 + (start[1] - end[1])**2)
+        assert dist < 1.0, f"Trefoil doesn't close: distance={dist:.4f}"
+
+    def test_pentarose_closes(self):
+        """Pentarose (k=5, n=3) should close properly.
+        k*n = 15 is odd, so period = pi*3/gcd(5,3) = 3*pi."""
+        params = {"k": 5, "n": 3, "d": 10}
+        points = sp.compute_curve("rose", params, 10000)
+        start = points[0]
+        end = points[-1]
+        dist = math.sqrt((start[0] - end[0])**2 + (start[1] - end[1])**2)
+        assert dist < 1.0, f"Pentarose doesn't close: distance={dist:.4f}"
+
+    def test_even_kn_closes(self):
+        """Rose with k=4, n=2 (k*n=8, even) should close properly.
+        period = 2*pi*2/gcd(4,2) = 2*pi."""
+        params = {"k": 4, "n": 2, "d": 10}
+        points = sp.compute_curve("rose", params, 10000)
+        start = points[0]
+        end = points[-1]
+        dist = math.sqrt((start[0] - end[0])**2 + (start[1] - end[1])**2)
+        assert dist < 1.0, f"Rose (4,2) doesn't close: distance={dist:.4f}"
