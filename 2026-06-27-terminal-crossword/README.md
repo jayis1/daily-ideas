@@ -1,10 +1,10 @@
 # Terminal Crossword Puzzle
 
-A feature-rich interactive crossword puzzle generator and game for your terminal. Generates random tech-themed crossword puzzles and lets you play them right in the command line with color-coded feedback, hint system, save/load, and multiple difficulty levels.
+A feature-rich interactive crossword puzzle generator and game for your terminal. Creates random tech-themed crossword puzzles you can play right in the command line with color-coded feedback, hints, save/resume, and multiple difficulty levels.
 
 ## Features
 
-- **Procedural Generation** — Creates unique crossword puzzles from a curated word bank of 80+ tech/computing terms
+- **Procedural Generation** — Creates unique crossword puzzles from a curated word bank of 76+ tech/computing terms
 - **Interactive TUI Gameplay** — Full keyboard-driven interface with cursor navigation, letter typing, and real-time feedback
 - **Color-Coded Cells** — Cyan cursor, blue highlighted word, green for correct, red for errors, yellow for revealed hints
 - **Difficulty Levels** — Easy (8 words), Medium (12 words), Hard (18 words) with appropriate grid sizes
@@ -19,10 +19,11 @@ A feature-rich interactive crossword puzzle generator and game for your terminal
 - **Smart Grid Filling** — Validates no unintended parallel words are created during generation
 - **Answer Mode** — Print puzzles with solutions using `--answers`
 - **Graceful Fallback** — Works in non-interactive mode (piped output) when no TTY is available
+- **Empty Grid Handling** — Gracefully handles edge cases like empty grids or zero-word puzzles
 
 ## Installation
 
-No external dependencies required — uses only Python standard library modules.
+No external dependencies — uses only Python standard library modules.
 
 ```bash
 # Clone or download the script
@@ -115,8 +116,13 @@ python3 crossword.py --version
 
   > 3A: A step-by-step procedure for solving a problem
 
-  [  ][1 ][  ][  ][  ][  ][  ][  ][  ][  ]
-  ...
+   1 C O M P 1 0 L E  3 W I R 5 E L E S S
+     O       O       I         I
+     M       B       R         B
+   4 A L G O R I T H M     F 6 B O O L E A N
+     I       O       I         O
+     L       L       S         L
+     E       G       S         E
 ```
 
 ## Running Tests
@@ -125,16 +131,19 @@ python3 crossword.py --version
 python3 test_crossword.py
 ```
 
-The test suite covers:
+The test suite covers 60 tests including:
 - Grid generation and word placement validation
 - Seed reproducibility
 - Difficulty presets
 - Game mechanics (typing, backspace, reveal, check)
 - Save/load round-trip
-- Edge cases (tiny grids, empty words, boundary checks)
+- Edge cases (empty grids, zero-word puzzles, tiny grids, boundary checks)
 - Progress tracking and timer formatting
 - Export functionality (ANSI-free output)
 - Version metadata
+- Render side-effect prevention (direction, message_timer)
+- Double-digit clue number rendering
+- Empty puzzle graceful handling
 
 ## Architecture
 
@@ -142,8 +151,19 @@ The test suite covers:
 - **`CrosswordGame`** — Manages interactive game state: player grid, cursor, direction, checking, hints, progress, rendering
 - **`play_interactive()`** — Main game loop with terminal raw-mode input handling
 - **`print_puzzle()`** — Static ANSI-color printed output for non-interactive mode
-- **`WORD_BANK`** — 80+ (word, clue) tuples with tech/computing terms
+- **`WORD_BANK`** — 76+ (word, clue) tuples with tech/computing terms
 - **`DIFFICULTY_PRESETS`** — Configuration dict for easy/medium/hard modes
+
+## Changelog
+
+### v1.2.0 — Bug Fixes
+- **Fixed infinite recursion** in `get_current_word_cells()` on empty grids — the method now uses a non-recursive `_collect_word_cells()` helper that tries both directions without infinite recursion
+- **Fixed render side effect** — `render()` no longer toggles the game direction or decrements `message_timer`; these are now handled in the game loop and `_collect_word_cells()` helper respectively
+- **Fixed `generate(max_words=0)`** — Previously placed 1 word unconditionally; now correctly places zero words when `max_words=0`
+- **Fixed grid misalignment** with double-digit clue numbers — render cells now use consistent 3-character visible width
+- **Fixed crash on empty puzzle** — `CrosswordGame` now handles generators with no placed words gracefully, showing a "No puzzle" message instead of crashing
+- **Removed unused imports** — `copy` and `defaultdict` were imported but never used
+- **Added 6 new tests** covering all fixed bugs
 
 ## License
 

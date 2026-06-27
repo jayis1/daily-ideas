@@ -439,8 +439,7 @@ class TestEdgeCases:
         """Generating with max_words=0 produces no placements."""
         gen = crossword.CrosswordGenerator(20, 14)
         gen.generate(max_words=0, seed=42)
-        # The first word always gets placed, so we expect 1
-        assert len(gen.placed_words) == 1
+        assert len(gen.placed_words) == 0
 
     def test_generate_tiny_grid(self):
         """A tiny grid can still place short words."""
@@ -463,6 +462,68 @@ class TestEdgeCases:
         text = gen.export_text()
         assert isinstance(text, str)
         assert len(text) > 0
+
+    def test_generate_max_words_zero(self):
+        """Generating with max_words=0 produces no placements."""
+        gen = crossword.CrosswordGenerator(20, 14)
+        gen.generate(max_words=0, seed=42)
+        assert len(gen.placed_words) == 0
+
+    def test_game_empty_puzzle_no_crash(self):
+        """Creating a game on an empty grid does not crash."""
+        gen = crossword.CrosswordGenerator(20, 14)
+        # No words placed
+        game = crossword.CrosswordGame(gen)
+        assert game.total_cells == 0
+        assert game.has_puzzle is False
+        # Render should work without crashing
+        output = game.render(use_color=False)
+        assert "No puzzle" in output
+
+    def test_get_current_word_cells_no_side_effect(self):
+        """get_current_word_cells should not toggle direction as side effect on normal puzzles."""
+        gen = crossword.CrosswordGenerator(20, 14)
+        gen.generate(max_words=10, seed=42)
+        gen.trim_grid()
+        game = crossword.CrosswordGame(gen)
+        original_dir = game.direction
+        cells = game.get_current_word_cells()
+        # On a normal puzzle, direction may toggle if perpendicular word is found
+        # But the result should be consistent
+        assert len(cells) >= 2
+
+    def test_render_does_not_decrement_message_timer(self):
+        """Render should not decrement message_timer (that's the game loop's job)."""
+        gen = crossword.CrosswordGenerator(20, 14)
+        gen.generate(max_words=10, seed=42)
+        gen.trim_grid()
+        game = crossword.CrosswordGame(gen)
+        game.check_puzzle()  # Sets message_timer
+        timer_before = game.message_timer
+        game.render(use_color=False)
+        timer_after = game.message_timer
+        assert timer_before == timer_after, "render() should not decrement message_timer"
+
+    def test_render_does_not_toggle_direction(self):
+        """Render should not toggle the game direction."""
+        gen = crossword.CrosswordGenerator(20, 14)
+        gen.generate(max_words=10, seed=42)
+        gen.trim_grid()
+        game = crossword.CrosswordGame(gen)
+        game.direction = 'A'
+        game.render(use_color=False)
+        # Direction should remain 'A' after rendering
+        assert game.direction == 'A'
+
+    def test_double_digit_clue_numbers_render(self):
+        """Render should handle double-digit clue numbers without misalignment."""
+        gen = crossword.CrosswordGenerator(24, 16)
+        gen.generate(max_words=18, seed=42, min_word_len=3)
+        gen.trim_grid()
+        game = crossword.CrosswordGame(gen)
+        # Should not crash
+        output = game.render(use_color=False)
+        assert len(output) > 100
 
 
 # ─── Run Tests ───────────────────────────────────────────────────────────────

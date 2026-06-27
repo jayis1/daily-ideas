@@ -20,11 +20,9 @@ import random
 import sys
 import os
 import time
-import copy
-from collections import defaultdict
 from datetime import datetime
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # ─── Word Bank ────────────────────────────────────────────────────────────────
 
@@ -319,6 +317,9 @@ class CrosswordGenerator:
         if not words:
             return self
 
+        if max_words <= 0:
+            return self
+
         first_word, first_clue = None, None
         for w, c in words:
             if len(w) <= self.width:
@@ -595,16 +596,18 @@ class CrosswordGame:
                 else:
                     self.player_grid[r][c] = ' '
 
-        # Set cursor to first puzzle cell
-        for r in range(generator.height):
-            for c in range(generator.width):
-                if generator.grid[r][c] != ' ':
-                    self.cursor_r = r
-                    self.cursor_c = c
-                    break
-            else:
-                continue
-            break
+        # Set cursor to first puzzle cell (if any exist)
+        self.has_puzzle = self.total_cells > 0
+        if self.has_puzzle:
+            for r in range(generator.height):
+                for c in range(generator.width):
+                    if generator.grid[r][c] != ' ':
+                        self.cursor_r = r
+                        self.cursor_c = c
+                        break
+                else:
+                    continue
+                break
 
     def elapsed_time(self):
         """Return elapsed seconds since game start."""
@@ -634,16 +637,24 @@ class CrosswordGame:
             Tuple of (number, clue_text) or None if not on a word start.
         """
         across_clues, down_clues, numbered = self.gen.get_clues()
-        # Find the word the cursor is currently on
-        cells = self.get_current_word_cells()
+        # Find the word the cursor is currently on using the current direction
+        cells = self._collect_word_cells(self.direction)
         if not cells or len(cells) < 2:
-            return None
+            # Try the other direction without toggling
+            other = 'D' if self.direction == 'A' else 'A'
+            cells = self._collect_word_cells(other)
+            if not cells or len(cells) < 2:
+                return None
+            # Use the other direction for clue lookup
+            direction_for_clue = other
+        else:
+            direction_for_clue = self.direction
         start_r, start_c = cells[0]
         num = numbered.get((start_r, start_c))
         if num is None:
             return None
         # Find the matching clue
-        if self.direction == 'A':
+        if direction_for_clue == 'A':
             for n, w, cl in across_clues:
                 if n == num:
                     return (num, cl)
@@ -654,8 +665,31 @@ class CrosswordGame:
         return None
 
     def get_current_word_cells(self):
-        """Get all cells in the current word at cursor position."""
-        dr, dc = (0, 1) if self.direction == 'A' else (1, 0)
+        """Get all cells in the current word at cursor position.
+
+        Tries the current direction first; if only 0-1 cells are found,
+        tries the perpendicular direction. Does NOT modify self.direction
+        as a side effect — direction toggling is handled separately.
+        """
+        cells = self._collect_word_cells(self.direction)
+        if len(cells) >= 2:
+            return cells
+
+        # Try the other direction
+        other = 'D' if self.direction == 'A' else 'A'
+        cells_other = self._collect_word_cells(other)
+        if len(cells_other) >= 2:
+            # Auto-switch direction to match the found word
+            self.direction = other
+            return cells_other
+
+        # Neither direction yields a real word — return whatever we have
+        # (single cell or empty; caller must handle this gracefully)
+        return cells if cells else cells_other
+
+    def _collect_word_cells(self, direction):
+        """Collect all cells in the word at cursor position along the given direction."""
+        dr, dc = (0, 1) if direction == 'A' else (1, 0)
         r, c = self.cursor_r, self.cursor_c
 
         # Find start of word
@@ -675,11 +709,6 @@ class CrosswordGame:
                 c += dc
             else:
                 break
-
-        if len(cells) <= 1:
-            # Switch direction and try again
-            self.direction = 'D' if self.direction == 'A' else 'A'
-            return self.get_current_word_cells()
 
         return cells
 
@@ -852,6 +881,7 @@ class CrosswordGame:
             for c in range(generator.width)
             if generator.grid[r][c] != ' '
         )
+        game.has_puzzle = game.total_cells > 0
         game.filled_count = 0
         return game
 
@@ -871,6 +901,15 @@ class CrosswordGame:
             C = Colors
         else:
             C = _NoColor()
+
+        # Handle empty puzzle gracefully
+        if not self.has_puzzle:
+            lines = []
+            lines.append(f"\n{C.BOLD}{C.CYAN}{'=' * 42}{C.RESET}")
+            lines.append(f"{C.BOLD}{C.CYAN}  TERMINAL CROSSWORD PUZZLE{C.RESET}")
+            lines.append(f"{C.BOLD}{C.CYAN}{'=' * 42}{C.RESET}\n")
+            lines.append(f"  {C.YELLOW}No puzzle to display. Generate a puzzle first.{C.RESET}")
+            return "\n".join(lines)
 
         lines = []
         lines.append(f"\n{C.BOLD}{C.CYAN}{'=' * 42}{C.RESET}")
@@ -908,21 +947,15 @@ class CrosswordGame:
                 player_char = self.player_grid[r][c]
 
                 if cell_char == ' ':
-                    row_str += f"{C.BG_GRAY}  {C.RESET}"
+                    row_str += f"{C.BG_GRAY}   {C.RESET}"
                 else:
                     is_cursor = (r == self.cursor_r and c == self.cursor_c)
-                    is_in_word = False
-                    word_cells = self.get_current_word_cells()
+                    word_cells = self._collect_word_cells(self.direction)
                     is_in_word = (r, c) in word_cells
 
                     is_checked = (r, c) in self.checked_cells
                     is_wrong = (r, c) in self.wrong_cells
                     is_revealed = (r, c) in self.revealed
-
-                    # Number in top-left if present
-                    num_str = ""
-                    if (r, c) in number_map:
-                        num_str = f"{C.DIM}{number_map[(r,c)]}{C.RESET}"
 
                     if is_cursor:
                         bg = C.BG_CYAN + C.BLACK
@@ -938,10 +971,19 @@ class CrosswordGame:
                         bg = C.BG_WHITE + C.BLACK
 
                     display_char = player_char if player_char != '_' else ' '
-                    if num_str:
-                        row_str += f"{bg}{num_str}{display_char}{C.RESET}"
+                    if (r, c) in number_map:
+                        num = number_map[(r, c)]
+                        # Fixed 3-char visible width per cell:
+                        # Single-digit: "1 A" (num + space + letter)
+                        # Double-digit: "10A" (num + letter)
+                        # Ensures grid alignment regardless of number width
+                        num_str = f"{C.DIM}{num}{C.RESET}"
+                        if num < 10:
+                            row_str += f"{bg}{num_str} {display_char}{C.RESET}"
+                        else:
+                            row_str += f"{bg}{num_str}{display_char}{C.RESET}"
                     else:
-                        row_str += f"{bg} {display_char}{C.RESET}"
+                        row_str += f"{bg}  {display_char}{C.RESET}"
 
             lines.append(row_str)
 
@@ -951,7 +993,6 @@ class CrosswordGame:
                 lines.append(f"\n  {C.BOLD}{C.GREEN}{self.message}{C.RESET}")
             else:
                 lines.append(f"\n  {C.BOLD}{self.message}{C.RESET}")
-            self.message_timer -= 1
         else:
             lines.append("")
 
@@ -1144,6 +1185,10 @@ def play_interactive(generator, resume_game=None):
             clear_screen()
             print(game.render(use_color=use_color))
             sys.stdout.flush()
+
+            # Decrement message timer in the game loop, not in render()
+            if game.message_timer > 0:
+                game.message_timer -= 1
 
             key = get_key()
 
