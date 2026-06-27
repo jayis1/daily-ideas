@@ -1,133 +1,150 @@
-# 📝 Terminal Crossword Puzzle
+# Terminal Crossword Puzzle
 
-An interactive crossword puzzle generator and player that runs entirely in the terminal. Features procedurally generated puzzles from a tech-themed word bank, beautiful box-drawing grid rendering with ANSI colors, and full keyboard-driven gameplay.
+A feature-rich interactive crossword puzzle generator and game for your terminal. Generates random tech-themed crossword puzzles and lets you play them right in the command line with color-coded feedback, hint system, save/load, and multiple difficulty levels.
 
-## ✨ Features
+## Features
 
-- **Procedural Generation** — Every puzzle is unique, built from a curated bank of 70+ tech and CS vocabulary words with clues
-- **Interactive Gameplay** — Full keyboard-driven interface with arrow keys, letter input, and intuitive navigation
-- **Smart Grid Rendering** — Beautiful Unicode box-drawing grid with clue numbers in cells, color-coded highlighting for cursor position, current word, checked cells, and revealed letters
-- **Direction Toggle** — Switch between ACROSS and DOWN with Tab or Enter to fill words in either direction
-- **Check & Reveal** — Check your answers for correctness (wrong cells highlighted in red), reveal individual letters, or reveal entire words
-- **Clue Numbering** — Standard crossword numbering with separate ACROSS and DOWN clue lists, words marked as ✓ when completed
-- **Reproducible Puzzles** — Use `--seed` to regenerate the same puzzle, or let it randomize
-- **Two Display Modes** — Full interactive play mode, or static print mode (`--print`) for paper-style output
-- **Answer Key** — `--answers` flag shows the solution alongside the puzzle
+- **Procedural Generation** — Creates unique crossword puzzles from a curated word bank of 80+ tech/computing terms
+- **Interactive TUI Gameplay** — Full keyboard-driven interface with cursor navigation, letter typing, and real-time feedback
+- **Color-Coded Cells** — Cyan cursor, blue highlighted word, green for correct, red for errors, yellow for revealed hints
+- **Difficulty Levels** — Easy (8 words), Medium (12 words), Hard (18 words) with appropriate grid sizes
+- **Progress Tracking** — Real-time percentage complete and elapsed timer display
+- **Current Clue Display** — Shows the clue for the word under the cursor
+- **Hint System** — Reveal a single letter (`R`) or an entire word (`W`)
+- **Check Puzzle** — Validates all filled letters, marking correct (green) and incorrect (red)
+- **Save & Resume** — Save game state to JSON and resume later with `--load`
+- **Export to Text** — Export puzzles as plain-text files (no ANSI codes) with `--export`
+- **Reproducible Seeds** — Use `--seed` to generate the same puzzle every time
+- **Deduplication** — Handles duplicate word bank entries gracefully
+- **Smart Grid Filling** — Validates no unintended parallel words are created during generation
+- **Answer Mode** — Print puzzles with solutions using `--answers`
+- **Graceful Fallback** — Works in non-interactive mode (piped output) when no TTY is available
 
-## 🎮 Controls
+## Installation
 
-| Key | Action |
-|-----|--------|
-| Arrow keys | Move cursor between cells |
-| A-Z | Type a letter in the current cell |
-| Backspace | Delete current letter and move back |
-| Tab / Enter | Toggle between ACROSS and DOWN |
-| C | Check puzzle (marks correct/wrong cells) |
-| R | Reveal the current letter |
-| W | Reveal the entire current word |
-| N | Generate a new puzzle |
-| Q | Quit |
-
-## 🔧 Installation
-
-No external dependencies needed — just Python 3.6+:
+No external dependencies required — uses only Python standard library modules.
 
 ```bash
-# Clone or download the crossword.py file
-# Make it executable:
-chmod +x crossword.py
+# Clone or download the script
+git clone <repo-url>
+cd terminal-crossword
+
+# Run directly
+python3 crossword.py
 ```
 
-## 🚀 How to Run
+## Usage
 
-### Interactive mode (default when running in a terminal)
+### Play Interactively (default)
+
 ```bash
 python3 crossword.py
 ```
 
-### Static print mode (for viewing the puzzle without interaction)
+### Set Difficulty
+
 ```bash
-python3 crossword.py --print
+python3 crossword.py --difficulty easy    # 8 words, smaller grid
+python3 crossword.py --difficulty medium   # 12 words (default)
+python3 crossword.py --difficulty hard     # 18 words, larger grid
 ```
 
-### Show the answer key
-```bash
-python3 crossword.py --print --answers
-```
+### Use a Seed for Reproducible Puzzles
 
-### Specify a seed for reproducible puzzles
 ```bash
 python3 crossword.py --seed 42
 ```
 
-### Adjust difficulty (number of words)
+### Print Puzzle (Non-Interactive)
+
 ```bash
-python3 crossword.py --words 8    # Easier: fewer words
-python3 crossword.py --words 18   # Harder: more words
+python3 crossword.py --print
+python3 crossword.py --print --answers     # Show solutions
 ```
 
-### Force non-interactive mode (for piping output)
+### Export to Text File
+
 ```bash
-python3 crossword.py --no-interactive
+python3 crossword.py --export puzzle.txt --seed 42
+python3 crossword.py --export puzzle_answers.txt --answers --seed 42
 ```
 
-## 📋 Usage Examples
+### Save and Resume Games
 
-**Play an interactive crossword:**
+```bash
+# While playing, press S to save
+# Resume later:
+python3 crossword.py --load ~/.crossword_saves/crossword_20260627_143000.json
 ```
-$ python3 crossword.py --seed 100
 
-╔══════════════════════════════════════╗
-║     📝 TERMINAL CROSSWORD PUZZLE      ║
-╚══════════════════════════════════════╝
+### Override Word Count
 
-  Direction: ACROSS →  |  Words: 12  |  Hints: 0
+```bash
+python3 crossword.py --words 20    # Override difficulty default
+```
 
-   ┌───┬───┬───┬───┬───┬───┬───┬───┐
- 0 │   │   │   │ 1 │   │   │   │   │
-   │   │   │   │   │   │   │   │   │
-   ├───┼───┼───┼───┼───┼───┼───┼───┤
- 1 │   │ 2 │   │   │   │   │   │   │
-   │   │   │   │   │   │   │   │   │
-   ...
+### Show Version
 
-── ACROSS ──────────────────────────────
-   1. A small part broken off from a larger whole (8)
+```bash
+python3 crossword.py --version
+```
 
-── DOWN ────────────────────────────────
-   1. Sequence where each number is the sum of the two before it (9)
+## Controls
 
-── CONTROLS ────────────────────────────
-  Arrow keys  Move cursor     Tab        Toggle across/down
+| Key | Action |
+|-----|---------|
+| Arrow keys | Move cursor |
+| Tab / Enter | Toggle across/down direction |
+| A-Z | Type a letter |
+| Backspace | Delete letter / move back |
+| C | Check puzzle (marks correct/incorrect) |
+| R | Reveal current letter (hint) |
+| W | Reveal current word (hint) |
+| S | Save game to file |
+| N | Start a new puzzle |
+| Q | Quit |
+
+## Example Output
+
+```
+==========================================
+  TERMINAL CROSSWORD PUZZLE
+==========================================
+
+  Direction: ACROSS →  |  Words: 12  |  Progress: 23%  |  Hints: 0  |  Time: 01:15
+
+  > 3A: A step-by-step procedure for solving a problem
+
+  [  ][1 ][  ][  ][  ][  ][  ][  ][  ][  ]
   ...
 ```
 
-**Print a puzzle with answers:**
+## Running Tests
+
 ```bash
-python3 crossword.py --print --answers --seed 42
+python3 test_crossword.py
 ```
 
-**Generate a daily puzzle (use date as seed):**
-```bash
-python3 crossword.py --seed $(date +%Y%m%d)
-```
+The test suite covers:
+- Grid generation and word placement validation
+- Seed reproducibility
+- Difficulty presets
+- Game mechanics (typing, backspace, reveal, check)
+- Save/load round-trip
+- Edge cases (tiny grids, empty words, boundary checks)
+- Progress tracking and timer formatting
+- Export functionality (ANSI-free output)
+- Version metadata
 
-## 🧩 How It Works
+## Architecture
 
-1. **Word Selection** — Words are sorted by length (longest first) and shuffled with a random seed
-2. **Placement** — The first word is placed horizontally in the center. Subsequent words are placed by finding intersecting letters with already-placed words
-3. **Validation** — Each placement is checked for conflicts: no unintended words formed by adjacency, proper intersections, and no words running into each other
-4. **Trimming** — After generation, the grid is trimmed to the minimal bounding box around all words
-5. **Numbering** — Clue numbers are assigned in standard crossword order (top-to-bottom, left-to-right)
+- **`CrosswordGenerator`** — Generates crossword grids from the word bank, validates placements, trims bounding boxes, and serializes/deserializes state
+- **`CrosswordGame`** — Manages interactive game state: player grid, cursor, direction, checking, hints, progress, rendering
+- **`play_interactive()`** — Main game loop with terminal raw-mode input handling
+- **`print_puzzle()`** — Static ANSI-color printed output for non-interactive mode
+- **`WORD_BANK`** — 80+ (word, clue) tuples with tech/computing terms
+- **`DIFFICULTY_PRESETS`** — Configuration dict for easy/medium/hard modes
 
-## 📐 Architecture
+## License
 
-- `CrosswordGenerator` — Builds the puzzle grid from the word bank using constraint-based placement
-- `CrosswordGame` — Manages interactive gameplay state (cursor, direction, filled letters, checking, revealing)
-- `Colors` — ANSI color code constants for terminal rendering
-- `print_puzzle()` — Static rendering function for non-interactive display
-- `play_interactive()` — Full interactive terminal game loop with raw key input
-
-## 🎯 Word Bank
-
-The puzzle draws from 70+ tech-themed words including: ALGORITHM, PYTHON, BINARY, CACHE, DEBUG, ENCRYPT, FIBONACCI, KERNEL, MATRIX, RECURSION, STACK, and many more — all with descriptive clues that range from straightforward definitions to clever hints.
+MIT

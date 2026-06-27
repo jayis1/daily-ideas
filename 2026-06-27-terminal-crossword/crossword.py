@@ -1,13 +1,30 @@
 #!/usr/bin/env python3
 """
 Terminal Crossword Puzzle — Generate and play interactive crossword puzzles in the terminal.
+
+Features:
+  - Procedural crossword generation from a word bank
+  - Interactive TUI gameplay with cursor navigation
+  - Static print mode for paper-style output
+  - Difficulty levels (easy/medium/hard)
+  - Save/load puzzle state to JSON files
+  - Progress tracking (% complete)
+  - Elapsed timer during gameplay
+  - Hint system (reveal letter, reveal word)
+  - Check puzzle for errors
+  - Puzzle export to plain text
 """
 
+import json
 import random
 import sys
 import os
+import time
 import copy
 from collections import defaultdict
+from datetime import datetime
+
+__version__ = "1.1.0"
 
 # ─── Word Bank ────────────────────────────────────────────────────────────────
 
@@ -80,7 +97,6 @@ WORD_BANK = [
     ("LOGIC", "The study of valid reasoning and inference"),
     ("PATCH", "A piece of software that fixes a bug"),
     ("SERIAL", "Sequential, one after another"),
-    ("CACHE", "Temporary storage for quick data access"),
     ("ABSTRACT", "A concept or idea not associated with any specific instance"),
     ("COMPUTE", "To calculate or determine by mathematical methods"),
     ("DYNAMIC", "Changing or evolving during execution"),
@@ -90,6 +106,14 @@ WORD_BANK = [
     ("VOLTAGE", "Electric potential difference measured in volts"),
     ("WIRELESS", "Communication without physical connections"),
 ]
+
+# ─── Difficulty Presets ───────────────────────────────────────────────────────
+
+DIFFICULTY_PRESETS = {
+    "easy": {"max_words": 8, "min_word_len": 3, "grid_width": 18, "grid_height": 12},
+    "medium": {"max_words": 12, "min_word_len": 4, "grid_width": 20, "grid_height": 14},
+    "hard": {"max_words": 18, "min_word_len": 5, "grid_width": 24, "grid_height": 16},
+}
 
 # ─── Colors ───────────────────────────────────────────────────────────────────
 
@@ -119,6 +143,45 @@ class Colors:
     BLACK = "\033[30m"
 
 
+class _NoColor:
+    """No-op color replacement for terminals that don't support color."""
+    RESET = ""
+    BOLD = ""
+    DIM = ""
+    UNDERLINE = ""
+    RED = ""
+    GREEN = ""
+    YELLOW = ""
+    BLUE = ""
+    MAGENTA = ""
+    CYAN = ""
+    WHITE = ""
+    BG_WHITE = ""
+    BG_BLACK = ""
+    BG_GRAY = ""
+    BG_DARK = ""
+    BG_BLUE = ""
+    BG_GREEN = ""
+    BG_YELLOW = ""
+    BG_CYAN = ""
+    BG_MAGENTA = ""
+    BG_RED = ""
+    BLACK = ""
+
+
+def supports_color():
+    """Check if the terminal supports color output."""
+    if not hasattr(sys.stdout, 'isatty'):
+        return False
+    if not sys.stdout.isatty():
+        return False
+    if os.environ.get('NO_COLOR') is not None:
+        return False
+    if os.environ.get('TERM') == 'dumb':
+        return False
+    return True
+
+
 # ─── Crossword Generator ────────────────────────────────────────────────────
 
 class CrosswordGenerator:
@@ -131,7 +194,15 @@ class CrosswordGenerator:
         self.placed_words = []  # (word, row, col, direction) where direction is 'A' or 'D'
 
     def can_place(self, word, row, col, direction):
-        """Check if a word can be placed at the given position."""
+        """Check if a word can be placed at the given position.
+
+        Validates:
+          - Word fits within grid bounds
+          - No conflicting letters at occupied cells
+          - No unintended adjacent words formed
+          - At least one intersection with existing words (except first word)
+          - No word extensions (cells before/after must be empty)
+        """
         dr, dc = (0, 1) if direction == 'A' else (1, 0)
         length = len(word)
 
@@ -143,7 +214,21 @@ class CrosswordGenerator:
         if row < 0 or col < 0:
             return False
 
-        # Check each cell
+        # Check cell before the word start — must be empty to avoid extending another word
+        before_r = row - dr
+        before_c = col - dc
+        if 0 <= before_r < self.height and 0 <= before_c < self.width:
+            if self.grid[before_r][before_c] != ' ':
+                return False
+
+        # Check cell after the word end — must be empty to avoid extending another word
+        after_r = row + dr * length
+        after_c = col + dc * length
+        if 0 <= after_r < self.height and 0 <= after_c < self.width:
+            if self.grid[after_r][after_c] != ' ':
+                return False
+
+        # Check each cell along the word's path
         has_intersection = False
         for i in range(length):
             r = row + dr * i
@@ -152,55 +237,14 @@ class CrosswordGenerator:
 
             if cell != ' ':
                 if cell != word[i]:
-                    return False  # Conflict
+                    return False  # Letter conflict
                 else:
                     has_intersection = True
             else:
-                # Check adjacent cells (no parallel adjacency unless intersecting)
-                if direction == 'A':
-                    # Check above and below
-                    if r > 0 and self.grid[r-1][c] != ' ':
-                        # Only ok if it's part of a vertical word crossing here
-                        pass  # We'll validate intersections separately
-                    if r < self.height - 1 and self.grid[r+1][c] != ' ':
-                        pass
-                else:
-                    if c > 0 and self.grid[r][c-1] != ' ':
-                        pass
-                    if c < self.width - 1 and self.grid[r][c+1] != ' ':
-                        pass
-
-        # Check cell before and after word
-        before_r = row - dr
-        before_c = col - dc
-        if 0 <= before_r < self.height and 0 <= before_c < self.width:
-            if self.grid[before_r][before_c] != ' ':
-                return False
-
-        after_r = row + dr * length
-        after_c = col + dc * length
-        if 0 <= after_r < self.height and 0 <= after_c < self.width:
-            if self.grid[after_r][after_c] != ' ':
-                return False
-
-        # For the first word, no intersection needed
-        if len(self.placed_words) == 0:
-            return True
-
-        # Must intersect at least one existing word
-        if not has_intersection:
-            return False
-
-        # Validate that adjacent cells don't create invalid words
-        for i in range(length):
-            r = row + dr * i
-            c = col + dc * i
-            cell = self.grid[r][c]
-
-            if cell == ' ':
                 # New letter being placed — check perpendicular neighbors
+                # to ensure we don't create unintended parallel words
                 if direction == 'A':
-                    # Check if this creates an unintended vertical word
+                    # For across words, check vertical neighbors
                     above = 0
                     rr = r - 1
                     while rr >= 0 and self.grid[rr][c] != ' ':
@@ -212,9 +256,9 @@ class CrosswordGenerator:
                         below += 1
                         rr += 1
                     if above > 0 or below > 0:
-                        return False  # Would create partial vertical word
+                        return False  # Would create an unintended vertical word
                 else:
-                    # Check if this creates an unintended horizontal word
+                    # For down words, check horizontal neighbors
                     left = 0
                     cc = c - 1
                     while cc >= 0 and self.grid[r][cc] != ' ':
@@ -226,9 +270,14 @@ class CrosswordGenerator:
                         right += 1
                         cc += 1
                     if left > 0 or right > 0:
-                        return False
+                        return False  # Would create an unintended horizontal word
 
-        return True
+        # First word doesn't need an intersection
+        if len(self.placed_words) == 0:
+            return True
+
+        # All subsequent words must intersect at least one existing word
+        return has_intersection
 
     def place_word(self, word, row, col, direction):
         """Place a word on the grid."""
@@ -239,20 +288,47 @@ class CrosswordGenerator:
             self.grid[r][c] = word[i]
         self.placed_words.append((word, row, col, direction))
 
-    def generate(self, max_words=15, seed=None):
-        """Generate a crossword puzzle."""
+    def generate(self, max_words=15, seed=None, min_word_len=3):
+        """Generate a crossword puzzle.
+
+        Args:
+            max_words: Maximum number of words to place.
+            seed: Random seed for reproducibility.
+            min_word_len: Minimum word length to include.
+
+        Returns:
+            self (for method chaining)
+        """
         if seed is not None:
             random.seed(seed)
 
-        words = list(set(WORD_BANK))
+        # Deduplicate and filter by minimum length
+        seen_words = set()
+        unique_words = []
+        for word, clue in WORD_BANK:
+            if word not in seen_words and len(word) >= min_word_len:
+                seen_words.add(word)
+                unique_words.append((word, clue))
+
+        words = list(unique_words)
         random.shuffle(words)
+        # Prefer longer words first for better grid filling
         words.sort(key=lambda w: len(w[0]), reverse=True)
 
-        # Place first word in the center
+        # Place first word in the center (pick the first word that fits)
         if not words:
             return self
 
-        first_word, first_clue = words[0]
+        first_word, first_clue = None, None
+        for w, c in words:
+            if len(w) <= self.width:
+                first_word, first_clue = w, c
+                break
+
+        if first_word is None:
+            # No words fit in the grid
+            return self
+
         start_col = (self.width - len(first_word)) // 2
         start_row = self.height // 2
         self.place_word(first_word, start_row, start_col, 'A')
@@ -268,7 +344,7 @@ class CrosswordGenerator:
                 for i in range(len(word)):
                     for j in range(len(pw)):
                         if word[i] == pw[j]:
-                            # Try placing perpendicular
+                            # Try placing perpendicular to existing word
                             if pd == 'A':
                                 # Existing word is across, try placing down
                                 nr = pr - i
@@ -286,8 +362,7 @@ class CrosswordGenerator:
 
             if best_placements:
                 best_placements.sort(reverse=True)
-                _, br, bc, bd = best_placements[0]
-                # Add some randomness for variety
+                # Pick from top candidates for variety
                 top_n = min(3, len(best_placements))
                 choice = random.randint(0, top_n - 1)
                 _, br, bc, bd = best_placements[choice]
@@ -296,7 +371,11 @@ class CrosswordGenerator:
         return self
 
     def _score_placement(self, word, row, col, direction):
-        """Score a placement position (higher is better)."""
+        """Score a placement position (higher is better).
+
+        Prefers placements near the center of the grid and with more
+        intersections with existing words.
+        """
         dr, dc = (0, 1) if direction == 'A' else (1, 0)
         score = 0
         for i in range(len(word)):
@@ -314,8 +393,13 @@ class CrosswordGenerator:
         return score
 
     def get_clues(self):
-        """Get numbered clues for across and down."""
-        # Find all word starts and assign numbers
+        """Get numbered clues for across and down.
+
+        Returns:
+            Tuple of (across_clues, down_clues, numbered_map)
+            where each clue list contains (number, word, clue_text)
+            and numbered_map maps (row, col) -> number.
+        """
         across = []
         down = []
 
@@ -355,7 +439,7 @@ class CrosswordGenerator:
         return across_numbered, down_numbered, numbered
 
     def trim_grid(self):
-        """Trim the grid to the minimum bounding box of placed words."""
+        """Trim the grid to the minimum bounding box of placed words, with padding."""
         if not self.placed_words:
             return self
 
@@ -388,6 +472,97 @@ class CrosswordGenerator:
         self.placed_words = new_placed
         return self
 
+    def to_dict(self):
+        """Serialize the generator state to a dictionary for save/load."""
+        return {
+            "width": self.width,
+            "height": self.height,
+            "grid": self.grid,
+            "placed_words": self.placed_words,
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        """Reconstruct a generator from a saved dictionary."""
+        gen = cls(data["width"], data["height"])
+        gen.grid = data["grid"]
+        gen.placed_words = [tuple(pw) for pw in data["placed_words"]]
+        return gen
+
+    def export_text(self, show_answers=False):
+        """Export the puzzle as a plain-text string (no ANSI codes).
+
+        Args:
+            show_answers: If True, fill in the solution letters.
+
+        Returns:
+            A string containing the full puzzle in plain text.
+        """
+        across_clues, down_clues, numbered = self.get_clues()
+        number_map = {}
+        for (r, c), num in numbered.items():
+            number_map[(r, c)] = num
+
+        lines = []
+        lines.append("TERMINAL CROSSWORD PUZZLE")
+        lines.append("=" * 40)
+        lines.append("")
+
+        # Grid
+        cell_w = 3
+        top = "   " + "+" + "---+" * self.width
+        mid = "   " + "+" + "---+" * self.width
+        bot = "   " + "+" + "---+" * self.width
+
+        lines.append(top)
+        for r in range(self.height):
+            num_row = f"{r:2d} |"
+            letter_row = "   |"
+            for c in range(self.width):
+                cell = self.grid[r][c]
+                if cell == ' ':
+                    num_row += "   |"
+                    letter_row += "   |"
+                else:
+                    n = number_map.get((r, c), '')
+                    if n:
+                        num_row += f"{n:<3d}|"
+                    else:
+                        num_row += "   |"
+                    if show_answers:
+                        letter_row += f" {cell} |"
+                    else:
+                        letter_row += "   |"
+            lines.append(num_row)
+            lines.append(letter_row)
+            if r < self.height - 1:
+                lines.append(mid)
+        lines.append(bot)
+
+        # Clues
+        lines.append("")
+        lines.append("ACROSS")
+        lines.append("-" * 40)
+        for num, word, clue in across_clues:
+            lines.append(f"  {num:2d}. {clue} ({len(word)})")
+
+        lines.append("")
+        lines.append("DOWN")
+        lines.append("-" * 40)
+        for num, word, clue in down_clues:
+            lines.append(f"  {num:2d}. {clue} ({len(word)})")
+
+        if show_answers:
+            lines.append("")
+            lines.append("ANSWERS")
+            lines.append("-" * 40)
+            for num, word, clue in across_clues:
+                lines.append(f"  {num:2d}A: {word}")
+            for num, word, clue in down_clues:
+                lines.append(f"  {num:2d}D: {word}")
+
+        return "\n".join(lines)
+
 
 # ─── Crossword Game ──────────────────────────────────────────────────────────
 
@@ -406,18 +581,21 @@ class CrosswordGame:
         self.revealed = set()
         self.checked_cells = set()
         self.wrong_cells = set()
-        self.start_time = None
+        self.start_time = time.time()
         self.hints_used = 0
+        self.total_cells = 0
+        self.filled_count = 0
 
-        # Initialize player grid
+        # Initialize player grid: mark cells that are part of the puzzle
         for r in range(generator.height):
             for c in range(generator.width):
                 if generator.grid[r][c] != ' ':
                     self.player_grid[r][c] = '_'
+                    self.total_cells += 1
                 else:
                     self.player_grid[r][c] = ' '
 
-        # Set cursor to first cell
+        # Set cursor to first puzzle cell
         for r in range(generator.height):
             for c in range(generator.width):
                 if generator.grid[r][c] != ' ':
@@ -427,6 +605,53 @@ class CrosswordGame:
             else:
                 continue
             break
+
+    def elapsed_time(self):
+        """Return elapsed seconds since game start."""
+        return time.time() - self.start_time
+
+    def format_time(self, seconds):
+        """Format seconds into MM:SS display."""
+        mins = int(seconds) // 60
+        secs = int(seconds) % 60
+        return f"{mins:02d}:{secs:02d}"
+
+    def progress_pct(self):
+        """Calculate percentage of cells filled (not necessarily correctly)."""
+        filled = sum(
+            1 for r in range(self.gen.height)
+            for c in range(self.gen.width)
+            if self.gen.grid[r][c] != ' ' and self.player_grid[r][c] != '_'
+        )
+        if self.total_cells == 0:
+            return 0
+        return int(100 * filled / self.total_cells)
+
+    def get_current_word_info(self):
+        """Get the clue number and text for the current word at cursor.
+
+        Returns:
+            Tuple of (number, clue_text) or None if not on a word start.
+        """
+        across_clues, down_clues, numbered = self.gen.get_clues()
+        # Find the word the cursor is currently on
+        cells = self.get_current_word_cells()
+        if not cells or len(cells) < 2:
+            return None
+        start_r, start_c = cells[0]
+        num = numbered.get((start_r, start_c))
+        if num is None:
+            return None
+        # Find the matching clue
+        if self.direction == 'A':
+            for n, w, cl in across_clues:
+                if n == num:
+                    return (num, cl)
+        else:
+            for n, w, cl in down_clues:
+                if n == num:
+                    return (num, cl)
+        return None
 
     def get_current_word_cells(self):
         """Get all cells in the current word at cursor position."""
@@ -452,18 +677,18 @@ class CrosswordGame:
                 break
 
         if len(cells) <= 1:
-            # Switch direction
+            # Switch direction and try again
             self.direction = 'D' if self.direction == 'A' else 'A'
             return self.get_current_word_cells()
 
         return cells
 
     def type_letter(self, letter):
-        """Type a letter at the current cursor position."""
+        """Type a letter at the current cursor position and advance."""
         if 0 <= self.cursor_r < self.gen.height and 0 <= self.cursor_c < self.gen.width:
             if self.gen.grid[self.cursor_r][self.cursor_c] != ' ':
                 self.player_grid[self.cursor_r][self.cursor_c] = letter.upper()
-                # Clear any check marks
+                # Clear any check marks for this cell
                 self.checked_cells.discard((self.cursor_r, self.cursor_c))
                 self.wrong_cells.discard((self.cursor_r, self.cursor_c))
                 # Advance cursor
@@ -507,7 +732,7 @@ class CrosswordGame:
             c -= dc
 
     def move_cursor(self, dr, dc):
-        """Move cursor in a direction."""
+        """Move cursor in an arbitrary direction, skipping non-puzzle cells."""
         nr = self.cursor_r + dr
         nc = self.cursor_c + dc
         while 0 <= nr < self.gen.height and 0 <= nc < self.gen.width:
@@ -523,7 +748,11 @@ class CrosswordGame:
         self.direction = 'D' if self.direction == 'A' else 'A'
 
     def check_puzzle(self):
-        """Check if the puzzle is correctly filled."""
+        """Check if the puzzle is correctly filled.
+
+        Marks correct cells green and incorrect cells red.
+        Sets self.solved to True if puzzle is complete and correct.
+        """
         all_correct = True
         any_filled = False
         self.checked_cells = set()
@@ -547,18 +776,18 @@ class CrosswordGame:
             self.message_timer = 60
         elif all_correct and self._all_filled():
             self.solved = True
-            self.message = "🎉 CONGRATULATIONS! Puzzle solved! 🎉"
+            self.message = "CONGRATULATIONS! Puzzle solved!"
             self.message_timer = 999
         elif all_correct:
-            self.message = "✓ All filled letters are correct! Keep going!"
+            self.message = "All filled letters are correct! Keep going!"
             self.message_timer = 60
         else:
             wrong_count = len(self.wrong_cells)
-            self.message = f"✗ {wrong_count} incorrect letter(s) found"
+            self.message = f"{wrong_count} incorrect letter(s) found"
             self.message_timer = 60
 
     def _all_filled(self):
-        """Check if all cells are filled."""
+        """Check if all puzzle cells are filled."""
         for r in range(self.gen.height):
             for c in range(self.gen.width):
                 if self.gen.grid[r][c] != ' ':
@@ -587,112 +816,141 @@ class CrosswordGame:
             self.checked_cells.discard((r, c))
             self.wrong_cells.discard((r, c))
 
-    def render(self):
-        """Render the crossword puzzle for the terminal."""
+    def to_dict(self):
+        """Serialize game state for save/load."""
+        return {
+            "player_grid": self.player_grid,
+            "cursor_r": self.cursor_r,
+            "cursor_c": self.cursor_c,
+            "direction": self.direction,
+            "revealed": [list(r) for r in sorted(self.revealed)],
+            "checked_cells": [list(c) for c in sorted(self.checked_cells)],
+            "wrong_cells": [list(w) for w in sorted(self.wrong_cells)],
+            "hints_used": self.hints_used,
+            "elapsed_seconds": self.elapsed_time(),
+        }
+
+    @classmethod
+    def from_dict(cls, generator, data):
+        """Reconstruct a game from saved state and a generator."""
+        game = cls.__new__(cls)
+        game.gen = generator
+        game.player_grid = data["player_grid"]
+        game.cursor_r = data["cursor_r"]
+        game.cursor_c = data["cursor_c"]
+        game.direction = data["direction"]
+        game.revealed = set(tuple(r) for r in data["revealed"])
+        game.checked_cells = set(tuple(c) for c in data["checked_cells"])
+        game.wrong_cells = set(tuple(w) for w in data["wrong_cells"])
+        game.hints_used = data["hints_used"]
+        game.start_time = time.time() - data.get("elapsed_seconds", 0)
+        game.solved = False
+        game.message = "Game restored from save."
+        game.message_timer = 60
+        game.total_cells = sum(
+            1 for r in range(generator.height)
+            for c in range(generator.width)
+            if generator.grid[r][c] != ' '
+        )
+        game.filled_count = 0
+        return game
+
+    def render(self, use_color=True):
+        """Render the crossword puzzle for the terminal.
+
+        Args:
+            use_color: If False, render without ANSI color codes.
+
+        Returns:
+            A string containing the rendered puzzle.
+        """
         across_clues, down_clues, numbered = self.gen.get_clues()
 
-        lines = []
-        lines.append(f"\n{Colors.BOLD}{Colors.CYAN}╔══════════════════════════════════════╗{Colors.RESET}")
-        lines.append(f"{Colors.BOLD}{Colors.CYAN}║     📝 TERMINAL CROSSWORD PUZZLE      ║{Colors.RESET}")
-        lines.append(f"{Colors.BOLD}{Colors.CYAN}╚══════════════════════════════════════╝{Colors.RESET}\n")
+        # Color/no-color helpers
+        if use_color:
+            C = Colors
+        else:
+            C = _NoColor()
 
-        # Direction indicator
-        dir_text = "ACROSS →" if self.direction == 'A' else "DOWN ↓"
-        lines.append(f"  Direction: {Colors.BOLD}{Colors.YELLOW}{dir_text}{Colors.RESET}  |  "
+        lines = []
+        lines.append(f"\n{C.BOLD}{C.CYAN}{'=' * 42}{C.RESET}")
+        lines.append(f"{C.BOLD}{C.CYAN}  TERMINAL CROSSWORD PUZZLE{C.RESET}")
+        lines.append(f"{C.BOLD}{C.CYAN}{'=' * 42}{C.RESET}\n")
+
+        # Direction indicator and stats
+        dir_text = "ACROSS ->" if self.direction == 'A' else "DOWN v"
+        pct = self.progress_pct()
+        elapsed = self.format_time(self.elapsed_time())
+        lines.append(f"  Direction: {C.BOLD}{C.YELLOW}{dir_text}{C.RESET}  |  "
                       f"Words: {len(self.gen.placed_words)}  |  "
-                      f"Hints: {self.hints_used}")
+                      f"Progress: {pct}%  |  "
+                      f"Hints: {self.hints_used}  |  "
+                      f"Time: {elapsed}")
         lines.append("")
 
-        # Build grid display using box-drawing characters (2 rows per puzzle row)
+        # Current clue display
+        word_info = self.get_current_word_info()
+        if word_info:
+            num, clue = word_info
+            direction_label = "Across" if self.direction == 'A' else "Down"
+            lines.append(f"  {C.BOLD}{C.GREEN}>{C.RESET} {num}{direction_label[0]}: {clue}")
+            lines.append("")
+
+        # Build grid display
         number_map = {}
         for (r, c), num in numbered.items():
             number_map[(r, c)] = num
 
-        # Pre-calculate which cells belong to current word
-        word_cells = set()
-        try:
-            word_cells = set(self.get_current_word_cells())
-        except Exception:
-            pass
-
-        top = "   " + "┌" + "───┬" * (self.gen.width - 1) + "───┐"
-        mid = "   " + "├" + "───┼" * (self.gen.width - 1) + "───┤"
-        bot = "   " + "└" + "───┴" * (self.gen.width - 1) + "───┘"
-
-        lines.append(top)
         for r in range(self.gen.height):
-            # Number row
-            num_row = f"{Colors.DIM}{r:2d}{Colors.RESET} │"
-            for c in range(self.gen.width):
-                cell_char = self.gen.grid[r][c]
-                if cell_char == ' ':
-                    num_row += f"{Colors.BG_GRAY}   {Colors.RESET}│"
-                else:
-                    is_cursor = (r == self.cursor_r and c == self.cursor_c)
-                    is_in_word = (r, c) in word_cells
-                    is_checked = (r, c) in self.checked_cells
-                    is_wrong = (r, c) in self.wrong_cells
-                    is_revealed = (r, c) in self.revealed
-
-                    if is_cursor:
-                        bg = Colors.BG_CYAN + Colors.BLACK
-                    elif is_wrong:
-                        bg = Colors.BG_RED + Colors.WHITE
-                    elif is_checked:
-                        bg = Colors.BG_GREEN + Colors.BLACK
-                    elif is_in_word:
-                        bg = Colors.BG_BLUE + Colors.WHITE
-                    elif is_revealed:
-                        bg = Colors.BG_YELLOW + Colors.BLACK
-                    else:
-                        bg = Colors.BG_WHITE + Colors.BLACK
-
-                    num = number_map.get((r, c), '')
-                    if num:
-                        num_text = f"{num}"
-                        num_row += f"{bg}{Colors.DIM}{num_text:^3s}{Colors.RESET}│"
-                    else:
-                        num_row += f"{bg}   {Colors.RESET}│"
-            lines.append(num_row)
-
-            # Letter row
-            letter_row = f"   │"
+            row_str = ""
             for c in range(self.gen.width):
                 cell_char = self.gen.grid[r][c]
                 player_char = self.player_grid[r][c]
+
                 if cell_char == ' ':
-                    letter_row += f"{Colors.BG_GRAY}   {Colors.RESET}│"
+                    row_str += f"{C.BG_GRAY}  {C.RESET}"
                 else:
                     is_cursor = (r == self.cursor_r and c == self.cursor_c)
+                    is_in_word = False
+                    word_cells = self.get_current_word_cells()
                     is_in_word = (r, c) in word_cells
+
                     is_checked = (r, c) in self.checked_cells
                     is_wrong = (r, c) in self.wrong_cells
                     is_revealed = (r, c) in self.revealed
 
+                    # Number in top-left if present
+                    num_str = ""
+                    if (r, c) in number_map:
+                        num_str = f"{C.DIM}{number_map[(r,c)]}{C.RESET}"
+
                     if is_cursor:
-                        bg = Colors.BG_CYAN + Colors.BLACK
+                        bg = C.BG_CYAN + C.BLACK
                     elif is_wrong:
-                        bg = Colors.BG_RED + Colors.WHITE
+                        bg = C.BG_RED + C.WHITE
                     elif is_checked:
-                        bg = Colors.BG_GREEN + Colors.BLACK
-                    elif is_in_word:
-                        bg = Colors.BG_BLUE + Colors.WHITE
+                        bg = C.BG_GREEN + C.BLACK
                     elif is_revealed:
-                        bg = Colors.BG_YELLOW + Colors.BLACK
+                        bg = C.BG_YELLOW + C.BLACK
+                    elif is_in_word:
+                        bg = C.BG_BLUE + C.WHITE
                     else:
-                        bg = Colors.BG_WHITE + Colors.BLACK
+                        bg = C.BG_WHITE + C.BLACK
 
                     display_char = player_char if player_char != '_' else ' '
-                    letter_row += f"{bg}{Colors.BOLD} {display_char} {Colors.RESET}│"
-            lines.append(letter_row)
+                    if num_str:
+                        row_str += f"{bg}{num_str}{display_char}{C.RESET}"
+                    else:
+                        row_str += f"{bg} {display_char}{C.RESET}"
 
-            if r < self.gen.height - 1:
-                lines.append(mid)
-        lines.append(bot)
+            lines.append(row_str)
 
         # Message
         if self.message_timer > 0:
-            lines.append(f"\n  {Colors.BOLD}{self.message}{Colors.RESET}")
+            if self.solved:
+                lines.append(f"\n  {C.BOLD}{C.GREEN}{self.message}{C.RESET}")
+            else:
+                lines.append(f"\n  {C.BOLD}{self.message}{C.RESET}")
             self.message_timer -= 1
         else:
             lines.append("")
@@ -711,27 +969,27 @@ class CrosswordGame:
             return False
 
         # Clues
-        lines.append(f"\n{Colors.BOLD}{Colors.CYAN}── ACROSS ──────────────────────────────{Colors.RESET}")
+        lines.append(f"\n{C.BOLD}{C.CYAN}-- ACROSS --{C.RESET}")
         for num, word, clue in across_clues:
             word_done = is_word_complete(word)
-            marker = f"{Colors.GREEN}✓{Colors.RESET}" if word_done else " "
-            clue_display = f"{Colors.DIM}{clue}{Colors.RESET}" if word_done else clue
-            lines.append(f"  {marker} {Colors.BOLD}{num:2d}.{Colors.RESET} {clue_display} ({len(word)})")
+            marker = f"{C.GREEN}V{C.RESET}" if word_done else " "
+            clue_display = f"{C.DIM}{clue}{C.RESET}" if word_done else clue
+            lines.append(f"  {marker} {C.BOLD}{num:2d}.{C.RESET} {clue_display} ({len(word)})")
 
-        lines.append(f"\n{Colors.BOLD}{Colors.CYAN}── DOWN ────────────────────────────────{Colors.RESET}")
+        lines.append(f"\n{C.BOLD}{C.CYAN}-- DOWN --{C.RESET}")
         for num, word, clue in down_clues:
             word_done = is_word_complete(word)
-            marker = f"{Colors.GREEN}✓{Colors.RESET}" if word_done else " "
-            clue_display = f"{Colors.DIM}{clue}{Colors.RESET}" if word_done else clue
-            lines.append(f"  {marker} {Colors.BOLD}{num:2d}.{Colors.RESET} {clue_display} ({len(word)})")
+            marker = f"{C.GREEN}V{C.RESET}" if word_done else " "
+            clue_display = f"{C.DIM}{clue}{C.RESET}" if word_done else clue
+            lines.append(f"  {marker} {C.BOLD}{num:2d}.{C.RESET} {clue_display} ({len(word)})")
 
         # Controls
-        lines.append(f"\n{Colors.BOLD}{Colors.CYAN}── CONTROLS ────────────────────────────{Colors.RESET}")
-        lines.append(f"  {Colors.YELLOW}Arrow keys{Colors.RESET}  Move cursor     {Colors.YELLOW}Tab{Colors.RESET}        Toggle across/down")
-        lines.append(f"  {Colors.YELLOW}Letters{Colors.RESET}     Type answer     {Colors.YELLOW}Backspace{Colors.RESET}  Delete letter")
-        lines.append(f"  {Colors.YELLOW}C{Colors.RESET}          Check puzzle   {Colors.YELLOW}R{Colors.RESET}          Reveal letter")
-        lines.append(f"  {Colors.YELLOW}W{Colors.RESET}          Reveal word     {Colors.YELLOW}Q{Colors.RESET}          Quit")
-        lines.append(f"  {Colors.YELLOW}N{Colors.RESET}          New puzzle")
+        lines.append(f"\n{C.BOLD}{C.CYAN}-- CONTROLS --{C.RESET}")
+        lines.append(f"  {C.YELLOW}Arrows{C.RESET}      Move cursor     {C.YELLOW}Tab{C.RESET}        Toggle across/down")
+        lines.append(f"  {C.YELLOW}Letters{C.RESET}     Type answer     {C.YELLOW}Backspace{C.RESET}  Delete letter")
+        lines.append(f"  {C.YELLOW}C{C.RESET}          Check puzzle   {C.YELLOW}R{C.RESET}          Reveal letter")
+        lines.append(f"  {C.YELLOW}W{C.RESET}          Reveal word     {C.YELLOW}S{C.RESET}          Save game")
+        lines.append(f"  {C.YELLOW}Q{C.RESET}          Quit            {C.YELLOW}N{C.RESET}          New puzzle")
 
         return "\n".join(lines)
 
@@ -739,7 +997,11 @@ class CrosswordGame:
 # ─── Simplified Terminal Input ───────────────────────────────────────────────
 
 def get_key():
-    """Read a single keypress from the terminal."""
+    """Read a single keypress from the terminal.
+
+    Returns a string key identifier like 'UP', 'DOWN', 'TAB', etc.
+    Falls back to basic input if termios is unavailable.
+    """
     import tty
     import termios
     fd = sys.stdin.fileno()
@@ -775,6 +1037,8 @@ def get_key():
         elif ch in '0123456789':
             return ch
         return ch
+    except Exception:
+        return 'QUIT'
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
@@ -785,23 +1049,105 @@ def clear_screen():
     sys.stdout.flush()
 
 
-def play_interactive(generator):
-    """Play the crossword puzzle interactively."""
-    game = CrosswordGame(generator)
+# ─── Save / Load ──────────────────────────────────────────────────────────────
+
+SAVE_DIR = os.path.join(os.path.expanduser("~"), ".crossword_saves")
+
+
+def save_game(generator, game, filename=None):
+    """Save a game to a JSON file.
+
+    Args:
+        generator: The CrosswordGenerator instance.
+        game: The CrosswordGame instance.
+        filename: Optional filename; defaults to timestamp-based name.
+
+    Returns:
+        The path to the saved file.
+    """
+    os.makedirs(SAVE_DIR, exist_ok=True)
+    if filename is None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"crossword_{timestamp}.json"
+    filepath = os.path.join(SAVE_DIR, filename)
+
+    data = {
+        "version": __version__,
+        "generator": generator.to_dict(),
+        "game": game.to_dict(),
+    }
+    with open(filepath, 'w') as f:
+        json.dump(data, f, indent=2)
+    return filepath
+
+
+def load_game(filepath):
+    """Load a game from a JSON file.
+
+    Args:
+        filepath: Path to the saved game file.
+
+    Returns:
+        Tuple of (generator, game) instances.
+    """
+    with open(filepath, 'r') as f:
+        data = json.load(f)
+
+    generator = CrosswordGenerator.from_dict(data["generator"])
+    game = CrosswordGame.from_dict(generator, data["game"])
+    return generator, game
+
+
+def list_saves():
+    """List all saved games in the save directory.
+
+    Returns:
+        List of (filepath, timestamp_string) tuples sorted by newest first.
+    """
+    if not os.path.exists(SAVE_DIR):
+        return []
+    saves = []
+    for fname in os.listdir(SAVE_DIR):
+        if fname.endswith('.json'):
+            filepath = os.path.join(SAVE_DIR, fname)
+            try:
+                with open(filepath, 'r') as f:
+                    data = json.load(f)
+                saves.append((filepath, data.get("version", "?"), fname))
+            except (json.JSONDecodeError, IOError):
+                continue
+    saves.sort(key=lambda x: x[2], reverse=True)
+    return saves
+
+
+# ─── Interactive Play ─────────────────────────────────────────────────────────
+
+def play_interactive(generator, resume_game=None):
+    """Play the crossword puzzle interactively.
+
+    Args:
+        generator: The CrosswordGenerator instance.
+        resume_game: Optional CrosswordGame instance to resume.
+
+    Returns:
+        A string: 'new', 'done', or 'quit'.
+    """
+    if resume_game:
+        game = resume_game
+    else:
+        game = CrosswordGame(generator)
+
+    use_color = supports_color()
 
     try:
         while not game.solved:
             clear_screen()
-            print(game.render())
+            print(game.render(use_color=use_color))
             sys.stdout.flush()
 
             key = get_key()
 
             if key == 'QUIT' or key == 'q' or key == 'Q':
-                # Confirm quit
-                if key == 'Q':
-                    break
-                # Just q - quit
                 break
             elif key == 'UP':
                 game.move_cursor(-1, 0)
@@ -811,14 +1157,12 @@ def play_interactive(generator):
                 game.move_cursor(0, -1)
             elif key == 'RIGHT':
                 game.move_cursor(0, 1)
-            elif key == 'TAB':
+            elif key == 'TAB' or key == 'SHIFT_TAB':
                 game.toggle_direction()
-            elif key == 'SHIFT_TAB':
+            elif key == 'ENTER':
                 game.toggle_direction()
             elif key == 'BACKSPACE':
                 game.backspace()
-            elif key == 'ENTER':
-                game.toggle_direction()
             elif key == 'C':
                 game.check_puzzle()
             elif key == 'R':
@@ -827,19 +1171,25 @@ def play_interactive(generator):
                 game.reveal_word()
             elif key == 'N':
                 return 'new'
+            elif key == 'S':
+                filepath = save_game(generator, game)
+                game.message = f"Game saved to {filepath}"
+                game.message_timer = 60
             elif len(key) == 1 and key.isalpha():
                 game.type_letter(key)
 
         clear_screen()
-        print(game.render())
-        print(f"\n{Colors.BOLD}{Colors.GREEN}🏆 Puzzle Complete! Hints used: {game.hints_used}{Colors.RESET}")
+        print(game.render(use_color=use_color))
+        if game.solved:
+            elapsed = game.format_time(game.elapsed_time())
+            print(f"\n  Puzzle Complete! Time: {elapsed} | Hints used: {game.hints_used}")
         return 'done'
 
     except KeyboardInterrupt:
         return 'quit'
 
 
-# ─── Non-interactive (fallback) Mode ─────────────────────────────────────────
+# ─── Non-interactive (fallback) Mode ──────────────────────────────────────────
 
 def print_puzzle(generator, show_answers=False):
     """Print the crossword puzzle in a static format using a clean box-drawing grid."""
@@ -848,48 +1198,45 @@ def print_puzzle(generator, show_answers=False):
     for (r, c), num in numbered.items():
         number_map[(r, c)] = num
 
-    print(f"\n{Colors.BOLD}{Colors.CYAN}╔══════════════════════════════════════╗{Colors.RESET}")
-    print(f"{Colors.BOLD}{Colors.CYAN}║     📝 TERMINAL CROSSWORD PUZZLE      ║{Colors.RESET}")
-    print(f"{Colors.BOLD}{Colors.CYAN}╚══════════════════════════════════════╝{Colors.RESET}\n")
+    C = Colors
+
+    print(f"\n{C.BOLD}{C.CYAN}{'=' * 42}{C.RESET}")
+    print(f"{C.BOLD}{C.CYAN}  TERMINAL CROSSWORD PUZZLE{C.RESET}")
+    print(f"{C.BOLD}{C.CYAN}{'=' * 42}{C.RESET}\n")
 
     # Use a 2-line-per-row grid: top line for numbers, bottom line for letters
-    cell_w = 3  # width of each cell in characters
+    top = "   " + "+" + "---+" * (generator.width - 1) + "---+"
+    mid = "   " + "+" + "---+" * (generator.width - 1) + "---+"
+    bot = "   " + "+" + "---+" * (generator.width - 1) + "---+"
 
-    # Top border
-    top = "   " + "┌" + "───┬" * (generator.width - 1) + "───┐"
-    mid = "   " + "├" + "───┼" * (generator.width - 1) + "───┤"
-    bot = "   " + "└" + "───┴" * (generator.width - 1) + "───┘"
-
-    # Row numbers on the left
     print(top)
     for r in range(generator.height):
         # Number row
-        num_row = f"{r:2d} │"
+        num_row = f"{r:2d} |"
         for c in range(generator.width):
             cell = generator.grid[r][c]
             if cell == ' ':
-                num_row += f"{Colors.BG_GRAY}   {Colors.RESET}│"
+                num_row += f"{C.BG_GRAY}   {C.RESET}|"
             else:
-                num = number_map.get((r, c), '')
-                if num:
-                    num_text = f"{num}"
-                    num_row += f"{Colors.BG_DARK}{Colors.CYAN}{num_text:^3s}{Colors.RESET}│"
+                n = number_map.get((r, c), '')
+                if n:
+                    num_text = f"{n}"
+                    num_row += f"{C.BG_DARK}{C.CYAN}{num_text:^3s}{C.RESET}|"
                 else:
-                    num_row += f"{Colors.BG_DARK}   {Colors.RESET}│"
+                    num_row += f"{C.BG_DARK}   {C.RESET}|"
         print(num_row)
 
         # Letter row
-        letter_row = f"   │"
+        letter_row = "   |"
         for c in range(generator.width):
             cell = generator.grid[r][c]
             if cell == ' ':
-                letter_row += f"{Colors.BG_GRAY}   {Colors.RESET}│"
+                letter_row += f"{C.BG_GRAY}   {C.RESET}|"
             else:
-                num = number_map.get((r, c), '')
                 if show_answers:
-                    letter_row += f"{Colors.BG_WHITE}{Colors.BLACK}{Colors.BOLD} {cell} {Colors.RESET}│"
+                    letter_row += f"{C.BG_WHITE}{C.BLACK}{C.BOLD} {cell} {C.RESET}|"
                 else:
-                    letter_row += f"{Colors.BG_WHITE}   {Colors.RESET}│"
+                    letter_row += f"{C.BG_WHITE}   {C.RESET}|"
         print(letter_row)
 
         if r < generator.height - 1:
@@ -897,79 +1244,151 @@ def print_puzzle(generator, show_answers=False):
     print(bot)
 
     # Clues
-    print(f"\n{Colors.BOLD}{Colors.CYAN}── ACROSS ──────────────────────────────{Colors.RESET}")
+    print(f"\n{C.BOLD}{C.CYAN}-- ACROSS --{C.RESET}")
     for num, word, clue in across_clues:
-        print(f"  {Colors.BOLD}{num:2d}.{Colors.RESET} {clue} ({len(word)})")
+        print(f"  {C.BOLD}{num:2d}.{C.RESET} {clue} ({len(word)})")
 
-    print(f"\n{Colors.BOLD}{Colors.CYAN}── DOWN ────────────────────────────────{Colors.RESET}")
+    print(f"\n{C.BOLD}{C.CYAN}-- DOWN --{C.RESET}")
     for num, word, clue in down_clues:
-        print(f"  {Colors.BOLD}{num:2d}.{Colors.RESET} {clue} ({len(word)})")
+        print(f"  {C.BOLD}{num:2d}.{C.RESET} {clue} ({len(word)})")
 
     if show_answers:
-        print(f"\n{Colors.BOLD}{Colors.YELLOW}── ANSWERS ──────────────────────────────{Colors.RESET}")
+        print(f"\n{C.BOLD}{C.YELLOW}-- ANSWERS --{C.RESET}")
         for num, word, clue in across_clues:
             print(f"  {num:2d}A: {word}")
         for num, word, clue in down_clues:
             print(f"  {num:2d}D: {word}")
 
 
-# ─── Puzzle Quality Checker ─────────────────────────────────────────────────
+# ─── Puzzle Quality Checker ──────────────────────────────────────────────────
 
 def is_good_puzzle(generator, min_words=6):
-    """Check if the generated puzzle has enough words."""
+    """Check if the generated puzzle has enough words for a good experience.
+
+    Args:
+        generator: The CrosswordGenerator instance.
+        min_words: Minimum number of placed words required.
+
+    Returns:
+        True if the puzzle meets the quality threshold.
+    """
     return len(generator.placed_words) >= min_words
 
 
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 def main():
+    """Entry point for the terminal crossword puzzle CLI."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Terminal Crossword Puzzle")
-    parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducible puzzles")
-    parser.add_argument("--words", type=int, default=12, help="Maximum number of words (default: 12)")
-    parser.add_argument("--answers", action="store_true", help="Show answers (non-interactive)")
-    parser.add_argument("--print", action="store_true", help="Print puzzle without playing (non-interactive)")
-    parser.add_argument("--interactive", action="store_true", help="Force interactive mode")
-    parser.add_argument("--no-interactive", action="store_true", help="Force non-interactive mode")
+    parser = argparse.ArgumentParser(
+        description="Terminal Crossword Puzzle — Generate and play interactive crossword puzzles",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+examples:
+  %(prog)s                          Play interactively (default)
+  %(prog)s --difficulty hard        Play a harder puzzle with more words
+  %(prog)s --print                   Print puzzle without playing
+  %(prog)s --answers                 Print puzzle with solutions shown
+  %(prog)s --seed 42                 Use seed 42 for reproducible puzzles
+  %(prog)s --export puzzle.txt       Export puzzle to a text file
+  %(prog)s --load ~/.crossword_saves/crossword_20260627.json
+                                    Resume a saved game
+"""
+    )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    parser.add_argument("--seed", type=int, default=None,
+                        help="Random seed for reproducible puzzles")
+    parser.add_argument("--words", type=int, default=None,
+                        help="Maximum number of words (overrides difficulty)")
+    parser.add_argument("--difficulty", choices=["easy", "medium", "hard"],
+                        default="medium",
+                        help="Difficulty level: easy (8 words), medium (12), hard (18)")
+    parser.add_argument("--answers", action="store_true",
+                        help="Show answers (non-interactive)")
+    parser.add_argument("--print", action="store_true", dest="print_puzzle",
+                        help="Print puzzle without playing (non-interactive)")
+    parser.add_argument("--interactive", action="store_true",
+                        help="Force interactive mode")
+    parser.add_argument("--no-interactive", action="store_true",
+                        help="Force non-interactive mode")
+    parser.add_argument("--export", metavar="FILE", default=None,
+                        help="Export puzzle to a plain-text file")
+    parser.add_argument("--load", metavar="FILE", default=None,
+                        help="Load and resume a saved game")
     args = parser.parse_args()
 
-    seed = args.seed if args.seed else random.randint(1, 999999)
+    # Determine difficulty settings
+    preset = DIFFICULTY_PRESETS[args.difficulty]
+    max_words = args.words if args.words is not None else preset["max_words"]
+    min_word_len = preset["min_word_len"]
+    grid_width = preset["grid_width"]
+    grid_height = preset["grid_height"]
 
-    # Generate until we get a good puzzle
-    for attempt in range(50):
-        gen = CrosswordGenerator(20, 14)
-        gen.generate(max_words=args.words, seed=seed + attempt)
-        gen.trim_grid()
-        if is_good_puzzle(gen):
-            break
-
-    print(f"{Colors.DIM}Generated crossword with {len(gen.placed_words)} words (seed: {seed + attempt}){Colors.RESET}\n")
-
-    if args.answers or args.print:
-        print_puzzle(gen, show_answers=args.answers)
-    else:
-        # Try interactive mode
+    # Load saved game if requested
+    if args.load:
         try:
-            import tty
-            import termios
-            interactive = True
-        except ImportError:
-            interactive = False
+            generator, game = load_game(args.load)
+            print(f"Loaded saved game from {args.load}")
+        except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
+            print(f"Error loading saved game: {e}", file=sys.stderr)
+            sys.exit(1)
+    else:
+        # Generate a new puzzle
+        seed = args.seed if args.seed else random.randint(1, 999999)
+        # Try multiple seeds until we get a good puzzle
+        for attempt in range(50):
+            generator = CrosswordGenerator(grid_width, grid_height)
+            generator.generate(max_words=max_words, seed=seed + attempt,
+                               min_word_len=min_word_len)
+            generator.trim_grid()
+            if is_good_puzzle(generator):
+                break
 
-        if args.no_interactive:
-            interactive = False
-        if args.interactive:
-            interactive = True
+        game = None  # Will be created in interactive mode
 
-        if interactive and sys.stdin.isatty():
-            result = play_interactive(gen)
-            if result == 'new':
-                # Regenerate
-                main()
-        else:
-            print_puzzle(gen, show_answers=False)
-            print(f"\n{Colors.DIM}(Run with --interactive to play, --answers to see solutions){Colors.RESET}")
+    print(f"Generated crossword with {len(generator.placed_words)} words "
+          f"(seed: {seed + attempt if args.seed or not args.load else 'loaded'}, "
+          f"difficulty: {args.difficulty})\n")
+
+    # Export mode
+    if args.export:
+        text = generator.export_text(show_answers=args.answers)
+        try:
+            with open(args.export, 'w') as f:
+                f.write(text)
+            print(f"Puzzle exported to {args.export}")
+        except IOError as e:
+            print(f"Error exporting puzzle: {e}", file=sys.stderr)
+            sys.exit(1)
+        return
+
+    # Print/answers mode (non-interactive)
+    if args.answers or args.print_puzzle:
+        print_puzzle(generator, show_answers=args.answers)
+        return
+
+    # Interactive mode
+    try:
+        import tty
+        import termios
+        interactive = True
+    except ImportError:
+        interactive = False
+
+    if args.no_interactive:
+        interactive = False
+    if args.interactive:
+        interactive = True
+
+    if interactive and sys.stdin.isatty():
+        result = play_interactive(generator, resume_game=game)
+        if result == 'new':
+            # Regenerate with a new seed
+            main()
+    else:
+        print_puzzle(generator, show_answers=False)
+        print(f"\n(Run with --interactive to play, --answers to see solutions)")
 
 
 if __name__ == "__main__":
