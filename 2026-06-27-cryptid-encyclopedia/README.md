@@ -5,15 +5,19 @@ A procedurally-generated bestiary of creatures that may or may not exist. Each c
 ## Features
 
 - **Deterministic generation** — Every name produces a unique, consistent creature. "Mothman" always has the same stats, art, and sightings.
-- **6 ASCII art templates** — Bipedal, quadrupedal, serpentine, insectoid, amorphous, and winged templates with randomized feature characters (eyes, mouths, wings, tails). Art template selection is influenced by body type — a serpentine creature is more likely to get the serpentine template.
+- **6 ASCII art templates** — Bipedal, quadrupedal, serpentine, insectoid, amorphous, and winged templates with randomized feature characters (eyes, mouths, wings, tails). Art template selection is influenced by body type.
 - **Rich lore** — Each cryptid has body type, skin texture, color, head shape, special ability, habitat, weakness, origin story, threat level (1–7 stars), diet, activity pattern, and 2–4 sighting reports.
 - **Interactive browser** — Explore with a prompt: look up, random, search, compare, related, history, and compact mode.
 - **Side-by-side comparison** — `--compare` shows two cryptids in a stat-by-stat table.
-- **JSON output** — `--json` for scripting, pipelines, or further processing.
+- **JSON output** — `--json` for scripting, pipelines, or further processing. Multiple results (`-n > 1`) output a JSON array.
 - **Compact mode** — `--compact` for a one-paragraph summary instead of the full boxed display.
 - **Reproducible randomness** — `--seed 42` makes random generation deterministic for sharing.
 - **Related cryptids** — `related` command in interactive mode finds cryptids that share traits with the one you just viewed.
 - **History tracking** — Interactive mode remembers your recently viewed cryptids.
+- **Export to file** — `--export file.txt` appends formatted entries to a file (creates parent directories automatically).
+- **Input validation** — Empty names and negative counts are rejected with clear error messages. Whitespace and tabs in names are normalized.
+- **Proper articles** — Descriptions and sighting reports use "An"/"an" before vowel-starting words ("An ozone silver..." not "A ozone silver...").
+- **Aligned box display** — All lines in the boxed display are consistently 70 characters wide.
 - **CLI with `--version`** — Full command-line interface with help, version, export, and all the flags above.
 - **Infinite variety** — Procedural name generation combines adjectives, nouns, creatures, places, and more to produce thousands of unique cryptid names.
 
@@ -64,8 +68,16 @@ python3 cryptid_encyclopedia.py --compare "The Ashen Wendigo" "The Hollow Stalke
 ### JSON output (for scripting)
 
 ```bash
+# Single cryptid as JSON object
 python3 cryptid_encyclopedia.py Mothman --json
+
+# Single random cryptid as JSON object
 python3 cryptid_encyclopedia.py --random --json
+
+# Multiple random cryptids as JSON array
+python3 cryptid_encyclopedia.py --random -n 3 --json --seed 42
+
+# Compare as JSON array
 python3 cryptid_encyclopedia.py --compare "A" "B" --json
 ```
 
@@ -85,7 +97,11 @@ python3 cryptid_encyclopedia.py --list
 ### Export to file
 
 ```bash
-python3 cryptid_encyclopedia.py "Mothman" --export cryptids.txt
+# Export a cryptid entry (appends to the file)
+python3 cryptid_encyclopedia.py Mothman --export cryptids.txt
+
+# Export with automatic directory creation
+python3 cryptid_encyclopedia.py Mothman --export output/cryptids.txt
 ```
 
 ### Interactive mode
@@ -115,44 +131,41 @@ python3 cryptid_encyclopedia.py --version
 ### Example Output
 
 ```
-╔════════════════════════════════════════════════════════════════╗
-║                   GRISTLE BARGHEST OF THE MERES                ║
-╔════════════════════════════════════════════════════════════════╗
-║                                _______                          ║
-║                              /       \                          ║
-║                             /  ✺  ✺  \                          ║
-║                            |  ∧      |                          ║
-║                           |   \____/   |                        ║
-║                            \__________/                         ║
-║                               |  ∿  |                           ║
-║                              /|  ∿  |\                          ║
-║                            / |      | \                         ║
-║ ...
-╟────────────────────────────────────────────────────────────────╢
-║  THREAT LEVEL: ★★★★★★★                                       ║
-║  Existential — classified threat by 3+ governments             ║
-╟────────────────────────────────────────────────────────────────╢
-║  Body Type: vermiform                                          ║
-║  Height: 12m                                                   ║
-║  Weight: 50kg                                                  ║
-║  Diet: hematophagic                                            ║
-╟────────────────────────────────────────────────────────────────╢
-║ A ozone silver, smoldering vermiform creature with a amorphous ║
-║ and constantly shifting head. It hibernates for decades then   ║
-║ emerges ravenous. Origin: a creature that has existed since    ║
-║ before the Permian extinction, merely sleeping.                 ║
-╟────────────────────────────────────────────────────────────────╢
-║  WEAKNESS: cannot enter any structure with a threshold offering║
-╟────────────────────────────────────────────────────────────────╢
-║  SIGHTING REPORTS                                              ║
-║  1. An elderly resident finally reported it in 1990.            ║
-║  2. A mining crew 2km underground radioed about it in 1984.    ║
-╚════════════════════════════════════════════════════════════════╝
+╔────────────────────────────────────────────────────────────────────╗
+║                              MOTHMAN                               ║
+╠════════════════════════════════════════════════════════════════════╣
+║                                   ⊙  ⊙  ⊙                          ║
+║                               /   \  ▽ /   \                       ║
+║                            /     \____/     \                      ║
+║                           /   §         §   \                      ║
+╟────────────────────────────────────────────────────────────────────╢
+║  THREAT LEVEL: ★★★★☆☆☆                                             ║
+║  Dangerous — known to have injured humans                          ║
+╟────────────────────────────────────────────────────────────────────╢
+║  Body Type: vermiform                                              ║
+║  Height: 0.8m                                                      ║
+║  Weight: 2kg                                                       ║
+║  Diet: carnivorous                                                 ║
+║  Activity: nocturnal                                               ║
+╟────────────────────────────────────────────────────────────────────╢
+║ An ozone silver, furry bipedal creature with an amorphous and      ║
+║ constantly shifting head. It can become invisible in fog.          ║
+║ Origin: a dimensional refugee that slipped through thin reality.   ║
+╟────────────────────────────────────────────────────────────────────╢
+║  HABITAT: abandoned nuclear testing sites in Kazakhstan             ║
+╟────────────────────────────────────────────────────────────────────╢
+║  WEAKNESS: loses power during the new moon                          ║
+╟────────────────────────────────────────────────────────────────────╢
+║  SIGHTING REPORTS                                                  ║
+║────────────────────────────────────────────────────────────────────║
+║   1. An elderly resident finally reported an Ooze Moth in 1990.   ║
+║   It circled their campsite for six hours.                         ║
+╚════════════════════════════════════════════════════════════════════╝
 ```
 
 ## How It Works
 
-1. **Seeding** — The cryptid name is hashed with SHA-256 and converted to an integer seed for Python's `random.Random`. This ensures deterministic output — the same name always produces the same creature. Case and leading/trailing whitespace are normalized, so "Mothman" and "mothman" produce identical results.
+1. **Seeding** — The cryptid name is hashed with SHA-256 and converted to an integer seed for Python's `random.Random`. This ensures deterministic output — the same name always produces the same creature. Case and whitespace are normalized, so "Mothman" and "mothman" produce identical results.
 2. **Template selection** — One of 6 ASCII art templates is selected, influenced by the creature's body type (70% chance of matching, 30% random for variety). Feature characters (eyes, mouths, wings, tails) are randomly filled from themed character pools.
 3. **Procedural lore** — Body type, skin texture, color, head shape, ability, habitat, weakness, origin, threat level, stats, and sighting reports are all picked from curated pools using the seeded RNG.
 4. **Name generation** — When generating random names, format strings combine adjectives, nouns, creature types, and place names for thousands of unique combinations.
@@ -164,7 +177,20 @@ python3 cryptid_encyclopedia.py --version
 python3 test_cryptid_encyclopedia.py
 ```
 
-Runs 26 tests covering determinism, generation, display, JSON output, CLI flags, and more.
+Runs 40 tests covering determinism, generation, display alignment, article grammar, JSON output (single and array), CLI flags, empty/invalid input handling, export functionality, and more.
+
+## Changelog
+
+### v1.2.0 — Bug fixes and improvements
+- **Fixed box alignment** — Threat level and description lines were too short (27 and 68 chars instead of 70). All lines now consistently use `BOX_WIDTH` padding.
+- **Fixed title separator** — Changed second top border from `╔╗` to `╠═╣` (double-line separator) for proper box drawing.
+- **Fixed article grammar** — Descriptions now use "An" before vowel-starting colors ("An ozone silver" instead of "A ozone silver") and "an" before vowel-starting head shapes ("with an amorphous head" instead of "with a amorphous head"). Sightings also correctly use "an" for vowel-starting names.
+- **Fixed crash on empty name** — Passing an empty string as a cryptid name caused an `IndexError`. Empty and whitespace-only names are now rejected with a clear error message.
+- **Fixed crash on export to nonexistent directory** — `--export` now creates parent directories automatically instead of crashing with `FileNotFoundError`.
+- **Fixed JSON output for multiple cryptids** — `--random -n N --json` previously output N separate JSON objects (invalid JSON). Now outputs a proper JSON array when N > 1, and a single object when N = 1.
+- **Fixed negative `--number` handling** — `--random -n -1` previously produced empty output silently. Now produces a clear error message.
+- **Fixed name whitespace normalization** — Tabs, newlines, and multiple spaces in names are now collapsed to single spaces, preventing display misalignment.
+- **Added `hr_double()` function** — New display helper for double-line separators in boxed output.
 
 ## License
 

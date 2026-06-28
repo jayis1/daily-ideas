@@ -29,7 +29,7 @@ import random
 import sys
 import textwrap
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # ── Deterministic RNG from string seed ──────────────────────────────────
 
@@ -423,7 +423,9 @@ def generate_sightings(rng, name):
     for i, year in enumerate(years):
         stype = pick(rng, SIGHTING_TYPES)
         detail = pick(rng, SIGHTING_DETAILS)
-        article = "an" if name[0].lower() in "aeiou" else "a"
+        # Guard against empty names; normalize for article selection
+        first_char = name.lstrip()[0].lower() if name.strip() else "x"
+        article = "an" if first_char in "aeiou" else "a"
         # Avoid "the The" duplication
         display_name = name
         if display_name.startswith("The "):
@@ -440,7 +442,14 @@ def generate_cryptid(name: str) -> dict:
     The name is hashed to produce a deterministic RNG, so the same name
     always produces the same cryptid.  Returns a dict with all the fields
     needed by display_cryptid() and export functions.
+
+    Whitespace and tabs in the name are normalized to single spaces.
+    Empty or whitespace-only names are rejected with a ValueError.
     """
+    # Normalize whitespace: collapse tabs/newlines to spaces, strip ends
+    name = " ".join(name.split())
+    if not name:
+        raise ValueError("Cryptid name cannot be empty")
     rng = seed_rng(name)
 
     body = pick(rng, BODY_TYPES)
@@ -530,6 +539,11 @@ def hr_mid(char="─"):
     return f"╟{char * BOX_WIDTH}╢"
 
 
+def hr_double(char="═"):
+    """Double-line separator (used after titles)."""
+    return f"╠{char * BOX_WIDTH}╣"
+
+
 def hr_bot(char="─"):
     """Bottom border line."""
     return f"╚{char * BOX_WIDTH}╝"
@@ -568,7 +582,7 @@ def display_cryptid(c: dict, compact: bool = False):
     # Title
     title = f"  {c['name'].upper()}  "
     print(f"║{title.center(W)}║")
-    print(hr())
+    print(hr_double())
 
     # ASCII art
     art_lines = c["art"].split("\n")
@@ -578,8 +592,10 @@ def display_cryptid(c: dict, compact: bool = False):
 
     # Classification
     threat_stars = "★" * c["threat_level"] + "☆" * (7 - c["threat_level"])
-    print(f"║  THREAT LEVEL: {threat_stars}  ║")
-    print(f"║  {c['threat_name']}{' ' * (W - 4 - len(c['threat_name']))}║")
+    threat_line = f"  THREAT LEVEL: {threat_stars}"
+    print(f"║{threat_line:<{W}}║")
+    threat_desc = f"  {c['threat_name']}"
+    print(f"║{threat_desc:<{W}}║")
     print(hr_mid())
 
     # Stats
@@ -595,10 +611,12 @@ def display_cryptid(c: dict, compact: bool = False):
         print(f"║{line:<{W}}║")
     print(hr_mid())
 
-    # Description
+    # Description — use "An" before vowel-starting colors and heads
+    color_article = "An" if c["color"][0].lower() in "aeiou" else "A"
+    head_article = "an" if c["head"][0].lower() in "aeiou" else "a"
     desc = (
-        f"A {c['color']}, {c['skin']} {c['body_type']} creature "
-        f"with a {c['head']} head. "
+        f"{color_article} {c['color']}, {c['skin']} {c['body_type']} creature "
+        f"with {head_article} {c['head']} head. "
         f"It {c['ability']}. "
         f"Origin: {c['origin']}."
     )
@@ -929,6 +947,10 @@ examples:
 
     args = parser.parse_args()
 
+    # Validate number
+    if args.number < 1:
+        parser.error("--number must be at least 1")
+
     # Interactive mode
     if args.interactive:
         interactive_mode()
@@ -958,20 +980,28 @@ examples:
     # Random mode
     if args.random:
         rng = random.Random(args.seed)  # args.seed=None → true random
+        results = []
         for _ in range(args.number):
             name = generate_name(rng)
             c = generate_cryptid(name)
             if args.json_output:
-                print(json.dumps(cryptid_to_json(c), indent=2))
+                results.append(cryptid_to_json(c))
             else:
                 display_cryptid(c, compact=args.compact)
             if args.export:
                 export_to_file(c, args.export, compact=args.compact)
+        if args.json_output:
+            if args.number == 1:
+                print(json.dumps(results[0], indent=2))
+            else:
+                print(json.dumps(results, indent=2))
         return
 
     # Name lookup
     if args.name:
-        name = " ".join(args.name)
+        name = " ".join(args.name).strip()
+        if not name:
+            parser.error("Cryptid name cannot be empty")
         c = generate_cryptid(name)
         if args.json_output:
             print(json.dumps(cryptid_to_json(c), indent=2))
@@ -990,14 +1020,19 @@ def export_to_file(c: dict, filepath: str, compact: bool = False):
 
     The file is appended to so multiple exports accumulate.
     Uses redirect_stdout to capture the formatted display output.
+    Creates parent directories if they don't exist.
     """
     import io
     import contextlib
+    import os
 
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         display_cryptid(c, compact=compact)
 
+    parent = os.path.dirname(filepath)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
     with open(filepath, "a") as f:
         f.write(buf.getvalue())
     print(f"  📄 Entry exported to {filepath}")

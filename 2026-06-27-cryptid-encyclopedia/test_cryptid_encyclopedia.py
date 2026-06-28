@@ -82,6 +82,34 @@ def test_height_valid():
         c = ce.generate_cryptid(f"HeightTest{i}")
         assert c["height"] in valid_heights, f"Invalid height: {c['height']}"
 
+def test_generate_cryptid_whitespace_normalization():
+    """Tabs and extra whitespace in names should be normalized."""
+    c1 = ce.generate_cryptid("Moth Man")
+    c2 = ce.generate_cryptid("Moth\tMan")
+    c3 = ce.generate_cryptid("  Moth   Man  ")
+    assert c1["name"] == "Moth Man"
+    assert c2["name"] == "Moth Man"
+    assert c3["name"] == "Moth Man"
+    # They should all produce the same cryptid since seed_rng normalizes
+    assert c1["body_type"] == c2["body_type"]
+    assert c1["body_type"] == c3["body_type"]
+
+def test_generate_cryptid_empty_name_raises():
+    """Empty string should raise ValueError."""
+    try:
+        ce.generate_cryptid("")
+        assert False, "Empty string should raise ValueError"
+    except ValueError as e:
+        assert "empty" in str(e).lower()
+
+def test_generate_cryptid_whitespace_only_raises():
+    """Whitespace-only name should raise ValueError."""
+    try:
+        ce.generate_cryptid("   \t\n  ")
+        assert False, "Whitespace-only should raise ValueError"
+    except ValueError:
+        pass  # Expected
+
 
 # ── Name generation tests ──────────────────────────────────────────────
 
@@ -154,6 +182,21 @@ def test_display_cryptid_runs():
     assert len(output) > 0
     assert "DISPLAY TEST" in output.upper()
 
+def test_display_box_alignment():
+    """All lines in the box display should have consistent width."""
+    c = ce.generate_cryptid("AlignmentTest")
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        ce.display_cryptid(c)
+    lines = buf.getvalue().strip().split('\n')
+    # All lines should be the same width (BOX_WIDTH + 2 for border chars)
+    expected_width = ce.BOX_WIDTH + 2  # ║ on each side or ╔╗ etc.
+    for i, line in enumerate(lines):
+        assert len(line) == expected_width, (
+            f"Line {i} has width {len(line)}, expected {expected_width}: "
+            f"{line[:50]}..."
+        )
+
 def test_display_compact():
     """Compact display should produce shorter output than full display."""
     c = ce.generate_cryptid("Compact Test")
@@ -175,6 +218,46 @@ def test_display_comparison():
     output = buf.getvalue()
     assert "COMPARE A" in output.upper()
     assert "COMPARE B" in output.upper()
+
+def test_display_article_an():
+    """Description should use 'An' before vowel-starting colors."""
+    # Find a cryptid with a vowel-starting color
+    for name in ['iii', 'aaa', 'eee', 'ooo', 'uuu', 'ash', 'oak', 'ice', 'under', 'elder']:
+        c = ce.generate_cryptid(name)
+        if c['color'][0].lower() in 'aeiou':
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                ce.display_cryptid(c)
+            output = buf.getvalue()
+            # Should contain "An" before the color name, not "A "
+            assert f"An {c['color']}" in output, (
+                f"Expected 'An {c['color']}' in description for '{name}'"
+            )
+            # Should NOT contain "A algae" or "A ozone" etc.
+            assert f"A {c['color']}" not in output, (
+                f"Found incorrect 'A {c['color']}' instead of 'An {c['color']}'"
+            )
+            break  # Found at least one test case, good enough
+
+def test_display_head_article_an():
+    """Description should use 'an' before vowel-starting head descriptions."""
+    for name in ['headtest1', 'headtest2', 'headtest3', 'headtest4', 'headtest5',
+                 'headtest6', 'headtest7', 'headtest8', 'headtest9', 'headtest10']:
+        c = ce.generate_cryptid(name)
+        if c['head'][0].lower() in 'aeiou':
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                ce.display_cryptid(c)
+            output = buf.getvalue()
+            # Should NOT have "with a {vowel_head}" pattern
+            assert f"with a {c['head']}" not in output, (
+                f"Found incorrect 'with a {c['head']}' instead of 'with an'"
+            )
+            # Should have "with an" before the head
+            assert "with an " in output, (
+                f"Expected 'with an' before vowel-starting head '{c['head']}'"
+            )
+            break
 
 
 # ── JSON export test ───────────────────────────────────────────────────
@@ -222,8 +305,8 @@ def test_cli_random():
     output = buf.getvalue()
     assert len(output) > 0
 
-def test_cli_random_json():
-    """CLI --random --json should produce valid JSON."""
+def test_cli_random_json_single():
+    """CLI --random --json should produce valid JSON for a single result."""
     sys.argv = ["cryptid_encyclopedia.py", "--random", "--seed", "42", "--json"]
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
@@ -231,6 +314,17 @@ def test_cli_random_json():
     output = buf.getvalue()
     parsed = json.loads(output)
     assert "name" in parsed
+
+def test_cli_random_json_multiple():
+    """CLI --random -n 3 --json should produce a valid JSON array."""
+    sys.argv = ["cryptid_encyclopedia.py", "--random", "-n", "3", "--seed", "42", "--json"]
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        ce.main()
+    output = buf.getvalue()
+    parsed = json.loads(output)
+    assert isinstance(parsed, list), f"Expected JSON array, got {type(parsed)}"
+    assert len(parsed) == 3, f"Expected 3 cryptids, got {len(parsed)}"
 
 def test_cli_random_compact():
     """CLI --random --compact should produce shorter output."""
@@ -274,6 +368,85 @@ def test_cli_version():
     # argparse --version writes to stdout in newer versions, stderr in older
     output = buf.getvalue()
     assert ce.__version__ in output or True  # version is output somewhere
+
+def test_cli_empty_name_error():
+    """CLI with empty name argument should produce an error."""
+    sys.argv = ["cryptid_encyclopedia.py", ""]
+    try:
+        ce.main()
+        # Should not reach here
+        assert False, "Empty name should cause an error"
+    except SystemExit:
+        pass  # Expected - argparse calls sys.exit on error
+
+def test_cli_negative_number_error():
+    """CLI --random -n -1 should produce an error."""
+    sys.argv = ["cryptid_encyclopedia.py", "--random", "-n", "-1"]
+    try:
+        ce.main()
+        assert False, "Negative number should cause an error"
+    except SystemExit:
+        pass  # Expected
+
+def test_cli_export_creates_file():
+    """CLI --export should create a file with the cryptid entry."""
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+        filepath = f.name
+    try:
+        sys.argv = ["cryptid_encyclopedia.py", "Mothman", "--export", filepath]
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            ce.main()
+        with open(filepath) as f:
+            content = f.read()
+        assert "MOTHMAN" in content
+        assert len(content) > 100
+    finally:
+        os.unlink(filepath)
+
+def test_cli_export_creates_directory():
+    """CLI --export should create parent directories if needed."""
+    import tempfile
+    tmpdir = tempfile.mkdtemp()
+    filepath = os.path.join(tmpdir, "subdir", "test_export.txt")
+    try:
+        sys.argv = ["cryptid_encyclopedia.py", "Mothman", "--export", filepath]
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            ce.main()
+        assert os.path.exists(filepath), "Export should create parent directories"
+        with open(filepath) as f:
+            content = f.read()
+        assert "MOTHMAN" in content
+    finally:
+        import shutil
+        shutil.rmtree(tmpdir)
+
+
+# ── Sighting article tests ─────────────────────────────────────────────
+
+def test_sighting_article_vowel():
+    """Names starting with vowels should use 'an' in sightings."""
+    c = ce.generate_cryptid("Aspen")
+    for s in c["sightings"]:
+        # Should contain "an Aspen" not "a Aspen"
+        assert "a Aspen" not in s, f"Found 'a Aspen' in sighting: {s}"
+
+def test_sighting_article_consonant():
+    """Names starting with consonants should use 'a' in sightings."""
+    c = ce.generate_cryptid("Bigfoot")
+    for s in c["sightings"]:
+        # Should contain "a Bigfoot" not "an Bigfoot"
+        assert "an Bigfoot" not in s, f"Found 'an Bigfoot' in sighting: {s}"
+
+def test_sighting_article_the_prefix():
+    """Names with 'The' prefix should not get 'a/an' article."""
+    c = ce.generate_cryptid("The Ashen Wendigo")
+    for s in c["sightings"]:
+        # Should not have "a The" or "an The"
+        assert "a The " not in s, f"Found 'a The' in sighting: {s}"
+        assert "an The " not in s, f"Found 'an The' in sighting: {s}"
 
 
 # ── Run all tests ──────────────────────────────────────────────────────
