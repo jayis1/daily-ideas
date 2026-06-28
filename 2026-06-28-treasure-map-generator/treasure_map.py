@@ -5,6 +5,8 @@ Procedural Treasure Map Generator
 Generates elaborate ASCII treasure maps with coastlines, terrain features,
 dotted trails, compass roses, sea monsters, pirate riddles, and X-marks-the-spot.
 Each map is unique — seeded or random.
+
+Version: 1.1.0
 """
 
 import random
@@ -14,6 +16,10 @@ import sys
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional
 
+
+# ── Version ──────────────────────────────────────────────────────────────────
+
+__version__ = "1.1.0"
 
 # ── Map Symbols ──────────────────────────────────────────────────────────────
 
@@ -153,7 +159,41 @@ class TreasureMap:
         self.grid: List[List[str]] = []
         self.terrain: List[List[str]] = []  # terrain type per cell
         self.annotations: List[Tuple[int, int, str]] = []  # overlaid labels
+        self.treasure_x: Optional[int] = None
+        self.treasure_y: Optional[int] = None
+        self.landing_x: Optional[int] = None
+        self.landing_y: Optional[int] = None
         self._generate()
+
+    def _add_annotation(self, x: int, y: int, text: str):
+        """Add an annotation label, clamping position so it stays within grid bounds.
+
+        Also checks for overlap with the treasure X position and shifts the label
+        if it would overwrite the treasure marker.
+        """
+        W, H = self.cfg.width, self.cfg.height
+        # Clamp x so the entire label fits within the grid
+        x = max(0, min(x, W - len(text)))
+        # Clamp y within grid bounds
+        y = max(0, min(y, H - 1))
+
+        # Avoid overwriting the treasure X marker with this label
+        if self.treasure_x is not None and self.treasure_y is not None:
+            tx, ty = self.treasure_x, self.treasure_y
+            if ty == y and x <= tx < x + len(text):
+                # Shift the label to the right past the treasure, or left before it
+                # Try shifting right first
+                new_x = tx + 2
+                if new_x + len(text) <= W:
+                    x = new_x
+                else:
+                    # Try shifting left so the label ends before the treasure
+                    new_x = tx - len(text) - 1
+                    if new_x >= 0:
+                        x = new_x
+                    # If neither works, keep original clamped position (best effort)
+
+        self.annotations.append((x, y, text))
 
     def _generate(self):
         W, H = self.cfg.width, self.cfg.height
@@ -233,7 +273,8 @@ class TreasureMap:
                         ny, nx = y + dy, x + dx
                         if 0 <= ny < H and 0 <= nx < W:
                             if self.terrain[ny][nx] not in ("water", "deep_water"):
-                                self.grid[y][x] = "~"
+                                # Use shallow water symbol (not hardcoded "~")
+                                self.grid[y][x] = self.sym["water"]
                                 break
 
     def _add_lake_if_possible(self, heightmap):
@@ -256,7 +297,8 @@ class TreasureMap:
                 d = math.sqrt((x - cx) ** 2 + (y - cy) ** 2)
                 if d < lake_r:
                     self.terrain[y][x] = "water"
-                    self.grid[y][x] = "~"
+                    # Use the symbol dict, not hardcoded "~"
+                    self.grid[y][x] = self.sym["water"]
 
     def _place_treasure(self, heightmap):
         """Place the treasure X on land, preferably inland."""
@@ -286,10 +328,12 @@ class TreasureMap:
         self.treasure_x, self.treasure_y = chosen[0], chosen[1]
         self.grid[self.treasure_y][self.treasure_x] = self.sym["x_mark"]
 
-        # Add "Here be treasure" annotation near the X
-        label_x = min(self.treasure_x + 2, self.cfg.width - 15)
+        # Add "Here be treasure!" annotation near the X
+        # Bug fix: label is 17 chars long, not 15; use proper bounds check
+        label = "Here be treasure!"
+        label_x = min(self.treasure_x + 2, W - len(label))
         label_y = max(self.treasure_y - 1, 0)
-        self.annotations.append((label_x, label_y, "Here be treasure!"))
+        self._add_annotation(label_x, label_y, label)
 
     def _draw_trail(self, heightmap):
         """Draw a dotted trail from a landing point to the treasure."""
@@ -307,10 +351,31 @@ class TreasureMap:
                                 beach_cells.append((x, y))
                                 break
 
-        if not beach_cells or not hasattr(self, 'treasure_x'):
+        if not beach_cells or self.treasure_x is None:
             return
 
-        start = random.choice(beach_cells)
+        # Filter out beach cells that are the same as the treasure location
+        # so the landing point is always distinct from the treasure
+        tx, ty = self.treasure_x, self.treasure_y
+        valid_beach = [(x, y) for x, y in beach_cells if (x, y) != (tx, ty)]
+        if not valid_beach:
+            # All beach cells overlap with treasure — expand search to any
+            # non-water cell adjacent to water that isn't the treasure
+            for y in range(H):
+                for x in range(W):
+                    if (x, y) != (tx, ty) and self.terrain[y][x] not in ("water", "deep_water"):
+                        for dy, dx in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                            ny, nx = y + dy, x + dx
+                            if 0 <= ny < H and 0 <= nx < W:
+                                if self.terrain[ny][nx] in ("water", "deep_water"):
+                                    valid_beach.append((x, y))
+                                    break
+        if not valid_beach:
+            # Still no valid landing — skip trail drawing
+            self.landing_x, self.landing_y = None, None
+            return
+
+        start = random.choice(valid_beach)
         self.landing_x, self.landing_y = start[0], start[1]
 
         # Mark the landing with an anchor symbol
@@ -326,11 +391,11 @@ class TreasureMap:
         path = self._find_path(start, (self.treasure_x, self.treasure_y))
         for i, (px, py) in enumerate(path):
             if self.terrain[py][px] not in ("water", "deep_water") and self.grid[py][px] != self.sym["x_mark"]:
-                # Dotted trail
+                # Dotted trail — use symbol dict, not hardcoded "·"
                 if i % 2 == 0:
                     self.grid[py][px] = self.sym["trail_dot"]
                 else:
-                    self.grid[py][px] = "·" if self.cfg.unicode else "."
+                    self.grid[py][px] = self.sym["trail_dot"]
 
     def _find_path(self, start, end):
         """Simple greedy path with randomness for a winding trail."""
@@ -391,8 +456,7 @@ class TreasureMap:
                         while name in used_names:
                             name = random.choice(landmark_names.get("peak", ["Peak"]))
                         used_names.add(name)
-                        lx = min(x + 1, W - len(name) - 1)
-                        self.annotations.append((lx, max(y - 1, 0), name))
+                        self._add_annotation(x + 1, max(y - 1, 0), name)
                         placed += 1
 
         # Try to label a forest area
@@ -404,8 +468,7 @@ class TreasureMap:
             while name in used_names:
                 name = random.choice(landmark_names.get(ftype, ["Woods"]))
             used_names.add(name)
-            lx = min(fx + 1, W - len(name) - 1)
-            self.annotations.append((lx, max(fy - 1, 0), name))
+            self._add_annotation(fx + 1, max(fy - 1, 0), name)
             placed += 1
 
         # Try to label a beach area
@@ -416,8 +479,7 @@ class TreasureMap:
             while name in used_names:
                 name = random.choice(landmark_names.get("sand", ["Beach"]))
             used_names.add(name)
-            lx = min(bx + 1, W - len(name) - 1)
-            self.annotations.append((lx, max(by - 1, 0), name))
+            self._add_annotation(bx + 1, max(by - 1, 0), name)
             placed += 1
 
     def _add_sea_creatures(self):
@@ -449,10 +511,10 @@ class TreasureMap:
                 cx, cy = water_cells[i]
                 if self.cfg.unicode:
                     self.grid[cy][cx] = random.choice(creatures)
-                # Label
+                # Label — use _add_annotation for proper bounds checking
                 label = creature_labels[i % len(creature_labels)]
                 lx = min(cx + 1, W - len(label) - 1)
-                self.annotations.append((lx, cy, label))
+                self._add_annotation(lx, cy, label)
 
         # Add "Here be dragons" text in a far water area
         if water_cells:
@@ -461,7 +523,7 @@ class TreasureMap:
                 fx, fy = far_cells[0]
                 label = "Here be dragons"
                 lx = max(0, min(fx - 2, W - len(label) - 1))
-                self.annotations.append((lx, fy, label))
+                self._add_annotation(lx, fy, label)
 
     def _add_compass_rose(self):
         """Add a compass rose in a corner water area."""
@@ -505,11 +567,11 @@ class TreasureMap:
         if candidates:
             sx, sy = random.choice(candidates)
             self.grid[sy][sx] = self.sym["ship"]
-            # Label the ship
+            # Label the ship — use _add_annotation for bounds checking
             ship_names = ["The Black Pearl", "Sea Viper", "Widow Maker", "Iron Tide", "Ghost Galleon"]
             name = random.choice(ship_names)
             lx = max(0, sx - len(name) - 1)
-            self.annotations.append((lx, sy, name))
+            self._add_annotation(lx, sy, name)
 
     def render(self) -> str:
         """Render the final map as a string."""
@@ -517,12 +579,26 @@ class TreasureMap:
         # Create a copy of the grid for rendering
         display = [row[:] for row in self.grid]
 
+        # Resolve annotation collisions: detect overlapping label rows and nudge them
+        # Sort annotations by row, then by start x
+        resolved = self._resolve_annotation_collisions(self.annotations, W, H)
+
         # Overlay annotations (labels on top of terrain)
-        for ax, ay, text in self.annotations:
+        # But protect the treasure X marker from being overwritten
+        for ax, ay, text in resolved:
             for i, ch in enumerate(text):
                 tx = ax + i
                 if 0 <= tx < W and 0 <= ay < H:
+                    # Protect treasure X from being overwritten by labels
+                    if self.treasure_x is not None and self.treasure_y is not None:
+                        if tx == self.treasure_x and ay == self.treasure_y:
+                            continue
                     display[ay][tx] = ch
+
+        # Ensure treasure X is still visible
+        if self.treasure_x is not None and self.treasure_y is not None:
+            if 0 <= self.treasure_x < W and 0 <= self.treasure_y < H:
+                display[self.treasure_y][self.treasure_x] = self.sym["x_mark"]
 
         # Build the lines
         lines = []
@@ -537,6 +613,52 @@ class TreasureMap:
         lines.append(self.sym["corner_bl"] + self.sym["border_h"] * W + self.sym["corner_br"])
 
         return "\n".join(lines)
+
+    def _resolve_annotation_collisions(self, annotations, W, H):
+        """Resolve overlapping annotations by nudging labels to different rows."""
+        if not annotations:
+            return annotations
+
+        # Sort by y, then by x
+        sorted_annots = sorted(annotations, key=lambda a: (a[1], a[0]))
+        resolved = []
+
+        # Track occupied intervals per row: row -> list of (start_x, end_x)
+        row_intervals = {}
+
+        for ax, ay, text in sorted_annots:
+            label_len = len(text)
+            # Try original position
+            end_x = ax + label_len
+            current_y = ay
+
+            # Try placing on this row, then shift down/up if collision
+            placed = False
+            for dy_offset in range(0, 5):  # Try original row, then shift down
+                for try_y in [current_y + dy_offset, current_y - dy_offset]:
+                    if try_y < 0 or try_y >= H:
+                        continue
+                    if try_y not in row_intervals:
+                        row_intervals[try_y] = []
+                    # Check for overlap with existing labels on this row
+                    overlaps = False
+                    for (sx, ex) in row_intervals[try_y]:
+                        if ax < ex and end_x > sx:
+                            overlaps = True
+                            break
+                    if not overlaps:
+                        row_intervals.setdefault(try_y, []).append((ax, end_x))
+                        resolved.append((ax, try_y, text))
+                        placed = True
+                        break
+                if placed:
+                    break
+
+            if not placed:
+                # If we can't resolve collision, just place it anyway
+                resolved.append((ax, ay, text))
+
+        return resolved
 
     def generate_riddle(self) -> str:
         """Generate a pirate riddle clue for the treasure."""
@@ -585,6 +707,7 @@ Examples:
     parser.add_argument("--riddle", action="store_true", help="Include a pirate riddle")
     parser.add_argument("--legend", action="store_true", help="Include a map legend")
     parser.add_argument("--count", type=int, default=1, help="Number of maps to generate")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
     args = parser.parse_args()
 
@@ -597,19 +720,30 @@ Examples:
             unicode=not args.no_unicode,
         )
         tmap = TreasureMap(config)
+        sym = tmap.sym
 
         print()
-        print("  ╔══════════════════════════════════════╗")
-        print("  ║   TREASURE MAP — Seed {:>6d}        ║".format(tmap.seed))
-        print("  ╚══════════════════════════════════════╝")
+        if not args.no_unicode:
+            print("  ╔══════════════════════════════════════╗")
+            print("  ║   TREASURE MAP — Seed {:>6d}        ║".format(tmap.seed))
+            print("  ╚══════════════════════════════════════╝")
+        else:
+            print("  +======================================+")
+            print("  |   TREASURE MAP - Seed {:>6d}        |".format(tmap.seed))
+            print("  +======================================+")
         print()
         print(tmap.render())
         print()
 
         if args.riddle:
-            print("  ┌──────────────────────────────────────┐")
-            print("  │          PIRATE'S RIDDLE               │")
-            print("  └──────────────────────────────────────┘")
+            if not args.no_unicode:
+                print("  ┌──────────────────────────────────────┐")
+                print("  │          PIRATE'S RIDDLE               │")
+                print("  └──────────────────────────────────────┘")
+            else:
+                print("  +--------------------------------------+")
+                print("  |          PIRATE'S RIDDLE             |")
+                print("  +--------------------------------------+")
             print()
             for line in tmap.generate_riddle().split("\n"):
                 print(f"      {line}")
@@ -617,9 +751,14 @@ Examples:
 
         if args.legend:
             print()
-            print("  ┌──────── LEGEND ────────┐")
-            print(tmap.generate_legend())
-            print("  └─────────────────────────┘")
+            if not args.no_unicode:
+                print("  ┌──────── LEGEND ────────┐")
+                print(tmap.generate_legend())
+                print("  └─────────────────────────┘")
+            else:
+                print("  +-------- LEGEND ----------+")
+                print(tmap.generate_legend())
+                print("  +---------------------------+")
             print()
 
         if args.count > 1:

@@ -6,15 +6,16 @@ Generate unique, elaborate ASCII treasure maps with coastlines, terrain features
 
 - **Procedural Island Generation** — Fractal Brownian Motion noise creates organic coastlines, beaches, grasslands, forests, and mountains
 - **Terrain Types** — Deep water, shallow water, sand beaches, grassland, forests, dense forests, mountains, and peaks
-- **Treasure Trail** — A dotted path winds from a landing point (⚓) on the beach to the treasure (✕), complete with an anchor marker
+- **Treasure Trail** — A dotted path winds from a landing point (⚓) on the beach to the treasure (✕), with an anchor marker
 - **Compass Rose** — A decorative N/S/E/W compass rose placed in open water
 - **Sea Creatures** — Krakens, Leviathans, and Sea Serpents lurk in the deep
 - **Named Landmarks** — "Dragon's Peak", "Whispering Forest", "Smuggler's Bay" and more are randomly placed
 - **Pirate Riddles** — Generate cryptic verse clues pointing to the treasure
 - **Map Legend** — Full symbol legend for all terrain types
 - **Seedable RNG** — Use `--seed` to reproduce the same map
-- **Unicode & ASCII modes** — Rich unicode symbols by default; `--no-unicode` for terminals that need plain ASCII
+- **Unicode & ASCII modes** — Rich unicode symbols by default; `--no-unicode` for pure ASCII terminals
 - **Batch generation** — Generate multiple maps with `--count`
+- **Version flag** — `--version` shows the program version
 
 ## How to Install
 
@@ -51,6 +52,12 @@ python3 treasure_map.py --count 3
 
 # Combine all options
 python3 treasure_map.py --seed 42 --riddle --legend --width 80 --height 36
+
+# Show version
+python3 treasure_map.py --version
+
+# Show help
+python3 treasure_map.py --help
 ```
 
 ## Usage Examples
@@ -77,16 +84,42 @@ Same maps but using only standard ASCII characters, compatible with any terminal
 
 1. **Heightmap Generation**: Uses fractal Brownian motion (layered Perlin-like noise) to create a height field, with a radial falloff to produce island shapes
 2. **Terrain Classification**: The heightmap is segmented into water/sand/grass/forest/mountain zones based on configurable thresholds
-3. **Feature Placement**: The algorithm finds suitable locations for the treasure (inland, far from water), a landing point (beach adjacent to water), and overlays a winding trail between them
+3. **Feature Placement**: The algorithm finds suitable locations for the treasure (inland, far from water), a landing point (beach adjacent to water, always distinct from the treasure), and overlays a winding trail between them
 4. **Annotation**: Named landmarks, sea creatures, a compass rose, and ship are procedurally placed in appropriate terrain
-5. **Rendering**: All layers are composited into a bordered ASCII display with optional riddle and legend
+5. **Collision Resolution**: Labels are automatically nudged to avoid overlapping, and the treasure X marker is always preserved even when labels pass nearby
+6. **Rendering**: All layers are composited into a bordered ASCII display with optional riddle and legend
 
-## What It Does
+## Bugs Fixed (v1.1.0)
 
-Each run produces a unique treasure map that tells a story: a ship arrives at anchor, follows a dotted trail past named landmarks and through varied terrain, to reach the buried treasure. The "Here be dragons" marginalia and sea creature labels add authentic cartographic flavor. Use it for:
+- **Landing on top of treasure**: The landing point could randomly coincide with the treasure X, producing a confusing trail of length 0. Now the landing always picks a location distinct from the treasure. (8/99 seeds were affected.)
+- **Hardcoded Unicode symbols in ASCII mode**: `_add_coast_foam()`, `_add_lake_if_possible()`, and `_draw_trail()` used hardcoded `"~"` and `"·"` instead of `self.sym["water"]` and `self.sym["trail_dot"]`, leaking unicode into ASCII mode output.
+- **Label overflow past grid width**: The "Here be treasure!" label (17 chars) was placed using a hardcoded offset of 15, causing it to extend past the grid boundary on ~40% of seeds. Labels are now clamped to grid bounds.
+- **Annotations overwriting the treasure X**: Labels overlapping the treasure position would erase the ✕ marker. The render now protects the treasure cell and restores it after all annotations are drawn. (7/99 seeds were affected.)
+- **Annotations overlapping each other**: Multiple labels on the same row would overwrite each other. A collision resolution system now nudges overlapping labels to different rows. (31/99 seeds had overlaps.)
+- **Ship label not bounded**: The `_add_ship()` label placement could extend past the grid edge. Now uses `_add_annotation()` for proper bounds checking.
+- **Unicode in ASCII mode headers**: The title box, riddle box, and legend box used Unicode box-drawing characters even in `--no-unicode` mode. Now uses ASCII `+`/`-`/`|` equivalents.
+- **Missing `--version` flag**: Added `--version` flag showing program version.
+- **Trail dot inconsistency**: The alternate trail dots (odd-indexed) used hardcoded `"·"` instead of `self.sym["trail_dot"]`, producing inconsistent rendering in ASCII mode.
 
-- RPG game props and handouts
-- Creative writing prompts
-- Terminal art fun
-- Procedural content inspiration
-- Coding challenge demonstrations (noise functions, pathfinding, procedural generation)
+## Testing
+
+Run the test suite:
+
+```bash
+python3 test_treasure_map.py
+```
+
+The test suite covers:
+- Basic construction and grid dimensions
+- Seed reproducibility
+- Unicode vs ASCII mode symbol correctness
+- Treasure placement on land
+- Landing distinct from treasure
+- Label overflow bounds checking
+- Annotation collision resolution
+- Treasure X preservation under annotations
+- Hardcoded symbol consistency in code
+- Edge case map sizes (tiny, extreme aspect ratios)
+- All-water and all-land maps
+- Riddle and legend generation
+- CLI flags (--version, --help, --seed, --riddle, --legend, --no-unicode)
