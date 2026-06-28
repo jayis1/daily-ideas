@@ -7,12 +7,16 @@ Features:
   - Interactive TUI gameplay with cursor navigation
   - Static print mode for paper-style output
   - Difficulty levels (easy/medium/hard)
+  - Themed puzzles (--theme flag) using categorized word banks
   - Save/load puzzle state to JSON files
   - Progress tracking (% complete)
-  - Elapsed timer during gameplay
+  - Elapsed timer during gameplay (with hours support)
   - Hint system (reveal letter, reveal word)
   - Check puzzle for errors
   - Puzzle export to plain text
+  - Statistics mode (--stats) showing puzzle metrics
+  - List saved games (--list-saves)
+  - No-color mode (--no-color) and NO_COLOR env var support
 """
 
 import json
@@ -22,7 +26,7 @@ import os
 import time
 from datetime import datetime
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 # ─── Word Bank ────────────────────────────────────────────────────────────────
 
@@ -105,7 +109,62 @@ WORD_BANK = [
     ("WIRELESS", "Communication without physical connections"),
 ]
 
-# ─── Difficulty Presets ───────────────────────────────────────────────────────
+# ─── Themed Word Banks ────────────────────────────────────────────────────────
+
+# Each theme maps to a subset of WORD_BANK entries.
+# Words can belong to multiple themes.
+THEMED_WORDS = {
+    "programming": [
+        "ALGORITHM", "PYTHON", "LAMBDA", "OBJECT", "VARIABLE", "CLASS",
+        "COMPILE", "LOOP", "MODULE", "PARSE", "SYNTAX", "TUPLE", "FLOAT",
+        "ARRAY", "EXCEPT", "FUNCTION", "INHERIT", "ABSTRACT", "DYNAMIC",
+        "SCOPE", "ITERATE", "RECURSION", "DEBUG", "VOID", "WHILE",
+    ],
+    "networking": [
+        "GATEWAY", "PROXY", "ROUTE", "WIRELESS", "SOCKET", "PACKET",
+        "FIREWALL", "BANDWIDTH", "LATENCY", "PROTOCOL", "ENCRYPT",
+        "TOKEN", "URL", "NODE", "HOST", "PORT", "DNS",
+    ],
+    "data": [
+        "BINARY", "HASH", "INDEX", "JSON", "QUEUE", "STACK", "HEAP",
+        "MATRIX", "CACHE", "DEQUE", "GRAPH", "QUERY", "BYTE",
+        "CURSOR", "MERGE", "SERIAL", "FRAGMENT", "SORT",
+    ],
+    "systems": [
+        "KERNEL", "DOCKER", "FORK", "GIT", "LINUX", "SHELL", "THREAD",
+        "PATCH", "RUNTIME", "OVERFLOW", "COMPUTE", "PROCESS",
+    ],
+}
+
+# Build themed clue maps by looking up each word in the main WORD_BANK
+_THEMED_CLUE_MAP = {word: clue for word, clue in WORD_BANK}
+
+
+def get_themed_word_bank(theme):
+    """Get word bank entries (word, clue) for a given theme.
+
+    Only returns words that exist in the main WORD_BANK.
+    If the theme is unknown, returns the full WORD_BANK.
+
+    Args:
+        theme: A theme name string (e.g. 'programming', 'networking').
+
+    Returns:
+        A list of (word, clue) tuples for the theme.
+    """
+    theme = theme.lower().strip()
+    if theme not in THEMED_WORDS:
+        return list(WORD_BANK)
+    result = []
+    seen = set()
+    for word in THEMED_WORDS[theme]:
+        if word in _THEMED_CLUE_MAP and word not in seen:
+            result.append((word, _THEMED_CLUE_MAP[word]))
+            seen.add(word)
+    return result
+
+
+# ─── Difficulty Presets ────────────────────────────────────────────────────────
 
 DIFFICULTY_PRESETS = {
     "easy": {"max_words": 8, "min_word_len": 3, "grid_width": 18, "grid_height": 12},
@@ -113,7 +172,7 @@ DIFFICULTY_PRESETS = {
     "hard": {"max_words": 18, "min_word_len": 5, "grid_width": 24, "grid_height": 16},
 }
 
-# ─── Colors ───────────────────────────────────────────────────────────────────
+# ─── Colors ────────────────────────────────────────────────────────────────────
 
 class Colors:
     """ANSI color codes for terminal output."""
@@ -168,7 +227,11 @@ class _NoColor:
 
 
 def supports_color():
-    """Check if the terminal supports color output."""
+    """Check if the terminal supports color output.
+
+    Respects the NO_COLOR environment variable (https://no-color.org/).
+    Returns False when stdout is not a TTY or TERM=dumb.
+    """
     if not hasattr(sys.stdout, 'isatty'):
         return False
     if not sys.stdout.isatty():
@@ -180,16 +243,37 @@ def supports_color():
     return True
 
 
+def strip_ansi(text):
+    """Remove ANSI escape sequences from a string.
+
+    Args:
+        text: String potentially containing ANSI escape codes.
+
+    Returns:
+        Clean string with all ANSI codes removed.
+    """
+    import re
+    return re.sub(r'\033\[[0-9;]*m', '', text)
+
+
 # ─── Crossword Generator ────────────────────────────────────────────────────
 
 class CrosswordGenerator:
     """Generates crossword puzzles from a word bank."""
 
-    def __init__(self, width=20, height=14):
+    def __init__(self, width=20, height=14, word_bank=None):
+        """Initialize a crossword generator.
+
+        Args:
+            width: Grid width in cells.
+            height: Grid height in cells.
+            word_bank: Optional list of (word, clue) tuples. Defaults to WORD_BANK.
+        """
         self.width = width
         self.height = height
         self.grid = [[' ' for _ in range(width)] for _ in range(height)]
         self.placed_words = []  # (word, row, col, direction) where direction is 'A' or 'D'
+        self.word_bank = word_bank if word_bank is not None else list(WORD_BANK)
 
     def can_place(self, word, row, col, direction):
         """Check if a word can be placed at the given position.
@@ -303,7 +387,7 @@ class CrosswordGenerator:
         # Deduplicate and filter by minimum length
         seen_words = set()
         unique_words = []
-        for word, clue in WORD_BANK:
+        for word, clue in self.word_bank:
             if word not in seen_words and len(word) >= min_word_len:
                 seen_words.add(word)
                 unique_words.append((word, clue))
@@ -406,7 +490,7 @@ class CrosswordGenerator:
 
         for word, row, col, direction in self.placed_words:
             clue_text = ""
-            for w, c in WORD_BANK:
+            for w, c in self.word_bank:
                 if w == word:
                     clue_text = c
                     break
@@ -472,6 +556,62 @@ class CrosswordGenerator:
         self.width = max_c - min_c + 1
         self.placed_words = new_placed
         return self
+
+    def get_stats(self):
+        """Compute and return puzzle statistics.
+
+        Returns:
+            A dictionary with keys:
+              - total_words: number of placed words
+              - across_count: number of across words
+              - down_count: number of down words
+              - total_cells: total number of letter cells in the grid
+              - intersections: number of cells where two words cross
+              - grid_density: fraction of grid cells that are filled (0.0-1.0)
+              - avg_word_len: average word length
+              - longest_word: longest placed word
+              - shortest_word: shortest placed word
+        """
+        if not self.placed_words:
+            return {
+                "total_words": 0, "across_count": 0, "down_count": 0,
+                "total_cells": 0, "intersections": 0, "grid_density": 0.0,
+                "avg_word_len": 0, "longest_word": "", "shortest_word": "",
+            }
+
+        across_count = sum(1 for _, _, _, d in self.placed_words if d == 'A')
+        down_count = sum(1 for _, _, _, d in self.placed_words if d == 'D')
+        total_cells = sum(
+            1 for r in range(self.height) for c in range(self.width)
+            if self.grid[r][c] != ' '
+        )
+        grid_cells = self.height * self.width
+        # Count intersections: cells that belong to more than one word
+        cell_owners = {}
+        for word, row, col, d in self.placed_words:
+            dr, dc = (0, 1) if d == 'A' else (1, 0)
+            for i in range(len(word)):
+                r = row + dr * i
+                c = col + dc * i
+                cell_owners.setdefault((r, c), []).append(word)
+        intersections = sum(1 for v in cell_owners.values() if len(v) > 1)
+
+        word_lengths = [len(w) for w, _, _, _ in self.placed_words]
+        avg_len = sum(word_lengths) / len(word_lengths) if word_lengths else 0
+        longest = max(self.placed_words, key=lambda x: len(x[0]))[0] if self.placed_words else ""
+        shortest = min(self.placed_words, key=lambda x: len(x[0]))[0] if self.placed_words else ""
+
+        return {
+            "total_words": len(self.placed_words),
+            "across_count": across_count,
+            "down_count": down_count,
+            "total_cells": total_cells,
+            "intersections": intersections,
+            "grid_density": total_cells / grid_cells if grid_cells else 0.0,
+            "avg_word_len": round(avg_len, 1),
+            "longest_word": longest,
+            "shortest_word": shortest,
+        }
 
     def to_dict(self):
         """Serialize the generator state to a dictionary for save/load."""
@@ -614,10 +754,20 @@ class CrosswordGame:
         return time.time() - self.start_time
 
     def format_time(self, seconds):
-        """Format seconds into MM:SS display."""
-        mins = int(seconds) // 60
-        secs = int(seconds) % 60
-        return f"{mins:02d}:{secs:02d}"
+        """Format seconds into HH:MM:SS or MM:SS display.
+
+        Shows HH:MM:SS when over an hour, otherwise MM:SS.
+        """
+        total_seconds = int(seconds)
+        if total_seconds >= 3600:
+            hours = total_seconds // 3600
+            mins = (total_seconds % 3600) // 60
+            secs = total_seconds % 60
+            return f"{hours:02d}:{mins:02d}:{secs:02d}"
+        else:
+            mins = total_seconds // 60
+            secs = total_seconds % 60
+            return f"{mins:02d}:{secs:02d}"
 
     def progress_pct(self):
         """Calculate percentage of cells filled (not necessarily correctly)."""
@@ -1035,7 +1185,7 @@ class CrosswordGame:
         return "\n".join(lines)
 
 
-# ─── Simplified Terminal Input ───────────────────────────────────────────────
+# ─── Simplified Terminal Input ────────────────────────────────────────────────
 
 def get_key():
     """Read a single keypress from the terminal.
@@ -1130,9 +1280,20 @@ def load_game(filepath):
 
     Returns:
         Tuple of (generator, game) instances.
+
+    Raises:
+        FileNotFoundError: If the save file doesn't exist.
+        ValueError: If the save file is corrupted or has an incompatible version.
     """
     with open(filepath, 'r') as f:
         data = json.load(f)
+
+    # Version compatibility check
+    save_version = data.get("version", "unknown")
+    if save_version != __version__:
+        # Still try to load — just warn
+        print(f"Warning: Save file version {save_version} differs from current {__version__}. "
+              f"Attempting to load anyway...", file=sys.stderr)
 
     generator = CrosswordGenerator.from_dict(data["generator"])
     game = CrosswordGame.from_dict(generator, data["game"])
@@ -1143,7 +1304,7 @@ def list_saves():
     """List all saved games in the save directory.
 
     Returns:
-        List of (filepath, timestamp_string) tuples sorted by newest first.
+        List of (filepath, version, filename) tuples sorted by newest first.
     """
     if not os.path.exists(SAVE_DIR):
         return []
@@ -1159,6 +1320,33 @@ def list_saves():
                 continue
     saves.sort(key=lambda x: x[2], reverse=True)
     return saves
+
+
+# ─── Print Stats ──────────────────────────────────────────────────────────────
+
+def print_stats(generator, use_color=True):
+    """Print puzzle statistics to stdout.
+
+    Args:
+        generator: The CrosswordGenerator instance (should be trimmed).
+        use_color: Whether to use ANSI color codes.
+    """
+    stats = generator.get_stats()
+    C = Colors if use_color else _NoColor()
+
+    print(f"\n{C.BOLD}{C.CYAN}{'=' * 42}{C.RESET}")
+    print(f"{C.BOLD}{C.CYAN}  PUZZLE STATISTICS{C.RESET}")
+    print(f"{C.BOLD}{C.CYAN}{'=' * 42}{C.RESET}\n")
+    print(f"  Total words:     {C.BOLD}{stats['total_words']}{C.RESET}")
+    print(f"  Across words:    {C.BOLD}{stats['across_count']}{C.RESET}")
+    print(f"  Down words:       {C.BOLD}{stats['down_count']}{C.RESET}")
+    print(f"  Total cells:      {C.BOLD}{stats['total_cells']}{C.RESET}")
+    print(f"  Intersections:    {C.BOLD}{stats['intersections']}{C.RESET}")
+    print(f"  Grid density:     {C.BOLD}{stats['grid_density']:.1%}{C.RESET}")
+    print(f"  Avg word length:  {C.BOLD}{stats['avg_word_len']}{C.RESET}")
+    print(f"  Longest word:     {C.BOLD}{stats['longest_word']}{C.RESET} ({len(stats['longest_word'])} letters)")
+    print(f"  Shortest word:    {C.BOLD}{stats['shortest_word']}{C.RESET} ({len(stats['shortest_word'])} letters)")
+    print()
 
 
 # ─── Interactive Play ─────────────────────────────────────────────────────────
@@ -1236,14 +1424,25 @@ def play_interactive(generator, resume_game=None):
 
 # ─── Non-interactive (fallback) Mode ──────────────────────────────────────────
 
-def print_puzzle(generator, show_answers=False):
-    """Print the crossword puzzle in a static format using a clean box-drawing grid."""
+def print_puzzle(generator, show_answers=False, use_color=None):
+    """Print the crossword puzzle in a static format using a clean box-drawing grid.
+
+    Args:
+        generator: The CrosswordGenerator instance.
+        show_answers: Whether to reveal the solution letters.
+        use_color: Explicit True/False for color. None = auto-detect.
+    """
     across_clues, down_clues, numbered = generator.get_clues()
     number_map = {}
     for (r, c), num in numbered.items():
         number_map[(r, c)] = num
 
-    C = Colors
+    if use_color is None:
+        C = Colors if supports_color() else _NoColor()
+    elif use_color:
+        C = Colors
+    else:
+        C = _NoColor()
 
     print(f"\n{C.BOLD}{C.CYAN}{'=' * 42}{C.RESET}")
     print(f"{C.BOLD}{C.CYAN}  TERMINAL CROSSWORD PUZZLE{C.RESET}")
@@ -1326,10 +1525,13 @@ def main():
     """Entry point for the terminal crossword puzzle CLI."""
     import argparse
 
+    # Available themes for --theme flag
+    theme_list = sorted(THEMED_WORDS.keys())
+
     parser = argparse.ArgumentParser(
         description="Terminal Crossword Puzzle — Generate and play interactive crossword puzzles",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""\
+        epilog=f"""\
 examples:
   %(prog)s                          Play interactively (default)
   %(prog)s --difficulty hard        Play a harder puzzle with more words
@@ -1337,8 +1539,13 @@ examples:
   %(prog)s --answers                 Print puzzle with solutions shown
   %(prog)s --seed 42                 Use seed 42 for reproducible puzzles
   %(prog)s --export puzzle.txt       Export puzzle to a text file
+  %(prog)s --theme programming       Use programming-themed words
+  %(prog)s --stats                   Show puzzle statistics
+  %(prog)s --list-saves              List saved games
   %(prog)s --load ~/.crossword_saves/crossword_20260627.json
                                     Resume a saved game
+
+available themes: {', '.join(theme_list)}
 """
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -1349,6 +1556,8 @@ examples:
     parser.add_argument("--difficulty", choices=["easy", "medium", "hard"],
                         default="medium",
                         help="Difficulty level: easy (8 words), medium (12), hard (18)")
+    parser.add_argument("--theme", choices=theme_list, default=None,
+                        help="Use a themed word bank (programming, networking, data, systems)")
     parser.add_argument("--answers", action="store_true",
                         help="Show answers (non-interactive)")
     parser.add_argument("--print", action="store_true", dest="print_puzzle",
@@ -1357,11 +1566,36 @@ examples:
                         help="Force interactive mode")
     parser.add_argument("--no-interactive", action="store_true",
                         help="Force non-interactive mode")
+    parser.add_argument("--no-color", action="store_true",
+                        help="Disable color output (overrides auto-detection)")
+    parser.add_argument("--stats", action="store_true",
+                        help="Print puzzle statistics and exit")
     parser.add_argument("--export", metavar="FILE", default=None,
                         help="Export puzzle to a plain-text file")
     parser.add_argument("--load", metavar="FILE", default=None,
                         help="Load and resume a saved game")
+    parser.add_argument("--list-saves", action="store_true",
+                        help="List all saved games and exit")
     args = parser.parse_args()
+
+    # List saves mode — no puzzle generation needed
+    if args.list_saves:
+        saves = list_saves()
+        if not saves:
+            print("No saved games found.")
+            print(f"Save directory: {SAVE_DIR}")
+        else:
+            print(f"\nSaved games ({SAVE_DIR}):\n")
+            print(f"  {'Filename':<45} {'Version':<10}")
+            print(f"  {'-'*45} {'-'*10}")
+            for filepath, version, fname in saves:
+                print(f"  {fname:<45} {version:<10}")
+            print(f"\nUse --load <filepath> to resume a game.")
+        return
+
+    # Handle --no-color by setting NO_COLOR env var for this process
+    if args.no_color:
+        os.environ['NO_COLOR'] = '1'
 
     # Determine difficulty settings
     preset = DIFFICULTY_PRESETS[args.difficulty]
@@ -1369,6 +1603,13 @@ examples:
     min_word_len = preset["min_word_len"]
     grid_width = preset["grid_width"]
     grid_height = preset["grid_height"]
+
+    # Select word bank based on theme
+    word_bank = get_themed_word_bank(args.theme) if args.theme else list(WORD_BANK)
+
+    game = None
+    attempt_seed = 0
+    attempt = 0
 
     # Load saved game if requested
     if args.load:
@@ -1381,10 +1622,11 @@ examples:
     else:
         # Generate a new puzzle
         seed = args.seed if args.seed else random.randint(1, 999999)
+        attempt_seed = seed
         # Try multiple seeds until we get a good puzzle
         for attempt in range(50):
-            generator = CrosswordGenerator(grid_width, grid_height)
-            generator.generate(max_words=max_words, seed=seed + attempt,
+            generator = CrosswordGenerator(grid_width, grid_height, word_bank=word_bank)
+            generator.generate(max_words=max_words, seed=attempt_seed + attempt,
                                min_word_len=min_word_len)
             generator.trim_grid()
             if is_good_puzzle(generator):
@@ -1392,9 +1634,18 @@ examples:
 
         game = None  # Will be created in interactive mode
 
+    seed_display = (args.seed if args.seed else
+                    (attempt_seed + attempt if not args.load else 'loaded'))
+    theme_display = f", theme: {args.theme}" if args.theme else ""
     print(f"Generated crossword with {len(generator.placed_words)} words "
-          f"(seed: {seed + attempt if args.seed or not args.load else 'loaded'}, "
-          f"difficulty: {args.difficulty})\n")
+          f"(seed: {seed_display}, difficulty: {args.difficulty}{theme_display})\n")
+
+    # Stats mode
+    if args.stats:
+        use_color = supports_color() if not args.no_color else False
+        print_stats(generator, use_color=use_color)
+        if not args.print_puzzle and not args.answers:
+            return
 
     # Export mode
     if args.export:
@@ -1410,7 +1661,8 @@ examples:
 
     # Print/answers mode (non-interactive)
     if args.answers or args.print_puzzle:
-        print_puzzle(generator, show_answers=args.answers)
+        use_color = supports_color() if not args.no_color else False
+        print_puzzle(generator, show_answers=args.answers, use_color=use_color)
         return
 
     # Interactive mode
@@ -1427,12 +1679,24 @@ examples:
         interactive = True
 
     if interactive and sys.stdin.isatty():
-        result = play_interactive(generator, resume_game=game)
-        if result == 'new':
-            # Regenerate with a new seed
-            main()
+        while True:
+            result = play_interactive(generator, resume_game=game)
+            if result == 'new':
+                # Regenerate with a new seed instead of recursing
+                new_seed = random.randint(1, 999999)
+                generator = CrosswordGenerator(grid_width, grid_height, word_bank=word_bank)
+                generator.generate(max_words=max_words, seed=new_seed,
+                                   min_word_len=min_word_len)
+                generator.trim_grid()
+                game = None
+                theme_str = f", theme: {args.theme}" if args.theme else ""
+                print(f"New puzzle! {len(generator.placed_words)} words "
+                      f"(seed: {new_seed}, difficulty: {args.difficulty}{theme_str})\n")
+            else:
+                break
     else:
-        print_puzzle(generator, show_answers=False)
+        use_color = supports_color() if not args.no_color else False
+        print_puzzle(generator, show_answers=False, use_color=use_color)
         print(f"\n(Run with --interactive to play, --answers to see solutions)")
 
 

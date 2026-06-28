@@ -26,6 +26,19 @@ class TestCrosswordGenerator:
         assert len(self.gen.grid[0]) == 20
         assert self.gen.placed_words == []
 
+    def test_init_custom_word_bank(self):
+        """Generator accepts a custom word bank."""
+        custom_bank = [("FOO", "A test word"), ("BAR", "Another test word")]
+        gen = crossword.CrosswordGenerator(20, 14, word_bank=custom_bank)
+        assert gen.word_bank == custom_bank
+        assert gen.width == 20
+        assert gen.height == 14
+
+    def test_default_word_bank(self):
+        """Default word bank is the global WORD_BANK."""
+        gen = crossword.CrosswordGenerator(20, 14)
+        assert gen.word_bank == crossword.WORD_BANK
+
     def test_generate_basic(self):
         """Basic generation places at least one word."""
         self.gen.generate(max_words=10, seed=42)
@@ -70,7 +83,6 @@ class TestCrosswordGenerator:
 
     def test_word_bank_deduplication(self):
         """Duplicate entries in WORD_BANK don't cause double placement."""
-        # CACHE appears twice in original WORD_BANK; generate should handle it
         gen = crossword.CrosswordGenerator(20, 14)
         gen.generate(max_words=15, seed=42)
         words_placed = [w for w, _, _, _ in gen.placed_words]
@@ -181,6 +193,38 @@ class TestCrosswordGenerator:
         assert crossword.is_good_puzzle(self.gen, min_words=3)
         assert crossword.is_good_puzzle(self.gen, min_words=100) == False
 
+    def test_get_stats(self):
+        """get_stats returns meaningful statistics for a generated puzzle."""
+        self.gen.generate(max_words=10, seed=42)
+        self.gen.trim_grid()
+        stats = self.gen.get_stats()
+        assert stats["total_words"] >= 1
+        assert stats["across_count"] + stats["down_count"] == stats["total_words"]
+        assert stats["total_cells"] > 0
+        assert stats["grid_density"] > 0
+        assert stats["avg_word_len"] > 0
+        assert len(stats["longest_word"]) >= len(stats["shortest_word"])
+        assert stats["intersections"] >= 0
+
+    def test_get_stats_empty(self):
+        """get_stats on empty generator returns zeroed stats."""
+        stats = self.gen.get_stats()
+        assert stats["total_words"] == 0
+        assert stats["total_cells"] == 0
+        assert stats["grid_density"] == 0.0
+        assert stats["longest_word"] == ""
+
+    def test_strip_ansi(self):
+        """strip_ansi removes ANSI escape sequences from strings."""
+        colored = f"\033[31mRed\033[0m \033[1mBold\033[0m"
+        stripped = crossword.strip_ansi(colored)
+        assert stripped == "Red Bold"
+
+    def test_strip_ansi_plain_text(self):
+        """strip_ansi leaves plain text untouched."""
+        plain = "Hello World"
+        assert crossword.strip_ansi(plain) == "Hello World"
+
 
 class TestCrosswordGame:
     """Tests for the CrosswordGame class."""
@@ -287,6 +331,12 @@ class TestCrosswordGame:
         assert self.game.format_time(0) == "00:00"
         assert self.game.format_time(3599) == "59:59"
 
+    def test_format_time_hours(self):
+        """format_time shows HH:MM:SS when over an hour."""
+        assert self.game.format_time(3600) == "01:00:00"
+        assert self.game.format_time(3661) == "01:01:01"
+        assert self.game.format_time(7200) == "02:00:00"
+
     def test_get_current_word_cells(self):
         """get_current_word_cells returns a list of cell positions."""
         cells = self.game.get_current_word_cells()
@@ -350,18 +400,16 @@ class TestSaveLoad:
     def test_save_and_load(self):
         """Save and load round-trip preserves game state."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            filepath = os.path.join(tmpdir, "test_save.json")
-            saved_path = crossword.save_game(self.gen, self.game, filename="test_save.json")
-            assert os.path.exists(saved_path)
+            filepath = crossword.save_game(self.gen, self.game, filename="test_save.json")
+            assert os.path.exists(filepath)
 
-            loaded_gen, loaded_game = crossword.load_game(saved_path)
+            loaded_gen, loaded_game = crossword.load_game(filepath)
             assert loaded_gen.width == self.gen.width
             assert loaded_gen.height == self.gen.height
             assert loaded_game.hints_used == self.game.hints_used
 
     def test_save_creates_directory(self):
         """Save creates the save directory if it doesn't exist."""
-        # This test ensures SAVE_DIR creation works
         filepath = crossword.save_game(self.gen, self.game)
         assert os.path.exists(filepath)
         # Clean up
@@ -384,6 +432,23 @@ class TestSaveLoad:
         # Clean up
         for filepath, _, _ in saves:
             os.unlink(filepath)
+
+    def test_load_missing_file(self):
+        """Loading a nonexistent file raises FileNotFoundError."""
+        try:
+            crossword.load_game("/nonexistent/path/file.json")
+            assert False, "Should have raised FileNotFoundError"
+        except (FileNotFoundError, IOError):
+            pass
+
+    def test_save_version_included(self):
+        """Saved file includes version information."""
+        filepath = crossword.save_game(self.gen, self.game, filename="test_ver.json")
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+        assert "version" in data
+        assert data["version"] == crossword.__version__
+        os.unlink(filepath)
 
 
 class TestDifficultyPresets:
@@ -420,6 +485,119 @@ class TestDifficultyPresets:
         assert len(gen.placed_words) >= 1
 
 
+class TestThemedWordBank:
+    """Tests for themed word bank functionality."""
+
+    def test_get_themed_word_bank_programming(self):
+        """Programming theme returns programming-related words."""
+        bank = crossword.get_themed_word_bank("programming")
+        assert len(bank) > 0
+        for word, clue in bank:
+            assert word in crossword.THEMED_WORDS["programming"]
+            assert len(clue) > 0
+
+    def test_get_themed_word_bank_networking(self):
+        """Networking theme returns networking-related words."""
+        bank = crossword.get_themed_word_bank("networking")
+        assert len(bank) > 0
+        for word, clue in bank:
+            assert word in crossword.THEMED_WORDS["networking"]
+
+    def test_get_themed_word_bank_data(self):
+        """Data theme returns data-related words."""
+        bank = crossword.get_themed_word_bank("data")
+        assert len(bank) > 0
+        for word, clue in bank:
+            assert word in crossword.THEMED_WORDS["data"]
+
+    def test_get_themed_word_bank_systems(self):
+        """Systems theme returns systems-related words."""
+        bank = crossword.get_themed_word_bank("systems")
+        assert len(bank) > 0
+        for word, clue in bank:
+            assert word in crossword.THEMED_WORDS["systems"]
+
+    def test_get_themed_word_bank_unknown(self):
+        """Unknown theme returns the full word bank."""
+        bank = crossword.get_themed_word_bank("unknown_theme")
+        assert bank == list(crossword.WORD_BANK)
+
+    def test_generate_with_theme(self):
+        """Generating a puzzle with a themed word bank works."""
+        bank = crossword.get_themed_word_bank("programming")
+        gen = crossword.CrosswordGenerator(20, 14, word_bank=bank)
+        gen.generate(max_words=8, seed=42)
+        gen.trim_grid()
+        assert len(gen.placed_words) >= 1
+        # All placed words should come from the themed bank
+        placed_words = {w for w, _, _, _ in gen.placed_words}
+        theme_words = {w for w, _ in bank}
+        assert placed_words.issubset(theme_words)
+
+    def test_theme_case_insensitive(self):
+        """Theme names are case-insensitive."""
+        bank1 = crossword.get_themed_word_bank("Programming")
+        bank2 = crossword.get_themed_word_bank("programming")
+        assert bank1 == bank2
+
+    def test_no_duplicates_in_themed_bank(self):
+        """Themed word banks have no duplicate words."""
+        for theme in crossword.THEMED_WORDS:
+            bank = crossword.get_themed_word_bank(theme)
+            words = [w for w, _ in bank]
+            assert len(words) == len(set(words)), f"Duplicates in theme '{theme}'"
+
+
+class TestStats:
+    """Tests for the puzzle statistics feature."""
+
+    def setup_method(self):
+        """Create a generated puzzle for stats tests."""
+        self.gen = crossword.CrosswordGenerator(20, 14)
+        self.gen.generate(max_words=10, seed=42)
+        self.gen.trim_grid()
+
+    def test_stats_total_words(self):
+        """Stats total_words matches placed_words count."""
+        stats = self.gen.get_stats()
+        assert stats["total_words"] == len(self.gen.placed_words)
+
+    def test_stats_across_down_counts(self):
+        """Stats across + down counts equal total words."""
+        stats = self.gen.get_stats()
+        assert stats["across_count"] + stats["down_count"] == stats["total_words"]
+
+    def test_stats_intersections(self):
+        """Stats intersections count is non-negative."""
+        stats = self.gen.get_stats()
+        assert stats["intersections"] >= 0
+
+    def test_stats_density_range(self):
+        """Stats grid density is between 0 and 1."""
+        stats = self.gen.get_stats()
+        assert 0 < stats["grid_density"] <= 1.0
+
+    def test_stats_word_lengths(self):
+        """Stats longest word is at least as long as shortest."""
+        stats = self.gen.get_stats()
+        assert len(stats["longest_word"]) >= len(stats["shortest_word"])
+
+    def test_print_stats_no_crash(self):
+        """print_stats runs without crashing."""
+        # Redirect stdout to suppress output during test
+        import io
+        old_stdout = sys.stdout
+        sys.stdout = io.StringIO()
+        try:
+            crossword.print_stats(self.gen, use_color=False)
+            output = sys.stdout.getvalue()
+            assert "PUZZLE STATISTICS" in output
+            assert "Total words" in output
+            assert "Intersections" in output
+        finally:
+            sys.stdout = old_stdout
+
+
 class TestVersion:
     """Test version constant."""
 
@@ -430,6 +608,10 @@ class TestVersion:
         # Should be in semver-like format
         parts = crossword.__version__.split('.')
         assert len(parts) >= 2
+
+    def test_version_is_1_3(self):
+        """Version is 1.3.0 after enhancements."""
+        assert crossword.__version__ == "1.3.0"
 
 
 class TestEdgeCases:
@@ -525,8 +707,41 @@ class TestEdgeCases:
         output = game.render(use_color=False)
         assert len(output) > 100
 
+    def test_format_time_over_one_hour(self):
+        """format_time shows hours when elapsed > 60 minutes."""
+        game = crossword.CrosswordGame(
+            crossword.CrosswordGenerator(20, 14))
+        # 1 hour, 23 minutes, 45 seconds
+        assert game.format_time(5025) == "01:23:45"
 
-# ─── Run Tests ───────────────────────────────────────────────────────────────
+    def test_format_time_under_one_hour(self):
+        """format_time shows MM:SS when under an hour."""
+        game = crossword.CrosswordGame(
+            crossword.CrosswordGenerator(20, 14))
+        assert game.format_time(599) == "09:59"
+
+    def test_supports_color_env_var(self):
+        """supports_color respects NO_COLOR env var."""
+        import os
+        original = os.environ.get('NO_COLOR')
+        os.environ['NO_COLOR'] = '1'
+        assert crossword.supports_color() is False
+        if original is not None:
+            os.environ['NO_COLOR'] = original
+        else:
+            del os.environ['NO_COLOR']
+
+    def test_strip_ansi_removes_escape_codes(self):
+        """strip_ansi correctly removes all ANSI sequences."""
+        text = "\033[1m\033[31mBold Red\033[0m normal \033[48;5;240mgray bg\033[0m"
+        result = crossword.strip_ansi(text)
+        assert "\033[" not in result
+        assert "Bold Red" in result
+        assert "normal" in result
+        assert "gray bg" in result
+
+
+# ─── Run Tests ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     # Simple test runner
@@ -535,6 +750,8 @@ if __name__ == "__main__":
         TestCrosswordGame,
         TestSaveLoad,
         TestDifficultyPresets,
+        TestThemedWordBank,
+        TestStats,
         TestVersion,
         TestEdgeCases,
     ]
