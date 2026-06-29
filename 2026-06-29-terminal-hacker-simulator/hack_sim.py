@@ -19,7 +19,7 @@ import argparse
 from collections import OrderedDict
 from datetime import datetime
 
-VERSION = "3.0.0"
+VERSION = "3.1.0"
 
 # ── Save file path ────────────────────────────────────────────────────────────
 
@@ -186,6 +186,10 @@ def save_game(game):
         "trace_level": game.trace_level,
         "max_trace": game.max_trace,
         "tools_unlocked": list(game.tools_unlocked),
+        "total_cracks_attempted": game.total_cracks_attempted,
+        "total_cracks_succeeded": game.total_cracks_succeeded,
+        "total_analyses": game.total_analyses,
+        "command_history": game.command_history[-50:],
         "saved_at": datetime.now().isoformat(),
     }
     if game.current_network:
@@ -221,6 +225,10 @@ def load_game(game):
     game.trace_level = state.get("trace_level", 0)
     game.max_trace = state.get("max_trace", 100)
     game.tools_unlocked = set(state.get("tools_unlocked", ["scan", "crack", "download"]))
+    game.total_cracks_attempted = state.get("total_cracks_attempted", 0)
+    game.total_cracks_succeeded = state.get("total_cracks_succeeded", 0)
+    game.total_analyses = state.get("total_analyses", 0)
+    game.command_history = state.get("command_history", [])
 
     net_data = state.get("network")
     if net_data:
@@ -321,7 +329,7 @@ class Network:
                 "type": random.choice(node_types),
                 "ip": f"{random.choice(IP_PREFIXES)}.{random.randint(1,254)}.{random.randint(1,254)}",
                 "name": f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}-{random.randint(10,99)}",
-                "difficulty": random.randint(1, self.difficulty + 1),
+                "difficulty": min(random.randint(1, self.difficulty + 1), 5),
                 "cracked": False,
                 "analyzed": False,
                 "files": random.sample(FILE_NAMES, k=random.randint(1, 3)),
@@ -438,8 +446,9 @@ class HackerSimulator:
             print(f"{YELLOW}No active mission. Type 'scan' or wait for a network to be assigned.{RESET}")
             return
 
-        trace_pct = int(self.trace_level)
-        trace_bar_filled = int(trace_pct / 4)
+        # Calculate trace percentage relative to max_trace
+        trace_pct = int(min(self.trace_level / self.max_trace * 100, 999))
+        trace_bar_filled = min(int(trace_pct / 4), 25)
         trace_bar = "█" * trace_bar_filled + "░" * (25 - trace_bar_filled)
 
         trace_color = GREEN if trace_pct < 40 else (YELLOW if trace_pct < 70 else RED)
@@ -453,7 +462,7 @@ class HackerSimulator:
         print(f"  TARGET: {BOLD}{net.corp}{RESET}  ({net.handle})")
         print(f"  IP: {net.ip}  |  Nodes: {total}  |  Difficulty: {'█' * net.difficulty}{'░' * (5 - net.difficulty)}")
         print(f"  PROGRESS: {GREEN}{cracked}{RESET}/{total} nodes cracked")
-        print(f"  TRACE: [{trace_color}{trace_bar}{RESET}] {trace_color}{trace_pct}%{RESET}")
+        print(f"  TRACE: [{trace_color}{trace_bar}{RESET}] {trace_color}{trace_pct}%{RESET}  ({int(self.trace_level)}/{self.max_trace})")
         print(f"  SCORE: {BOLD}{self.score}{RESET}  |  Networks: {self.networks_cracked}  |  Files: {self.files_stolen}")
         print(f"{CYAN}{'─' * 60}{RESET}\n")
 
@@ -469,7 +478,7 @@ class HackerSimulator:
 
         for i, node in enumerate(net.nodes):
             status_icon = f"{GREEN}✓{RESET}" if node["cracked"] else (f"{BLUE}◎{RESET}" if node.get("analyzed") else f"{RED}✗{RESET}")
-            diff_bar = "█" * node["difficulty"] + "░" * (6 - node["difficulty"])
+            diff_bar = "█" * node["difficulty"] + "░" * (5 - node["difficulty"])
             analyzed_tag = f" {DIM}[ANALYZED]{RESET}" if node.get("analyzed") and not node["cracked"] else ""
             print(f"  [{i+1}] {status_icon} {BOLD}{node['name']:<25}{RESET} {DIM}({node['type']}){RESET}{analyzed_tag}")
             print(f"      IP: {node['ip']}  |  Security: {diff_bar}  |  Files: {len(node['files'])}")
@@ -511,7 +520,7 @@ class HackerSimulator:
 
         print(f"\n{BLUE}▶ Analyzing: {BOLD}{node['name']}{RESET}")
         print(f"{BLUE}▶ Type: {node['type']}  |  Security Level: {difficulty}{RESET}")
-        print(f"{DIM}  Trace cost: +{trace_cost}%{RESET}\n")
+        print(f"{DIM}  Trace cost: +{trace_cost} points{RESET}\n")
 
         # Run a brief scan animation
         verb = random.choice(HACK_VERBS)
@@ -661,7 +670,7 @@ class HackerSimulator:
 
     def deploy_tool(self, tool_name):
         """Use a special hacking tool."""
-        if self.current_network is None and tool_name in ("nuke",):
+        if self.current_network is None and tool_name in ("nuke", "overclock"):
             print(f"{YELLOW}No active mission. Connect to a network first.{RESET}")
             return
 
@@ -674,7 +683,7 @@ class HackerSimulator:
             progress_bar("  Neutralizing trace", length=20, speed=0.025)
             reduction = min(self.trace_level, random.randint(15, 35))
             self.trace_level -= reduction
-            print(f"  {GREEN}Trace reduced by {reduction}%!{RESET}")
+            print(f"  {GREEN}Trace reduced by {reduction} points!{RESET}")
             self.tools_unlocked.discard("tracecut")
 
         elif tool_name == "nuke":
@@ -686,14 +695,14 @@ class HackerSimulator:
                     self.total_cracks_succeeded += 1
                     self.total_cracks_attempted += 1
             self.trace_level += 20
-            print(f"  {RED}All nodes cracked! But trace increased by 20%{RESET}")
+            print(f"  {RED}All nodes cracked! But trace increased by 20 points!{RESET}")
             self.tools_unlocked.discard("nuke")
 
         elif tool_name == "stealth":
             print(f"\n  {CYAN}⚡ DEPLOYING STEALTH MODULE{RESET}")
             progress_bar("  Cloaking", length=15, speed=0.02)
             self.trace_level = max(0, self.trace_level - 25)
-            print(f"  {GREEN}Stealth active! Trace reduced by 25%{RESET}")
+            print(f"  {GREEN}Stealth active! Trace reduced by 25 points!{RESET}")
             self.tools_unlocked.discard("stealth")
 
         elif tool_name == "overclock":
@@ -704,7 +713,7 @@ class HackerSimulator:
             for node in self.current_network.nodes:
                 if not node["cracked"] and node["difficulty"] > 1:
                     node["difficulty"] -= 1
-            print(f"  {GREEN}CPU overclocked! Node difficulties reduced. Trace -15%.{RESET}")
+            print(f"  {GREEN}CPU overclocked! Node difficulties reduced. Trace -15 points.{RESET}")
             self.tools_unlocked.discard("overclock")
 
         elif tool_name == "shield":
@@ -792,7 +801,7 @@ class HackerSimulator:
   • Use {GREEN}analyze <n>{RESET} before cracking — it reveals code hints!
   • Each crack attempt increases trace — be strategic!
   • Partial code matches (≥50%) still crack the node but increase trace.
-  • If trace reaches {RED}100%{RESET}, you're caught — game over!
+  • If trace reaches {RED}max{RESET}, you're caught — game over!
   • Your game auto-saves after each mission victory.
 """
         print(help_text)

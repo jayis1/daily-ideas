@@ -4,16 +4,16 @@ A cinematic hacking simulation game played entirely in the terminal. Break into 
 
 ## Features
 
-- **Cinematic boot sequence** — Animated startup with glitch effects, matrix rain, and progress bars that make you feel like a movie hacker
-- **Procedural networks** — Every mission generates a unique corporate network with randomized names, IPs, node types, and difficulty levels
+- **Cinematic boot sequence** — Animated startup with glitch effects, matrix rain, and progress bars
+- **Procedural networks** — Every mission generates a unique corporate network with randomized names, IPs, node types, and difficulty levels (1–5)
 - **Code-cracking mini-game** — Crack nodes by typing access codes; partial matches (≥50%) still work but increase your trace
 - **Node analysis** — Use `analyze <n>` to recon nodes before cracking — reveals code hints at a trace cost
-- **Trace system** — Every action increases your trace level; hit the max and you're caught. Play strategically!
-- **5 special tools** — Earn unlockable tools through gameplay: `tracecut`, `nuke`, `stealth`, `overclock`, and `shield`
+- **Trace system** — Every action increases your trace level; hit the max and you're caught. The status bar shows trace as a percentage of your max (affected by shield)
+- **5 special tools** — Earn unlockable tools: `tracecut`, `nuke`, `stealth`, `overclock`, and `shield`
 - **Escalating difficulty** — Each successive network gets harder with more nodes and tougher security
 - **Score tracking** — Earn points for cracking nodes, downloading files, and low-trace completion bonuses
 - **Detailed stats** — View your crack success rate, networks cracked, and more with the `score` command
-- **Save & Load** — Auto-saves after every mission victory; manually save anytime with `save`
+- **Save & Load** — Auto-saves after every mission victory; manually save anytime with `save`. Persists score, stats, trace level, tools, network state, crack success rate, and command history
 - **High score table** — Compete across sessions with persistent high scores (`scores` command)
 - **Command history** — Review your recent commands with `history`
 - **Hacker identity** — Run `whoami` for a fun flavor display of your hacker profile
@@ -62,7 +62,7 @@ Make sure your terminal supports ANSI colors for the full experience. A terminal
   ██║  ██║██║  ██║╚██████╗██║  ██╗
   ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝
 
-        T E R M I N A L   H A C K E R   v3.0.0
+        T E R M I N A L   H A C K E R   v3.1.0
 
 [BIOS] POST check... OK
 [BIOS] Memory test... 32768K OK
@@ -95,20 +95,20 @@ Make sure your terminal supports ANSI colors for the full experience. A terminal
 
 | Tool | Effect |
 |------|--------|
-| `tracecut` | Reduce trace level by 15–35% (one-time use) |
-| `nuke` | Crack all remaining nodes instantly (big trace hit) |
-| `stealth` | Reduce trace by 25% (one-time use) |
-| `overclock` | Reduce all node difficulties by 1 + trace -15% |
-| `shield` | Increase max trace by 30%, giving more headroom |
+| `tracecut` | Reduce trace level by 15–35 points (one-time use) |
+| `nuke` | Crack all remaining nodes instantly (trace +20 points) |
+| `stealth` | Reduce trace by 25 points (one-time use) |
+| `overclock` | Reduce all node difficulties by 1 + trace −15 points |
+| `shield` | Increase max trace by 30 points, giving more headroom |
 
 ### Gameplay Flow
 
 1. A new corporate network is generated automatically
 2. Use `nodes` or `scan` to see available targets
-3. Use `analyze <n>` to get code hints before cracking (costs trace)
+3. Use `analyze <n>` to get code hints before cracking (costs trace points)
 4. Use `crack <n>` to attempt breaching a node — type the access code
 5. Use `download <n>` to exfiltrate files from cracked nodes for points
-6. Watch your trace level — if it hits 100% (or your shield-boosted max), it's game over
+6. Watch your trace level — if it reaches the max (default 100, boosted by shield), it's game over
 7. Deploy tools strategically to manage trace and crack tough nodes
 8. Crack all nodes to complete the mission and earn a bonus
 9. Move on to the next, harder network
@@ -121,12 +121,12 @@ hack> analyze 1
 
   ▶ Analyzing: shadow-vault-42
   ▶ Type: gateway  |  Security Level: 2
-    Trace cost: +4%
+    Trace cost: +4 points
 
   Scanning shadow-vault-42 [████████████████████]
   ◈ ANALYSIS COMPLETE
   Node type: gateway  |  Security level: 2
-  Access code pattern: K3M••••
+  Access code pattern: K3M•••
   Use 'crack 1' to attempt access.
 
 hack> crack 1
@@ -137,7 +137,7 @@ hack> crack 1
   Scanning 10.0.47.0 [████████████████████████████]
   ⚡ CRACKING ACCESS CODE
 
-  Access code pattern: K3M••••
+  Access code pattern: K3M•••
 
   CODE> K3M7R
   ★ PERFECT CRACK! ★
@@ -165,12 +165,12 @@ hack> score
 
 ## What It Does
 
-Terminal Hacker Simulator is a single-player terminal game that simulates the Hollywood-style hacking experience. Each run generates a unique corporate network with multiple nodes of varying difficulty. Players can analyze nodes for intel before cracking, strategically manage their trace level, deploy earned tools like overclock and shield, and compete for high scores across sessions. The game features a full cinematic boot sequence with ANSI animations, glitch effects, a progress-bar driven cracking system, persistent save/load, and a high score leaderboard — all from the comfort of your terminal.
+Terminal Hacker Simulator is a single-player terminal game that simulates the Hollywood-style hacking experience. Each run generates a unique corporate network with multiple nodes of varying difficulty (1–5). Players can analyze nodes for intel before cracking, strategically manage their trace level, deploy earned tools like overclock and shield, and compete for high scores across sessions. The game features a full cinematic boot sequence with ANSI animations, glitch effects, a progress-bar driven cracking system, persistent save/load (including stats and command history), and a high score leaderboard — all from the comfort of your terminal.
 
 ## Save Data
 
 Save files are stored in `~/.config/hack_sim/`:
-- `save.json` — Current game state (auto-saved after each mission)
+- `save.json` — Current game state (auto-saved after each mission). Persists: score, networks cracked, files stolen, trace level, max trace, tools unlocked, crack stats, analysis count, and command history.
 - `highscores.json` — Top 10 high scores across all sessions
 
 ## Testing
@@ -179,32 +179,53 @@ Save files are stored in `~/.config/hack_sim/`:
 python3 -m pytest test_hack_sim.py -v
 ```
 
-The test suite includes **70 tests** covering:
+The test suite includes **77 tests** covering:
 - Network generation and structure validation
 - IP address format validation
-- Node difficulty ranges
+- Node difficulty ranges (capped at 5)
 - HackerSimulator initialization
 - Crack, download, analyze, and deploy operations
 - Trace level tracking with custom max_trace (shield)
-- Overclock tool — difficulty reduction with floor of 1
+- Trace bar display as percentage of max_trace (not absolute)
+- Trace bar overflow protection (capped at 25 chars)
+- Overclock tool — difficulty reduction with floor of 1, None network guard
 - Shield tool — stacking max_trace increases
 - Mission completion, victory bonuses, and shield-aware bonuses
-- Save/load system — save, load, corrupt files, missing files, directory creation
+- Save/load system — save, load, corrupt files, missing files, directory creation, stats persistence
 - High score system — save, sort, limit, display
-- Command history tracking
-- Stats tracking (crack success rate, analysis count)
-- Edge cases (empty files, invalid inputs, None network guards, duplicate data)
-- Display bar formatting
+- Command history tracking and persistence
+- Stats tracking (crack success rate, analysis count, save/load roundtrip)
+- Edge cases (empty files, invalid inputs, None network guards, deploy overclock/nuke with None network, duplicate data)
+- Display bar formatting (difficulty bars now consistently 5 chars wide)
 - Version constant format
 
+## Known Issues
+
+None currently known. All identified bugs have been fixed.
+
 ## Changelog
+
+### v3.1.0 — Bug Fix Release
+
+**Fixed:**
+- **Overclock crash with no network** — `deploy overclock` with `current_network=None` caused `AttributeError`. Added None check alongside nuke (both need a network)
+- **Trace bar showed absolute percentage instead of relative** — The status bar showed `trace_level%` regardless of `max_trace`. With shield (max_trace=130), a trace of 65 was shown as "65%" instead of the correct "50%". Now calculated as `trace_level / max_trace * 100`
+- **Trace bar overflow** — When `trace_level > max_trace`, the bar could exceed 25 chars producing garbled output. Now capped at 25 chars
+- **Difficulty bar inconsistency** — Network difficulty bars were 5 chars wide, but node difficulty bars were 6 chars wide. Now both consistently use 5 chars
+- **Node difficulty could exceed 5** — `random.randint(1, difficulty + 1)` for difficulty-5 networks could produce difficulty-6 nodes, breaking the bar display. Now capped at `min(randint(1, difficulty+1), 5)`
+- **Save/load didn't persist stats** — `total_cracks_attempted`, `total_cracks_succeeded`, `total_analyses`, and `command_history` were not saved or restored, so they were lost on load. Now fully persisted
+- **Misleading trace messages** — Tracecut said "reduced by X%" but used absolute values; stealth said "reduced by 25%" (actually 25 points); overclock said "trace -15%" (actually 15 points); nuke said "trace increased by 20%" (actually 20 points); analyze said "trace cost: +X%" (actually X points). All changed to say "points" instead of "%"
+- **Status trace display now shows absolute values** — Added `(current/max)` after the percentage bar for clarity, e.g., `TRACE: [████████████░░░░░░░░░░░░] 50%  (65/130)`
+
+**Added:**
+- 7 new tests (77 total, up from 70): overclock None network guard, node difficulty cap at 5, trace bar relative percentage, trace bar overflow protection, save/load stats roundtrip, tracecut non-negative, stealth non-negative
 
 ### v3.0.0 — Feature Release
 
 **Added:**
 - `analyze <n>` command — recon a node to reveal access code hints before cracking (costs 2× difficulty trace)
-- `overclock` tool — reduces all node difficulties by 1 and trace by 15%
-- `shield` tool — increases max trace by 30%, giving more headroom before game over
+- `overclock` tool — reduces all node difficulties by 1 and trace by 15 points
+- `shield` tool — increases max trace by 30 points, giving more headroom before game over
 - `score` / `stats` command — shows detailed score breakdown, crack success rate, and stats
 - `history` command — shows the last 20 commands entered
 - `whoami` command — displays a fun hacker identity based on your progress
@@ -212,8 +233,8 @@ The test suite includes **70 tests** covering:
 - `save` command — manually save game progress to disk
 - `scores` / `highscores` / `leaderboard` command — persistent high score table (top 10)
 - Auto-save after every mission victory
-- High score tracking across sessions (stored in `~/.config/hack_sim/highscores.json`)
-- Save/load system with JSON persistence (`~/.config/hack_sim/save.json`)
+- High score tracking across sessions
+- Save/load system with JSON persistence
 - Progress indicator in status showing cracked/total nodes
 - Analyzed node indicators (◎ icon) and code hints in `nodes` display
 - `command_history` tracking on HackerSimulator
@@ -226,19 +247,7 @@ The test suite includes **70 tests** covering:
 - 36 new tests (70 total, up from 34)
 
 **Fixed:**
-- `mission_victory` bonus now uses `max_trace` instead of hardcoded 100, so shield tool works correctly
-- `mission_complete()` now returns `False` when `current_network` is `None` instead of crashing
+- `mission_victory` bonus now uses `max_trace` instead of hardcoded 100
+- `mission_complete()` returns `False` when `current_network` is `None`
 - `deploy` now checks `tools_unlocked` before allowing tool use
 - Boot sequence now shows save directory path
-
-### v2.7.0 — Bug Fix Release
-
-**Fixed:**
-- IP range display bug (5 octets → correct CIDR notation)
-- Duplicate entries in NOUNS
-- Double final score on game over
-- Empty file download confusion
-- `status` command was a no-op
-- NoneType crashes on multiple methods
-- Banner version alignment
-- Version hardcoded in banner

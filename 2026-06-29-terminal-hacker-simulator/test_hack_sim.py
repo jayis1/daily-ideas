@@ -61,12 +61,15 @@ class TestNetwork(unittest.TestCase):
         self.assertEqual(len(parts), 4, f"Expected 4 octets, got {parts}")
 
     def test_node_difficulty_range(self):
+        """Node difficulty should be between 1 and min(network_difficulty + 1, 5)."""
         for d in range(1, 6):
             random.seed(d * 13)
             net = h.Network(difficulty=d)
             for n in net.nodes:
                 self.assertGreaterEqual(n["difficulty"], 1)
-                self.assertLessEqual(n["difficulty"], d + 1)
+                self.assertLessEqual(n["difficulty"], min(d + 1, 5),
+                                     f"Node difficulty {n['difficulty']} exceeds max "
+                                     f"min({d}+1, 5)={min(d + 1, 5)} for network difficulty {d}")
 
     def test_node_files_independent(self):
         random.seed(42)
@@ -408,6 +411,27 @@ class TestSaveLoad(unittest.TestCase):
         self.assertIn("nuke", loaded_game.tools_unlocked)
         self.assertIsNotNone(loaded_game.current_network)
 
+    def test_save_and_load_stats(self):
+        """Test that stats (cracks attempted/succeeded/analyses) are persisted."""
+        random.seed(42)
+        game = h.HackerSimulator()
+        game.current_network = h.Network(difficulty=2)
+        game.score = 500
+        game.total_cracks_attempted = 10
+        game.total_cracks_succeeded = 7
+        game.total_analyses = 3
+        game.command_history = ["scan", "crack 1", "status"]
+
+        self.assertTrue(h.save_game(game))
+
+        loaded_game = h.HackerSimulator()
+        self.assertTrue(h.load_game(loaded_game))
+
+        self.assertEqual(loaded_game.total_cracks_attempted, 10)
+        self.assertEqual(loaded_game.total_cracks_succeeded, 7)
+        self.assertEqual(loaded_game.total_analyses, 3)
+        self.assertEqual(loaded_game.command_history, ["scan", "crack 1", "status"])
+
     def test_load_no_save_file(self):
         """Loading when no save file exists should return False."""
         game = h.HackerSimulator()
@@ -500,15 +524,38 @@ class TestDifficultyBarDisplay(unittest.TestCase):
             self.assertEqual(len(bar), 5)
 
     def test_node_difficulty_bars(self):
-        for d in range(1, 7):
-            bar = "█" * d + "░" * (6 - d)
-            self.assertEqual(len(bar), 6)
+        """Node difficulty bars should be 5 chars wide (matching network difficulty bars)."""
+        for d in range(1, 6):
+            bar = "█" * d + "░" * (5 - d)
+            self.assertEqual(len(bar), 5)
 
     def test_trace_bars(self):
+        """Trace bar should show percentage of max_trace, capped at 25 chars."""
         for pct in [0, 25, 50, 75, 99, 100]:
-            filled = int(pct / 4)
+            filled = min(int(pct / 4), 25)
             bar = "█" * filled + "░" * (25 - filled)
             self.assertEqual(len(bar), 25)
+
+    def test_trace_bar_with_custom_max(self):
+        """Trace percentage should be relative to max_trace."""
+        game = h.HackerSimulator()
+        game.current_network = h.Network(difficulty=2)
+        game.max_trace = 130
+        game.trace_level = 65
+        # 65/130 * 100 = 50%, bar should show ~50%
+        pct = int(min(game.trace_level / game.max_trace * 100, 999))
+        self.assertEqual(pct, 50)
+
+    def test_trace_bar_overflow_protection(self):
+        """Trace bar should not exceed 25 chars even with trace > max_trace."""
+        game = h.HackerSimulator()
+        game.current_network = h.Network(difficulty=2)
+        game.max_trace = 100
+        game.trace_level = 200
+        pct = int(min(game.trace_level / game.max_trace * 100, 999))
+        filled = min(int(pct / 4), 25)
+        bar = "█" * filled + "░" * (25 - filled)
+        self.assertEqual(len(bar), 25)
 
 
 class TestEdgeCases(unittest.TestCase):
@@ -570,6 +617,40 @@ class TestEdgeCases(unittest.TestCase):
         game.deploy_tool("overclock")
         for node in game.current_network.nodes:
             self.assertGreaterEqual(node["difficulty"], 1)
+
+    def test_deploy_overclock_with_none_network(self):
+        """Overclock should not crash when current_network is None."""
+        game = h.HackerSimulator()
+        game.current_network = None
+        game.tools_unlocked.add("overclock")
+        game.deploy_tool("overclock")  # Should print error, not crash
+
+    def test_node_difficulty_capped_at_5(self):
+        """Node difficulty should never exceed 5, even for difficulty-5 networks."""
+        for seed in range(50):
+            random.seed(seed)
+            net = h.Network(difficulty=5)
+            for node in net.nodes:
+                self.assertLessEqual(node["difficulty"], 5,
+                                     f"Seed {seed}: node difficulty {node['difficulty']} exceeds cap of 5")
+
+    def test_tracecut_does_not_go_negative(self):
+        """Tracecut should never make trace_level negative."""
+        game = h.HackerSimulator()
+        game.current_network = h.Network(difficulty=2)
+        game.trace_level = 0
+        game.tools_unlocked.add("tracecut")
+        game.deploy_tool("tracecut")
+        self.assertGreaterEqual(game.trace_level, 0)
+
+    def test_stealth_does_not_go_negative(self):
+        """Stealth should never make trace_level negative."""
+        game = h.HackerSimulator()
+        game.current_network = h.Network(difficulty=2)
+        game.trace_level = 0
+        game.tools_unlocked.add("stealth")
+        game.deploy_tool("stealth")
+        self.assertGreaterEqual(game.trace_level, 0)
 
 
 if __name__ == "__main__":
