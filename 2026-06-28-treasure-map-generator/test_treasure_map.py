@@ -2,19 +2,48 @@
 """
 Tests for treasure_map.py — Procedural Treasure Map Generator
 
+Covers:
+  - Basic construction and grid dimensions
+  - Seed reproducibility
+  - Unicode vs ASCII mode symbol correctness
+  - Treasure placement on land
+  - Landing distinct from treasure
+  - Label overflow bounds checking
+  - Annotation collision resolution
+  - Treasure X preservation under annotations
+  - Hardcoded symbol consistency in code
+  - Edge case map sizes (tiny, extreme aspect ratios)
+  - All-water and all-land maps
+  - Riddle and legend generation
+  - CLI flags (--version, --help, --seed, --riddle, --legend, --no-unicode)
+  - Difficulty presets
+  - Terrain statistics
+  - Trail distance calculation
+  - Swamp generation
+  - Volcano generation
+  - Danger markers
+  - Context-aware riddles
+  - --save flag
+  - --stats flag
+
 Run with: python3 test_treasure_map.py
 """
 
 import sys
 import os
 import subprocess
+import tempfile
 import io
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from treasure_map import MapConfig, TreasureMap, __version__, SYMBOLS, SIMPLE_SYMBOLS
+from treasure_map import (
+    MapConfig, TreasureMap, __version__, SYMBOLS, SIMPLE_SYMBOLS,
+    DIFFICULTY_PRESETS
+)
 
 passed = 0
 failed = 0
+
 
 def test(name, condition, detail=""):
     global passed, failed
@@ -24,6 +53,7 @@ def test(name, condition, detail=""):
     else:
         failed += 1
         print(f"  FAIL: {name}" + (f" — {detail}" if detail else ""))
+
 
 # ── Basic construction ──────────────────────────────────────────────────────
 
@@ -69,13 +99,6 @@ for ch in always_unicode:
 for ch in always_ascii:
     test(f"ASCII char '{ch}' present in ASCII mode", ch in rendered_ascii)
 
-# Check terrain-dependent chars may or may not appear (no assertion, just info)
-terrain_chars = ['♣', '▲', '△', '☠']
-for ch in terrain_chars:
-    present_u = ch in rendered_unicode
-    present_a = ch in rendered_ascii
-    print(f"  INFO: '{ch}' unicode={present_u}, ascii={present_a} (terrain-dependent)")
-
 test("ASCII mode uses simple borders",
      rendered_ascii.startswith("+=") or rendered_ascii.startswith("+="))
 
@@ -100,7 +123,7 @@ for s in range(1, 20):
         tx, ty = tmap.treasure_x, tmap.treasure_y
         terrain = tmap.terrain[ty][tx]
         test(f"Seed {s}: Treasure on land ('{terrain}')",
-             terrain in ("grass", "forest", "dense_forest", "sand"))
+             terrain in ("grass", "forest", "dense_forest", "sand", "swamp"))
 
 # ── Landing distinct from treasure ───────────────────────────────────────────
 
@@ -241,6 +264,147 @@ legend = tmap.generate_legend()
 test("Legend is non-empty", len(legend) > 0)
 test("Legend contains key terrain types",
      "Deep Water" in legend and "Shallow Water" in legend)
+test("Legend contains swamp and volcano",
+     "Swamp" in legend and "Volcano" in legend)
+
+# ── Difficulty presets ────────────────────────────────────────────────────────
+
+print("\n=== Difficulty Presets ===")
+
+test("Easy difficulty exists", "easy" in DIFFICULTY_PRESETS)
+test("Normal difficulty exists", "normal" in DIFFICULTY_PRESETS)
+test("Hard difficulty exists", "hard" in DIFFICULTY_PRESETS)
+test("Easy has more land than hard",
+     DIFFICULTY_PRESETS["easy"]["water_level"] < DIFFICULTY_PRESETS["hard"]["water_level"])
+
+cfg_easy = MapConfig(width=40, height=18, seed=99, difficulty="easy")
+cfg_hard = MapConfig(width=40, height=18, seed=99, difficulty="hard")
+tmap_easy = TreasureMap(cfg_easy)
+tmap_hard = TreasureMap(cfg_hard)
+
+# Count land cells in each
+easy_land = sum(1 for y in range(18) for x in range(40)
+                if tmap_easy.terrain[y][x] not in ("water", "deep_water"))
+hard_land = sum(1 for y in range(18) for x in range(40)
+                if tmap_hard.terrain[y][x] not in ("water", "deep_water"))
+test(f"Easy has more land than hard ({easy_land} vs {hard_land})",
+     easy_land >= hard_land,
+     f"Easy: {easy_land}, Hard: {hard_land}")
+
+# ── Terrain statistics ─────────────────────────────────────────────────────────
+
+print("\n=== Terrain Statistics ===")
+
+cfg = MapConfig(width=40, height=18, seed=42)
+tmap = TreasureMap(cfg)
+stats = tmap.get_terrain_stats()
+test("Stats returns a dict", isinstance(stats, dict))
+test("Stats contains terrain types", len(stats) > 0)
+total_pct = sum(stats.values())
+test(f"Stats percentages sum to 100 (got {total_pct}%)", total_pct == 100,
+     f"Sum: {total_pct}%")
+
+# ── Trail distance ────────────────────────────────────────────────────────────
+
+print("\n=== Trail Distance ===")
+
+cfg = MapConfig(width=40, height=18, seed=42)
+tmap = TreasureMap(cfg)
+dist = tmap.get_trail_distance()
+if tmap.treasure_x is not None and tmap.landing_x is not None:
+    test("Trail distance is a positive integer when treasure and landing exist",
+         dist is not None and dist > 0, f"dist={dist}")
+else:
+    test("Trail distance None when no treasure/landing", dist is None)
+
+# Test all-water map has None distance
+cfg_water = MapConfig(width=30, height=15, seed=5, water_level=0.99)
+tmap_water = TreasureMap(cfg_water)
+test("All-water map: distance is None", tmap_water.get_trail_distance() is None)
+
+# ── Swamp generation ────────────────────────────────────────────────────────────
+
+print("\n=== Swamp Generation ===")
+
+swamp_found = False
+for s in range(1, 50):
+    cfg = MapConfig(width=50, height=25, seed=s)
+    tmap = TreasureMap(cfg)
+    for y in range(cfg.height):
+        for x in range(cfg.width):
+            if tmap.terrain[y][x] == "swamp":
+                swamp_found = True
+                break
+        if swamp_found:
+            break
+    if swamp_found:
+        break
+
+test("Swamp terrain generated on some seeds", swamp_found,
+     "No swamps found across 49 seeds")
+
+# ── Volcano generation ────────────────────────────────────────────────────────────
+
+print("\n=== Volcano Generation ===")
+
+volcano_found = False
+# Use easy difficulty (more land = more mountains) to ensure volcano terrain exists
+for s in range(1, 100):
+    cfg = MapConfig(width=72, height=34, seed=s, difficulty="easy")
+    tmap = TreasureMap(cfg)
+    for y in range(cfg.height):
+        for x in range(cfg.width):
+            if tmap.terrain[y][x] in ("volcano", "lava"):
+                volcano_found = True
+                break
+        if volcano_found:
+            break
+    if volcano_found:
+        break
+
+test("Volcano/lava terrain generated on some seeds", volcano_found,
+     "No volcanoes found across 99 easy-mode seeds")
+
+# Also test that volcano method doesn't crash even without appropriate terrain
+try:
+    cfg_water = MapConfig(width=30, height=15, seed=1, water_level=0.99)
+    tmap_water = TreasureMap(cfg_water)
+    test("Volcano on all-water map: no crash", True)
+except Exception as e:
+    test("Volcano on all-water map: no crash", False, str(e))
+
+# ── Danger markers ────────────────────────────────────────────────────────────────
+
+print("\n=== Danger Markers ===")
+
+# Just verify the method doesn't crash
+cfg = MapConfig(width=40, height=18, seed=42)
+tmap = TreasureMap(cfg)
+try:
+    tmap._add_danger_markers()
+    test("Danger markers method runs without error", True)
+except Exception as e:
+    test("Danger markers method runs without error", False, str(e))
+
+# ── Context-aware riddles ─────────────────────────────────────────────────────────
+
+print("\n=== Context-Aware Riddles ===")
+
+cfg = MapConfig(width=50, height=25, seed=42)
+tmap = TreasureMap(cfg)
+
+# Generate multiple riddles — at least some should reference landmarks
+riddles = [tmap.generate_riddle() for _ in range(10)]
+context_riddle_count = 0
+for riddle in riddles:
+    # Check if the riddle references any landmark name
+    for name in tmap.landmark_names_placed:
+        if name in riddle:
+            context_riddle_count += 1
+            break
+
+test("Context-aware riddles generated (>=1/10)", context_riddle_count >= 1,
+     f"Only {context_riddle_count}/10 riddles referenced landmarks")
 
 # ── CLI flags ─────────────────────────────────────────────────────────────────
 
@@ -260,6 +424,9 @@ result = subprocess.run(
     capture_output=True, text=True
 )
 test("--help flag works", result.returncode == 0)
+test("--help mentions --difficulty", "--difficulty" in result.stdout)
+test("--help mentions --stats", "--stats" in result.stdout)
+test("--help mentions --save", "--save" in result.stdout)
 
 result = subprocess.run(
     [sys.executable, script, '--seed', '42', '--riddle', '--legend'],
@@ -273,6 +440,77 @@ result = subprocess.run(
     capture_output=True, text=True
 )
 test("--no-unicode produces ASCII output", result.returncode == 0)
+
+# ── Difficulty CLI ────────────────────────────────────────────────────────────────
+
+print("\n=== Difficulty CLI ===")
+
+result = subprocess.run(
+    [sys.executable, script, '--seed', '42', '--difficulty', 'easy'],
+    capture_output=True, text=True
+)
+test("--difficulty easy runs without error", result.returncode == 0)
+test("--difficulty easy output contains DIFFICULTY", "Difficulty:" in result.stdout or "EASY" in result.stdout)
+
+result = subprocess.run(
+    [sys.executable, script, '--seed', '42', '--difficulty', 'hard'],
+    capture_output=True, text=True
+)
+test("--difficulty hard runs without error", result.returncode == 0)
+
+# ── Stats CLI ────────────────────────────────────────────────────────────────────────
+
+print("\n=== Stats CLI ===")
+
+result = subprocess.run(
+    [sys.executable, script, '--seed', '42', '--stats'],
+    capture_output=True, text=True
+)
+test("--stats runs without error", result.returncode == 0)
+test("--stats output contains terrain stats", "Terrain Statistics" in result.stdout)
+
+# ── Save CLI ────────────────────────────────────────────────────────────────────────
+
+print("\n=== Save CLI ===")
+
+with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+    save_path = f.name
+
+try:
+    result = subprocess.run(
+        [sys.executable, script, '--seed', '42', '--save', save_path],
+        capture_output=True, text=True
+    )
+    test("--save runs without error", result.returncode == 0)
+    test("--save output mentions saved file", f"saved to {save_path}" in result.stdout.lower() or "saved" in result.stdout.lower())
+
+    # Verify the file was written
+    with open(save_path, 'r', encoding='utf-8') as f:
+        saved_content = f.read()
+    test("--save file contains map content", "TREASURE MAP" in saved_content)
+    test("--save file has map rendering", len(saved_content) > 100)
+except Exception as e:
+    test("--save file operations", False, str(e))
+finally:
+    if os.path.exists(save_path):
+        os.unlink(save_path)
+
+# ── Distance in output ────────────────────────────────────────────────────────
+
+print("\n=== Distance in Output ===")
+
+result = subprocess.run(
+    [sys.executable, script, '--seed', '42'],
+    capture_output=True, text=True
+)
+test("Output contains distance estimate", "Estimated distance" in result.stdout or "paces" in result.stdout)
+
+# ── Version consistency ────────────────────────────────────────────────────────
+
+print("\n=== Version Consistency ===")
+
+test("Version is 1.2.0", __version__ == "1.2.0",
+     f"Got {__version__}")
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 
