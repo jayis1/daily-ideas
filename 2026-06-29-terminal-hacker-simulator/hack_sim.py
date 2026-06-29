@@ -12,7 +12,10 @@ import os
 import shutil
 import string
 import textwrap
+import argparse
 from collections import OrderedDict
+
+VERSION = "2.7.0"
 
 # ── ANSI helpers ──────────────────────────────────────────────────────────────
 
@@ -107,9 +110,9 @@ ADJECTIVES = [
 ]
 
 NOUNS = [
-    "net", "grid", "node", "core", "vault", "gate", "vault", "mainframe",
+    "net", "grid", "node", "core", "vault", "gate", "mainframe",
     "sector", "daemon", "spider", "wolf", "fox", "raven", "viper",
-    "matrix", "archive", "tower", "vault", "fortress", "engine",
+    "matrix", "archive", "tower", "fortress", "engine", "sentinel",
 ]
 
 CORP_NAMES = [
@@ -174,6 +177,11 @@ class Network:
     def total_difficulty(self):
         return sum(n["difficulty"] for n in self.nodes)
 
+    def network_addr(self):
+        """Return the network address in CIDR notation (first 3 octets + .0/24)."""
+        first_three = ".".join(self.ip.split(".")[:3])
+        return f"{first_three}.0/24"
+
 
 class HackerSimulator:
     """Main game engine."""
@@ -213,7 +221,7 @@ class HackerSimulator:
             f"{GREEN}{BOLD}  ║     ██║ ╚████║███████╗   ██║   ██║  ██║╚██████╔╝   ██║      ║",
             f"{GREEN}{BOLD}  ║     ╚═╝  ╚═══╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝      ║",
             f"{GREEN}{BOLD}  ║                                                          ║",
-            f"{GREEN}{BOLD}  ║           T E R M I N A L   H A C K E R   v2.6          ║",
+            f"{GREEN}{BOLD}  ║{f'T E R M I N A L   H A C K E R   v{VERSION}'.center(58)}║",
             f"{GREEN}{BOLD}  ║                                                          ║",
             f"{GREEN}{BOLD}  ╚══════════════════════════════════════════════════════════╝",
             f"{RESET}",
@@ -256,6 +264,9 @@ class HackerSimulator:
     def show_status(self):
         """Display current mission status."""
         net = self.current_network
+        if net is None:
+            print(f"{YELLOW}No active mission. Type 'scan' or wait for a network to be assigned.{RESET}")
+            return
         trace_pct = int(self.trace_level)
         trace_bar_filled = int(trace_pct / 4)
         trace_bar = "█" * trace_bar_filled + "░" * (25 - trace_bar_filled)
@@ -272,6 +283,9 @@ class HackerSimulator:
     def show_nodes(self):
         """Display network nodes with their status."""
         net = self.current_network
+        if net is None:
+            print(f"{YELLOW}No active mission. Use 'scan' to find a network.{RESET}")
+            return
         print(f"\n{CYAN}{'═' * 60}")
         print(f"  NETWORK MAP: {net.corp}")
         print(f"{'═' * 60}{RESET}\n")
@@ -287,6 +301,10 @@ class HackerSimulator:
 
     def crack_node(self, node_idx):
         """Attempt to crack a node with a mini-game."""
+        if self.current_network is None:
+            print(f"{YELLOW}No active mission. Use 'scan' to find a network.{RESET}")
+            return
+
         if node_idx < 1 or node_idx > len(self.current_network.nodes):
             print(f"{RED}Invalid node number.{RESET}")
             return
@@ -358,6 +376,10 @@ class HackerSimulator:
 
     def download_files(self, node_idx):
         """Download files from a cracked node."""
+        if self.current_network is None:
+            print(f"{YELLOW}No active mission. Use 'scan' to find a network.{RESET}")
+            return
+
         if node_idx < 1 or node_idx > len(self.current_network.nodes):
             print(f"{RED}Invalid node number.{RESET}")
             return
@@ -369,6 +391,10 @@ class HackerSimulator:
             return
 
         files = node["files"]
+        if not files:
+            print(f"  {YELLOW}No files remaining on this node.{RESET}")
+            return
+
         print(f"\n  {CYAN}▼ Downloading from {node['name']}...{RESET}\n")
 
         for f in files:
@@ -383,6 +409,9 @@ class HackerSimulator:
 
     def deploy_tool(self, tool_name):
         """Use a special hacking tool."""
+        if self.current_network is None and tool_name in ("nuke",):
+            print(f"{YELLOW}No active mission. Connect to a network first.{RESET}")
+            return
         if tool_name == "tracecut":
             print(f"\n  {MAGENTA}⚡ DEPLOYING TRACE CUTTER{RESET}")
             progress_bar("  Neutralizing trace", length=20, speed=0.025)
@@ -428,7 +457,7 @@ class HackerSimulator:
         print(f"\n{GREEN}{BOLD}  ▶ NEW TARGET ACQUIRED{RESET}")
         print(f"  {CYAN}Corporation: {BOLD}{self.current_network.corp}{RESET}")
         print(f"  {CYAN}Network: {self.current_network.handle}{RESET}")
-        print(f"  {CYAN}IP Range: {self.current_network.ip}.0/24{RESET}")
+        print(f"  {CYAN}IP Range: {self.current_network.network_addr()}{RESET}")
         print(f"  {CYAN}Nodes: {len(self.current_network.nodes)}  |  Difficulty: {'█' * difficulty}{'░' * (5 - difficulty)}{RESET}")
         print()
 
@@ -487,9 +516,6 @@ class HackerSimulator:
         time.sleep(0.5)
         print(f"\n  {RED}Trace detected. Your location has been triangulated.{RESET}")
         print(f"  {RED}Connection terminated by remote host.{RESET}")
-        print(f"\n  {DIM}Final Score: {BOLD}{self.score}{RESET}")
-        print(f"  {DIM}Networks Cracked: {self.networks_cracked}{RESET}")
-        print(f"  {DIM}Files Exfiltrated: {self.files_stolen}{RESET}")
         print()
 
     def mission_victory(self):
@@ -507,11 +533,16 @@ class HackerSimulator:
         print(f"  {GREEN}Total Score: {BOLD}{self.score}{RESET}")
         print()
 
-    def run(self):
+    def run(self, skip_boot=False, start_difficulty=None):
         """Main game loop."""
         try:
-            self.boot_sequence()
-            self.generate_network()
+            if not skip_boot:
+                self.boot_sequence()
+            else:
+                self.clear()
+                print(f"  {GREEN}{BOLD}Terminal Hacker v{VERSION} — Quick Start{RESET}")
+                print(f"  {DIM}Boot sequence skipped.{RESET}\n")
+            self.generate_network(difficulty=start_difficulty)
 
             while self.running:
                 try:
@@ -554,7 +585,8 @@ class HackerSimulator:
                     elif action == "help" or action == "?":
                         self.show_help()
                     elif action == "status":
-                        pass  # status shown every loop
+                        self.show_status()
+                        continue  # Don't re-show status below
                     elif action == "nodes":
                         self.show_nodes()
                     elif action == "crack":
@@ -598,10 +630,24 @@ class HackerSimulator:
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
-if __name__ == "__main__":
+def main():
+    parser = argparse.ArgumentParser(
+        prog="hack_sim",
+        description="Terminal Hacker Simulator — A cinematic hacking simulation game.",
+    )
+    parser.add_argument("--version", "-v", action="version", version=f"Terminal Hacker Simulator v{VERSION}")
+    parser.add_argument("--skip-boot", "-s", action="store_true", help="Skip the cinematic boot sequence")
+    parser.add_argument("--difficulty", "-d", type=int, choices=range(1, 6), metavar="1-5",
+                        help="Starting difficulty (1-5, default scales with missions)")
+    args = parser.parse_args()
+
     print(HIDE_CURSOR)
     try:
         game = HackerSimulator()
-        game.run()
+        game.run(skip_boot=args.skip_boot, start_difficulty=args.difficulty)
     finally:
         print(SHOW_CURSOR)
+
+
+if __name__ == "__main__":
+    main()
