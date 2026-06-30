@@ -26,6 +26,8 @@ from perfume_alchemist import (
     compare_perfumes,
     search_notes,
     _dedupe_notes,
+    _article,
+    _title_case,
     HARMONY_PAIRS,
     CONCENTRATION_LONGEVITY,
     CONCENTRATION_SILLAGE,
@@ -335,7 +337,7 @@ def test_cli_version():
         capture_output=True, text=True, cwd=os.path.dirname(__file__),
     )
     assert result.returncode == 0
-    assert "1.1.0" in result.stdout or "1.1.0" in result.stderr
+    assert "1.2.0" in result.stdout or "1.2.0" in result.stderr
 
 
 def test_cli_help():
@@ -412,6 +414,103 @@ def test_cli_season_flag():
     )
     assert result.returncode == 0
     assert "High summer" in result.stdout
+
+
+# ─── Bug Fix Regression Tests ─────────────────────────────────────────────────
+
+def test_no_duplicate_prefix_in_name_prefixes():
+    """NAME_PREFIXES should not contain duplicate entries."""
+    from perfume_alchemist import NAME_PREFIXES
+    assert len(NAME_PREFIXES) == len(set(NAME_PREFIXES)), \
+        f"Duplicate prefixes found: {[p for p in NAME_PREFIXES if NAME_PREFIXES.count(p) > 1]}"
+
+
+def test_generate_name_three_styles():
+    """generate_name should produce three distinct styles: prefix+suffix, standalone, prefix-only."""
+    random.seed(12345)
+    names = [generate_name() for _ in range(200)]
+    standalone_names = [n for n in names if n in __import__('perfume_alchemist').NAME_STANDALONES]
+    # With 200 names and ~30% standalone, we should get at least 20
+    assert len(standalone_names) >= 20, \
+        f"Expected at least 20 standalone names, got {len(standalone_names)}"
+
+
+def test_article_function_vowel_moods():
+    """_article should return 'an' for vowel-starting moods and 'a' for consonant-starting."""
+    from perfume_alchemist import _article
+    assert _article("enigmatic") == "an"
+    assert _article("opulent") == "an"
+    assert _article("intimate") == "an"
+    assert _article("austere") == "an"
+    assert _article("serene") == "a"
+    assert _article("feral") == "a"
+    assert _article("") == "a"  # edge case
+
+
+def test_description_uses_correct_article():
+    """Description templates should use 'an' before vowel-starting moods."""
+    from perfume_alchemist import _article
+    vowel_moods = [m for m in MOODS if m[0] in "aeiou"]
+    for mood in vowel_moods:
+        p = generate_perfume(mood=mood)
+        # Check that description doesn't contain "a enigmatic" etc.
+        bad_article = f"a {mood}"
+        assert bad_article not in p.description.lower(), \
+            f"Description uses 'a {mood}' instead of 'an {mood}': {p.description[:100]}"
+
+
+def test_origin_capitalization_preserves_proper_nouns():
+    """Origin capitalization should preserve proper nouns like Parisian, Kyoto."""
+    from perfume_alchemist import _title_case
+    assert _title_case("a Parisian attic where old letters yellow") == \
+        "A Parisian attic where old letters yellow"
+    assert _title_case("a Kyoto temple garden in November") == \
+        "A Kyoto temple garden in November"
+    assert _title_case("a Marrakech souk at closing time") == \
+        "A Marrakech souk at closing time"
+
+
+def test_note_pyramid_consistent_width():
+    """All lines in the note pyramid should have the same width."""
+    p = generate_perfume()
+    pyramid = p.note_pyramid()
+    lines = pyramid.split('\n')
+    # Border lines and header lines should all have the same length
+    # Content lines may vary but should be padded to match
+    widths = set(len(line) for line in lines if line.strip())
+    assert len(widths) == 1, f"Note pyramid lines have inconsistent widths: {widths}"
+
+
+def test_compare_perfumes_aligned_columns():
+    """compare_perfumes should produce properly aligned columns."""
+    p1 = generate_perfume()
+    p2 = generate_perfume()
+    output = compare_perfumes(p1, p2)
+    assert "FRAGRANCE DUEL" in output
+    # Lines with two values should have proper spacing
+    for line in output.split('\n'):
+        if 'Mood:' in line and line.count('Mood:') == 2:
+            # Both columns should be present
+            parts = line.strip().split('Mood:')
+            assert len(parts) == 3, f"Mood line not properly formatted: {line}"
+
+
+def test_cli_generate_zero_exits_with_error():
+    """--generate 0 should exit with an error."""
+    result = subprocess.run(
+        [sys.executable, "perfume_alchemist.py", "--generate", "0"],
+        capture_output=True, text=True, cwd=os.path.dirname(__file__),
+    )
+    assert result.returncode != 0
+
+
+def test_cli_export_without_generation_flag_exits_with_error():
+    """--export without --generate, --collection, or --compare should exit with error."""
+    result = subprocess.run(
+        [sys.executable, "perfume_alchemist.py", "--export", "/tmp/test_no_gen.json"],
+        capture_output=True, text=True, cwd=os.path.dirname(__file__),
+    )
+    assert result.returncode != 0
 
 
 if __name__ == "__main__":

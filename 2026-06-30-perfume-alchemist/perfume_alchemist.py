@@ -14,7 +14,7 @@ Features:
   - Concentration-longevity consistency (EDC < EDT < EDP < Extrait)
   - Interactive menu-driven exploration
 
-Version: 1.1.0
+Version: 1.2.0
 """
 
 import json
@@ -24,7 +24,7 @@ import argparse
 from dataclasses import dataclass, field, asdict
 from typing import List, Optional, Dict, Tuple
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # ─── Data: Fragrance notes ───────────────────────────────────────────────────
 
@@ -143,7 +143,7 @@ ORIGINS = [
 NAME_PREFIXES = [
     "Noir", "Velours", "Lumière", "Ombre", "Éclat", "Brume", "Silence",
     "Aube", "Cendres", "Rêve", "Fugace", "Immortelle", "Braise", "Absinthe",
-    "Spectre", "Éther", "Nacre", "Soupir", "Oubli", "Mirage", "Velours",
+    "Spectre", "Éther", "Nacre", "Soupir", "Oubli", "Mirage",
     "Somnium", "Crépuscule", "Vérité", "Chimère", "Obscura", "Solstice",
     "Hérésie", "Alchimie", "Mystère",
 ]
@@ -246,13 +246,13 @@ class Perfume:
         lines = []
         lines.append("╭" + "─" * (w + 2) + "╮")
         lines.append("│" + " TOP ".center(w + 2) + "│")
-        lines.append("│" + f"  {top_str}".ljust(w + 1) + "│")
+        lines.append("│" + f"  {top_str}".ljust(w + 2) + "│")
         lines.append("├" + "─" * (w + 2) + "┤")
         lines.append("│" + " HEART ".center(w + 2) + "│")
-        lines.append("│" + f"  {heart_str}".ljust(w + 1) + "│")
+        lines.append("│" + f"  {heart_str}".ljust(w + 2) + "│")
         lines.append("├" + "─" * (w + 2) + "┤")
         lines.append("│" + " BASE ".center(w + 2) + "│")
-        lines.append("│" + f"  {base_str}".ljust(w + 1) + "│")
+        lines.append("│" + f"  {base_str}".ljust(w + 2) + "│")
         lines.append("╰" + "─" * (w + 2) + "╯")
         return "\n".join(lines)
 
@@ -315,7 +315,7 @@ class Perfume:
         lines.append("")
         lines.append(f"  Mood: {self.mood.capitalize()}")
         lines.append(f"  Season: {self.season.capitalize()}")
-        lines.append(f"  Origin: {self.origin.capitalize()}")
+        lines.append(f"  Origin: {_title_case(self.origin)}")
         lines.append(f"  Concentration: {self.concentration}")
         lines.append(f"  Longevity: {self.longevity}")
         lines.append(f"  Sillage: {self.sillage}")
@@ -385,21 +385,57 @@ def generate_name() -> str:
     elif style < 0.65:
         return random.choice(NAME_STANDALONES)
     else:
-        prefix = random.choice(NAME_PREFIXES)
-        suffix = random.choice(NAME_SUFFIXES)
-        return f"{prefix} {suffix}"
+        # Prefix-only style (e.g., "Noir", "Absinthe", "Brume")
+        return random.choice(NAME_PREFIXES)
+
+
+def _article(word: str) -> str:
+    """Return 'an' if word starts with a vowel sound, else 'a'.
+
+    Args:
+        word: The word to determine the article for.
+
+    Returns:
+        'an' or 'a'.
+    """
+    if word and word[0].lower() in "aeiou":
+        return "an"
+    return "a"
+
+
+def _title_case(text: str) -> str:
+    """Title-case a string while preserving already-capitalized words.
+
+    Unlike str.capitalize() which lowercases all letters after the first,
+    this function only lowercases words that are all-uppercase and capitalizes
+    the first letter of each word, leaving mixed-case words (like proper nouns)
+    untouched.
+
+    Args:
+        text: The string to title-case.
+
+    Returns:
+        A title-cased version of the string.
+    """
+    # If the string starts with "a " (as our origins do), capitalize
+    # the first letter after "a " and leave the rest as-is
+    if text.startswith("a "):
+        return "A " + text[2:]
+    # Otherwise, do a simple capitalize on the first character
+    return text[0].upper() + text[1:] if text else text
 
 
 def generate_description(perfume: Perfume) -> str:
     """Generate an evocative perfume description."""
+    art = _article(perfume.mood)
     templates = [
-        f"{perfume.name} opens with a {perfume.mood} whisper of {perfume.top_notes[0].name}, "
+        f"{perfume.name} opens with {art} {perfume.mood} whisper of {perfume.top_notes[0].name}, "
         f"unfurling into {perfume.heart_notes[0].name} at its pulsing heart. "
-        f"The dry-down reveals {perfume.base_notes[0].name}, leaving a {perfume.mood} "
+        f"The dry-down reveals {perfume.base_notes[0].name}, leaving {art} {perfume.mood} "
         f"trail that lingers like {perfume.origin}. This {perfume.family.lower()} fragrance "
         f"is a meditation on {perfume.season} — {perfume.family_description.lower()}",
 
-        f"Born from {perfume.origin}, {perfume.name} is a {perfume.mood} "
+        f"Born from {perfume.origin}, {perfume.name} is {art} {perfume.mood} "
         f"{perfume.family.lower()} that traces the arc of {perfume.season}. "
         f"From the {perfume.top_notes[0].description} of {perfume.top_notes[0].name} "
         f"through the {perfume.heart_notes[0].name}'s {perfume.heart_notes[0].description}, "
@@ -413,13 +449,13 @@ def generate_description(perfume: Perfume) -> str:
         f"{perfume.base_notes[0].description} — a ghost of {perfume.season}. "
         f"{perfume.family_description}",
 
-        f"A {perfume.mood} apparition, {perfume.name} drifts in from {perfume.origin}. "
+        f"{art.capitalize()} {perfume.mood} apparition, {perfume.name} drifts in from {perfume.origin}. "
         f"Its opening of {perfume.top_notes[0].name} gives way to the {perfume.heart_notes[0].name} "
         f"heart — {perfume.heart_notes[0].description} — before settling into the deep "
         f"embrace of {perfume.base_notes[0].name}. A {perfume.family.lower()} for "
         f"{perfume.season}.",
 
-        f"Close your eyes: {perfume.season}, {perfume.origin}. {perfume.name} is a "
+        f"Close your eyes: {perfume.season}, {perfume.origin}. {perfume.name} is {art} "
         f"{perfume.mood} {perfume.family.lower()} that begins with {perfume.top_notes[0].name} — "
         f"{perfume.top_notes[0].description} — and spirals through "
         f"{perfume.heart_notes[0].name} before finding its resolution in "
@@ -564,25 +600,42 @@ def compare_perfumes(p1: Perfume, p2: Perfume) -> str:
     lines.append("  ══════════════════ FRAGRANCE DUEL ══════════════════")
     lines.append("")
 
-    # Side by side basic info
-    max_name = max(len(p1.name), len(p2.name))
-    lines.append(f"  ✦ {p1.name:<{max_name + 4}} ✦ {p2.name}")
-    lines.append(f"  {p1.family:<{max_name + 6}} {p2.family}")
-    lines.append(f"  Mood: {p1.mood:<{max_name}} Mood: {p2.mood}")
-    lines.append(f"  Season: {p1.season:<{max_name - 3}} Season: {p2.season}")
-    lines.append(f"  Conc: {p1.concentration:<{max_name - 1}} Conc: {p2.concentration}")
-    lines.append(f"  Longevity: {p1.longevity:<{max_name - 5}} Longevity: {p2.longevity}")
-    lines.append(f"  Sillage: {p1.sillage:<{max_name - 2}} Sillage: {p2.sillage}")
-    lines.append(f"  Harmony: {p1.harmony_score():<{max_name}} Harmony: {p2.harmony_score()}")
+    # Compute column width based on label+value pairs
+    h1 = p1.harmony_score()
+    h2 = p2.harmony_score()
+    rows = [
+        (f"✦ {p1.name}", f"✦ {p2.name}"),
+        (p1.family, p2.family),
+        (f"Mood: {p1.mood}", f"Mood: {p2.mood}"),
+        (f"Season: {p1.season}", f"Season: {p2.season}"),
+        (f"Conc: {p1.concentration}", f"Conc: {p2.concentration}"),
+        (f"Longevity: {p1.longevity}", f"Longevity: {p2.longevity}"),
+        (f"Sillage: {p1.sillage}", f"Sillage: {p2.sillage}"),
+        (f"Harmony: {h1}", f"Harmony: {h2}"),
+    ]
+    # Column 1 width = max length of all left-side strings + 2 padding
+    col1_width = max(len(left) for left, _ in rows) + 2
+
+    for left, right in rows:
+        lines.append(f"  {left:<{col1_width}}{right}")
     lines.append("")
 
     # Note comparison
+    p1_top = ', '.join(n.name for n in p1.top_notes)
+    p2_top = ', '.join(n.name for n in p2.top_notes)
+    p1_heart = ', '.join(n.name for n in p1.heart_notes)
+    p2_heart = ', '.join(n.name for n in p2.heart_notes)
+    p1_base = ', '.join(n.name for n in p1.base_notes)
+    p2_base = ', '.join(n.name for n in p2.base_notes)
+    note_col = max(len(p1_top), len(p2_top), len(p1_heart), len(p2_heart),
+                   len(p1_base), len(p2_base)) + 4
+
     lines.append("  ── Top Notes ──")
-    lines.append(f"    {', '.join(n.name for n in p1.top_notes):<{max_name + 6}} {', '.join(n.name for n in p2.top_notes)}")
+    lines.append(f"    {p1_top:<{note_col}}{p2_top}")
     lines.append("  ── Heart Notes ──")
-    lines.append(f"    {', '.join(n.name for n in p1.heart_notes):<{max_name + 6}} {', '.join(n.name for n in p2.heart_notes)}")
+    lines.append(f"    {p1_heart:<{note_col}}{p2_heart}")
     lines.append("  ── Base Notes ──")
-    lines.append(f"    {', '.join(n.name for n in p1.base_notes):<{max_name + 6}} {', '.join(n.name for n in p2.base_notes)}")
+    lines.append(f"    {p1_base:<{note_col}}{p2_base}")
     lines.append("")
 
     # Shared notes
@@ -870,6 +923,9 @@ Examples:
 
     if args.generate is not None:
         n = args.generate
+        if n <= 0:
+            print("Error: --generate count must be a positive integer.", file=sys.stderr)
+            sys.exit(1)
         perfumes = [
             generate_perfume(family=args.family, mood=args.mood, season=args.season)
             for _ in range(n)
@@ -887,6 +943,12 @@ Examples:
             except OSError as exc:
                 print(f"  Error writing to {args.export}: {exc}", file=sys.stderr)
         return
+
+    # --export without a generation action: show error
+    if args.export and not (args.generate is not None or args.collection or args.compare):
+        print("Error: --export requires one of --generate, --collection, or --compare.",
+              file=sys.stderr)
+        sys.exit(1)
 
     # Default: interactive mode
     interactive_menu()

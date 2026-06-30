@@ -2,11 +2,13 @@
 
 A procedural perfume generator that creates unique, evocative fragrance compositions with note pyramids, scent profile visualizations, harmony scores, side-by-side comparisons, and poetic descriptions — all in your terminal.
 
+**Version 1.2.0** — Bug fix release
+
 ## What It Does
 
 Perfume Alchemist generates procedurally unique perfumes using a rich database of 60 real fragrance notes organized into top, heart, and base tiers. Each generated perfume includes:
 
-- **A French-inspired name** (e.g., *Peau d'Âme*, *Cendres et Roses*, *Brume Sans Nom*)
+- **A French-inspired name** (e.g., *Peau d'Âme*, *Cendres et Roses*, *Absinthe*, *Brume*)
 - **Fragrance family** (Chypre, Oriental, Floral, Gourmand, etc.)
 - **Mood & season** (enigmatic, opulent, melancholic; eternal spring, monsoon dusk…)
 - **Origin story** (a Carpathian monastery, a Venetian palazzo at Carnival…)
@@ -28,10 +30,11 @@ Perfume Alchemist generates procedurally unique perfumes using a rich database o
 - ⚔️ **Fragrance Duel** — side-by-side comparison of two perfumes, with shared notes and categories
 - 🔍 **Note search** — look up any note by name or category across all tiers
 - 📐 **Harmony scoring** — algorithmic rating of how well a perfume's note categories harmonize
-- 🎯 **Realistic concentrations** — longevity and sillage are now consistent with concentration (EDC lasts less than Extrait)
+- 🎯 **Realistic concentrations** — longevity and sillage are consistent with concentration (EDC lasts less than Extrait)
 - 📤 **JSON export** — save perfume compositions to JSON files for sharing or further processing
 - 🔒 **Reproducible** — seed flag for deterministic output
 - 🆚 **`--version`** — print the version number
+- 📝 **Grammar-correct descriptions** — uses "an" before vowel-starting moods, preserves proper noun capitalization in origins
 
 ## Installation
 
@@ -100,50 +103,37 @@ python3 perfume_alchemist.py --version
 
 ### Generate a single perfume
 ```
-$ python3 perfume_alchemist.py --generate --seed 99
+$ python3 perfume_alchemist.py --generate --seed 42
 
-✦ Vérité Oublié ✦
-  "Fougère" — Barbershop soul — lavender, coumarin, fern-green sophistication.
+                    ✦ Mirage de Minuit ✦
+  "Oriental / Amber" — Warm, resinous, addictive — vanilla, oud, and spice bazaars.
 
-  Mood: Dreamlike
-  Season: Winter solstice
-  Origin: A savannah veranda in August
+  Mood: Enigmatic
+  Season: Monsoon dusk
+  Origin: A Bombay spice warehouse at dawn
   Concentration: Eau de Cologne
-  Longevity: 3–5 hours
-  Sillage: Moderate
+  Longevity: 2–4 hours
+  Sillage: Intimate
   Harmony: ★·· Distinctive (27%)
 
                       ── Note Pyramid ──
-╭───────────────────────────────╮
-│              TOP              │
-│  mint  ·  pink pepper        │
-├───────────────────────────────┤
-│             HEART             │
-│  clove bud · black tea       │
-├───────────────────────────────┤
-│              BASE             │
-│  immortelle · guaiacwood     │
-╰───────────────────────────────╯
+╭───────────────────────────────────╮
+│                TOP                │
+│  lavender  ·  mastic              │
+├───────────────────────────────────┤
+│               HEART               │
+│  jasmine sambac · magnolia        │
+├───────────────────────────────────┤
+│                BASE               │
+│  balsam peru · vetiver haiti      │
+╰───────────────────────────────────╯
 
                      ── Scent Profile ──
-  Herbal   ███████░░░░░░░░░░░░░░░░░░░░░░░ 25%
-  Spicy    ███████░░░░░░░░░░░░░░░░░░░░░░░ 25%
-  Earthy   ███████░░░░░░░░░░░░░░░░░░░░░░░ 25%
-  Woody    ███████░░░░░░░░░░░░░░░░░░░░░░░ 25%
-
-                     ── Tasting Notes ──
-
-  ▸ TOP:
-    mint — crisp and invigorating, morning garden fresh
-    pink pepper — rosy warmth with a playful bite
-
-  ▸ HEART:
-    clove bud — arid heat, dental sharp, ancient spice route
-    black tea — tannic depth, smoky, contemplative cup
-
-  ▸ BASE:
-    immortelle — curry flower, burnt sugar, eternal straw
-    guaiacwood — smoky, rose-tinged, quiet strength
+  Floral     ██████████░░░░░░░░░░░░░░░░░░░░ 33%
+  Resinous   ███████░░░░░░░░░░░░░░░░░░░░░░░ 25%
+  Earthy     ███████░░░░░░░░░░░░░░░░░░░░░░░ 25%
+  Herbal     ██░░░░░░░░░░░░░░░░░░░░░░░░░░░░ 8%
+  Green      ██░░░░░░░░░░░░░░░░░░░░░░░░░░░░ 8%
 ```
 
 ### Search for notes
@@ -161,21 +151,21 @@ $ python3 perfume_alchemist.py --compare
 
   ══════════════════ FRAGRANCE DUEL ══════════════════
 
-  ✦ Mirage de Minuit     ✦ Mirage Perdu
-  Oriental / Amber       Green / Herbaceous
+  ✦ Chimère Oublié        ✦ L'Heure Bleue
+  Oriental / Amber         Gourmand
+  Mood: dreamlike          Mood: nostalgic
   ...
-  Shared categories: Earthy, Green, Herbal
 ```
 
 ## How It Works
 
-1. **Name generation**: Combines French prefixes, suffixes, and standalone poetic names
+1. **Name generation**: Combines French prefixes, suffixes, and standalone poetic names in three distinct styles (prefix+suffix, standalone, prefix-only)
 2. **Note selection**: Randomly selects 2–3 top notes, 2–4 heart notes, and 2–4 base notes from curated pools of real fragrance ingredients, ensuring no duplicates
 3. **Family & mood assignment**: Each perfume is assigned a fragrance family and mood that shape its character
 4. **Origin & season**: An evocative origin story and seasonal context add narrative depth
-5. **Concentration realism**: Longevity and sillage are now drawn from ranges consistent with the concentration level (Eau de Cologne → shorter, Parfum/Extrait → longer)
+5. **Concentration realism**: Longevity and sillage are drawn from ranges consistent with the concentration level (Eau de Cologne → shorter, Parfum/Extrait → longer)
 6. **Harmony scoring**: Note categories are checked against known harmonious pairings (e.g., floral + woody, citrus + herbal) to produce a compatibility score
-7. **Description generation**: Procedurally combines the name, notes, mood, origin, and family into evocative prose descriptions using 5 different templates
+7. **Description generation**: Procedurally combines the name, notes, mood, origin, and family into evocative prose descriptions using 5 different templates, with correct a/an grammar
 8. **Visualization**: Renders an ASCII note pyramid and weighted category bar chart for scent profile analysis
 
 ## Fragrance Families
@@ -199,7 +189,20 @@ $ python3 perfume_alchemist.py --compare
 python3 test_perfume_alchemist.py
 ```
 
-38 tests cover data integrity, generation, name variety, concentration consistency, harmony scoring, note search, comparison, JSON export, and CLI flags.
+47 tests cover data integrity, generation, name variety, concentration consistency, harmony scoring, note search, comparison, JSON export, CLI flags, a/an grammar, origin capitalization, note pyramid alignment, and comparison column alignment.
+
+## Changelog
+
+### v1.2.0 (Bug Fix Release)
+
+- **Fixed: `generate_name()` had two identical branches** — The third name style (style > 0.65) was identical to the first (style < 0.35), both producing "prefix + suffix" names. Now the third branch produces prefix-only names (e.g., "Noir", "Absinthe", "Brume"), giving a proper ~35/30/35 distribution across three distinct styles.
+- **Fixed: Duplicate "Velours" in `NAME_PREFIXES`** — The prefix "Velours" appeared twice, giving it double probability. Removed the duplicate.
+- **Fixed: "a"/"an" grammar error in descriptions** — All five description templates used "a {mood}" regardless of whether the mood started with a vowel, producing phrases like "a enigmatic", "a opulent". Added `_article()` helper and updated all templates to use correct articles ("an enigmatic", "an opulent").
+- **Fixed: Origin capitalization mangled proper nouns** — `str.capitalize()` lowercased all characters after the first, turning "a Parisian attic" into "A parisian attic" and "a Kyoto temple" into "A kyoto temple". Added `_title_case()` function that preserves proper noun capitalization.
+- **Fixed: Note pyramid had inconsistent line widths** — Content lines were 1 character shorter than border lines (54 vs 55 chars) due to `.ljust(w+1)` instead of `.ljust(w+2)`. Fixed to use `.ljust(w+2)` so all lines in the pyramid are the same width.
+- **Fixed: Compare alignment was broken** — `compare_perfumes()` used perfume name length as the column width for all fields, causing misaligned columns when label lengths varied (e.g., "Harmony: " is 9 chars but "Conc: " is 6). Rewrote to compute column width from actual label+value content, ensuring proper alignment.
+- **Fixed: `--generate 0` and `--generate -1` silently succeeded** — Now returns an error: "count must be a positive integer".
+- **Fixed: `--export` without generation flag fell through to interactive mode** — Now returns an error requiring `--generate`, `--collection`, or `--compare`.
 
 ## License
 
