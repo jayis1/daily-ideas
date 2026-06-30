@@ -2,7 +2,7 @@
 
 A procedurally generated 3D-like terrain flyover rendered entirely in your terminal using ANSI 256-color codes and Unicode characters. Soar over mountains, oceans, forests, and plains — all generated in real-time from Perlin noise.
 
-![Terminal](https://img.shields.io/badge/platform-terminal-green) ![Python](https://img.shields.io/badge/python-3.7+-blue) ![License](https://img.shields.io/badge/license-MIT-yellow) ![Version](https://img.shields.io/badge/version-1.1.0-orange)
+![Terminal](https://img.shields.io/badge/platform-terminal-green) ![Python](https://img.shields.io/badge/python-3.7+-blue) ![License](https://img.shields.io/badge/license-MIT-yellow) ![Version](https://img.shields.io/badge/version-1.1.1-orange)
 
 ## Features
 
@@ -23,20 +23,30 @@ A procedurally generated 3D-like terrain flyover rendered entirely in your termi
 - **Deterministic seeds** — share a seed number to reproduce the same terrain
 - **Configurable** — adjust speed, altitude, FPS, duration, time-of-day, and more
 - **`--version` flag** — prints the version number
-- **Comprehensive test suite** — 44 tests covering noise, color, rendering, and CLI
+- **Comprehensive test suite** — 55 tests covering noise, color, rendering, CLI, and regression tests for fixed bugs
 
-## What's New in v1.1.0
+## What's New
 
-- 🌅 **Day/night cycle** — `--hour` parameter changes sky, terrain tinting, and fog colors (try `--hour 0` for midnight, `--hour 19` for sunset)
-- 🌊 **Water animation** — ocean and shallow water characters animate with wave patterns
-- 🧭 **Compass heading** — status bar now shows compass direction (N/NE/E/SE/S/SW/W/NW)
-- 🗺️ **Minimap overlay** — `--minimap` shows a live top-down map in the corner during flyover
-- ⌨️ **Interactive mode** — `--interactive` enables WASDQE keyboard controls for manual flight
-- 📸 **Screenshot mode** — `--screenshot FILE` saves a single plain-text frame to a file
-- 🏷️ **`--version`** flag added
-- 🐛 **Fixed minimap position marker** — the ▶ marker now correctly replaces the center character
-- 🧪 **Full test suite** — 44 tests covering all major functionality
-- 📝 **Type hints and improved documentation** throughout the codebase
+### v1.1.1 (Bug Fix Release)
+
+- 🐛 **Fixed: Division by zero crash when `fog_dist=0`** — `height_to_char()` and `fog_factor` calculation now guard against zero fog distance
+- 🐛 **Fixed: Interactive mode WASDQE keys had no effect** — `_keys_held` was cleared before `render_frame()` read it; now cleared after rendering instead
+- 🐛 **Fixed: Q key did nothing in interactive mode** — the dead `if key.lower() == 'q' and key.isupper(): pass` branch was removed; Q now correctly decreases altitude via `_keys_held`
+- 🐛 **Fixed: Minimap overlay garbled ANSI escape sequences** — `_overlay_minimap()` was slicing raw ANSI strings at byte offsets, splitting escape codes in half; now properly parses visual cells before overlaying
+- 🐛 **Fixed: `render_minimap()` position marker parser was fragile** — replaced the ad-hoc ANSI parser with the robust `_parse_ansi_cells()` / `_cells_to_string()` methods
+- ✅ Added 11 regression tests for all fixed bugs
+- 🧹 Added `_parse_ansi_cells()` and `_cells_to_string()` helper methods for correct ANSI-aware string manipulation
+
+### v1.1.0 (Feature Release)
+
+- 🌅 Day/night cycle (`--hour`)
+- 🌊 Animated water characters
+- 🧭 Compass heading in status bar
+- 🗺️ Minimap overlay (`--minimap`)
+- ⌨️ Interactive mode (`--interactive`)
+- 📸 Screenshot export (`--screenshot`)
+- 🏷️ `--version` flag
+- 🧪 44 tests
 
 ## How It Works
 
@@ -183,21 +193,14 @@ Flyover mode renders a perspective view with sky, fog, terrain, and animated wat
       ░░░░░▒▒▒▓▓▓▓▓▒▒▒░░░░░░░  ░░  ░░    ░░░░░░░░░░░░░
           ░░▒▓████████▓▒░░░░░░░░  ░░░░░░░░░░░░░░░░░░░░░░
 """"""vvvvvv""""""""""vvvv♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣^^^^^^^♣♣♣♣♣♣
-""""""vvvvvv""""""""""vvvv♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣^^^^^^♣♣♣♣♣♣♣
+""""""vvvvvv""""""""""vvvv♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣^^^^^^♣♣♣♣♣♣♣♣
   POS (142,87)  HDG 15° NE  BIOME Forest  SEED 42  ALT 0.6  SPD 1.0×  TIME 12:00
-```
-
-Night mode (`--hour 2`):
-
-```
-      ░░░░░▒▒▒▓▓▓▓▓▒▒▒░░░░░░░  ░░  ░░    ░░░░░░░░░░░░░
-  POS (142,87)  HDG 15° NE  BIOME Ocean  SEED 42  ALT 0.6  SPD 1.0×  TIME 02:00
 ```
 
 Map mode renders a top-down view:
 
 ```
-♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣
+♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣
 ♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣
                               ▶♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣♣
 ```
@@ -208,21 +211,25 @@ Map mode renders a top-down view:
 python3 -m pytest test_terrain_flyover.py -v
 ```
 
-44 tests covering Perlin noise, color blending, height mapping, terrain rendering, day/night palettes, screenshot export, map mode, sky rendering, and CLI arguments.
+55 tests covering Perlin noise, color blending, height mapping, terrain rendering, day/night palettes, screenshot export, map mode, sky rendering, CLI arguments, and regression tests for all fixed bugs.
 
-## Implementation Notes
+## Changelog
 
-- **Perlin noise**: Custom implementation with permutation tables and gradient interpolation
-- **Octave noise**: 6 octaves with configurable persistence and lacunarity for realistic terrain detail
-- **Power curve**: Applied to height values to create more dramatic peaks and deeper ocean trenches
-- **Hill shading**: Compares neighboring height values to simulate directional lighting
-- **Fog**: Distance-based atmospheric perspective using alpha blending over ANSI palette (darkens at night)
-- **Clouds**: Second noise instance offset to create independent cloud formations
-- **Camera path**: Sinusoidal heading oscillation creates a natural banking/sweeping flight path (or manual WASDQE control)
-- **Day/night**: Three palettes (day, sunset, night) interpolated by hour — terrain tints darker at night, sky gradient shifts, and fog turns dark
-- **Water animation**: Ocean/shallows characters cycle through `~≈∽∿` based on frame count and distance
-- **Compass**: Heading in radians converted to 8-direction compass bearing
-- **Minimap**: Inline overlay parses ANSI-coded strings to insert the ▶ position marker
+### v1.1.1
+- Fixed crash when `fog_dist=0` (division by zero in `height_to_char` and `fog_factor`)
+- Fixed interactive mode WASDQE keys having no effect (`_keys_held` cleared before use)
+- Fixed Q key being a no-op (dead `pass` branch removed; Q now decreases altitude)
+- Fixed minimap overlay garbling ANSI escape sequences (byte-offset slicing replaced with visual-cell parsing)
+- Fixed fragile ANSI parser in `render_minimap()` (replaced with `_parse_ansi_cells()`)
+- Added `_parse_ansi_cells()` and `_cells_to_string()` helper methods for ANSI-aware string manipulation
+- Added 11 regression tests
+
+### v1.1.0
+- Added day/night cycle, animated water, compass heading, minimap overlay, interactive mode, screenshot export, `--version` flag
+- Added 44 tests
+
+### v1.0.0
+- Initial release
 
 ## License
 

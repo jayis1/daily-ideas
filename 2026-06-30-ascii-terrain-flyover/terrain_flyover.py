@@ -10,7 +10,7 @@ Supports interactive keyboard controls, day/night cycles, water animation,
 minimap overlays, and screenshot export.
 """
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 import os
 import sys
@@ -248,6 +248,9 @@ def height_to_char(h: float, dist: float, max_dist: float, frame: int = 0) -> st
     else:
         chars = "*✦❄"
 
+    # Guard against division by zero when max_dist is 0
+    if max_dist <= 0:
+        return chars[0]
     idx = min(len(chars) - 1, int(dist / max_dist * (len(chars) - 1)))
     return chars[idx]
 
@@ -477,12 +480,12 @@ class TerrainFlyover:
                     apparent_h = th - (1 - camera_h) * dist_ratio
                     apparent_h = max(0, min(1, apparent_h))
 
-                    # Fog
-                    fog_factor = (dist / self.fog_dist) ** 1.5
+                    # Fog (guard against zero fog_dist)
+                    fog_factor = (dist / max(1, self.fog_dist)) ** 1.5
 
                     # Get color and character (with time-of-day and animation)
                     c = height_to_color(apparent_h, fog_factor, self.hour)
-                    ch = height_to_char(th, dist, self.fog_dist, frame)
+                    ch = height_to_char(th, dist, max(1, self.fog_dist), frame)
 
                     # Hill shading
                     if apparent_h > 0.4 and dist < self.fog_dist * 0.6:
@@ -561,25 +564,91 @@ class TerrainFlyover:
             lines.append("".join(line_parts))
         return lines
 
+    @staticmethod
+    def _parse_ansi_cells(line: str) -> List[Tuple[str, str]]:
+        """Parse an ANSI-coded string into a list of (ansi_prefix, char) tuples.
+
+        Each visual cell on the terminal corresponds to one tuple.
+        ANSI escape sequences are grouped with their following visible character.
+        """
+        cells = []
+        pos = 0
+        current_ansi = ""
+        while pos < len(line):
+            if line[pos] == '\x1b':
+                # Start of ANSI escape sequence
+                seq_start = pos
+                pos += 1  # skip ESC
+                if pos < len(line) and line[pos] == '[':
+                    pos += 1  # skip '['
+                    while pos < len(line) and line[pos] not in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz':
+                        pos += 1
+                    if pos < len(line):
+                        pos += 1  # skip the final letter
+                elif pos < len(line) and line[pos] == ']':
+                    # OSC sequence: ESC] ... BEL or ST
+                    pos += 1
+                    while pos < len(line) and line[pos] != '\x07' and line[pos:pos+2] != '\x1b\\':
+                        pos += 1
+                    if pos < len(line):
+                        if line[pos] == '\x07':
+                            pos += 1
+                        elif line[pos:pos+2] == '\x1b\\':
+                            pos += 2
+                else:
+                    pos += 1  # skip unknown after ESC
+                current_ansi = line[seq_start:pos]
+                # The ANSI prefix belongs to the next visible char
+                continue
+            elif line[pos] == '\n':
+                pos += 1
+                continue
+            else:
+                # Visible character — attach any pending ANSI prefix
+                cells.append((current_ansi, line[pos]))
+                current_ansi = ""
+                pos += 1
+        return cells
+
+    @staticmethod
+    def _cells_to_string(cells: List[Tuple[str, str]]) -> str:
+        """Convert a list of (ansi_prefix, char) tuples back to a string."""
+        return "".join(a + c for a, c in cells)
+
     def _overlay_minimap(self, frame_lines: List[str], minimap_lines: List[str],
                           size: int, width: int) -> None:
-        """Overlay the minimap onto the bottom-right corner of the frame."""
+        """Overlay the minimap onto the bottom-right corner of the frame.
+
+        Properly handles ANSI escape sequences by parsing visual cells
+        instead of slicing raw byte strings.
+        """
         start_row = len(frame_lines) - size - 1  # -1 for stats bar
-        start_col = width - size - 2
 
         for i, mini_line in enumerate(minimap_lines):
             row_idx = start_row + i
             if row_idx < 0 or row_idx >= len(frame_lines):
                 continue
-            # Place minimap line with a border
+
+            # Parse the frame line into visual cells
+            cells = self._parse_ansi_cells(frame_lines[row_idx])
+            # Parse the minimap line into visual cells
+            mini_cells = self._parse_ansi_cells(mini_line)
+
+            # Border cell
             border = f"{ESC}48;5;236;38;5;252m "
-            frame_lines[row_idx] = (
-                frame_lines[row_idx][:len(frame_lines[row_idx]) - size - 4]
-                + border
-                + mini_line
-                + border
-                + RESET
-            )
+            border_cell = (border, " ")
+
+            # Calculate where the minimap starts (in visual columns from the right)
+            start_col = max(0, len(cells) - size - 2)
+
+            # Build new cell list: original up to start_col, border, minimap cells, border, RESET
+            new_cells = cells[:start_col]
+            new_cells.append(border_cell)
+            new_cells.extend(mini_cells)
+            new_cells.append(border_cell)
+            new_cells.append((RESET, ""))
+
+            frame_lines[row_idx] = self._cells_to_string(new_cells)
 
     def render_screenshot(self, frame: int = 0) -> str:
         """Render a single frame for screenshot export (strip ANSI codes for plain text)."""
@@ -624,33 +693,13 @@ def render_minimap(flyover: TerrainFlyover, map_w: int = 80, map_h: int = 30,
     # Position marker — replace center character with a plane marker
     center_row = map_h // 2
     center_col = map_w // 2
-    # Simplify: rebuild the center row from scratch, inserting the marker
-    center_line = lines[center_row]
-    # Parse ANSI-colored string into (ansi_prefix, char) pairs
-    visible_chars = []
-    pos = 0
-    while pos < len(center_line):
-        if center_line[pos] == ESC[0]:
-            # Collect the full ANSI sequence
-            seq_start = pos
-            while pos < len(center_line) and center_line[pos] != 'm':
-                pos += 1
-            pos += 1  # skip 'm'
-            current_ansi = center_line[seq_start:pos]
-            # Next visible char belongs to this sequence
-            if pos < len(center_line):
-                visible_chars.append((current_ansi, center_line[pos]))
-                pos += 1
-        else:
-            visible_chars.append(("", center_line[pos]))
-            pos += 1
-
-    # Replace the center character with the marker
-    if center_col < len(visible_chars):
+    # Parse ANSI-colored string into visual cells and replace center with marker
+    center_cells = TerrainFlyover._parse_ansi_cells(lines[center_row])
+    if center_col < len(center_cells):
         marker_ansi = f"{ESC}38;5;196m"
-        visible_chars[center_col] = (marker_ansi, "▶")
+        center_cells[center_col] = (marker_ansi, "▶")
 
-    lines[center_row] = "".join(a + c for a, c in visible_chars)
+    lines[center_row] = TerrainFlyover._cells_to_string(center_cells)
 
     return "\n".join(lines) + RESET
 
@@ -751,10 +800,7 @@ def run_demo(seed: Optional[int] = None, speed: float = 1.0, altitude: float = 0
             if interactive:
                 key = _read_key_nonblock(sys.stdin.fileno())
                 while key is not None:
-                    if key.lower() == 'q' and key.isupper():
-                        # Q = quit (only if shift detected, or just use Ctrl+C)
-                        pass
-                    elif key == '\x1b':  # Escape sequences
+                    if key == '\x1b':  # Escape sequences
                         # Read the rest of the escape sequence
                         k2 = _read_key_nonblock(sys.stdin.fileno(), 0.005)
                         if k2 == '[':
@@ -768,19 +814,10 @@ def run_demo(seed: Optional[int] = None, speed: float = 1.0, altitude: float = 0
                         flyover._keys_held.add(key.lower())
                     key = _read_key_nonblock(sys.stdin.fileno())
 
-                # Release keys that aren't being pressed (simple: clear each frame
-                # and re-read; this is sufficient for our purposes)
-                flyover._keys_held = set()
-
-                # Re-read held keys via continuous check
-                for k in ['w', 'a', 's', 'd', 'q', 'e']:
-                    # Check if key is being pressed (we can't really detect held
-                    # keys in raw mode without more sophisticated handling, so we
-                    # just keep adding keys as they come in above)
-                    pass
-
             frame_start = time.time()
             output = flyover.render_frame(frame)
+            # Clear held keys after rendering so they don't stick
+            flyover._keys_held = set()
             sys.stdout.write(output)
             sys.stdout.flush()
 

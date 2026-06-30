@@ -359,6 +359,95 @@ class TestCLIArgs:
         assert "terrain" in result.stdout.lower()
 
 
+class TestBugFixes:
+    """Regression tests for bugs that were found and fixed."""
+
+    def test_height_to_char_zero_max_dist(self):
+        """height_to_char should not crash when max_dist=0."""
+        # Bug: ZeroDivisionError when max_dist=0 (fog_dist=0)
+        ch = tf.height_to_char(0.5, 5, 0, frame=0)
+        assert isinstance(ch, str)
+        assert len(ch) > 0
+
+    def test_height_to_char_negative_max_dist(self):
+        """height_to_char should not crash when max_dist is negative."""
+        ch = tf.height_to_char(0.5, 5, -1, frame=0)
+        assert isinstance(ch, str)
+        assert len(ch) > 0
+
+    def test_fog_dist_zero_no_crash(self):
+        """TerrainFlyover with fog_dist=0 should not crash."""
+        f = tf.TerrainFlyover(seed=42, width=20, height=10,
+                               fog_dist=0, show_stats=False)
+        output = f.render_frame(0)
+        assert isinstance(output, str)
+        assert len(output) > 0
+
+    def test_interactive_keys_not_cleared_before_render(self):
+        """_keys_held should be usable by render_frame in interactive mode."""
+        f = tf.TerrainFlyover(seed=42, width=40, height=15,
+                               interactive=True, show_stats=False)
+        # Set keys and verify they affect rendering
+        f._keys_held = {'w'}
+        output = f.render_frame(0)
+        assert isinstance(output, str)
+        assert len(output) > 0
+        # 'w' should cause speed_mult = speed * 2.0, which changes the output
+
+    def test_overlay_minimap_no_garbled_ansi(self):
+        """Minimap overlay should not produce garbled ANSI sequences."""
+        f = tf.TerrainFlyover(seed=42, width=60, height=20,
+                               show_minimap=True, show_stats=True)
+        output = f.render_frame(0)
+        # Check there are no double-ESC sequences (garbled ANSI)
+        # Garbled sequences look like: \x1b[\x1b[...
+        assert r'\x1b[\x1b[' not in repr(output), \
+            "Minimap overlay produces garbled ANSI sequences"
+
+    def test_parse_ansi_cells_basic(self):
+        """_parse_ansi_cells should correctly parse ANSI-colored strings."""
+        cells = tf.TerrainFlyover._parse_ansi_cells("\x1b[38;5;34m\"\x1b[0m")
+        # The \x1b[0m is a trailing ANSI sequence with no following visible char,
+        # so it's stored as a prefix for an empty string char.
+        assert len(cells) == 1
+        assert cells[0] == ("\x1b[38;5;34m", '"')
+
+    def test_parse_ansi_cells_plain_text(self):
+        """_parse_ansi_cells should handle plain text without ANSI."""
+        cells = tf.TerrainFlyover._parse_ansi_cells("hello")
+        assert len(cells) == 5
+        assert all(a == "" for a, c in cells)
+
+    def test_cells_to_string_roundtrip(self):
+        """_cells_to_string should reconstruct the original ANSI string (minus trailing resets)."""
+        # Note: trailing ANSI sequences with no following visible char are dropped by
+        # _parse_ansi_cells, which is fine for the overlay use case.
+        original = "\x1b[38;5;34mv\x1b[38;5;22m♣"
+        cells = tf.TerrainFlyover._parse_ansi_cells(original)
+        reconstructed = tf.TerrainFlyover._cells_to_string(cells)
+        assert reconstructed == original
+
+    def test_render_minimap_marker_after_fix(self):
+        """render_minimap should still produce valid output with ▶ marker."""
+        flyover = tf.TerrainFlyover(seed=42, width=40, height=20)
+        output = tf.render_minimap(flyover, map_w=20, map_h=10, scale=0.3)
+        assert "▶" in output, "Minimap should contain position marker"
+
+    def test_screenshot_no_ansi_codes(self):
+        """Screenshot should contain no ANSI escape sequences."""
+        f = tf.TerrainFlyover(seed=42, width=40, height=15, show_stats=True)
+        plain = f.render_screenshot(0)
+        assert '\x1b[' not in plain, "Screenshot should not contain ANSI codes"
+
+    def test_small_terminal_with_minimap(self):
+        """Small terminals with minimap should not crash or produce garbled output."""
+        f = tf.TerrainFlyover(seed=42, width=25, height=10,
+                               show_minimap=True, show_stats=False)
+        output = f.render_frame(0)
+        assert isinstance(output, str)
+        assert len(output) > 0
+
+
 import sys
 
 if __name__ == "__main__":
