@@ -1,6 +1,6 @@
 # Procedural Fingerprint Generator
 
-**Version 1.1.0**
+**Version 1.1.1**
 
 Generate unique, realistic ASCII fingerprint patterns from a seed value. Each seed produces a deterministic, reproducible fingerprint with scientifically-inspired ridge patterns including loops, whorls, arches, tented arches, and double loops.
 
@@ -25,10 +25,11 @@ The generator uses an **orientation field model** — a technique inspired by re
 - **ANSI color output**: Colorized rendering with `--color`
 - **Batch generation**: Generate multiple fingerprints with `--batch N`
 - **JSON output**: Machine-readable metadata with `--json`
-- **File export**: Save fingerprint to a file with `--output`
+- **File export**: Save fingerprint to a file with `--output` (ANSI codes are automatically stripped)
 - **Adjustable density and contrast**: Fine-tune the visual output
 - **Custom dimensions**: Control width and height of the output
 - **Input validation**: Rejects invalid parameters with clear error messages
+- **Responsive borders**: Border alignment is maintained even at narrow widths
 - **Version flag**: `--version` support
 
 ## Installation
@@ -90,8 +91,20 @@ python3 fingerprint.py --version
 # Batch generate 5 fingerprints
 python3 fingerprint.py --batch 5 --seed 100
 
-# Save fingerprint to a file
+# Save fingerprint to a file (ANSI codes are stripped automatically)
 python3 fingerprint.py --seed 42 --output fingerprint.txt
+
+# Save colorized fingerprint to a file (ANSI codes are stripped)
+python3 fingerprint.py --seed 42 --color --output fingerprint.txt
+
+# Save fingerprint ID to a file
+python3 fingerprint.py --seed 42 --id-only --output id.txt
+
+# Save batch output to a file
+python3 fingerprint.py --batch 3 --seed 100 --output batch.txt
+
+# Save comparison to a file
+python3 fingerprint.py --compare --output comparison.txt
 ```
 
 ## Examples
@@ -107,13 +120,7 @@ python3 fingerprint.py --seed 42 --output fingerprint.txt
 │              :-=+=-==-==--:=:... ....                  │
 │              ::---:===--::. ....   .                   │
 │            .  .::::-:-.-...     .  .   .               │
-│                   .:.::... .         .:..- :            │
-│       .::::.       .:.       .-=+**#****=              │
-│      .-+=:=:...   ::: =   .. -=++#%@%%%#@#=            │
-│      =*#*=+-.. ...  .:..:  .:-++#@@%%%#%@%@#+          │
-│     *%@@%%%%@%#*=-:.      :..   -=+#%%%%#@%@%#@#%#+    │
-│     +#@@@%%*%*=-:.   .:... .-+%%@%@@%@%%%@@@%%+        │
-│ Minutiae: 10 points                                  │
+│ Minutiae: 10 points                                 │
 └────────────────────────────────────────────────────┘
 ```
 
@@ -177,4 +184,18 @@ Phase integration accumulates the orientation and frequency gradients from the t
 python3 -m pytest test_fingerprint.py -v
 ```
 
-The test suite includes 40 tests covering orientation computation, rendering, minutiae generation, fingerprint IDs, CLI argument handling, JSON output, file export, batch mode, and input validation.
+The test suite includes 54 tests covering orientation computation, rendering, minutiae generation, fingerprint IDs, CLI argument handling, JSON output, file export, batch mode, input validation, border alignment, ANSI stripping for file output, and all new bug fixes.
+
+## Changelog
+
+### v1.1.1 — Bug Fix Release
+
+- **Fixed**: Border alignment for narrow widths — title, info, and legend lines could overflow the border when the width was less than ~34 characters. Now all lines are properly truncated/padded to fit.
+- **Fixed**: `--color --output` wrote ANSI escape codes to the file. ANSI codes are now automatically stripped when writing to a file.
+- **Fixed**: `--batch --output` didn't write batch output to the file — it only printed to stdout. Now batch output is properly written to the specified file.
+- **Fixed**: `--compare --output` didn't write comparison output to the file. Now comparison output is properly written to the specified file.
+- **Fixed**: `--id-only --output` didn't write the fingerprint ID to the file. Now the ID is written to the specified file.
+- **Fixed**: Error messages for density and contrast validation said "between 0 and X" but rejected 0. Messages now correctly say "greater than 0 and at most X".
+- **Added**: `_pad_line()` helper function for safe text padding/truncation within borders.
+- **Added**: `generate_comparison()` and `generate_batch()` now return strings instead of printing directly, enabling proper file output handling.
+- **Added**: 7 new tests covering border alignment, ANSI stripping, file output for batch/compare/id-only modes, and error message content.

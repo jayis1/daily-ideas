@@ -8,7 +8,7 @@ Generates unique, realistic ASCII fingerprint patterns with various ridge types
 Uses an orientation field model combined with cosine wave rendering to produce
 dense, realistic ridge patterns.
 
-Version: 1.1.0
+Version: 1.1.1
 """
 
 import argparse
@@ -16,11 +16,12 @@ import hashlib
 import json
 import math
 import random
+import re
 import sys
 from enum import Enum
 from typing import List, Optional, Tuple
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 # ASCII intensity ramp from lightest to darkest
 RAMP = " .:-=+*#%@"
@@ -373,6 +374,24 @@ def mark_minutiae(lines: List[str], minutiae: List[dict],
     return ["".join(row) for row in result]
 
 
+def _pad_line(text: str, width: int, color_prefix: str, color_suffix: str) -> str:
+    """Pad text to exactly `width` characters, truncating if too long.
+
+    Args:
+        text: The text content to pad/truncate.
+        width: Target visible width in characters.
+        color_prefix: ANSI color prefix to apply.
+        color_suffix: ANSI color suffix (reset) to apply.
+
+    Returns:
+        Padded/truncated string with color codes.
+    """
+    if len(text) > width:
+        text = text[:width - 1] + "…"
+    padding = max(0, width - len(text))
+    return f"{color_prefix}{text}{color_suffix}" + " " * padding
+
+
 def format_fingerprint(lines: List[str], w: int, h: int, pattern: PatternType,
                        seed: int, minutiae: List[dict], show_minutiae: bool,
                        use_color: bool = False) -> str:
@@ -401,8 +420,12 @@ def format_fingerprint(lines: List[str], w: int, h: int, pattern: PatternType,
         c = {k: "" for k in ANSI_COLORS}
         c["reset"] = ""
 
-    # Title bar
+    # Title bar — truncate title if it exceeds total_w
     title = f" Fingerprint: {name} (seed: {seed}) "
+    if len(title) > total_w:
+        # Truncate title to fit within the border
+        max_title_len = total_w - 2  # account for ┌ and ┐
+        title = title[:max_title_len - 1] + "… "
     pad_l = max(0, (total_w - len(title)) // 2)
     pad_r = max(0, total_w - len(title) - pad_l)
     output.append(f"{c['border']}┌" + "─" * pad_l + f"{c['title']}{title}{c['reset']}" + f"{c['border']}─" * pad_r + "┐" + c["reset"])
@@ -426,13 +449,15 @@ def format_fingerprint(lines: List[str], w: int, h: int, pattern: PatternType,
         else:
             output.append(f"│ {line} │")
 
-    # Bottom info
+    # Bottom info — pad or truncate to fit within total_w
     info = f" Minutiae: {len(minutiae)} points "
-    output.append(f"{c['border']}│{c['reset']}{c['info']}{info}{c['reset']}" + " " * (total_w - len(info)) + f"{c['border']}│{c['reset']}")
+    padded_info = _pad_line(info, total_w, c["info"], c["reset"])
+    output.append(f"{c['border']}│{c['reset']}{padded_info}{c['border']}│{c['reset']}")
 
     if show_minutiae:
         legend = " ◆=Ending ◇=Bifurcation ○=Island "
-        output.append(f"{c['border']}│{c['reset']}{c['info']}{legend}{c['reset']}" + " " * (total_w - len(legend)) + f"{c['border']}│{c['reset']}")
+        padded_legend = _pad_line(legend, total_w, c["info"], c["reset"])
+        output.append(f"{c['border']}│{c['reset']}{padded_legend}{c['border']}│{c['reset']}")
 
     output.append(f"{c['border']}└" + "─" * total_w + "┘" + c["reset"])
 
@@ -505,7 +530,7 @@ def list_patterns():
 
 def generate_comparison(w: int, h: int, seed: int, density: float,
                          contrast: float, show_minutiae: bool,
-                         use_color: bool = False):
+                         use_color: bool = False) -> str:
     """Show all pattern types side by side for comparison.
 
     Generates all five pattern types using the same seed and renders them
@@ -518,6 +543,9 @@ def generate_comparison(w: int, h: int, seed: int, density: float,
         contrast: Contrast multiplier.
         show_minutiae: Whether to show minutiae markers.
         use_color: Whether to use ANSI colors.
+
+    Returns:
+        Formatted comparison string.
     """
     patterns = [PatternType.LOOP, PatternType.WHORL, PatternType.ARCH,
                 PatternType.TENTED_ARCH, PatternType.DOUBLE_LOOP]
@@ -530,24 +558,28 @@ def generate_comparison(w: int, h: int, seed: int, density: float,
         lines, _ = render_fingerprint(cw, ch, pat, seed, density, contrast, show_minutiae)
         all_lines.append(lines)
 
+    output_parts = []
+
     # Headers
     headers = [f"{name:^{cw}}" for name in short_names]
-    print("  ".join(headers))
-    print("  ".join(["─" * cw] * 5))
+    output_parts.append("  ".join(headers))
+    output_parts.append("  ".join(["─" * cw] * 5))
 
     for row in range(ch):
         row_strs = []
         for fp in all_lines:
             row_strs.append(fp[row] if row < len(fp) else " " * cw)
-        print("  ".join(row_strs))
+        output_parts.append("  ".join(row_strs))
 
-    print("  ".join(["─" * cw] * 5))
-    print(f"\nAll patterns generated with seed: {seed}")
+    output_parts.append("  ".join(["─" * cw] * 5))
+    output_parts.append(f"\nAll patterns generated with seed: {seed}")
+
+    return "\n".join(output_parts)
 
 
 def generate_batch(count: int, w: int, h: int, pattern: PatternType,
                     seed: int, density: float, contrast: float,
-                    show_minutiae: bool, use_color: bool = False):
+                    show_minutiae: bool, use_color: bool = False) -> str:
     """Generate multiple fingerprints with sequential seeds.
 
     Args:
@@ -559,19 +591,24 @@ def generate_batch(count: int, w: int, h: int, pattern: PatternType,
         contrast: Contrast multiplier.
         show_minutiae: Whether to show minutiae markers.
         use_color: Whether to use ANSI colors.
+
+    Returns:
+        Formatted string with all fingerprints.
     """
+    output_parts = []
     for i in range(count):
         current_seed = seed + i
         lines, minutiae = render_fingerprint(
             w, h, pattern, current_seed, density, contrast, show_minutiae
         )
         fp_id = generate_fingerprint_id(pattern, current_seed, minutiae)
-        print(f"\n--- Fingerprint {i + 1}/{count} ---")
-        print(format_fingerprint(lines, w, h, pattern, current_seed,
-                                  minutiae, show_minutiae, use_color))
-        print(f"  Fingerprint ID: {fp_id}")
-        print(f"  Pattern: {pattern.value} | Seed: {current_seed} | Minutiae: {len(minutiae)}")
-    print()
+        output_parts.append(f"\n--- Fingerprint {i + 1}/{count} ---")
+        output_parts.append(format_fingerprint(lines, w, h, pattern, current_seed,
+                                                minutiae, show_minutiae, use_color))
+        output_parts.append(f"  Fingerprint ID: {fp_id}")
+        output_parts.append(f"  Pattern: {pattern.value} | Seed: {current_seed} | Minutiae: {len(minutiae)}")
+    output_parts.append("")
+    return "\n".join(output_parts)
 
 
 def validate_args(args: argparse.Namespace) -> None:
@@ -590,10 +627,10 @@ def validate_args(args: argparse.Namespace) -> None:
         print(f"Error: height must be between 10 and 200, got {args.height}", file=sys.stderr)
         sys.exit(1)
     if args.density <= 0 or args.density > 5.0:
-        print(f"Error: density must be between 0 and 5.0, got {args.density}", file=sys.stderr)
+        print(f"Error: density must be greater than 0 and at most 5.0, got {args.density}", file=sys.stderr)
         sys.exit(1)
     if args.contrast <= 0 or args.contrast > 10.0:
-        print(f"Error: contrast must be between 0 and 10.0, got {args.contrast}", file=sys.stderr)
+        print(f"Error: contrast must be greater than 0 and at most 10.0, got {args.contrast}", file=sys.stderr)
         sys.exit(1)
     if args.batch is not None and args.batch < 1:
         print(f"Error: batch must be >= 1, got {args.batch}", file=sys.stderr)
@@ -673,6 +710,18 @@ Examples:
     seed = args.seed if args.seed is not None else random.randint(0, 999999)
     pattern = pattern_map[args.pattern]
 
+    # Helper to write output to file or stdout, stripping ANSI if writing to file
+    def _write_output(content: str, filepath: Optional[str], strip_ansi: bool = False):
+        """Write content to file or stdout, optionally stripping ANSI codes."""
+        if strip_ansi and filepath:
+            content = re.sub(r'\033\[[0-9;]*m', '', content)
+        if filepath:
+            with open(filepath, "w") as f:
+                f.write(content)
+            print(f"Output saved to {filepath}")
+        else:
+            print(content)
+
     # JSON output mode
     if args.json:
         if args.compare:
@@ -705,14 +754,16 @@ Examples:
 
     # Comparison mode
     if args.compare:
-        generate_comparison(args.width, args.height, seed, args.density,
-                           args.contrast, args.minutiae, args.color)
+        output = generate_comparison(args.width, args.height, seed, args.density,
+                                     args.contrast, args.minutiae, args.color)
+        _write_output(output, args.output, strip_ansi=True)
         return
 
     # Batch mode
     if args.batch:
-        generate_batch(args.batch, args.width, args.height, pattern, seed,
-                      args.density, args.contrast, args.minutiae, args.color)
+        output = generate_batch(args.batch, args.width, args.height, pattern, seed,
+                                args.density, args.contrast, args.minutiae, args.color)
+        _write_output(output, args.output, strip_ansi=True)
         return
 
     # Single fingerprint generation
@@ -724,7 +775,12 @@ Examples:
     fp_id = generate_fingerprint_id(pattern, seed, minutiae)
 
     if args.id_only:
-        print(fp_id)
+        if args.output:
+            with open(args.output, "w") as f:
+                f.write(fp_id + "\n")
+            print(f"Fingerprint ID saved to {args.output}")
+        else:
+            print(fp_id)
         return
 
     # Build output
@@ -735,13 +791,8 @@ Examples:
 
     full_output = f"\n{rendered}\n{info_line}\n{meta_line}\n"
 
-    # Output to file or stdout
-    if args.output:
-        with open(args.output, "w") as f:
-            f.write(full_output)
-        print(f"Fingerprint saved to {args.output}")
-    else:
-        print(full_output)
+    # Output to file or stdout (strip ANSI color codes when writing to file)
+    _write_output(full_output, args.output, strip_ansi=True)
 
 
 if __name__ == "__main__":

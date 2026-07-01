@@ -13,7 +13,9 @@ sys.path.insert(0, os.path.dirname(__file__))
 from fingerprint import (
     RAMP,
     PatternType,
+    _pad_line,
     apply_oval_mask,
+    format_fingerprint,
     generate_fingerprint_id,
     generate_fingerprint_metadata,
     generate_minutiae,
@@ -165,6 +167,70 @@ class TestApplyOvalMask:
         assert len(result) == 2
 
 
+class TestPadLine:
+    """Tests for the _pad_line helper function."""
+
+    def test_short_text_is_padded(self):
+        """Short text should be padded with spaces to reach target width."""
+        result = _pad_line("hello", 10, "", "")
+        assert len(result) == 10
+        assert result.startswith("hello")
+        assert result.endswith("     ")
+
+    def test_exact_width_text(self):
+        """Text that exactly fills the width should not be padded."""
+        result = _pad_line("hello", 5, "", "")
+        assert len(result) == 5
+        assert result == "hello"
+
+    def test_long_text_is_truncated(self):
+        """Text longer than the width should be truncated with ellipsis."""
+        result = _pad_line("hello world", 8, "", "")
+        assert len(result) == 8
+        assert result.endswith("…")
+
+    def test_color_prefix_and_suffix(self):
+        """Color codes should be applied to the text content."""
+        result = _pad_line("hi", 6, "\033[31m", "\033[0m")
+        assert result.startswith("\033[31m")
+        assert "\033[0m" in result
+        # After stripping ANSI, should be 6 chars
+        import re
+        stripped = re.sub(r'\033\[[0-9;]*m', '', result)
+        assert len(stripped) == 6
+
+
+class TestFormatFingerprintAlignment:
+    """Tests for border alignment in format_fingerprint."""
+
+    def test_wide_border_aligned(self):
+        """For wide widths, all border lines should have consistent length."""
+        lines, minutiae = render_fingerprint(50, 20, PatternType.LOOP, 42, 1.0, 1.2, False)
+        output = format_fingerprint(lines, 50, 20, PatternType.LOOP, 42, minutiae, False, False)
+        import re
+        out_lines = output.split('\n')
+        visible_lens = [len(re.sub(r'\033\[[0-9;]*m', '', l)) for l in out_lines]
+        max_diff = max(visible_lens) - min(visible_lens)
+        assert max_diff == 0, f"Border lines have inconsistent widths: {visible_lens}"
+
+    def test_narrow_border_aligned(self):
+        """For narrow widths, all border lines should have consistent length."""
+        lines, minutiae = render_fingerprint(10, 10, PatternType.LOOP, 42, 1.0, 1.2, True)
+        output = format_fingerprint(lines, 10, 10, PatternType.LOOP, 42, minutiae, True, False)
+        import re
+        out_lines = output.split('\n')
+        visible_lens = [len(re.sub(r'\033\[[0-9;]*m', '', l)) for l in out_lines]
+        max_diff = max(visible_lens) - min(visible_lens)
+        assert max_diff == 0, f"Narrow border lines have inconsistent widths: {visible_lens}"
+
+    def test_narrow_title_truncated(self):
+        """For narrow widths, the title should be truncated to fit."""
+        lines, minutiae = render_fingerprint(10, 10, PatternType.LOOP, 42, 1.0, 1.2, False)
+        output = format_fingerprint(lines, 10, 10, PatternType.LOOP, 42, minutiae, False, False)
+        # Title should contain "…" if truncated
+        assert "…" in output or "Fingerprint" not in output.split('\n')[0][2:-2]
+
+
 class TestGenerateMinutiae:
     """Tests for the generate_minutiae function."""
 
@@ -307,7 +373,7 @@ class TestCLI:
         """--version should output version string."""
         result = self._run(["--version"])
         assert result.returncode == 0
-        assert "1.1.0" in result.stdout
+        assert "1.1.1" in result.stdout
 
     def test_json_output(self):
         """--json should produce valid JSON with metadata."""
@@ -357,6 +423,90 @@ class TestCLI:
         """Negative density should produce an error."""
         result = self._run(["--density", "-1"])
         assert result.returncode != 0
+
+    def test_density_zero_error_message(self):
+        """Density=0 should produce a clear error about the valid range."""
+        result = self._run(["--density", "0"])
+        assert result.returncode != 0
+        assert "greater than 0" in result.stderr
+
+    def test_contrast_zero_error_message(self):
+        """Contrast=0 should produce a clear error about the valid range."""
+        result = self._run(["--contrast", "0"])
+        assert result.returncode != 0
+        assert "greater than 0" in result.stderr
+
+    def test_narrow_width_border_alignment(self):
+        """Narrow widths should produce properly aligned borders."""
+        result = self._run(["--seed", "42", "--width", "10", "--height", "10"])
+        assert result.returncode == 0
+        lines = result.stdout.strip().split("\n")
+        # Find lines starting with border characters
+        border_lines = [l for l in lines if l.startswith("┌") or l.startswith("└") or l.startswith("│")]
+        if len(border_lines) >= 2:
+            # All border lines should have consistent visible width
+            import re
+            visible_lengths = [len(re.sub(r'\033\[[0-9;]*m', '', l)) for l in border_lines]
+            # The lengths should all be the same (no overflow)
+            assert max(visible_lengths) - min(visible_lengths) <= 1, \
+                f"Border lines have inconsistent widths: {visible_lengths}"
+
+    def test_id_only_with_output(self):
+        """--id-only with --output should write ID to file."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            tmpfile = f.name
+        try:
+            result = self._run(["--seed", "42", "--id-only", "--output", tmpfile])
+            assert result.returncode == 0
+            with open(tmpfile) as f:
+                content = f.read().strip()
+            assert len(content) == 16
+            assert all(c in "0123456789ABCDEF" for c in content)
+        finally:
+            os.unlink(tmpfile)
+
+    def test_color_output_to_file_strips_ansi(self):
+        """--color --output should strip ANSI codes from the file."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            tmpfile = f.name
+        try:
+            result = self._run(["--seed", "42", "--color", "--output", tmpfile])
+            assert result.returncode == 0
+            with open(tmpfile) as f:
+                content = f.read()
+            # File should NOT contain ANSI escape codes
+            assert "\033[" not in content, "ANSI escape codes found in file output"
+            assert "Fingerprint" in content
+        finally:
+            os.unlink(tmpfile)
+
+    def test_batch_with_output(self):
+        """--batch with --output should write all fingerprints to file."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            tmpfile = f.name
+        try:
+            result = self._run(["--seed", "42", "--batch", "2", "--output", tmpfile,
+                                "--width", "20", "--height", "20"])
+            assert result.returncode == 0
+            with open(tmpfile) as f:
+                content = f.read()
+            assert "Fingerprint 1/2" in content
+            assert "Fingerprint 2/2" in content
+        finally:
+            os.unlink(tmpfile)
+
+    def test_compare_with_output(self):
+        """--compare with --output should write comparison to file."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            tmpfile = f.name
+        try:
+            result = self._run(["--seed", "42", "--compare", "--output", tmpfile])
+            assert result.returncode == 0
+            with open(tmpfile) as f:
+                content = f.read()
+            assert "seed: 42" in content
+        finally:
+            os.unlink(tmpfile)
 
 
 if __name__ == "__main__":
