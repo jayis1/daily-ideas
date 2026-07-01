@@ -1,5 +1,7 @@
 # Procedural Fingerprint Generator
 
+**Version 1.1.0**
+
 Generate unique, realistic ASCII fingerprint patterns from a seed value. Each seed produces a deterministic, reproducible fingerprint with scientifically-inspired ridge patterns including loops, whorls, arches, tented arches, and double loops.
 
 ## How It Works
@@ -7,7 +9,7 @@ Generate unique, realistic ASCII fingerprint patterns from a seed value. Each se
 The generator uses an **orientation field model** — a technique inspired by real fingerprint analysis:
 
 1. An **orientation field** computes the local ridge direction at every point, modeled after real fingerprint pattern classes (Henry classification system)
-2. A **frequency field** determines local ridge spacing
+2. A **frequency field** determines local ridge spacing, with variations near the core
 3. **Phase integration** accumulates these fields across the grid to produce a continuous phase map
 4. A **cosine rendering** step converts the phase map into ridge/valley intensity values
 5. An **elliptical mask** shapes the output to resemble a real finger pad impression
@@ -19,9 +21,15 @@ The generator uses an **orientation field model** — a technique inspired by re
 - **Deterministic generation**: Same seed always produces the same fingerprint
 - **Unique fingerprint IDs**: SHA-256 hash based on pattern + seed + minutiae positions
 - **Minutiae visualization**: Mark ridge endings (◆), bifurcations (◇), and islands (○)
-- **Side-by-side comparison**: View all pattern types simultaneously
+- **Side-by-side comparison**: View all pattern types simultaneously with `--compare`
+- **ANSI color output**: Colorized rendering with `--color`
+- **Batch generation**: Generate multiple fingerprints with `--batch N`
+- **JSON output**: Machine-readable metadata with `--json`
+- **File export**: Save fingerprint to a file with `--output`
 - **Adjustable density and contrast**: Fine-tune the visual output
 - **Custom dimensions**: Control width and height of the output
+- **Input validation**: Rejects invalid parameters with clear error messages
+- **Version flag**: `--version` support
 
 ## Installation
 
@@ -52,11 +60,20 @@ python3 fingerprint.py --seed 12345
 # Show minutiae points
 python3 fingerprint.py --minutiae
 
+# Enable color output
+python3 fingerprint.py --color
+
 # Compare all pattern types side by side
 python3 fingerprint.py --compare
 
 # Get just the fingerprint ID hash
 python3 fingerprint.py --seed 42 --id-only
+
+# Output metadata as JSON
+python3 fingerprint.py --seed 42 --json
+
+# Output JSON comparison of all patterns
+python3 fingerprint.py --seed 42 --json --compare
 
 # Adjust density and contrast
 python3 fingerprint.py --density 0.8 --contrast 1.5
@@ -66,6 +83,15 @@ python3 fingerprint.py --width 60 --height 70
 
 # List available patterns
 python3 fingerprint.py --list
+
+# Show version
+python3 fingerprint.py --version
+
+# Batch generate 5 fingerprints
+python3 fingerprint.py --batch 5 --seed 100
+
+# Save fingerprint to a file
+python3 fingerprint.py --seed 42 --output fingerprint.txt
 ```
 
 ## Examples
@@ -87,16 +113,28 @@ python3 fingerprint.py --list
 │      =*#*=+-.. ...  .:..:  .:-++#@@%%%#%@%@#+          │
 │     *%@@%%%%@%#*=-:.      :..   -=+#%%%%#@%@%#@#%#+    │
 │     +#@@@%%*%*=-:.   .:... .-+%%@%@@%@%%%@@@%%+        │
-│     ...                                                      │
 │ Minutiae: 10 points                                  │
 └────────────────────────────────────────────────────┘
 ```
 
-### Plain Whorl (seed: 42)
-The whorl pattern produces characteristic concentric spiral ridges rotating around a central core point.
-
-### Comparison View
-Use `--compare` to see all five pattern types side by side.
+### JSON Output
+```bash
+$ python3 fingerprint.py --seed 42 --json
+{
+  "fingerprint_id": "2818839C6E44B290",
+  "pattern_type": "loop",
+  "pattern_name": "Ulnar Loop",
+  "seed": 42,
+  "width": 50,
+  "height": 55,
+  "minutiae_count": 10,
+  "minutiae": [
+    {"x": 18.4, "y": 15.2, "angle": 3.7568, "type": "bifurcation"},
+    ...
+  ],
+  "ascii": "..."
+}
+```
 
 ## Pattern Types
 
@@ -129,3 +167,14 @@ The orientation field for each pattern type is based on simplified mathematical 
 - **Arch**: `θ(x,y) = -π/2 + bump(x) × h(y)` with Gaussian bump
 - **Tented Arch**: Sharper Gaussian spike than arch
 - **Double Loop**: Weighted blend of two loop orientation fields around dual cores
+
+Phase integration accumulates the orientation and frequency gradients from the top-left corner, averaging contributions from the left and above neighbors for numerical stability. Gaussian noise is added to the rendered output for realism.
+
+## Testing
+
+```bash
+# Run the test suite
+python3 -m pytest test_fingerprint.py -v
+```
+
+The test suite includes 40 tests covering orientation computation, rendering, minutiae generation, fingerprint IDs, CLI argument handling, JSON output, file export, batch mode, and input validation.
