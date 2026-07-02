@@ -1,4 +1,4 @@
-# Terminal Tower Defense v2.2
+# Terminal Tower Defense v2.3
 
 A fully playable tower defense game rendered entirely in the terminal using ASCII art and `curses`. Strategically place and upgrade towers, deploy power-ups, and defend against waves of increasingly tough enemies — including stealth phantoms that dodge your attacks!
 
@@ -22,7 +22,7 @@ A fully playable tower defense game rendered entirely in the terminal using ASCI
 - **Overlord** — Boss every 5th wave. Massive HP.
 - **Phantom** — Stealth enemy from wave 7+. Phases in/out of visibility and has 30% dodge chance!
 
-### Power-Up System (New!)
+### Power-Up System
 Earn 1 charge of each power-up per wave cleared:
 - **Bomb** (`b` key) — Deals 80 damage to ALL enemies on the map. Great for emergencies!
 - **Freeze** (`e` key) — Freezes all enemies in place for 3 seconds. Perfect for boss waves!
@@ -77,7 +77,7 @@ Optional flags:
 python3 tower_defense.py --difficulty hard    # Skip difficulty menu, start on hard
 python3 tower_defense.py --difficulty easy    # Skip menu, start on easy
 python3 tower_defense.py --version            # Show version and exit
-python3 tower_defense.py --help               # Show usage info and power-up guide
+python3 tower_defense.py --help              # Show usage info and power-up guide
 ```
 
 > **Note**: Must be run in a real terminal (not an IDE output panel). Requires a terminal that supports color and at least 84×28 characters.
@@ -147,7 +147,23 @@ python3 tower_defense.py --help               # Show usage info and power-up gui
 | Lightning | 130g | 15 | 5 | Medium (14) | Chains to 3 targets |
 | Poison | 90g | 3 | 4 | Medium (10) | 3 poison dmg/tick for 5 ticks |
 
+## Running Tests
+
+```bash
+python3 -m pytest test_tower_defense.py -v
+```
+
+The test suite covers path building, enemy mechanics, tower upgrades/selling, game state, wave generation, power-ups, stealth/dodge, poison, interest, statistics, high scores (including corrupted JSON handling), version formatting, and regression tests for all fixed bugs — 81 tests total.
+
 ## Changelog
+
+### v2.3 — Bug Fixes
+- **Fixed freeze off-by-one**: Freeze power-up was losing its effect 1 frame early. Enemies could move on what should have been the last frozen frame. Now `freeze_timer` is checked before being decremented, so the full `FREEZE_DURATION` (3 seconds) of freeze is applied correctly.
+- **Fixed gold rush off-by-one**: Gold Rush power-up was losing its doubling effect 1 frame early. Kill rewards on the last frame of Gold Rush were not being doubled. Now `gold_rush_timer` is checked before being decremented, so the full `GOLD_RUSH_DURATION` (5 seconds) of double gold is applied correctly.
+- **Fixed slow timer ticking during freeze**: When enemies were frozen, their slow timer was still counting down. This meant slow effects would expire while the enemy was frozen, so after freeze ended the enemy would move at full speed instead of slowed. Now slow timers are paused during freeze.
+- **Fixed dead enemies still moving after poison kill**: When an enemy was killed by poison damage mid-update, it continued advancing along the path. This could cause a killed enemy to "reach the end" and trigger unexpected path completion logic. Now enemies that die from poison immediately stop moving.
+- **Fixed sell refund inflating `total_gold_earned`**: Selling a tower was adding the 50% refund to the `total_gold_earned` statistic, making it appear that more gold was earned than actually was. Sell refunds are now correctly excluded from the earned gold counter.
+- **Added 6 new regression tests** covering all five bugs plus a freeze duration exactness test.
 
 ### v2.2 — New Features & Improvements
 - **Poison Tower** (7th tower type): Applies damage-over-time. Upgradeable poison damage. Visual indicator (`p`) on poisoned enemies.
@@ -171,11 +187,3 @@ python3 tower_defense.py --help               # Show usage info and power-up gui
 - **Fixed negative lives display**: Lives could go negative when multiple enemies reached the end in the same frame. The display now shows `max(0, lives)` to avoid showing negative numbers.
 - **Added `source_tower` to Projectile**: Projectiles now track which tower fired them, enabling per-tower kill counting.
 - **Added `killed_by` to Enemy**: Enemies now track which tower dealt the killing blow (first to kill), enabling kill attribution.
-
-## Running Tests
-
-```bash
-python3 -m pytest test_tower_defense.py -v
-```
-
-The test suite covers path building, enemy mechanics, tower upgrades/selling, game state, wave generation, power-ups, stealth/dodge, poison, interest, statistics, high scores (including corrupted JSON handling), version formatting, and regression tests for all fixed bugs — 75 tests total.

@@ -28,5 +28,43 @@
     "wave": 0,
     "difficulty": "normal",
     "date": "2026-07-02 16:04"
+  },
+  {
+    "score": 0,
+    "wave": 0,
+    "difficulty": "normal",
+    "date": "2026-07-02 16:58"
+  },
+  {
+    "score": 0,
+    "wave": 1,
+    "difficulty": "normal",
+    "date": "2026-07-02 16:59",
+    "stats": {
+      "total_kills": 0,
+      "towers_placed": 0,
+      "towers_upgraded": 0,
+      "towers_sold": 0,
+      "total_gold_earned": 0,
+      "interest_earned": 0
+    }
+  },
+  {
+    "score": 0,
+    "wave": 0,
+    "difficulty": "normal",
+    "date": "2026-07-02 17:01"
+  },
+  {
+    "score": 0,
+    "wave": 0,
+    "difficulty": "normal",
+    "date": "2026-07-02 17:02"
+  },
+  {
+    "score": 0,
+    "wave": 0,
+    "difficulty": "normal",
+    "date": "2026-07-02 17:03"
   }
 ]

@@ -18,7 +18,7 @@ from tower_defense import (
     load_highscores, save_highscore, HIGHSCORE_FILE,
     VERSION, MIN_TERM_W, MIN_TERM_H, Projectile, Tile,
     BOMB_DAMAGE, FREEZE_DURATION, GOLD_RUSH_DURATION, INTEREST_RATE,
-    INTEREST_MAX_GOLD, POWER_UP_PER_WAVE,
+    INTEREST_MAX_GOLD, POWER_UP_PER_WAVE, MAP_H, MAP_W,
 )
 
 
@@ -773,6 +773,114 @@ class TestBugFixes(unittest.TestCase):
 
 # Build path for tests that need ordered_path
 WAYPOINTS_PATH = build_path(WAYPOINTS)[1]
+
+
+class TestBugFixesV23(unittest.TestCase):
+    """Regression tests for bugs found and fixed in v2.3."""
+
+    def test_freeze_last_frame_still_freezes_enemies(self):
+        """On the last frame of freeze (timer=1), enemies should still be frozen."""
+        g = Game(difficulty="normal")
+        g.freeze_timer = 1  # Only 1 frame left
+        e = Enemy(EnemyType.BASIC, wave_num=1)
+        e.path_index = 10.0
+        g.enemies = [e]
+        g.wave_enemies = []
+        g.wave_active = True
+        pos_before = e.path_index
+        g.update()
+        # Enemy should NOT have moved on the last frame of freeze
+        self.assertEqual(e.path_index, pos_before,
+                         "Enemy should not move on the last frame of freeze")
+
+    def test_gold_rush_last_frame_still_doubles_gold(self):
+        """On the last frame of gold rush (timer=1), kills should still give double gold."""
+        g = Game(difficulty="normal")
+        g.gold_rush_timer = 1  # Only 1 frame left
+        e = Enemy(EnemyType.BASIC, wave_num=1)
+        e.hp = 0
+        e.alive = False
+        e.reached_end = False
+        g.enemies = [e]
+        g.wave_enemies = []
+        g.wave_active = True
+        gold_before = g.gold
+        g.update()
+        # Kill reward should be doubled: 5 * 2 = 10
+        self.assertGreater(g.gold, gold_before,
+                            "Gold rush last frame should still double kill rewards")
+
+    def test_slow_timer_does_not_tick_during_freeze(self):
+        """Slow effects should be paused during freeze, not expire."""
+        g = Game(difficulty="normal")
+        g.freeze_timer = 10  # 10 frames of freeze
+        e = Enemy(EnemyType.BASIC, wave_num=1)
+        e.path_index = 10.0
+        e.apply_slow(duration=3)  # 3 frames of slow
+        self.assertEqual(e.slow_timer, 3)
+        g.enemies = [e]
+        g.wave_enemies = []
+        g.wave_active = True
+        # After 10 frames of freeze, slow_timer should NOT have changed
+        for i in range(10):
+            g.freeze_timer = 10 - i
+            g.update()
+        self.assertEqual(e.slow_timer, 3,
+                         "Slow timer should NOT tick down during freeze")
+
+    def test_poison_killed_enemy_stops_moving(self):
+        """An enemy killed by poison should not advance further along the path."""
+        e = Enemy(EnemyType.BASIC, wave_num=1)
+        e.hp = 1
+        e.max_hp = 1
+        e.path_index = 10.0
+        e.apply_poison(dmg_per_tick=10, duration=5)  # Will kill
+        idx_before = e.path_index
+        e.update(WAYPOINTS_PATH)
+        self.assertFalse(e.alive, "Enemy should be dead from poison")
+        self.assertEqual(e.path_index, idx_before,
+                         "Dead enemy should not advance along path")
+
+    def test_sell_refund_not_counted_in_total_gold_earned(self):
+        """Selling a tower should add gold but NOT count in total_gold_earned."""
+        g = Game(difficulty="normal")
+        # Find an empty cell
+        for r in range(MAP_H):
+            for c in range(MAP_W):
+                if g.grid[r][c] == Tile.EMPTY:
+                    g.cursor_col = c
+                    g.cursor_row = r
+                    break
+            else:
+                continue
+            break
+        g.place_tower(TowerType.ARROW)
+        earned_before = g.total_gold_earned
+        g.sell_tower()
+        # Gold should increase (refund), but total_gold_earned should NOT
+        self.assertEqual(g.total_gold_earned, earned_before,
+                         "Sell refund should not count as earned gold")
+
+    def test_freeze_duration_exact(self):
+        """Freeze should last exactly FREEZE_DURATION frames."""
+        g = Game(difficulty="normal")
+        g.freeze_timer = FREEZE_DURATION
+        e = Enemy(EnemyType.BASIC, wave_num=1)
+        e.path_index = 10.0
+        g.enemies = [e]
+        g.wave_enemies = []
+        g.wave_active = True
+        pos_start = e.path_index
+        # Enemy should be frozen for exactly FREEZE_DURATION frames
+        for i in range(FREEZE_DURATION):
+            g.update()
+        # After FREEZE_DURATION frames, enemy should NOT have moved at all
+        self.assertEqual(e.path_index, pos_start,
+                         "Enemy should not move during entire freeze duration")
+        # Now freeze is over, enemy should move on next frame
+        g.update()
+        self.assertGreater(e.path_index, pos_start,
+                           "Enemy should move after freeze ends")
 
 
 if __name__ == "__main__":

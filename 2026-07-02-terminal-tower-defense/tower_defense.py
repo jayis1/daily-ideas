@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 # ─── Version ────────────────────────────────────────────────────────────────
-VERSION = "2.2.0"
+VERSION = "2.3.0"
 
 # ─── Grid & Display Constants ───────────────────────────────────────────────
 MAP_W = 50
@@ -363,9 +363,7 @@ class Enemy:
     def update(self, ordered_path: List[Tuple[int, int]], frozen: bool = False) -> None:
         """Advance enemy along the path. If frozen, do not move."""
         if frozen:
-            # Frozen enemies don't move but still tick down timers
-            if self.slow_timer > 0:
-                self.slow_timer -= 1
+            # Frozen enemies don't move and timers are paused (except hit flash)
             if self.hit_flash > 0:
                 self.hit_flash -= 1
             return
@@ -385,6 +383,8 @@ class Enemy:
             if self.hp <= 0:
                 self.hp = 0
                 self.alive = False
+                # Dead enemy stops moving — no further path advancement
+                return
 
         # Stealth phasing: cycle between visible and invisible
         if self.stealth:
@@ -641,7 +641,7 @@ class Game:
         self.cursor_row = 10
         self.selected_tower = 0
         self.log: deque = deque(maxlen=50)
-        self.log.append("Welcome to Terminal Tower Defense v2.2!")
+        self.log.append("Welcome to Terminal Tower Defense v2.3!")
         self.log.append("Place towers to defend against waves of enemies.")
         self.log.append("Press SPACE to start wave 1. Press q to quit.")
         self.log.append("Press 'a' for auto-wave, 'f' for fast-forward.")
@@ -716,7 +716,8 @@ class Game:
             return
         value = tower.sell_value()
         self.gold += value
-        self.total_gold_earned += value
+        # Note: sell refund is NOT counted in total_gold_earned
+        # (it's a refund of previously spent gold, not new income)
         self.towers.remove(tower)
         del self.tower_grid[(c, r)]
         self.grid[r][c] = Tile.EMPTY
@@ -858,7 +859,12 @@ class Game:
             return
         self.frame += 1
 
-        # Decrement power-up timers
+        # Check power-up states BEFORE decrementing timers
+        # (so the last frame of a power-up still has its effect active)
+        is_frozen = self.freeze_timer > 0
+        gold_rush_active = self.gold_rush_timer > 0
+
+        # Decrement power-up timers AFTER checking their state
         if self.freeze_timer > 0:
             self.freeze_timer -= 1
         if self.gold_rush_timer > 0:
@@ -873,7 +879,6 @@ class Game:
                 self.spawn_timer = delay
 
         # Update enemies
-        is_frozen = self.freeze_timer > 0
         for e in self.enemies:
             if e.alive:
                 e.update(self.ordered_path, frozen=is_frozen)
@@ -901,8 +906,8 @@ class Game:
         for e in self.enemies:
             if not e.alive:
                 if not e.reached_end:
-                    # Gold rush: double reward
-                    reward = e.reward * (2 if self.gold_rush_timer > 0 else 1)
+                    # Gold rush: double reward (using state from before timer decrement)
+                    reward = e.reward * (2 if gold_rush_active else 1)
                     self.gold += reward
                     self.total_gold_earned += reward
                     self.score += e.reward * 2
