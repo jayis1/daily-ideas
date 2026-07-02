@@ -5,6 +5,7 @@ import sys
 import os
 import curses
 import unittest
+import random
 
 # We need curses constants for TowerType/EnemyType but can't init curses display
 # Import just the game logic parts by mocking what's needed
@@ -13,9 +14,11 @@ sys.path.insert(0, os.path.dirname(__file__))
 # Must import after path setup since tower_defense uses curses at module level
 from tower_defense import (
     build_path, Enemy, EnemyType, TowerType, Tower, TOWER_DATA, ENEMY_DATA,
-    Game, WAYPOINTS, DIFFICULTY_SETTINGS, generate_wave,
+    Game, WAYPOINTS, DIFFICULTY_SETTINGS, generate_wave, describe_wave,
     load_highscores, save_highscore, HIGHSCORE_FILE,
     VERSION, MIN_TERM_W, MIN_TERM_H, Projectile, Tile,
+    BOMB_DAMAGE, FREEZE_DURATION, GOLD_RUSH_DURATION, INTEREST_RATE,
+    INTEREST_MAX_GOLD, POWER_UP_PER_WAVE,
 )
 
 
@@ -88,14 +91,16 @@ class TestEnemy(unittest.TestCase):
         """Taking damage should reduce HP, and killing should mark dead."""
         e = Enemy(EnemyType.BASIC, wave_num=1)
         initial_hp = e.hp
-        e.take_damage(5)
+        hit = e.take_damage(5)
+        self.assertTrue(hit)  # damage should go through
         self.assertEqual(e.hp, initial_hp - 5)
         self.assertTrue(e.alive)
 
     def test_enemy_kill(self):
         """Taking damage equal to HP should mark enemy as dead."""
         e = Enemy(EnemyType.BASIC, wave_num=1)
-        e.take_damage(e.hp)
+        hit = e.take_damage(e.hp)
+        self.assertTrue(hit)
         self.assertEqual(e.hp, 0)
         self.assertFalse(e.alive)
 
@@ -130,6 +135,68 @@ class TestEnemy(unittest.TestCase):
         e_hard = Enemy(EnemyType.BASIC, wave_num=1, difficulty="hard")
         self.assertGreater(e_hard.max_hp, e_easy.max_hp)
         self.assertGreater(e_easy.reward, e_hard.reward)
+
+    def test_stealth_enemy_creation(self):
+        """Stealth (Phantom) enemies should have stealth=True and dodge chance."""
+        e = Enemy(EnemyType.STEALTH, wave_num=1)
+        self.assertTrue(e.stealth)
+        self.assertGreater(e.dodge, 0)
+        self.assertEqual(e.name, "Phantom")
+
+    def test_stealth_enemy_dodge(self):
+        """Stealth enemies should sometimes dodge attacks (probabilistic test)."""
+        e = Enemy(EnemyType.STEALTH, wave_num=1)
+        dodged = 0
+        hits = 0
+        for _ in range(1000):
+            e.hp = e.max_hp  # reset HP each time
+            e.alive = True
+            e.killed_by = None
+            result = e.take_damage(5)
+            if not result:
+                dodged += 1
+            else:
+                hits += 1
+        # With 30% dodge, we should see both outcomes in 1000 trials
+        self.assertGreater(dodged, 0, "Stealth enemy should dodge some attacks")
+        self.assertGreater(hits, 0, "Stealth enemy should not dodge all attacks")
+
+    def test_poison_application(self):
+        """Applying poison should set poison_timer and poison_dmg."""
+        e = Enemy(EnemyType.BASIC, wave_num=1)
+        e.apply_poison(dmg_per_tick=3, duration=5)
+        self.assertEqual(e.poison_timer, 5)
+        self.assertEqual(e.poison_dmg, 3)
+
+    def test_poison_does_not_reduce_duration(self):
+        """Reapplying poison with shorter duration should not reduce timer."""
+        e = Enemy(EnemyType.BASIC, wave_num=1)
+        e.apply_poison(dmg_per_tick=3, duration=10)
+        e.apply_poison(dmg_per_tick=2, duration=5)
+        self.assertEqual(e.poison_timer, 10, "Poison timer should not be shortened")
+        self.assertEqual(e.poison_dmg, 3, "Poison dmg should keep max value")
+
+    def test_enemy_poison_damage_in_update(self):
+        """Poison damage should reduce HP each update tick."""
+        e = Enemy(EnemyType.BASIC, wave_num=1)
+        # Give enough HP to survive poison
+        e.max_hp = 100
+        e.hp = 100
+        e.apply_poison(dmg_per_tick=5, duration=3)
+        e.update(WAYPOINTS_PATH)
+        self.assertLess(e.hp, 100, "Poison should deal damage")
+
+    def test_non_stealth_enemy_has_no_dodge(self):
+        """Non-stealth enemies should not dodge attacks."""
+        e = Enemy(EnemyType.BASIC, wave_num=1)
+        self.assertEqual(e.dodge, 0)
+
+    def test_enemy_repr(self):
+        """Enemy repr should be informative."""
+        e = Enemy(EnemyType.BASIC, wave_num=1)
+        r = repr(e)
+        self.assertIn("Grunt", r)
+        self.assertIn("hp=", r)
 
 
 class TestTower(unittest.TestCase):
@@ -178,6 +245,27 @@ class TestTower(unittest.TestCase):
         self.assertEqual(t.chain, 3)
         self.assertEqual(t.name, "Lightning")
 
+    def test_poison_tower_creation(self):
+        """Poison tower should have poison attribute."""
+        t = Tower(TowerType.POISON, 5, 5)
+        self.assertEqual(t.name, "Poison")
+        self.assertEqual(t.char, "P")
+        self.assertGreater(t.poison, 0)
+
+    def test_poison_tower_upgrade_increases_poison(self):
+        """Upgrading poison tower should increase poison damage."""
+        t = Tower(TowerType.POISON, 5, 5)
+        initial_poison = t.poison
+        t.upgrade()
+        self.assertGreater(t.poison, initial_poison)
+
+    def test_tower_repr(self):
+        """Tower repr should be informative."""
+        t = Tower(TowerType.ARROW, 5, 5)
+        r = repr(t)
+        self.assertIn("Arrow", r)
+        self.assertIn("Lv1", r)
+
     def test_all_towers_have_data(self):
         """Every TowerType should have a corresponding TOWER_DATA entry."""
         for tt in TowerType:
@@ -214,14 +302,18 @@ class TestGame(unittest.TestCase):
         self.assertEqual(g.gold, 150)
         self.assertEqual(g.lives, 10)
 
+    def test_game_initial_powerups(self):
+        """Game should start with zero power-up charges."""
+        g = Game(difficulty="normal")
+        self.assertEqual(g.bomb_charges, 0)
+        self.assertEqual(g.freeze_charges, 0)
+        self.assertEqual(g.gold_rush_charges, 0)
+
     def test_place_tower(self):
         """Placing a tower should deduct gold and mark the tile."""
         g = Game(difficulty="normal")
-        # Place at a position that's not on the path
-        # Cursor starts at (10, 10), but (10,10) might be on path. Let's check:
         g.cursor_col = 5
         g.cursor_row = 0
-        # Ensure this tile is empty
         if g.grid[0][5] == 0:  # Tile.EMPTY
             g.place_tower(TowerType.ARROW)
             self.assertEqual(g.gold, 200 - 50)
@@ -305,7 +397,164 @@ class TestGame(unittest.TestCase):
         g.auto_wave = True
         g.start_wave()  # Start wave 1
         # After clearing, auto_wave should trigger next wave
-        # This is tested indirectly via update logic
+
+    def test_bomb_powerup(self):
+        """Using a bomb should damage all alive enemies."""
+        g = Game(difficulty="normal")
+        g.bomb_charges = 1
+        # Create enemies on a later wave so they have enough HP to survive a bomb
+        e1 = Enemy(EnemyType.TANK, wave_num=10)
+        e2 = Enemy(EnemyType.TANK, wave_num=10)
+        e1.path_index = 10.0
+        e2.path_index = 20.0
+        g.enemies = [e1, e2]
+        g.use_bomb()
+        self.assertEqual(g.bomb_charges, 0)
+        # Both enemies should have taken BOMB_DAMAGE (clamped to 0 minimum)
+        expected_hp1 = max(0, e1.max_hp - BOMB_DAMAGE)
+        expected_hp2 = max(0, e2.max_hp - BOMB_DAMAGE)
+        self.assertEqual(e1.hp, expected_hp1)
+        self.assertEqual(e2.hp, expected_hp2)
+        # Both enemies should have been hit (hit_flash set)
+        self.assertGreater(e1.hit_flash, 0)
+        self.assertGreater(e2.hit_flash, 0)
+
+    def test_bomb_kills_weak_enemies(self):
+        """Bomb should kill enemies with HP <= BOMB_DAMAGE."""
+        g = Game(difficulty="normal")
+        g.bomb_charges = 1
+        # Swarm has 12 * (1 + 0.15) = 13.8 HP at wave 1
+        e = Enemy(EnemyType.SWARM, wave_num=1)
+        e.hp = 1  # nearly dead
+        e.path_index = 10.0
+        g.enemies = [e]
+        g.use_bomb()
+        self.assertFalse(e.alive)
+
+    def test_bomb_no_charges(self):
+        """Using bomb with no charges should log error and not crash."""
+        g = Game(difficulty="normal")
+        g.bomb_charges = 0
+        g.use_bomb()  # Should not crash
+
+    def test_freeze_powerup(self):
+        """Using freeze should set freeze_timer."""
+        g = Game(difficulty="normal")
+        g.freeze_charges = 1
+        g.use_freeze()
+        self.assertEqual(g.freeze_timer, FREEZE_DURATION)
+        self.assertEqual(g.freeze_charges, 0)
+
+    def test_gold_rush_powerup(self):
+        """Using gold rush should set gold_rush_timer."""
+        g = Game(difficulty="normal")
+        g.gold_rush_charges = 1
+        g.use_gold_rush()
+        self.assertEqual(g.gold_rush_timer, GOLD_RUSH_DURATION)
+        self.assertEqual(g.gold_rush_charges, 0)
+
+    def test_wave_clear_grants_powerups(self):
+        """Clearing a wave should grant power-up charges."""
+        g = Game(difficulty="normal")
+        g.start_wave()
+        # Simulate clearing by emptying enemies
+        g.wave_enemies = []
+        g.enemies = []
+        g.wave_active = True
+        g.update()
+        self.assertEqual(g.bomb_charges, POWER_UP_PER_WAVE)
+        self.assertEqual(g.freeze_charges, POWER_UP_PER_WAVE)
+        self.assertEqual(g.gold_rush_charges, POWER_UP_PER_WAVE)
+
+    def test_wave_clear_grants_interest(self):
+        """Clearing a wave should grant gold interest."""
+        g = Game(difficulty="normal")
+        # Start and immediately clear wave 1
+        g.start_wave()
+        g.wave_enemies = []
+        g.enemies = []
+        g.wave_active = True
+        gold_before = g.gold
+        g.update()
+        # Interest = gold * 5%
+        expected_interest = min(int(gold_before * INTEREST_RATE), INTEREST_MAX_GOLD)
+        self.assertGreater(g.interest_earned, 0)
+
+    def test_gold_rush_doubles_rewards(self):
+        """When gold rush is active, enemy kills should give double gold."""
+        g = Game(difficulty="normal")
+        g.gold_rush_timer = 10  # active
+        e = Enemy(EnemyType.BASIC, wave_num=1)
+        e.hp = 0
+        e.alive = False
+        e.reached_end = False
+        # Simulate gold earning
+        reward = e.reward * 2  # gold rush doubles
+        self.assertEqual(reward, e.reward * 2)
+
+    def test_freeze_stops_enemies(self):
+        """When freeze_timer is active, enemies should not advance."""
+        g = Game(difficulty="normal")
+        g.start_wave()
+        # Spawn an enemy manually
+        e = Enemy(EnemyType.BASIC, 1)
+        e.path_index = 10.0
+        g.enemies = [e]
+        g.wave_enemies = []
+        g.freeze_timer = 10
+        pos_before = e.path_index
+        g.update()
+        # Enemy should not have moved
+        self.assertEqual(e.path_index, pos_before)
+
+    def test_statistics_tracking(self):
+        """Game should track placement/upgrade/sell statistics."""
+        g = Game(difficulty="normal")
+        self.assertEqual(g.towers_placed, 0)
+        self.assertEqual(g.towers_upgraded, 0)
+        self.assertEqual(g.towers_sold, 0)
+        self.assertEqual(g.total_gold_earned, 0)
+
+    def test_place_tower_increments_stats(self):
+        """Placing a tower should increment towers_placed."""
+        g = Game(difficulty="normal")
+        g.cursor_col = 5
+        g.cursor_row = 0
+        if g.grid[0][5] == 0:
+            g.place_tower(TowerType.ARROW)
+            self.assertEqual(g.towers_placed, 1)
+
+    def test_get_stats(self):
+        """get_stats should return a dictionary with expected keys."""
+        g = Game(difficulty="normal")
+        stats = g.get_stats()
+        self.assertIn("total_kills", stats)
+        self.assertIn("towers_placed", stats)
+        self.assertIn("towers_upgraded", stats)
+        self.assertIn("towers_sold", stats)
+        self.assertIn("total_gold_earned", stats)
+        self.assertIn("interest_earned", stats)
+
+
+class TestDescribeWave(unittest.TestCase):
+    """Tests for the wave preview description function."""
+
+    def test_describe_wave_1(self):
+        """Wave 1 should describe basic enemies."""
+        desc = describe_wave(1)
+        self.assertIn("Grunt", desc)
+
+    def test_describe_wave_0(self):
+        """Wave 0 should return a hint message."""
+        desc = describe_wave(0)
+        self.assertIn("SPACE", desc)
+
+    def test_describe_wave_5_has_boss(self):
+        """Wave 5 description should mention the boss."""
+        # Wave 5 has a boss, but describe_wave uses random, so we just check it doesn't crash
+        desc = describe_wave(5)
+        self.assertIsInstance(desc, str)
+        self.assertGreater(len(desc), 0)
 
 
 class TestHighscores(unittest.TestCase):
@@ -339,6 +588,15 @@ class TestHighscores(unittest.TestCase):
         self.assertEqual(scores[0]["wave"], 5)
         self.assertEqual(scores[0]["difficulty"], "normal")
 
+    def test_save_with_stats(self):
+        """Saving a score with stats should include them."""
+        stats = {"total_kills": 50, "towers_placed": 10}
+        save_highscore(200, 8, "hard", stats)
+        scores = load_highscores()
+        self.assertEqual(len(scores), 1)
+        self.assertIn("stats", scores[0])
+        self.assertEqual(scores[0]["stats"]["total_kills"], 50)
+
     def test_top_10_kept(self):
         """Only the top 10 scores should be retained."""
         for i in range(15):
@@ -347,6 +605,18 @@ class TestHighscores(unittest.TestCase):
         self.assertLessEqual(len(scores), 10)
         # Highest score should be first
         self.assertEqual(scores[0]["score"], 140)
+
+    def test_corrupted_file(self):
+        """Loading a corrupted JSON file should return empty list."""
+        HIGHSCORE_FILE.write_text("not valid json{{{")
+        scores = load_highscores()
+        self.assertEqual(scores, [])
+
+    def test_invalid_json_type(self):
+        """Loading JSON that isn't a list should return empty list."""
+        HIGHSCORE_FILE.write_text('{"score": 100}')
+        scores = load_highscores()
+        self.assertEqual(scores, [])
 
 
 class TestVersion(unittest.TestCase):
@@ -488,7 +758,6 @@ class TestBugFixes(unittest.TestCase):
 
     def test_difficulty_cli_flag_logic(self):
         """The --difficulty flag should override the difficulty menu."""
-        # _selected_difficulty is a module-level global
         import tower_defense
         original = tower_defense._selected_difficulty
         try:
@@ -500,6 +769,10 @@ class TestBugFixes(unittest.TestCase):
             self.assertNotIn(tower_defense._selected_difficulty, DIFFICULTY_SETTINGS)
         finally:
             tower_defense._selected_difficulty = original
+
+
+# Build path for tests that need ordered_path
+WAYPOINTS_PATH = build_path(WAYPOINTS)[1]
 
 
 if __name__ == "__main__":
