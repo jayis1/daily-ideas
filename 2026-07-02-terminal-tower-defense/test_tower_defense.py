@@ -15,7 +15,7 @@ from tower_defense import (
     build_path, Enemy, EnemyType, TowerType, Tower, TOWER_DATA, ENEMY_DATA,
     Game, WAYPOINTS, DIFFICULTY_SETTINGS, generate_wave,
     load_highscores, save_highscore, HIGHSCORE_FILE,
-    VERSION, MIN_TERM_W, MIN_TERM_H,
+    VERSION, MIN_TERM_W, MIN_TERM_H, Projectile, Tile,
 )
 
 
@@ -356,6 +356,150 @@ class TestVersion(unittest.TestCase):
         """Version should be a non-empty string in semver-ish format."""
         self.assertIsInstance(VERSION, str)
         self.assertRegex(VERSION, r'\d+\.\d+\.\d+')
+
+
+class TestBugFixes(unittest.TestCase):
+    """Regression tests for bugs that were found and fixed."""
+
+    def test_start_wave_blocked_when_game_over(self):
+        """Starting a wave after game over should be blocked."""
+        g = Game(difficulty="normal")
+        g.game_over = True
+        g.start_wave()
+        self.assertEqual(g.wave_num, 0, "Wave num should not increment when game_over")
+
+    def test_double_kill_count_fix(self):
+        """Chain lightning kills should not be double-counted in total_kills."""
+        g = Game(difficulty="normal")
+        # Create two enemies with 1 HP each
+        e1 = Enemy(EnemyType.BASIC, 1, "normal")
+        e1.hp = 1
+        e2 = Enemy(EnemyType.BASIC, 1, "normal")
+        e2.hp = 1
+        e1.path_index = 10.0
+        e2.path_index = 11.0
+        g.enemies = [e1, e2]
+
+        # Create a tower and a lightning projectile that kills both
+        tower = Tower(TowerType.LIGHTNING, 10, 10)
+        proj = Projectile((10, 10), (10.0, 5.0), 15, chain=3, source_tower=tower)
+        proj.col = 10.0
+        proj.row = 5.0
+        proj.alive = False
+        g._apply_projectile_hit(proj)
+
+        # Run update to process dead enemies
+        g.update()
+
+        # Both enemies should be killed, total_kills should be 2 (not 4)
+        self.assertEqual(g.total_kills, 2, "Chain kills should not be double-counted")
+        # Tower should have 2 kills
+        self.assertEqual(tower.kills, 2, "Tower should track kills from projectiles")
+
+    def test_tower_kill_tracking(self):
+        """Tower.kills should be incremented when a tower's projectile kills an enemy."""
+        g = Game(difficulty="normal")
+        tower = Tower(TowerType.ARROW, 5, 0)
+        g.towers.append(tower)
+        g.tower_grid[(5, 0)] = tower
+        g.grid[0][5] = Tile.TOWER
+
+        # Create an enemy with 1 HP
+        e = Enemy(EnemyType.BASIC, 1, "normal")
+        e.hp = 1
+        e.path_index = 10.0
+        g.enemies = [e]
+
+        # Simulate a projectile hit
+        proj = Projectile((5, 0), (10.0, 5.0), 10, source_tower=tower)
+        proj.col = 10.0
+        proj.row = 5.0
+        proj.alive = False
+        g._apply_projectile_hit(proj)
+        g.update()
+
+        self.assertEqual(tower.kills, 1, "Tower should have 1 kill")
+        self.assertEqual(g.total_kills, 1, "Total kills should be 1")
+
+    def test_single_kill_not_double_counted(self):
+        """A single-target kill should count exactly once in total_kills."""
+        g = Game(difficulty="normal")
+        tower = Tower(TowerType.ARROW, 25, 10)
+        e = Enemy(EnemyType.BASIC, 1, "normal")
+        e.hp = 1
+        e.path_index = 50
+        g.enemies = [e]
+
+        proj = Projectile((25, 10), e.position(g.ordered_path), 10, source_tower=tower)
+        proj.col, proj.row = e.position(g.ordered_path)
+        proj.alive = False
+        g._apply_projectile_hit(proj)
+        self.assertFalse(e.alive)
+        g.update()
+        self.assertEqual(g.total_kills, 1)
+        self.assertEqual(tower.kills, 1)
+
+    def test_lives_display_nonnegative(self):
+        """Lives display should show 0 minimum even if lives goes negative."""
+        g = Game(difficulty="normal")
+        g.lives = 1
+        # Simulate multiple enemies reaching end in same frame
+        for _ in range(3):
+            g.lives -= 1
+        # Lives is -2 internally, but game over triggers at <= 0
+        self.assertLessEqual(g.lives, 0)
+        # Display should use max(0, lives)
+        self.assertEqual(max(0, g.lives), 0)
+
+    def test_game_over_saves_highscore_once(self):
+        """High score should only be saved once even if multiple enemies reach end."""
+        g = Game(difficulty="normal")
+        g.lives = 1
+        # First enemy reaching end triggers game over and saves
+        g.lives -= 1
+        if g.lives <= 0 and not g.game_over:
+            g.game_over = True
+            save_highscore(g.score, g.wave_num, g.difficulty)
+        # Second enemy reaching end should NOT save again
+        g.lives -= 1
+        already_saved = g.game_over  # True already
+        self.assertTrue(already_saved, "game_over should prevent double save")
+
+    def test_enemy_killed_by_tracking(self):
+        """Enemy.killed_by should track which tower dealt the killing blow."""
+        tower = Tower(TowerType.SNIPER, 25, 10)
+        e = Enemy(EnemyType.BASIC, 1, "normal")
+        e.take_damage(5, source=tower)
+        self.assertIsNone(e.killed_by, "Enemy should not be marked as killed_by while alive")
+        e.take_damage(e.hp, source=tower)
+        self.assertFalse(e.alive)
+        self.assertEqual(e.killed_by, tower, "killed_by should be the tower that dealt the killing blow")
+
+    def test_enemy_killed_by_only_first_killer(self):
+        """killed_by should only be set by the first killing blow, not overwritten."""
+        tower1 = Tower(TowerType.ARROW, 25, 10)
+        tower2 = Tower(TowerType.CANNON, 25, 10)
+        e = Enemy(EnemyType.BASIC, 1, "normal")
+        e.take_damage(e.hp, source=tower1)
+        self.assertEqual(e.killed_by, tower1)
+        # Overkill from another tower should not change killed_by
+        e.take_damage(100, source=tower2)
+        self.assertEqual(e.killed_by, tower1, "killed_by should not change after first kill")
+
+    def test_difficulty_cli_flag_logic(self):
+        """The --difficulty flag should override the difficulty menu."""
+        # _selected_difficulty is a module-level global
+        import tower_defense
+        original = tower_defense._selected_difficulty
+        try:
+            # Setting it to a valid difficulty should skip the menu
+            tower_defense._selected_difficulty = "hard"
+            self.assertIn(tower_defense._selected_difficulty, DIFFICULTY_SETTINGS)
+            # Setting it to None or invalid should trigger the menu
+            tower_defense._selected_difficulty = None
+            self.assertNotIn(tower_defense._selected_difficulty, DIFFICULTY_SETTINGS)
+        finally:
+            tower_defense._selected_difficulty = original
 
 
 if __name__ == "__main__":

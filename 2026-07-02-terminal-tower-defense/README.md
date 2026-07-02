@@ -1,6 +1,6 @@
-# Terminal Tower Defense v2.0
+# Terminal Tower Defense v2.1
 
-A fully playable tower defense game rendered entirely in the terminal using ASCII art and `curses`. Strategically place and upgrade towers to defend against waves of increasingly tough enemies — now with 6 tower types, 6 enemy types, difficulty modes, auto-wave, fast-forward, and persistent high scores!
+A fully playable tower defense game rendered entirely in the terminal using ASCII art and `curses`. Strategically place and upgrade towers to defend against waves of increasingly tough enemies — with 6 tower types, 6 enemy types, 3 difficulty modes, auto-wave, fast-forward, per-tower kill tracking, and persistent high scores!
 
 ## Features
 
@@ -27,13 +27,13 @@ A fully playable tower defense game rendered entirely in the terminal using ASCI
 - **3 Difficulty Modes**: Easy (300g/30 lives), Normal (200g/20 lives), Hard (150g/10 lives).
 - **Auto-Wave**: Press `a` to automatically start the next wave after clearing.
 - **Fast-Forward**: Press `f` to double game speed.
-- **Kill Tracking**: Towers display kill counts; total kills shown in header.
+- **Kill Tracking**: Each tower tracks its own kill count, shown in the sidebar.
 - **Hit Flash**: Enemies briefly show `!` when damaged.
 - **Splash Damage Falloff**: Cannon/Mortar damage decreases with distance from center.
 - **Persistent High Scores**: Top 10 scores saved to `highscores.json`.
 - **Game Over Screen**: Shows final score, waves survived, kills, and difficulty.
 - **Restart**: Press `r` after game over to play again without restarting the program.
-- **Pathfinding**: Enemies follow a winding path through the map with smooth interpolation.
+- **Pathfinding**: Enemies follow a winding path with smooth interpolation.
 - **Visual Range Indicator**: See tower range before placement.
 - **Colorful ASCII Display**: Full color rendering with health bars and projectile animations.
 - **In-Game Log**: Real-time feedback on placement, kills, and wave status.
@@ -89,7 +89,7 @@ python3 tower_defense.py --help               # Show usage info
 
 ## Gameplay Guide
 
-1. **Start**: Choose a difficulty at the title screen. You begin with gold and lives based on difficulty.
+1. **Start**: Choose a difficulty at the title screen (or use `--difficulty` to skip it). You begin with gold and lives based on difficulty.
 2. **Place Towers**: Move the cursor to an empty tile (`·`) and press `1`-`6` to place a tower.
 3. **Start a Wave**: Press `Space` to send the next wave. Enemies follow the brown path (`█`).
 4. **Upgrade & Sell**: Press `u` to upgrade or `s` to sell a tower under the cursor.
@@ -119,13 +119,17 @@ python3 tower_defense.py --help               # Show usage info
 | Mortar | 150g | 40 | 5 | Slow (18) | Splash (2 tiles) |
 | Lightning | 130g | 15 | 5 | Medium (14) | Chains to 3 targets |
 
-## What It Does
+## Changelog
 
-The game renders a 50×20 character map in your terminal showing a winding enemy path (brown `█` tiles) through a field of empty tiles (`·`). Towers appear as colored letters at their placement positions — level is shown as a number for upgraded towers (e.g., `2` for level 2). Enemies appear as colored characters moving along the path with hit flash indicators. Projectiles animate from towers to their targets.
-
-The sidebar shows tower selection, selected tower stats (including kill counts for placed towers), controls, and a list of current enemies with HP bars. The bottom log area shows game events in real time.
-
-Each wave spawns progressively more and tougher enemies. Enemy HP and count scale with wave number. Gold is earned by defeating enemies and completing waves. The difficulty mode affects starting gold, lives, enemy HP scaling, and reward scaling. Strategic tower placement, upgrading, and selling is key to surviving all waves!
+### v2.1 — Bug Fixes
+- **Fixed double-counting of kills from Lightning chain damage**: Chain kills were incrementing `total_kills` in both `_apply_projectile_hit()` and `update()`, causing chain kills to be counted twice. Now kills are only counted once in `update()`.
+- **Fixed tower kill tracking**: `Tower.kills` was initialized to 0 but never incremented. Now each tower correctly tracks its own kills via the `killed_by` field on enemies, and kill counts are displayed in the sidebar.
+- **Fixed `--difficulty` CLI flag being ignored**: The `--difficulty` command-line flag was setting a global variable but `main()` always called `select_difficulty()` which overwrote it. Now the menu is skipped when a valid difficulty is pre-selected via CLI.
+- **Fixed `start_wave()` allowing wave start after game over**: After game over, pressing Space would still increment `wave_num` and set `wave_active`. Now `start_wave()` checks for `game_over` and refuses to start a new wave.
+- **Fixed potential double high score save**: If multiple enemies reached the end in the same frame while lives dropped to 0 or below, `save_highscore()` could be called multiple times. Now a `not self.game_over` guard prevents this.
+- **Fixed negative lives display**: Lives could go negative when multiple enemies reached the end in the same frame. The display now shows `max(0, lives)` to avoid showing negative numbers.
+- **Added `source_tower` to Projectile**: Projectiles now track which tower fired them, enabling per-tower kill counting.
+- **Added `killed_by` to Enemy**: Enemies now track which tower dealt the killing blow (first to kill), enabling kill attribution.
 
 ## Running Tests
 
@@ -133,4 +137,4 @@ Each wave spawns progressively more and tougher enemies. Enemy HP and count scal
 python3 -m pytest test_tower_defense.py -v
 ```
 
-The test suite covers path building, enemy mechanics, tower upgrades/selling, game state, wave generation, high scores, and version formatting — 37 tests total.
+The test suite covers path building, enemy mechanics, tower upgrades/selling, game state, wave generation, high scores, version formatting, and regression tests for all fixed bugs — 46 tests total.

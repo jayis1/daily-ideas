@@ -38,7 +38,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 # ─── Version ────────────────────────────────────────────────────────────────
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 
 # ─── Grid & Display Constants ───────────────────────────────────────────────
 MAP_W = 50
@@ -290,6 +290,7 @@ class Enemy:
         self.reached_end = False
         self.slow_timer = 0
         self.hit_flash = 0  # frames to show hit indicator
+        self.killed_by: Optional[Tower] = None  # which tower killed this enemy
 
     def position(self, ordered_path: List[Tuple[int, int]]) -> Tuple[float, float]:
         """Interpolated (col, row) position along the path."""
@@ -322,13 +323,15 @@ class Enemy:
             self.reached_end = True
             self.alive = False
 
-    def take_damage(self, dmg: int) -> None:
+    def take_damage(self, dmg: int, source: Optional["Tower"] = None) -> None:
         """Apply damage. Marks enemy as dead if HP reaches zero."""
         self.hp -= dmg
         self.hit_flash = 3
         if self.hp <= 0:
             self.hp = 0
             self.alive = False
+            if source is not None and self.killed_by is None:
+                self.killed_by = source
 
     def apply_slow(self, duration: int = 15) -> None:
         """Slow the enemy for a number of frames. Only extends, never shortens."""
@@ -340,7 +343,8 @@ class Projectile:
 
     def __init__(self, start: Tuple[int, int], target: Tuple[float, float],
                  damage: int, splash: int = 0, slow: float = 0,
-                 chain: int = 0, color: int = curses.COLOR_WHITE):
+                 chain: int = 0, color: int = curses.COLOR_WHITE,
+                 source_tower: Optional["Tower"] = None):
         self.col, self.row = start
         self.target = target
         self.damage = damage
@@ -348,6 +352,7 @@ class Projectile:
         self.slow = slow
         self.chain = chain
         self.color = color
+        self.source_tower = source_tower  # Track which tower fired this projectile
         self.speed = 0.5
         self.alive = True
 
@@ -441,7 +446,8 @@ class Tower:
         tc, tr = target.position(ordered_path)
         return Projectile(
             (self.col, self.row), (tc, tr),
-            self.damage, self.splash, self.slow, self.chain, self.color
+            self.damage, self.splash, self.slow, self.chain, self.color,
+            source_tower=self
         )
 
 
@@ -514,7 +520,7 @@ class Game:
         self.cursor_row = 10
         self.selected_tower = 0
         self.log: deque = deque(maxlen=50)
-        self.log.append("Welcome to Terminal Tower Defense v2.0!")
+        self.log.append("Welcome to Terminal Tower Defense v2.1!")
         self.log.append("Place towers to defend against waves of enemies.")
         self.log.append("Press SPACE to start wave 1. Press q to quit.")
         self.log.append("Press 'a' for auto-wave, 'f' for fast-forward.")
@@ -582,6 +588,9 @@ class Game:
 
     def start_wave(self) -> None:
         """Begin the next wave of enemies."""
+        if self.game_over:
+            self.add_log("Game is over! Press 'r' to restart.")
+            return
         if self.wave_active:
             self.add_log("Wave already in progress!")
             return
@@ -593,6 +602,7 @@ class Game:
 
     def _apply_projectile_hit(self, proj: Projectile) -> None:
         """Apply damage/effects from a projectile that has reached its target."""
+        source = proj.source_tower  # May be None for older projectiles
         if proj.chain > 0:
             # Lightning: hits primary target, then chains to nearby enemies
             hit_enemies: List[Enemy] = []
@@ -607,7 +617,7 @@ class Game:
                         best_dist = dist
                         primary = e
             if primary and best_dist < 2.0:
-                primary.take_damage(proj.damage)
+                primary.take_damage(proj.damage, source)
                 hit_enemies.append(primary)
                 # Chain to nearby enemies
                 chain_remaining = proj.chain
@@ -625,16 +635,13 @@ class Game:
                                 next_enemy = e
                     if next_enemy:
                         chain_damage = int(proj.damage * 0.7)  # 70% damage per chain
-                        next_enemy.take_damage(chain_damage)
+                        next_enemy.take_damage(chain_damage, source)
                         hit_enemies.append(next_enemy)
                         last_ec, last_er = next_enemy.position(self.ordered_path)
                         chain_remaining -= 1
                     else:
                         break
-                # Award kills to nearest tower (approximation)
-                for e in hit_enemies:
-                    if not e.alive:
-                        self.total_kills += 1
+                # Kill counting is handled in update() — don't double-count here
         elif proj.splash > 0:
             # Splash damage: full to primary, reduced to others in radius
             for e in self.enemies:
@@ -645,7 +652,7 @@ class Game:
                         # Damage falls off with distance from center
                         falloff = max(0.5, 1.0 - dist / (proj.splash + 1))
                         damage = int(proj.damage * falloff)
-                        e.take_damage(max(1, damage))
+                        e.take_damage(max(1, damage), source)
                         if proj.slow > 0:
                             e.apply_slow()
         else:
@@ -660,7 +667,7 @@ class Game:
                         best_dist = dist
                         best = e
             if best and best_dist < 1.5:
-                best.take_damage(proj.damage)
+                best.take_damage(proj.damage, source)
                 if proj.slow > 0:
                     best.apply_slow()
 
@@ -684,8 +691,8 @@ class Game:
                 e.update(self.ordered_path)
                 if e.reached_end:
                     self.lives -= 1
-                    self.add_log(f"{e.name} reached the end! ({self.lives} lives left)")
-                    if self.lives <= 0:
+                    self.add_log(f"{e.name} reached the end! ({max(0, self.lives)} lives left)")
+                    if self.lives <= 0 and not self.game_over:
                         self.game_over = True
                         self.add_log("GAME OVER! All lives lost.")
                         save_highscore(self.score, self.wave_num, self.difficulty)
@@ -708,6 +715,9 @@ class Game:
                     self.gold += e.reward
                     self.score += e.reward * 2
                     self.total_kills += 1
+                    # Track which tower got the kill
+                    if e.killed_by is not None:
+                        e.killed_by.kills += 1
             else:
                 surviving.append(e)
         self.enemies = surviving
@@ -1086,8 +1096,11 @@ def main(stdscr):
         stdscr.getch()
         return
 
-    # Difficulty selection
-    difficulty = select_difficulty(stdscr)
+    # Difficulty selection — skip menu if pre-selected via CLI
+    if _selected_difficulty in DIFFICULTY_SETTINGS:
+        difficulty = _selected_difficulty
+    else:
+        difficulty = select_difficulty(stdscr)
 
     curses.curs_set(0)
     stdscr.nodelay(True)
