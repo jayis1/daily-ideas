@@ -29,7 +29,7 @@ from dataclasses import dataclass, field, asdict
 from typing import List, Tuple, Optional, Dict, Set
 
 # ─── Version ────────────────────────────────────────────────────────────────
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 
 # ─── Data pools ──────────────────────────────────────────────────────────────
 
@@ -162,7 +162,12 @@ class TimelineEvent:
 # ─── Board generation ────────────────────────────────────────────────────────
 
 def pick(pool: list, n: int) -> list:
-    """Pick n unique items from a pool. Returns at most len(pool) items."""
+    """Pick n unique items from a pool. Returns at most len(pool) items.
+
+    Handles n <= 0 by returning an empty list.
+    """
+    if n <= 0:
+        return []
     return random.sample(pool, min(n, len(pool)))
 
 
@@ -431,10 +436,13 @@ def generate_board(
     notes: List[Note] = []
     for text in note_texts:
         # Try to place note avoiding entity positions
-        nx = random.randint(margin, max(margin + 1, width - margin - len(text) - 4))
+        # Note box requires: left ┌ at nx-1, right ┐ at nx+len(text)
+        # So nx must be >= 1 and nx + len(text) must be <= width - 1
+        max_nx = max(margin + 1, width - margin - len(text) - 2)
+        nx = random.randint(margin, max_nx)
         ny = random.randint(margin + 2, max(margin + 3, height - margin - 2))
         for _ in range(30):
-            candidate_nx = random.randint(margin, max(margin + 1, width - margin - len(text) - 4))
+            candidate_nx = random.randint(margin, max(margin + 1, width - margin - len(text) - 2))
             candidate_ny = random.randint(margin + 2, max(margin + 3, height - margin - 2))
             # Check if this overlaps with any entity
             overlap = any(abs(ent.x - candidate_nx) < len(text) // 2 + 2 and abs(ent.y - candidate_ny) < 2
@@ -587,16 +595,30 @@ def render_board(entities, connections, notes, width=90, height=45, color=True):
         col = KIND_COL.get(ent.kind, "") if color else ""
         put(ent.x, ent.y, sym, col + C.BLD if color else "")
 
-        # Name centered below
+        # Name centered below (clamp start position and truncate to fit board)
         name = ent.name
         sx = ent.x - len(name) // 2
+        # Clamp start to at least 0 so name doesn't overflow left
+        if sx < 0:
+            name = name[-sx:]  # Trim left side of name
+            sx = 0
+        # Truncate name if it extends beyond board width
+        if sx + len(name) > width:
+            name = name[:width - sx]
         for i, ch in enumerate(name):
             put(sx + i, ent.y + 1, ch, col if color else "")
 
-        # Evidence tag above
+        # Evidence tag above (clamp start position and truncate to fit board)
         if ent.evidence:
             ev = "[" + ",".join(ent.evidence[:2]) + "]"
             esx = ent.x - len(ev) // 2
+            # Clamp start to at least 0
+            if esx < 0:
+                ev = ev[-esx:]
+                esx = 0
+            # Truncate if extends beyond board width
+            if esx + len(ev) > width:
+                ev = ev[:width - esx]
             for i, ch in enumerate(ev):
                 put(esx + i, ent.y - 1, ch, C.DIM if color else "")
 
@@ -619,11 +641,11 @@ def render_board(entities, connections, notes, width=90, height=45, color=True):
     lines.append("└" + "─" * width + "┘")
 
     # ── Legend box ──
-    box_w = 78
+    box_w = 100
     lines.append("")
-    lines.append("╔" + "═" * box_w + "╗")
-    lines.append("║" + " CONSPIRACY BOARD — LEGEND & INTEL ".center(box_w) + "║")
-    lines.append("╠" + "═" * box_w + "╣")
+    lines.append("╔" + "═" * (box_w + 2) + "╗")
+    lines.append("║" + " CONSPIRACY BOARD — LEGEND & INTEL ".center(box_w + 2) + "║")
+    lines.append("╠" + "═" * (box_w + 2) + "╣")
 
     def legend(text, col=""):
         t = text[:box_w].ljust(box_w)
@@ -642,13 +664,16 @@ def render_board(entities, connections, notes, width=90, height=45, color=True):
         sym = KIND_SYM.get(ent.kind, "?")
         ev = ""
         if ent.evidence:
-            ev = f"  │ Evidence: {', '.join(ent.evidence)}"
+            # Show up to 2 evidence types, truncate if too long to fit legend
+            ev_list = ", ".join(ent.evidence[:2])
+            ev = f"  │ Ev: {ev_list}"
         sus_label = suspicion_label(ent.suspicion)
         sus_bar_len = 8
         sus_filled = int(ent.suspicion * sus_bar_len)
         sus_bar = "█" * sus_filled + "░" * (sus_bar_len - sus_filled)
         col = KIND_COL.get(ent.kind, "") if color else ""
-        lines.append(legend(f"    {sym} {ent.name:<20} [{sus_bar}] {sus_label}{ev}", col))
+        line = f"    {sym} {ent.name:<20} [{sus_bar}] {sus_label}{ev}"
+        lines.append(legend(line, col))
 
     lines.append(legend(""))
     lines.append(legend("  CONNECTIONS:", C.RED + C.BLD))
@@ -672,7 +697,7 @@ def render_board(entities, connections, notes, width=90, height=45, color=True):
             names = " → ".join(entities[idx].name for idx in cycle)
             lines.append(legend(f"    ◯ {names} ◯", C.RED))
 
-    lines.append("╚" + "═" * box_w + "╝")
+    lines.append("╚" + "═" * (box_w + 2) + "╝")
 
     return "\n".join(lines)
 
@@ -890,6 +915,12 @@ def main():
     args = parser.parse_args()
 
     # Validate entity counts make sense
+    for name, val in [("people", args.people), ("orgs", args.orgs),
+                      ("events", args.events), ("locations", args.locations),
+                      ("connections", args.connections), ("notes", args.notes)]:
+        if val < 0:
+            parser.error(f"--{name} must be non-negative, got {val}")
+
     total_entities = args.people + args.orgs + args.events + args.locations
     if total_entities < 2:
         parser.error("Need at least 2 entities total to generate connections")

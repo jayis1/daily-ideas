@@ -1,197 +1,120 @@
-# 🔍 Procedural Conspiracy Board Generator
+# Conspiracy Board Generator v2.1
 
-**Version 2.0.0**
-
-A command-line tool that generates **random conspiracy investigation boards** in ASCII art — complete with entities (people, organizations, events, locations), red-string connections, cryptic notes, evidence tags, suspicion scores, cycle detection, conspiracy timelines, redacted briefings, and a full legend. Every run produces a unique, paranoid masterpiece.
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│       ┌──────────────┐                                          │
-│       │TRUST NO ONE  │                                          │
-│       └──────┬───────┘                                          │
-│              ·                                                  │
-│    ◆━━━━━━━━━◈         ┌─────────────────────┐                 │
-│ The Syndicate  The Collapse  │IT WAS NEVER A THEORY│               │
-│     │SEES    ·    └──────┬──────────────┘                 │
-│     ·        ·           ·                                  │
-│     ·         ·         ·                                   │
-│     ·          ·   ☻━━━━━☻                                  │
-│     ·     [DOCUMENT] Mr. Nyx  Dr. Vance                    │
-│     ▲              [CIPHER]                                 │
-│  Site Alpha                                                   │
-│     ·                                                        │
-│     ·        ◆━━━━━━━━━━━▲                                  │
-│     └─Division 6   HUNTS   The Bunker                      │
-│                                                               │
-└───────────────────────────────────────────────────────────────┘
-```
+A procedurally generated conspiracy theory board — complete with red-string connections, classified documents, suspicion scores, cycle detection, and timeline events. Generates a unique, visually rich ASCII-art conspiracy board every time.
 
 ## Features
 
-### Core (v1.0)
-- **Procedural generation** — every board is unique with randomized entities, connections, and notes
-- **4 entity types** — People (☻), Organizations (◆), Events (◈), Locations (▲)
-- **Connection strings** — Bresenham line-drawn "red strings" with varying thickness (weak/medium/strong)
-- **Evidence tags** — randomly assigned evidence types (PHOTO, DOCUMENT, CIPHER, etc.)
-- **Cryptic note boxes** — boxed paranoid messages scattered across the board
-- **Full legend** — entity roster, connection list, and note index below the board
-- **Colored output** — ANSI color support (people=cyan, orgs=magenta, events=yellow, notes=green, strings=red)
-- **Reproducible seeds** — use `--seed` to regenerate the same board
-- **Configurable size** — control board dimensions and entity counts
-
-### New in v2.0
-- **Suspicion scores** — each entity gets a computed suspicion level (LOW → MODERATE → HIGH → CRITICAL → EXTREME) based on connections, evidence, and entity-type diversity, displayed with a progress bar in the legend
-- **Cycle detection** — automatically detects triangular connection patterns (A→B→C→A) and highlights them in the legend
-- **Conspiracy timeline** (`--timeline`) — generates dated, classified timeline events linking entities to key moments with redacted text
-- **JSON output** (`--json`) — export all board data (entities, connections, notes, cycles, timeline) as structured JSON for integration with other tools
-- **Redacted text** — timeline entries in narratives include █████-style redaction for flavor
-- **Narrative improvements** — classified briefing now includes suspicion assessment and strength-of-connection labels (weak/moderate/strong)
-- **Better entity placement** — overlap avoidance for both entities and note boxes
-- **Input validation** — `--version` flag, board dimension clamping (40–200 × 20–100), entity count validation, and helpful error messages
-- **Connection diversity** — connections preferentially form between different entity types for more interesting boards
-- **Improved `--help`** — includes usage examples and parameter ranges
+- **Procedural board generation** — Randomly places people, organizations, events, and locations on a red-string conspiracy board
+- **Connection types** — Entities are linked with labeled connections (CONTACTED, LEAKED TO, WORKS FOR, etc.) with visual strength indicators (━━ strong, ── medium, ·· weak)
+- **Suspicion scores** — Each entity gets a computed suspicion level (LOW → MODERATE → HIGH → CRITICAL → EXTREME) based on connections, evidence, and entity type diversity, displayed with progress bars in the legend
+- **Cycle detection** — Automatically detects triangular connection patterns (A→B→C→A) and highlights them in the legend with a "⚠ TRIANGULATED CONNECTIONS" section
+- **Conspiracy timeline** — Generates dated, classified timeline events linking entities to key moments across 2019–2028, with classification levels like TOP SECRET, SCI, NOFORN
+- **Narrative mode** — Produces a classified briefing document with suspicion assessment, connection strength labels, and optional timeline fragments
+- **JSON output** — Exports all board data (entities with suspicion scores, connections with strength labels, notes, cycles, timeline) as structured JSON
+- **Evidence tags** — Entities can have evidence markers (PHOTO, DOCUMENT, WITNESS, etc.) displayed on the board
+- **Cryptic notes** — Redacted sticky notes scattered across the board with conspiracy-themed messages
+- **Reproducible seeds** — Use `--seed` for deterministic output; same seed always produces the same board
+- **Color and monochrome** — Full ANSI color support with `--no-color` for terminals without color
 
 ## Installation
 
-No external dependencies needed — just Python 3.6+:
+No external dependencies needed — uses only the Python standard library.
 
 ```bash
-# Clone or download
-cd ~/daily-ideas/2026-07-03-conspiracy-board-generator
+# Just run it directly
+python3 conspiracy_board.py
 
-# Make executable (optional)
-chmod +x conspiracy_board.py
+# Or clone the repo
+cd ~/daily-ideas
+git pull
+cd 2026-07-03-conspiracy-board-generator
+python3 conspiracy_board.py
 ```
+
+Requires Python 3.7+ (uses dataclasses).
 
 ## Usage
 
 ```bash
-# Default board (90×45, 5 people, 3 orgs, 3 events, 2 locations)
+# Generate a random conspiracy board
 python3 conspiracy_board.py
 
-# Board with classified briefing narrative
-python3 conspiracy_board.py --narrative
-
-# Board with conspiracy timeline
-python3 conspiracy_board.py --timeline
-
-# Both narrative and timeline
-python3 conspiracy_board.py --narrative --timeline
-
-# Reproducible board with a seed
+# With a specific seed for reproducibility
 python3 conspiracy_board.py --seed 42
 
-# JSON output (for scripts, analysis, or integration)
-python3 conspiracy_board.py --json --seed 42
+# Include narrative briefing
+python3 conspiracy_board.py --seed 42 --narrative
 
-# Custom dimensions and entity counts
-python3 conspiracy_board.py --width 120 --height 55 --people 8 --orgs 5 --connections 20 --notes 6
+# Include classified timeline
+python3 conspiracy_board.py --seed 42 --timeline
 
-# Plain text (no ANSI colors) — great for piping to files
-python3 conspiracy_board.py --no-color > board.txt
+# Both narrative and timeline
+python3 conspiracy_board.py --seed 42 --narrative --timeline
+
+# JSON output (machine-readable)
+python3 conspiracy_board.py --seed 42 --json
+
+# No ANSI colors
+python3 conspiracy_board.py --no-color
+
+# Custom board dimensions and entity counts
+python3 conspiracy_board.py --width 120 --height 50 --people 8 --orgs 4 --connections 15
 
 # Show version
 python3 conspiracy_board.py --version
-
-# All options
-python3 conspiracy_board.py --help
 ```
 
-### Command-line Options
+### Command-Line Options
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--width` | 90 | Board width in characters (40–200) |
-| `--height` | 45 | Board height in characters (20–100) |
-| `--people` | 5 | Number of people on the board |
-| `--orgs` | 3 | Number of organizations |
-| `--events` | 3 | Number of events |
-| `--locations` | 2 | Number of locations |
-| `--connections` | 9 | Number of connections between entities |
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--width` | 90 | Board width in characters |
+| `--height` | 45 | Board height in characters |
+| `--people` | 5 | Number of person entities |
+| `--orgs` | 3 | Number of organization entities |
+| `--events` | 3 | Number of event entities |
+| `--locations` | 2 | Number of location entities |
+| `--connections` | 9 | Number of connections to generate |
 | `--notes` | 4 | Number of cryptic notes |
 | `--seed` | random | Random seed for reproducibility |
-| `--narrative` | off | Also print a classified briefing |
-| `--timeline` | off | Generate and display a conspiracy timeline |
-| `--json` | off | Output all board data as JSON |
-| `--no-color` | off | Disable ANSI color output |
+| `--narrative` | off | Print classified narrative briefing |
+| `--timeline` | off | Print conspiracy timeline |
+| `--json` | off | Output board data as JSON |
+| `--no-color` | off | Disable ANSI color codes |
 | `--version` | — | Print version and exit |
 
-## Examples
-
-### Quick board
-```bash
-python3 conspiracy_board.py --seed 42
-```
-
-### Large board with lots of connections
-```bash
-python3 conspiracy_board.py --width 120 --height 55 --people 8 --orgs 5 --connections 20 --notes 6
-```
-
-### Generate a full briefing for a TTRPG session
-```bash
-python3 conspiracy_board.py --narrative --timeline --seed 12345 --no-color > session_briefing.txt
-```
-
-### Export as JSON for analysis
-```bash
-python3 conspiracy_board.py --json --seed 7 > board_data.json
-```
-
-### Save a board as text art
-```bash
-python3 conspiracy_board.py --no-color --seed 7 > my_conspiracy.txt
-```
-
-## How It Works
-
-1. **Entity generation**: Entities are drawn from themed pools (PEOPLE, ORGANIZATIONS, EVENTS, LOCATIONS) and placed on a grid with jittered positions and overlap avoidance
-2. **Suspicion scoring**: Each entity's suspicion is computed from connection count (×0.15), connection strength (×0.05), evidence count (×0.1), and the diversity of connected entity types (×0.1 per type)
-3. **Connection drawing**: Connections are rendered using Bresenham's line algorithm, with thickness based on connection strength (1=weak dots, 2=medium dashes, 3=strong solid lines). Connections preferentially link different entity types
-4. **Note boxes**: Cryptic notes are drawn as boxed text with box-drawing characters, avoiding entity positions
-5. **Note labels**: Connection labels appear near the midpoint of each string
-6. **Timeline generation**: A conspiracy timeline is built from template sentences, dated across a plausible range (2019–2028), with classification levels and entity references
-7. **Cycle detection**: The system checks for triangular connection patterns (A→B→C→A) and reports them in the legend
-8. **Legend**: A formatted legend below the board lists all entities (sorted by suspicion), connections (with strength), cryptic notes, and any detected cycles
+All entity count arguments must be non-negative integers. Board dimensions are clamped to 40–200 (width) and 20–100 (height). At least 2 entities total are required.
 
 ## Testing
 
 ```bash
+# Run the full test suite (65 tests)
 python3 test_conspiracy_board.py
 ```
 
-Runs 57 tests covering entity generation, board rendering, narrative output, timeline generation, JSON export, suspicion scoring, cycle detection, redaction, reproducibility, and more.
-
-## Use Cases
-
-- **Tabletop RPGs** — Generate conspiracy plots for modern/cyberpunk/investigation campaigns
-- **Creative writing prompts** — Use generated boards as story seeds
-- **ASCII art fun** — Share paranoid masterpieces with friends
-- **Game prototyping** — Use as a starting point for investigation game mechanics
-- **Data pipeline** — Use `--json` output to feed generated conspiracies into other tools or visualizations
+Tests cover all major features: board generation, rendering, narrative, timeline, JSON output, suspicion scoring, cycle detection, redaction, and regression tests for all bug fixes.
 
 ## Changelog
 
-### v2.0.0
-- **Added**: Suspicion scores for all entities (computed from connections, evidence, and type diversity)
-- **Added**: Cycle detection for triangular connection patterns
-- **Added**: `--timeline` flag to generate dated conspiracy timeline events with classification levels
-- **Added**: `--json` flag for structured JSON output (entities, connections, notes, cycles, timeline)
-- **Added**: `--version` flag
-- **Added**: Redacted text (█████) in narrative timeline fragments
-- **Added**: Connection strength labels (weak/moderate/strong) in narrative
-- **Added**: Entity overlap avoidance for better board layout
-- **Added**: Note box placement avoidance of entity positions
-- **Added**: Connection diversity — connections preferentially link different entity types
-- **Added**: Input validation with helpful error messages
-- **Added**: Board dimension clamping (40–200 × 20–100)
-- **Improved**: Legend now sorts entities by suspicion score with progress bars
-- **Improved**: `--help` now includes usage examples
-- **Fixed**: `suspicion_label` boundary conditions (correct threshold ranges)
-- **Fixed**: Template string variable names (`from_ent`/`to_ent` instead of Python reserved `from`/`to`)
+### v2.1.0 — Bug Fix Release
 
-### v1.0.0
-- Initial release with procedural board generation, Bresenham strings, evidence tags, cryptic notes, and narrative mode
+**Bugs Fixed:**
+- **`pick()` crash on negative `n`** — Calling `pick(pool, n)` with a negative `n` would crash with `ValueError` from `random.sample()`. Now returns an empty list for any `n ≤ 0`.
+- **Entity name overflow** — Entity names and evidence tags placed near board edges could extend beyond the board boundaries, causing visual corruption. Now clamped to board width with proper truncation.
+- **Legend box width inconsistency** — Legend border lines (╔═╗, ╠═╣, ╚═╝) were 2 characters narrower than content lines (║ ... ║), causing misalignment. All lines are now consistently `box_w + 4` characters.
+- **Legend entity line overflow** — Entity lines with evidence could exceed the 78-character `box_w`, truncating important info. `box_w` increased from 78 to 100, and evidence display shortened from `"Evidence:"` to `"Ev:"` with max 2 items.
+- **Negative CLI arguments** — Passing negative values for `--people`, `--orgs`, `--events`, `--locations`, `--connections`, or `--notes` would cause undefined behavior. Now properly rejected with a helpful error message.
+- **Note position overflow** — Cryptic notes placed near board edges could overflow. Note positions are now properly clamped within board margins.
+
+**Tests Added:** 8 new regression tests (57 → 65 total):
+- `test_pick_negative_n` — Verifies `pick()` returns `[]` for negative `n`
+- `test_pick_negative_n_large` — Verifies `pick()` returns `[]` for large negative `n`
+- `test_pick_empty_pool` — Verifies `pick()` returns `[]` from an empty pool
+- `test_entity_names_within_board` — Verifies entity names render within board bounds
+- `test_entity_evidence_clamped` — Verifies evidence tags don't crash on small boards
+- `test_legend_box_consistency` — Verifies all legend lines have the same width
+- `test_negative_cli_args_rejected` — Verifies negative CLI arguments are rejected
+- `test_version_updated` — Verifies version string format after changes
 
 ## License
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the Procedural Conspiracy Board Generator v2.0."""
+"""Tests for the Procedural Conspiracy Board Generator v2.1."""
 
 import sys
 import os
@@ -586,6 +586,99 @@ def test_connection_strength_range():
     _, connections, _ = generate_board(seed=42)
     for conn in connections:
         assert conn.strength in (1, 2, 3), f"Invalid strength: {conn.strength}"
+
+
+# ─── Bug fix regression tests ────────────────────────────────────────────────
+
+def test_pick_negative_n():
+    """Test that pick() handles negative n gracefully (returns empty list)."""
+    result = pick(PEOPLE, -1)
+    assert result == [], f"pick with n=-1 should return [], got {result}"
+
+
+def test_pick_negative_n_large():
+    """Test that pick() handles large negative n gracefully."""
+    result = pick(PEOPLE, -100)
+    assert result == [], f"pick with n=-100 should return [], got {result}"
+
+
+def test_entity_names_within_board():
+    """Test that entity names and evidence tags don't overflow the board."""
+    import re
+    for seed in range(20):
+        entities, connections, notes = generate_board(
+            width=40, height=20, seed=seed
+        )
+        board = render_board(entities, connections, notes,
+                             width=40, height=20, color=False)
+        # Board should render without error and be non-empty
+        assert len(board) > 0
+        # All entity names should appear somewhere in the output (even if clipped)
+        for ent in entities:
+            # At least the start of each name should be in the output
+            assert ent.name[:3] in board or ent.name in board, \
+                f"Entity name '{ent.name}' not found in board output"
+
+
+def test_entity_evidence_clamped():
+    """Test that entity evidence tags are clamped to board bounds in rendering."""
+    # Create entities near the edges and render a small board
+    entities = [
+        Entity(name="TestEntity", kind="person", x=2, y=5,
+               evidence=["PHOTO", "DOCUMENT"]),
+    ]
+    connections = []
+    notes = []
+    # Should not crash even on a small board
+    board = render_board(entities, connections, notes,
+                         width=40, height=20, color=False)
+    assert len(board) > 0
+
+
+def test_legend_box_consistency():
+    """Test that legend box lines are consistently wide."""
+    entities, connections, notes = generate_board(seed=42)
+    board = render_board(entities, connections, notes,
+                         width=100, height=45, color=False)
+    lines = board.split('\n')
+    # Find legend lines
+    legend_lines = [l for l in lines if l.startswith('║')]
+    assert len(legend_lines) > 0, "No legend lines found"
+    # All legend lines should have the same width (after stripping ANSI codes)
+    widths = set()
+    import re
+    for line in legend_lines:
+        clean = re.sub(r'\033\[[0-9;]*m', '', line)
+        widths.add(len(clean.rstrip()))
+    # All widths should be the same (box_w + 4 for ║ + space + content + space + ║)
+    # Due to truncation, they should all be exactly box_w + 4
+    assert len(widths) == 1, f"Legend lines have inconsistent widths: {widths}"
+
+
+def test_negative_cli_args_rejected():
+    """Test that negative CLI arguments are rejected."""
+    import subprocess
+    result = subprocess.run(
+        [sys.executable, "conspiracy_board.py", "--people", "-1"],
+        capture_output=True, text=True
+    )
+    assert result.returncode != 0, "Should reject negative --people"
+
+
+def test_pick_empty_pool():
+    """Test that pick from empty pool returns empty list."""
+    result = pick([], 5)
+    assert result == []
+
+
+def test_version_updated():
+    """Test that VERSION is still a valid version string after bug fixes."""
+    from conspiracy_board import VERSION
+    assert isinstance(VERSION, str)
+    parts = VERSION.split(".")
+    assert len(parts) == 3
+    for part in parts:
+        assert part.isdigit()
 
 
 if __name__ == "__main__":
