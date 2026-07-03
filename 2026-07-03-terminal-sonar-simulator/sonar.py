@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 from typing import List, Tuple, Optional, Set
 
 # ── Version ────────────────────────────────────────────────────────────
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 
 # ── Constants ──────────────────────────────────────────────────────────
 WORLD_W = 120
@@ -495,18 +495,30 @@ class SonarGame:
         # Passive listening burst (P)
         if key in (ord('p'), ord('P')):
             if self.sonar_mode == "passive":
-                self.pings.append(SonarPing(self.sub.x, self.sub.y, 0, PASSIVE_RADIUS, active_ping=False))
-                self.add_message("👂 Passive listening...", 40)
+                if self.sub.ping_cooldown <= 0:
+                    self.pings.append(SonarPing(self.sub.x, self.sub.y, 0, PASSIVE_RADIUS, active_ping=False))
+                    self.sub.ping_cooldown = self.ping_cooldown_max // 2  # passive costs half cooldown
+                    self.add_message("👂 Passive listening...", 40)
+                else:
+                    self.add_message("Sonar recharging...", 30)
+            else:
+                self.add_message("Switch to passive mode first (E)", 60)
 
-        # Change depth (Z = dive, X = rise)
+        # Change depth (Z = dive deeper, X = rise shallower)
         if key == ord('z'):
-            self.sub.depth = max(0, self.sub.depth - 1)
-            depths = ["Periscope depth", "Shallow depth", "Deep depth"]
-            self.add_message(f"⬇ Diving: {depths[self.sub.depth]}", 60)
+            if self.sub.depth < 2:
+                self.sub.depth += 1
+                depths = ["Periscope depth", "Shallow depth", "Deep depth"]
+                self.add_message(f"⬇ Diving: {depths[self.sub.depth]}", 60)
+            else:
+                self.add_message("Already at maximum depth", 40)
         if key == ord('x'):
-            self.sub.depth = min(2, self.sub.depth + 1)
-            depths = ["Periscope depth", "Shallow depth", "Deep depth"]
-            self.add_message(f"⬆ Rising: {depths[self.sub.depth]}", 60)
+            if self.sub.depth > 0:
+                self.sub.depth -= 1
+                depths = ["Periscope depth", "Shallow depth", "Deep depth"]
+                self.add_message(f"⬆ Rising: {depths[self.sub.depth]}", 60)
+            else:
+                self.add_message("Already at periscope depth", 40)
 
         # Fire torpedo at nearest (F)
         if key in (ord('f'), ord('F')):
@@ -843,7 +855,7 @@ class SonarGame:
 
         # Camera centred on submarine
         cam_x = self.sub.x - w // 2
-        cam_y = self.sub.y - (h - 4) // 2
+        cam_y = self.sub.y - (h - 6) // 2
 
         view_r = VIEW_RADIUS * self.depth_view_penalty[self.sub.depth]
 

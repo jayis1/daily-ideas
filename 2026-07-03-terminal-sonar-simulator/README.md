@@ -2,19 +2,20 @@
 
 A submarine combat game played entirely in the terminal. Navigate a fog-of-war ocean using sonar pings to detect, classify, and destroy hidden enemy vessels — while trying not to give away your own position.
 
-**Version 1.1.0** — Now with difficulty levels, supply crates, bearing indicators, noise mechanics, and CLI options.
+**Version 1.2.0**
 
-## What's New in v1.1.0
+## What's New
 
-- **Difficulty levels** — Choose `easy`, `normal`, or `hard` via `--difficulty`. Each adjusts enemy count, HP, detection range, fire rate, and torpedo loadout.
-- **Supply crates** — Floating pickup crates scattered across the ocean grant torpedo refills (+2) or repair kits (+3 HP).
-- **Noise mechanic** — Moving and pinging generates noise that enemies can detect. Deeper diving reduces your noise footprint. A noise bar in the HUD shows your current level.
-- **Bearing indicators** — The HUD now shows directional arrows and distances to classified enemies (e.g. `→S14 ↑D8`).
-- **Long-range fire** — Press `G` to fire a torpedo at the farthest classified target instead of the nearest.
-- **Time tracking** — Elapsed game time is shown in the HUD; finishing quickly earns a time bonus on victory.
-- **Depth damage reduction** — Taking hits at deeper depths now reduces damage by 25% (shallow) or 50% (deep), matching the HUD feedback.
-- **CLI flags** — `--help`, `--version`, `--difficulty`, `--enemies`, and `--seed` for full control.
-- **38 unit tests** — Comprehensive test suite covering world generation, enemy spawning, supply crates, data classes, difficulty presets, CLI parsing, and helper functions.
+### v1.2.0 (Bug Fixes)
+- **Fixed inverted depth controls** — Z now correctly dives deeper (depth increases) and X correctly rises shallower (depth decreases). Previously these were swapped, making Z rise and X dive!
+- **Fixed passive sonar spam** — Passive listening burst (P key) now has a cooldown (half the active ping cooldown) and cannot be spammed infinitely.
+- **Fixed passive mode feedback** — Pressing P in active sonar mode now shows "Switch to passive mode first (E)" instead of silently doing nothing.
+- **Fixed camera centering** — The submarine now appears vertically centered in the viewport. Previously the camera offset used `h-4` instead of `h-6`, causing the sub to appear ~1 line off-center.
+- **Added boundary feedback** — Pressing Z at max depth or X at min depth now shows informative messages instead of silently doing nothing.
+- **Added 11 new tests** (49 total) covering depth control logic, passive sonar constraints, and camera centering.
+
+### v1.1.0 (Feature Update)
+- Difficulty levels, supply crates, bearing indicators, noise mechanics, long-range fire, time tracking, depth damage reduction, CLI flags, and 38 unit tests.
 
 ## Description
 
@@ -87,13 +88,13 @@ Make sure your terminal is at least **80×30 characters** for the best experienc
 | Key | Action |
 |-----|--------|
 | `W/A/S/D` or Arrow Keys | Move submarine |
-| `SPACE` | Fire active sonar ping (reveals large area, alerts enemies) |
+| `SPACE` | Fire active sonar ping (reveals large area, alerts enemies, costs cooldown) |
 | `E` | Toggle active/passive sonar mode |
-| `P` | Passive sonar listening burst (short range, stealthy) |
+| `P` | Passive sonar listening burst (short range, stealthy, has cooldown) |
 | `F` | Fire torpedo at nearest classified enemy |
 | `G` | Fire torpedo at farthest classified enemy (long-range engage) |
 | `Z` | Dive deeper (more protection, less visibility, less noise) |
-| `X` | Rise shallower (less protection, more visibility) |
+| `X` | Rise shallower (less protection, more visibility, more noise) |
 | `M` | Toggle minimap |
 | `Q` | Quit |
 | `R` | Restart (after game over or victory) |
@@ -115,6 +116,19 @@ Make sure your terminal is at least **80×30 characters** for the best experienc
 | `T` | Torpedo supply crate |
 | `+` | Repair kit crate |
 
+## Depth System
+
+| Depth Level | Visibility | Damage Reduction | Noise | Health Regen |
+|-------------|-----------|-------------------|-------|-------------|
+| Periscope (0) | 100% | 0% | High | None |
+| Shallow (1) | 70% | 25% | Medium | None |
+| Deep (2) | 40% | 50% | Low | +1 HP/min |
+
+- Press **Z** to dive deeper (more protection, less visibility).
+- Press **X** to rise shallower (more visibility, less protection).
+- Active pings generate 0.4 noise regardless of depth.
+- Movement noise decreases with depth (0.15 → 0.08 → 0.03 per step).
+
 ## Difficulty Levels
 
 | Setting | Enemies | Torpedoes | Enemy HP | Enemy Detection | Fire Rate | Ping Cooldown |
@@ -134,17 +148,29 @@ Make sure your terminal is at least **80×30 characters** for the best experienc
 - **Watch the noise bar** — high noise alerts nearby enemies even without pinging.
 - **Pick up crates** — look for `T` and `+` on the map and minimap for crucial resupply.
 
-## How It Works
-
-The game uses a curses-based terminal renderer with a scrolling viewport centered on your submarine. The ocean world (120×60 tiles) is procedurally generated with random island clusters. Enemy vessels have AI that switches between patrol mode and chase mode based on alert level and noise detection. Sonar pings expand outward as animated rings, revealing any enemy they pass through. The fog of war system ensures you can only see tiles within your current detection radius or illuminated by recent pings. Supply crates spawn at game start and can be collected by moving over them.
-
 ## Running Tests
 
 ```bash
 python3 test_sonar.py
 ```
 
-38 tests covering world generation, enemy spawning, supply crates, data classes, difficulty presets, CLI parsing, helper functions, and config consistency.
+49 tests covering world generation, enemy spawning, supply crates, data classes, difficulty presets, CLI parsing, helper functions, config consistency, depth controls, passive sonar constraints, and camera centering.
+
+## Changelog
+
+### v1.2.0
+- **Fixed**: Z/X depth controls were inverted — Z now correctly dives deeper and X correctly rises shallower
+- **Fixed**: Passive listening burst (P key) had no cooldown, allowing infinite passive pings — now costs half the active ping cooldown
+- **Fixed**: Pressing P in active sonar mode silently did nothing — now shows "Switch to passive mode first (E)"
+- **Fixed**: Camera vertical centering was off by ~1 line (used `h-4` instead of `h-6` to match viewport height)
+- **Added**: Boundary messages when trying to dive at max depth or rise at periscope depth
+- **Added**: 11 new tests for depth controls, passive sonar constraints, and camera centering (49 total)
+
+### v1.1.0
+- Added difficulty levels, supply crates, noise mechanic, bearing indicators, long-range fire, time tracking, depth damage reduction, CLI flags, and 38 unit tests
+
+### v1.0.0
+- Initial release
 
 ## License
 

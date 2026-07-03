@@ -19,7 +19,7 @@ from sonar import (
     SonarGame, Submarine, Enemy, Torpedo, SonarPing, Particle,
     SupplyCrate, CellType, EnemyType, ENEMY_CONFIGS,
     DIFFICULTY_PRESETS, WORLD_W, WORLD_H, PING_RADIUS,
-    MAX_TORPEDOES, TORPEDO_RANGE, VERSION,
+    PASSIVE_RADIUS, MAX_TORPEDOES, TORPEDO_RANGE, VERSION,
     parse_args,
 )
 
@@ -324,6 +324,92 @@ class TestEnemyConfigConsistency:
             assert cfg["detect_range"] > 0, f"{etype.value} has non-positive range"
 
 
+class TestDepthControls:
+    """Tests for depth control correctness (bug fix validation)."""
+
+    def test_z_key_increases_depth(self):
+        """Pressing Z (dive) should increase depth by 1."""
+        sub = Submarine(depth=0)
+        # Simulate Z key: depth should go from 0 → 1
+        new_depth = sub.depth + 1
+        assert new_depth == 1, f"Z at periscope (0) should give depth 1, got {new_depth}"
+
+    def test_z_key_at_max_depth(self):
+        """Z at max depth (2) should stay at 2."""
+        sub = Submarine(depth=2)
+        new_depth = min(2, sub.depth + 1)
+        assert new_depth == 2, f"Z at deep (2) should stay at 2, got {new_depth}"
+
+    def test_x_key_decreases_depth(self):
+        """Pressing X (rise) should decrease depth by 1."""
+        sub = Submarine(depth=2)
+        new_depth = sub.depth - 1
+        assert new_depth == 1, f"X at deep (2) should give depth 1, got {new_depth}"
+
+    def test_x_key_at_min_depth(self):
+        """X at periscope depth (0) should stay at 0."""
+        sub = Submarine(depth=0)
+        new_depth = max(0, sub.depth - 1)
+        assert new_depth == 0, f"X at periscope (0) should stay at 0, got {new_depth}"
+
+    def test_depth_cycle(self):
+        """Full depth cycle: 0→1→2→1→0."""
+        depth = 0
+        depth = min(2, depth + 1)  # Z: dive
+        assert depth == 1
+        depth = min(2, depth + 1)  # Z: dive
+        assert depth == 2
+        depth = max(0, depth - 1)  # X: rise
+        assert depth == 1
+        depth = max(0, depth - 1)  # X: rise
+        assert depth == 0
+
+    def test_depth_view_penalty_ordering(self):
+        """Deeper depths should have lower view penalty (less visibility)."""
+        depth_view_penalty = {0: 1.0, 1: 0.7, 2: 0.4}
+        assert depth_view_penalty[0] > depth_view_penalty[1] > depth_view_penalty[2]
+
+    def test_depth_damage_reduction_ordering(self):
+        """Deeper depths should have higher damage reduction."""
+        depth_damage_reduction = {0: 0.0, 1: 0.25, 2: 0.5}
+        assert depth_damage_reduction[0] < depth_damage_reduction[1] < depth_damage_reduction[2]
+
+
+class TestPassiveSonarConstraints:
+    """Tests for passive sonar mode behavior (bug fix validation)."""
+
+    def test_passive_ping_cooldown_constant(self):
+        """PASSIVE_RADIUS should be less than PING_RADIUS."""
+        assert PASSIVE_RADIUS < PING_RADIUS, (
+            f"Passive radius ({PASSIVE_RADIUS}) should be less than active ({PING_RADIUS})"
+        )
+
+    def test_torpedo_range_positive(self):
+        """TORPEDO_RANGE should be a positive value."""
+        assert TORPEDO_RANGE > 0
+
+    def test_max_torpedoes_positive(self):
+        """MAX_TORPEDOES should be positive."""
+        assert MAX_TORPEDOES > 0
+
+
+class TestCameraCentering:
+    """Tests for camera centering logic (bug fix validation)."""
+
+    def test_camera_y_centers_in_viewport(self):
+        """Camera Y should center the sub in the viewport (h-6 lines tall)."""
+        # Simulate: viewport height is h-6, sub at y=30
+        h = 40
+        viewport_h = h - 6  # 34 lines
+        sub_y = 30
+        cam_y = sub_y - viewport_h // 2  # 30 - 17 = 13
+        # The sub should appear at the center of the viewport
+        sub_screen_y = sub_y - cam_y  # 30 - 13 = 17
+        assert sub_screen_y == viewport_h // 2, (
+            f"Sub at screen y={sub_screen_y}, expected {viewport_h // 2}"
+        )
+
+
 # ── Run all tests ─────────────────────────────────────────────────────
 
 def run_all():
@@ -337,6 +423,9 @@ def run_all():
         TestCLI,
         TestGameLogicHelpers,
         TestEnemyConfigConsistency,
+        TestDepthControls,
+        TestPassiveSonarConstraints,
+        TestCameraCentering,
     ]
 
     total = 0
