@@ -1,6 +1,6 @@
 # ❄ Procedural Snowflake Generator
 
-**Version 2.0.0** — Generate unique, mathematically-derived snowflake crystal patterns using fractal branching algorithms. No two are alike — just like real snowflakes!
+**Version 2.1.0** — Generate unique, mathematically-derived snowflake crystal patterns using fractal branching algorithms. No two are alike — just like real snowflakes!
 
 Each snowflake is deterministic from its seed string, so the same seed always produces the same crystal. The generator simulates dendritic arm growth with randomized branching, producing 5 crystal types: Dendrite, Plate, Stellar, Fernlike, and Columnar.
 
@@ -21,6 +21,8 @@ Each snowflake is deterministic from its seed string, so the same seed always pr
 - **Configurable depth**: Control complexity from simple plates to intricate dendrites (1–5)
 - **Version flag**: `--version` for version checking
 - **Input validation**: Depth and size are automatically clamped to valid ranges
+- **`--no-color` support**: All rendering modes (render, gallery, compare, info, animate) respect the `--no-color` flag
+- **SVG XSS prevention**: Seed names and crystal types are HTML-escaped in SVG output
 - **No external dependencies**: Uses only the Python standard library
 
 ## How to Install
@@ -47,14 +49,23 @@ python3 snowflake.py -s "aurora" -p aurora
 # Choose symmetry (4, 6, 8, or 12)
 python3 snowflake.py -s "crystal" --symmetry 8
 
+# Disable colors (for pipes, files, or non-TTY output)
+python3 snowflake.py -s "plain" --no-color
+
 # Animate the snowflake falling through the sky
 python3 snowflake.py -s "gentle-snow" --animate
 
 # Generate a gallery of 4 snowflakes
 python3 snowflake.py -s "gallery" --gallery 4
 
+# Gallery without colors
+python3 snowflake.py -s "gallery" --gallery 4 --no-color
+
 # Compare two seeds side by side
 python3 snowflake.py --compare "fire" "ice"
+
+# Compare without colors
+python3 snowflake.py --compare "fire" "ice" --no-color
 
 # Export as SVG (with palette colors)
 python3 snowflake.py -s "crystal" --svg snowflake.svg
@@ -71,14 +82,14 @@ python3 snowflake.py -s "data" --json -
 # Show crystal growth parameters
 python3 snowflake.py -s "frost" --info
 
+# Show crystal report without colors
+python3 snowflake.py -s "frost" --info --no-color
+
 # Control complexity with depth (1-5, default 4)
 python3 snowflake.py -s "simple" -d 2
 
 # Larger canvas (11-199, automatically made odd)
 python3 snowflake.py -s "detailed" --size 71
-
-# No colors (for pipes/files)
-python3 snowflake.py -s "plain" --no-color
 
 # Show version
 python3 snowflake.py --version
@@ -122,6 +133,17 @@ Control the rotational symmetry of your snowflake:
 | 8-fold   | Octagonal star patterns |
 | 12-fold  | Dense radial patterns |
 
+### Color Control
+
+The `--no-color` flag suppresses all ANSI escape codes across every output mode:
+
+- **Render**: No ANSI codes in the snowflake display or header
+- **Gallery**: Plain-text gallery with no color codes
+- **Compare**: Side-by-side comparison without ANSI codes
+- **Info**: Crystal report without bold/formatting codes
+- **Animate**: Animation without ANSI color codes
+- Color is also automatically disabled when stdout is not a TTY (piped output)
+
 ### JSON Export
 
 Use `--json -` for machine-readable output (pure JSON on stdout, no rendering):
@@ -134,7 +156,7 @@ The JSON output includes: seed, crystal type, symmetry, max depth, version, and 
 
 ### Animation
 
-The `--animate` flag renders an animated snowflake falling through a starry night sky with gentle horizontal sway.
+The `--animate` flag renders an animated snowflake falling through a starry night sky with gentle horizontal sway. Color can be disabled with `--no-color`.
 
 ### Gallery Mode
 
@@ -171,11 +193,34 @@ The test suite covers:
 - Segment creation and serialization (`.to_dict()`)
 - Snowflake generation: all crystal types, custom symmetry, depth clamping
 - Rendering: with/without color, with/without info, custom symmetry
-- Export: SVG (with palette), JSON (structure and keys)
-- Gallery and compare modes
+- **No-color mode**: ANSI suppression verified for render, gallery, compare, info, and CLI
+- **SVG XSS prevention**: HTML escaping of `<`, `>`, `&`, `"` characters in seed/crystal type
+- Export: SVG (with palette, with escaping), JSON (structure and keys)
+- Gallery and compare modes (with and without color)
+- `print_seed_info` color parameter
+- `animate_snowfall` color parameter existence
 - CLI: help, version, seed, gallery, info, symmetry, JSON, SVG, compare flags
 
-## What's New in v2.0.0
+## What's New in v2.1.0
+
+### Bug Fixes
+- **`--no-color` now works everywhere**: Previously, `--no-color` only suppressed color in the main snowflake render. It now correctly suppresses ANSI codes in:
+  - Gallery mode (`--gallery`)
+  - Compare mode (`--compare`)
+  - Info mode (`--info`)
+  - Animation mode (`--animate`)
+  - Render mode header text
+- **SVG XSS/injection prevention**: Seeds and crystal types containing `<`, `>`, `&`, or `"` characters are now properly HTML-escaped in SVG output, preventing malformed SVG and potential XSS attacks.
+- **`generate_gallery()` now accepts `color` parameter**: Gallery rendering can now be colorless, matching the behavior of other rendering functions.
+- **`animate_snowfall()` now accepts `color` parameter**: Animation can now be rendered without ANSI color codes.
+- **`print_seed_info()` now accepts `color` parameter**: Crystal report header respects the color flag.
+- **`main()` now passes `color` to all rendering functions**: Gallery, info, and animate calls now receive the `color` flag derived from `--no-color` and TTY detection.
+
+### Improvements
+- **Type hints**: Added `Optional[str]` type hints for color grid arrays in `animate_snowfall()` and `generate_gallery()`.
+- **69 tests**: Added 16 new tests covering no-color mode, SVG escaping, seed info color, and animation color parameter.
+
+## What Was New in v2.0.0
 
 - **`--symmetry` flag**: Choose 4, 6, 8, or 12-fold rotational symmetry
 - **`--compare` mode**: Side-by-side comparison of two seeds
@@ -186,7 +231,6 @@ The test suite covers:
 - **Input validation**: Depth and size are automatically clamped to valid ranges
 - **`Segment.to_dict()`**: Serialize segments for JSON export
 - **`SeededRNG.shuffle()`**: Fisher-Yates shuffle for future use
-- **53 tests**: Comprehensive test coverage including all new features
 - **Type hints**: Full type annotations throughout the codebase
 - **Better docstrings**: Detailed docstrings with argument descriptions
 

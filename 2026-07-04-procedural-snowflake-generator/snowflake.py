@@ -17,11 +17,12 @@ Features:
   - SVG and JSON export for programmatic use
   - Deterministic seeds for reproducible art
 
-Version: 2.0.0
+Version: 2.1.0
 """
 
 import argparse
 import hashlib
+import html
 import json
 import math
 import os
@@ -30,7 +31,7 @@ import sys
 import time
 from typing import Dict, List, Optional, Tuple
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 
 # ─── ANSI helpers ──────────────────────────────────────────────────────────
 
@@ -397,7 +398,8 @@ def render_snowflake(segments: List[Segment], crystal_type: str, seed: str,
     # Build output
     lines: List[str] = []
     if show_info:
-        lines.append(f"{BOLD}❄  Procedural Snowflake Generator{RESET}")
+        header = "❄  Procedural Snowflake Generator"
+        lines.append(f"{BOLD}{header}{RESET}" if color else header)
         lines.append(f"   Seed: {seed}")
         lines.append(f"   Type: {crystal_type.capitalize()}")
         lines.append(f"   Symmetry: {symmetry}-fold")
@@ -428,7 +430,7 @@ def render_snowflake(segments: List[Segment], crystal_type: str, seed: str,
 def animate_snowfall(segments: List[Segment], crystal_type: str, seed: str,
                      palette: str = "frost", frames: int = 30,
                      width: int = 80, height: int = 24,
-                     symmetry: int = 6):
+                     symmetry: int = 6, color: bool = True):
     """Animate a snowflake gently falling through a starry sky.
 
     Args:
@@ -440,6 +442,7 @@ def animate_snowfall(segments: List[Segment], crystal_type: str, seed: str,
         width: Terminal width in characters.
         height: Terminal height in characters.
         symmetry: Number of symmetry folds.
+        color: Whether to include ANSI color codes.
     """
     pal = PALETTES.get(palette, PALETTES["frost"])
 
@@ -477,7 +480,7 @@ def animate_snowfall(segments: List[Segment], crystal_type: str, seed: str,
 
         # Build frame
         grid = [[" " for _ in range(width)] for _ in range(height)]
-        grid_colors = [[None for _ in range(width)] for _ in range(height)]
+        grid_colors: List[List[Optional[str]]] = [[None for _ in range(width)] for _ in range(height)]
 
         # Stars
         for sx, sy, sch in stars:
@@ -485,7 +488,8 @@ def animate_snowfall(segments: List[Segment], crystal_type: str, seed: str,
             if rng2.random() > 0.3:
                 if 0 <= sy < height and 0 <= sx < width:
                     grid[sy][sx] = sch
-                    grid_colors[sy][sx] = DIM + "\033[38;5;244m"
+                    if color:
+                        grid_colors[sy][sx] = DIM + "\033[38;5;244m"
 
         # Snowflake
         for (fx, fy), ch in flake_chars.items():
@@ -494,14 +498,16 @@ def animate_snowfall(segments: List[Segment], crystal_type: str, seed: str,
             if 0 <= gx < width and 0 <= gy < height:
                 depth = points[(fx, fy)][0]
                 grid[gy][gx] = ch
-                grid_colors[gy][gx] = pal[min(depth, len(pal) - 1)]
+                if color:
+                    grid_colors[gy][gx] = pal[min(depth, len(pal) - 1)]
 
         # Center crystal
         ccx = flake_x_pos + cx
         ccy = flake_y_pos + cy
         if 0 <= ccx < width and 0 <= ccy < height:
             grid[ccy][ccx] = "◆"
-            grid_colors[ccy][ccx] = pal[0]
+            if color:
+                grid_colors[ccy][ccx] = pal[0]
 
         # Render
         lines = []
@@ -509,14 +515,20 @@ def animate_snowfall(segments: List[Segment], crystal_type: str, seed: str,
             row = ""
             for x in range(width):
                 ch = grid[y][x]
-                if ch != " " and grid_colors[y][x]:
-                    row += grid_colors[y][x] + ch + RESET
+                if ch != " ":
+                    if color and grid_colors[y][x]:
+                        row += grid_colors[y][x] + ch + RESET
+                    else:
+                        row += ch
                 else:
-                    row += ch
+                    row += " "
             lines.append(row.rstrip())
 
         output = "\n".join(lines)
-        sys.stdout.write(f"\033[2J\033[H{output}\n\033[38;5;117m❄ {seed} ❄{RESET}\n")
+        if color:
+            sys.stdout.write(f"\033[2J\033[H{output}\n\033[38;5;117m❄ {seed} ❄{RESET}\n")
+        else:
+            sys.stdout.write(f"\033[2J\033[H{output}\n❄ {seed} ❄\n")
         sys.stdout.flush()
         time.sleep(0.12)
 
@@ -525,7 +537,7 @@ def animate_snowfall(segments: List[Segment], crystal_type: str, seed: str,
 
 
 def generate_gallery(seeds: List[str], palette: str = "frost", width: int = 39,
-                     symmetry: int = 6) -> str:
+                     symmetry: int = 6, color: bool = True) -> str:
     """Generate a side-by-side gallery of multiple snowflakes.
 
     Args:
@@ -533,6 +545,7 @@ def generate_gallery(seeds: List[str], palette: str = "frost", width: int = 39,
         palette: Color palette name.
         width: Canvas width per snowflake.
         symmetry: Number of symmetry folds.
+        color: Whether to include ANSI color codes.
 
     Returns:
         Formatted string with side-by-side snowflakes.
@@ -547,7 +560,7 @@ def generate_gallery(seeds: List[str], palette: str = "frost", width: int = 39,
 
         pal = PALETTES.get(palette, PALETTES["frost"])
         grid = [[" " for _ in range(width)] for _ in range(width)]
-        grid_c = [[None for _ in range(width)] for _ in range(width)]
+        grid_c: List[List[Optional[str]]] = [[None for _ in range(width)] for _ in range(width)]
 
         grid[cy][cx] = "◆"
         grid_c[cy][cx] = pal[0]
@@ -566,7 +579,8 @@ def generate_gallery(seeds: List[str], palette: str = "frost", width: int = 39,
         label = f" {seed[:8]}… ({ctype[:4]}) "
         header_parts.append(label.center(width))
 
-    result = BOLD + "❄  Snowflake Gallery" + RESET + "\n"
+    gallery_header = "❄  Snowflake Gallery"
+    result = (f"{BOLD}{gallery_header}{RESET}" if color else gallery_header) + "\n"
     result += "│".join(header_parts) + "\n"
     result += "─" * (width * len(seeds) + len(seeds) - 1) + "\n"
 
@@ -576,8 +590,11 @@ def generate_gallery(seeds: List[str], palette: str = "frost", width: int = 39,
             row = ""
             for x in range(width):
                 ch = grid[y][x]
-                if ch != " " and grid_c[y][x]:
-                    row += grid_c[y][x] + ch + RESET
+                if ch != " ":
+                    if color and grid_c[y][x]:
+                        row += grid_c[y][x] + ch + RESET
+                    else:
+                        row += ch
                 else:
                     row += " "
             row_parts.append(row)
@@ -650,7 +667,8 @@ def compare_snowflakes(seed_a: str, seed_b: str, canvas_size: int = 31,
     sep = " │ "
     header_a = f" {seed_a[:12]} ({ctype_a[:6]}) ".center(canvas_size)
     header_b = f" {seed_b[:12]} ({ctype_b[:6]}) ".center(canvas_size)
-    result.append(f"{BOLD}❄  Snowflake Comparison{RESET}")
+    header_label = "❄  Snowflake Comparison"
+    result.append(f"{BOLD}{header_label}{RESET}" if color else header_label)
     result.append(header_a + sep + header_b)
     result.append("─" * canvas_size + "─┼─" + "─" * canvas_size)
 
@@ -708,7 +726,7 @@ def export_svg(segments: List[Segment], crystal_type: str, seed: str,
     lines.append(f'  </g>')
     lines.append(f'  <text x="{size // 2}" y="{size - 15}" text-anchor="middle" '
                  f'fill="{svg_pal[1]}" font-size="12" font-family="monospace">'
-                 f'❄ {seed} ({crystal_type})</text>')
+                 f'❄ {html.escape(seed)} ({html.escape(crystal_type)})</text>')
     lines.append(f'</svg>')
 
     with open(filename, "w", encoding="utf-8") as f:
@@ -743,12 +761,13 @@ def export_json(segments: List[Segment], crystal_type: str, seed: str,
     return json.dumps(data, indent=2)
 
 
-def print_seed_info(seed: str, symmetry: int = 6):
+def print_seed_info(seed: str, symmetry: int = 6, color: bool = True):
     """Show deterministic properties derived from a seed.
 
     Args:
         seed: The seed string to analyze.
         symmetry: Number of symmetry folds.
+        color: Whether to include ANSI color codes.
     """
     rng = SeededRNG(seed)
 
@@ -762,7 +781,8 @@ def print_seed_info(seed: str, symmetry: int = 6):
     humidity = rng.uniform(60, 100)
     temp = rng.uniform(-20, -2)
 
-    print(f"{BOLD}❄  Snowflake Crystal Report{RESET}")
+    header = "❄  Snowflake Crystal Report"
+    print(f"{BOLD}{header}{RESET}" if color else header)
     print(f"   Seed:       {seed}")
     print(f"   Crystal:    {ct}")
     print(f"   Symmetry:   {symmetry}-fold")
@@ -842,12 +862,12 @@ Examples:
         color = False
 
     if args.info:
-        print_seed_info(args.seed, symmetry=args.symmetry)
+        print_seed_info(args.seed, symmetry=args.symmetry, color=color)
 
     if args.gallery:
         seeds = [f"{args.seed}-{i}" for i in range(args.gallery)]
         print(generate_gallery(seeds, palette=args.palette, width=39,
-                               symmetry=args.symmetry))
+                               symmetry=args.symmetry, color=color))
         return
 
     if args.compare:
@@ -875,7 +895,7 @@ Examples:
 
     if args.animate:
         animate_snowfall(segments, crystal_type, args.seed, palette=args.palette,
-                         symmetry=args.symmetry)
+                         symmetry=args.symmetry, color=color)
     else:
         output = render_snowflake(segments, crystal_type, args.seed,
                                   canvas_size=args.size, palette=args.palette,

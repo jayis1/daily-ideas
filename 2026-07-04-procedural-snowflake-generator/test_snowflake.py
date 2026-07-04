@@ -16,6 +16,7 @@ from snowflake import (
     render_snowflake, export_svg, export_json, generate_gallery,
     compare_snowflakes, PALETTES, SVG_PALETTES, VALID_SYMMETRIES,
     CRYSTAL_TYPES, __version__, _get_branch_count, _add_koch_edge,
+    print_seed_info, animate_snowfall,
 )
 
 
@@ -482,6 +483,189 @@ class TestCLI:
         )
         assert result.returncode == 0
         assert "Comparison" in result.stdout
+
+
+class TestNoColorMode:
+    """Tests for --no-color flag propagating to all rendering functions."""
+
+    def test_render_no_color_header(self):
+        """render_snowflake with color=False should not contain ANSI in header."""
+        segments, ctype = generate_snowflake("nocolor_hdr", max_depth=4)
+        output = render_snowflake(segments, ctype, "nocolor_hdr",
+                                  canvas_size=31, color=False, show_info=True)
+        import re
+        ansi_seqs = re.findall(r'\033\[[^m]*m', output)
+        assert len(ansi_seqs) == 0, f"Found ANSI sequences in color=False output: {ansi_seqs[:5]}"
+
+    def test_render_with_color_header(self):
+        """render_snowflake with color=True should contain ANSI in header."""
+        segments, ctype = generate_snowflake("color_hdr", max_depth=4)
+        output = render_snowflake(segments, ctype, "color_hdr",
+                                  canvas_size=31, color=True, show_info=True)
+        import re
+        ansi_seqs = re.findall(r'\033\[[^m]*m', output)
+        assert len(ansi_seqs) > 0, "Expected ANSI sequences in color=True output"
+
+    def test_compare_no_color(self):
+        """compare_snowflakes with color=False should not contain ANSI."""
+        output = compare_snowflakes("a", "b", canvas_size=21, color=False)
+        import re
+        ansi_seqs = re.findall(r'\033\[[^m]*m', output)
+        assert len(ansi_seqs) == 0, f"Found ANSI in compare color=False: {ansi_seqs[:5]}"
+
+    def test_compare_with_color(self):
+        """compare_snowflakes with color=True should contain ANSI."""
+        output = compare_snowflakes("x", "y", canvas_size=21, color=True)
+        import re
+        ansi_seqs = re.findall(r'\033\[[^m]*m', output)
+        assert len(ansi_seqs) > 0, "Expected ANSI sequences in color=True output"
+
+    def test_gallery_no_color(self):
+        """generate_gallery with color=False should not contain ANSI."""
+        output = generate_gallery(["g1", "g2"], width=21, color=False)
+        import re
+        ansi_seqs = re.findall(r'\033\[[^m]*m', output)
+        assert len(ansi_seqs) == 0, f"Found ANSI in gallery color=False: {ansi_seqs[:5]}"
+
+    def test_gallery_with_color(self):
+        """generate_gallery with color=True should contain ANSI."""
+        output = generate_gallery(["g1", "g2"], width=21, color=True)
+        import re
+        ansi_seqs = re.findall(r'\033\[[^m]*m', output)
+        assert len(ansi_seqs) > 0, "Expected ANSI sequences in gallery color=True"
+
+    def test_cli_no_color(self):
+        """CLI --no-color should suppress ANSI codes in output."""
+        result = subprocess.run(
+            [sys.executable, "snowflake.py", "-s", "cli_nocolor",
+             "--no-color", "--size", "21"],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(__file__)
+        )
+        import re
+        ansi_seqs = re.findall(r'\033\[[^m]*m', result.stdout)
+        assert len(ansi_seqs) == 0, f"Found ANSI in --no-color output: {ansi_seqs[:5]}"
+
+    def test_cli_no_color_gallery(self):
+        """CLI --no-color should suppress ANSI codes in gallery output."""
+        result = subprocess.run(
+            [sys.executable, "snowflake.py", "-s", "gal_nc",
+             "--gallery", "2", "--no-color"],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(__file__)
+        )
+        import re
+        ansi_seqs = re.findall(r'\033\[[^m]*m', result.stdout)
+        assert len(ansi_seqs) == 0, f"Found ANSI in --no-color gallery: {ansi_seqs[:5]}"
+
+    def test_cli_no_color_compare(self):
+        """CLI --no-color should suppress ANSI codes in compare output."""
+        result = subprocess.run(
+            [sys.executable, "snowflake.py", "--compare", "a", "b",
+             "--no-color", "--size", "21"],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(__file__)
+        )
+        import re
+        ansi_seqs = re.findall(r'\033\[[^m]*m', result.stdout)
+        assert len(ansi_seqs) == 0, f"Found ANSI in --no-color compare: {ansi_seqs[:5]}"
+
+    def test_cli_no_color_info(self):
+        """CLI --no-color with --info should suppress ANSI codes."""
+        result = subprocess.run(
+            [sys.executable, "snowflake.py", "-s", "info_nc",
+             "--info", "--no-color", "--size", "21"],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(__file__)
+        )
+        import re
+        ansi_seqs = re.findall(r'\033\[[^m]*m', result.stdout)
+        assert len(ansi_seqs) == 0, f"Found ANSI in --no-color --info: {ansi_seqs[:5]}"
+
+
+class TestSVGXSSPrevention:
+    """Tests for SVG seed/crystal type HTML escaping."""
+
+    def test_svg_escapes_angle_brackets(self):
+        """SVG export should escape < and > in seed names."""
+        segments, ctype = generate_snowflake("svg_escape", max_depth=3)
+        with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
+            fname = f.name
+        try:
+            export_svg(segments, ctype, '<script>alert(1)</script>', filename=fname)
+            with open(fname) as f:
+                content = f.read()
+            assert '<script>' not in content, "Unescaped <script> in SVG"
+            assert '&lt;script&gt;' in content, "Escaped <script> not found in SVG"
+        finally:
+            os.unlink(fname)
+
+    def test_svg_escapes_ampersand(self):
+        """SVG export should escape & in seed names."""
+        segments, ctype = generate_snowflake("svg_amp", max_depth=3)
+        with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
+            fname = f.name
+        try:
+            export_svg(segments, ctype, 'a&b', filename=fname)
+            with open(fname) as f:
+                content = f.read()
+            # The bare & should be escaped as &amp; in the text element
+            assert 'a&amp;b' in content or 'a&#x26;b' in content, "Ampersand not escaped in SVG"
+        finally:
+            os.unlink(fname)
+
+    def test_svg_escapes_quotes(self):
+        """SVG export should escape double quotes in seed names."""
+        segments, ctype = generate_snowflake("svg_quotes", max_depth=3)
+        with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
+            fname = f.name
+        try:
+            export_svg(segments, ctype, 'say "hello"', filename=fname)
+            with open(fname) as f:
+                content = f.read()
+            # Should not have raw " inside the text element attribute
+            assert '&quot;' in content or '&#x27;' in content or '&amp;quot;' in content, \
+                "Quotes should be escaped in SVG"
+        finally:
+            os.unlink(fname)
+
+
+class TestPrintSeedInfoColor:
+    """Tests for print_seed_info color parameter."""
+
+    def test_seed_info_with_color(self):
+        """print_seed_info with color=True should produce ANSI codes."""
+        import io
+        old_stdout = sys.stdout
+        sys.stdout = io.StringIO()
+        print_seed_info("color_test", color=True)
+        output = sys.stdout.getvalue()
+        sys.stdout = old_stdout
+        import re
+        assert len(re.findall(r'\033\[[^m]*m', output)) > 0, "Expected ANSI codes"
+
+    def test_seed_info_no_color(self):
+        """print_seed_info with color=False should not produce ANSI codes."""
+        import io
+        old_stdout = sys.stdout
+        sys.stdout = io.StringIO()
+        print_seed_info("nocolor_test", color=False)
+        output = sys.stdout.getvalue()
+        sys.stdout = old_stdout
+        import re
+        assert len(re.findall(r'\033\[[^m]*m', output)) == 0, \
+            "No ANSI codes expected in color=False mode"
+
+
+class TestAnimateSnowfallColor:
+    """Tests for animate_snowfall color parameter (signature only)."""
+
+    def test_animate_has_color_param(self):
+        """animate_snowfall should accept a color parameter."""
+        import inspect
+        from snowflake import animate_snowfall
+        sig = inspect.signature(animate_snowfall)
+        assert 'color' in sig.parameters, "animate_snowfall should have a 'color' parameter"
 
 
 if __name__ == "__main__":
