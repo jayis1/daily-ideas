@@ -389,6 +389,118 @@ class TestCLIArgs(unittest.TestCase):
         self.assertEqual(MAX_PINS, 8)
 
 
+class TestBugFixes(unittest.TestCase):
+    """Regression tests for bugs found and fixed."""
+
+    def test_pick_health_never_negative(self):
+        """Pick health should never go below 0."""
+        random.seed(42)
+        lock = Lock(3, 5)  # Master difficulty
+        lock.apply_tension(0.5)
+        lock.pick_health = 0.0001
+        for _ in range(100):
+            lock.lift_pin(0, 0.02)
+        self.assertGreaterEqual(lock.pick_health, 0.0,
+                                 "Pick health should never go negative from lifting")
+
+    def test_rake_pick_health_never_negative(self):
+        """Raking should never make pick health negative."""
+        random.seed(42)
+        lock = Lock(4, 3)
+        lock.apply_tension(0.5)
+        lock.pick_health = 0.01
+        for _ in range(10):
+            lock.rack()
+        self.assertGreaterEqual(lock.pick_health, 0.0,
+                                 "Raking should never make pick health negative")
+
+    def test_pins_set_count_is_computed(self):
+        """pins_set_count should always match actual is_set count."""
+        random.seed(42)
+        lock = Lock(5, 2)
+        lock.apply_tension(0.5)
+
+        # Set pins one by one and verify count
+        for i, pin in enumerate(lock.pins):
+            if pin.is_bound and not pin.is_set:
+                while not pin.is_set:
+                    lock.lift_pin(i, 0.02)
+                self.assertEqual(lock.pins_set_count,
+                                 sum(1 for p in lock.pins if p.is_set),
+                                 f"After setting pin {i}, count mismatch")
+                lock.apply_tension(lock.tension)
+
+    def test_already_set_pin_not_double_counted(self):
+        """Lifting an already-set pin should not increment pins_set_count."""
+        random.seed(42)
+        lock = Lock(3, 1)
+        lock.apply_tension(0.5)
+
+        # Set a bound pin
+        for i, pin in enumerate(lock.pins):
+            if pin.is_bound:
+                while not pin.is_set:
+                    lock.lift_pin(i, 0.02)
+                break
+
+        count_before = lock.pins_set_count
+        # Lift the already-set pin again
+        lock.lift_pin(i, 0.02)
+        self.assertEqual(lock.pins_set_count, count_before,
+                         "Lifting an already-set pin should not increment count")
+
+    def test_check_open_with_exact_tension_threshold(self):
+        """Lock should open when tension is exactly 0.2."""
+        lock = Lock(3, 1)
+        for pin in lock.pins:
+            pin.is_set = True
+            pin.current_height = pin.key_height
+        lock.tension = 0.2
+        result = lock.check_open()
+        self.assertTrue(result, "Lock should open with tension >= 0.2")
+
+    def test_check_open_below_tension_threshold(self):
+        """Lock should not open when tension is below 0.2."""
+        lock = Lock(3, 1)
+        for pin in lock.pins:
+            pin.is_set = True
+            pin.current_height = pin.key_height
+        lock.tension = 0.19
+        result = lock.check_open()
+        self.assertFalse(result, "Lock should not open with tension < 0.2")
+
+    def test_pick_health_bar_distinct_levels(self):
+        """Pick health bar should have distinct visuals for different levels."""
+        from lock_picker import get_pick_health_bar
+        bar_high = get_pick_health_bar(0.8, 20)
+        bar_mid = get_pick_health_bar(0.4, 20)
+        bar_low = get_pick_health_bar(0.1, 20)
+        # High should use ▓, mid should use ▒, low should use ·
+        self.assertIn('▓', bar_high)
+        self.assertIn('▒', bar_mid)
+        self.assertIn('·', bar_low)
+
+    def test_pins_set_count_after_raking(self):
+        """pins_set_count should match actual count after raking."""
+        random.seed(42)
+        lock = Lock(4, 1)
+        lock.apply_tension(0.5)
+        lock.rack()
+        self.assertEqual(lock.pins_set_count,
+                         sum(1 for p in lock.pins if p.is_set),
+                         "pins_set_count should match actual after raking")
+
+    def test_raking_on_novice_no_pick_wear(self):
+        """Raking on Novice difficulty should not wear the pick."""
+        random.seed(42)
+        lock = Lock(4, 1)  # Novice
+        lock.apply_tension(0.5)
+        initial_health = lock.pick_health
+        lock.rack()
+        self.assertEqual(lock.pick_health, initial_health,
+                         "Raking on Novice should not wear the pick")
+
+
 if __name__ == '__main__':
     print("Testing Terminal Lock Picker...\n")
     unittest.main(verbosity=2)

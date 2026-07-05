@@ -23,7 +23,7 @@ import math
 
 # ─── Constants ────────────────────────────────────────────────────────────
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 
 DIFFICULTY_NAMES = ['Novice', 'Easy', 'Medium', 'Hard', 'Master']
 
@@ -108,9 +108,13 @@ class Lock:
         self.core_rotation = 0.0
         self.raking_mode = False
         self.pick_health = 1.0  # Pick durability (1.0 = full, 0.0 = broken)
-        self.pins_set_count = 0  # Track how many pins have been set
 
         self._generate_pins()
+
+    @property
+    def pins_set_count(self):
+        """Number of pins currently set (computed from pin states)."""
+        return sum(1 for p in self.pins if p.is_set)
 
     def _generate_pins(self):
         """Generate random pin heights and binding orders.
@@ -206,7 +210,7 @@ class Lock:
 
         # Pick wear — each lift slightly damages the pick on Hard/Master
         if self.difficulty >= 4:
-            self.pick_health -= 0.0005 * amount
+            self.pick_health = max(0.0, self.pick_health - 0.0005 * amount)
 
         new_height = pin.current_height + effective_lift
         new_height = max(0.0, new_height)
@@ -219,16 +223,14 @@ class Lock:
 
         # Check if pin is set (at the shear line = key height)
         tolerance = 0.06 - (self.difficulty * 0.006)
-        if pin.is_bound and abs(pin.current_height - pin.key_height) < tolerance:
+        if pin.is_bound and not pin.is_set and abs(pin.current_height - pin.key_height) < tolerance:
             pin.is_set = True
             pin.current_height = pin.key_height  # Snap to set position
-            self.pins_set_count += 1
             return True  # Click!
 
         # If pin was set but we moved it, it might unset
         if pin.is_set and abs(pin.current_height - pin.key_height) > tolerance * 2.5:
             pin.is_set = False
-            self.pins_set_count = max(0, self.pins_set_count - 1)
 
         return False
 
@@ -250,7 +252,7 @@ class Lock:
         Returns:
             True if the lock is successfully opened.
         """
-        if all(pin.is_set for pin in self.pins) and self.tension > 0.2:
+        if all(pin.is_set for pin in self.pins) and self.tension >= 0.2:
             self.is_open = True
             return True
         return False
@@ -273,16 +275,15 @@ class Lock:
                 if pin.is_bound and abs(pin.current_height - pin.key_height) < tolerance:
                     pin.is_set = True
                     pin.current_height = pin.key_height
-                    self.pins_set_count += 1
                     clicks += 1
-                # Raking can unset previously set pins on hard locks
-                elif pin.is_set and self.difficulty >= 3:
-                    if random.random() < 0.15 * (self.difficulty - 2):
-                        pin.is_set = False
-                        self.pins_set_count = max(0, self.pins_set_count - 1)
+        # Raking can unset previously set pins on hard locks
+        if self.difficulty >= 3:
+            for pin in self.pins:
+                if pin.is_set and random.random() < 0.15 * (self.difficulty - 2):
+                    pin.is_set = False
         # Raking is hard on the pick
         if self.difficulty >= 3:
-            self.pick_health -= 0.03
+            self.pick_health = max(0.0, self.pick_health - 0.03)
         return clicks
 
     def get_next_hint(self):
@@ -331,8 +332,6 @@ def get_pin_visual(pin, width=10):
     status = ''
     if pin.is_bound:
         status = ' ←BOUND'
-    elif pin.is_set:
-        status = ' ←SET'
 
     return bar + status
 
@@ -354,7 +353,8 @@ def get_pick_health_bar(health, width=20):
     elif health > 0.2:
         bar = '▒' * filled + '░' * (width - filled)
     else:
-        bar = '▒' * filled + '░' * (width - filled)
+        # Critical health: show remaining as warning dots
+        bar = '·' * filled + '·' * (width - filled)
     return f"Pick: [{bar}] {health:.0%}"
 
 
@@ -376,8 +376,8 @@ class LockPickerGame:
         self.total_time = 0
         self.start_time = 0
         self.state = 'menu'
-        self.num_pins = start_pins if start_pins else 5
-        self.difficulty = start_difficulty if start_difficulty else 1
+        self.num_pins = start_pins if start_pins is not None else 5
+        self.difficulty = start_difficulty if start_difficulty is not None else 1
         self.scroll_offset = 0
         self.hint_cooldown = 0  # Frames until next hint available
         self.last_hint = ""
@@ -978,14 +978,17 @@ def run_demo(num_pins=5, difficulty=2, speed=0.05):
         found_bound = False
         for i, pin in enumerate(lock.pins):
             if pin.is_bound and not pin.is_set:
+                clicked_pin = False
                 for _ in range(lift_per_round):
                     clicked = lock.lift_pin(i, 0.02)
                     if clicked:
                         print(f"  Round {round_num+1}: ✦ CLICK! Pin {i+1} set! ✦")
                         no_progress_count = 0
+                        clicked_pin = True
                         break
+                if not clicked_pin:
+                    no_progress_count += 1
                 found_bound = True
-                no_progress_count += 1
                 break
 
         if not found_bound:
@@ -1056,8 +1059,8 @@ def main():
     """Main entry point — parse args and launch appropriate mode."""
     args = parse_args()
 
-    pins = args.pins if args.pins else 5
-    difficulty = args.difficulty if args.difficulty else 1
+    pins = args.pins if args.pins is not None else 5
+    difficulty = args.difficulty if args.difficulty is not None else 1
 
     if args.demo:
         # Non-interactive demo mode
@@ -1065,6 +1068,7 @@ def main():
         sys.exit(0 if success else 1)
     else:
         # Interactive curses mode
+        result = None
         try:
             def curses_main(stdscr):
                 game = LockPickerGame(stdscr, start_pins=args.pins, start_difficulty=args.difficulty)
@@ -1073,7 +1077,7 @@ def main():
             result = curses.wrapper(curses_main)
         except KeyboardInterrupt:
             print("\nThanks for playing Terminal Lock Picker!")
-        print(f"\nLocks picked this session: {result if 'result' in dir() else 'interrupted'}")
+        print(f"\nLocks picked this session: {result if result is not None else 'interrupted'}")
 
 
 if __name__ == '__main__':
