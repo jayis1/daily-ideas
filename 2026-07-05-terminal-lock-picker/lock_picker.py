@@ -25,7 +25,7 @@ import math
 
 # ─── Constants ────────────────────────────────────────────────────────────
 
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 
 DIFFICULTY_NAMES = ['Novice', 'Easy', 'Medium', 'Hard', 'Master']
 
@@ -604,6 +604,7 @@ class LockPickerGame:
         self.lock = Lock(self.num_pins, self.difficulty)
         self.selected_pin = 0
         self.start_time = time.time()
+        self.completion_time = 0
         self.attempts += 1
         self.state = 'picking'
         self.hint_cooldown = 0
@@ -789,6 +790,7 @@ class LockPickerGame:
             # Check for open
             if self.lock.check_open():
                 elapsed = time.time() - self.start_time
+                self.completion_time = elapsed  # Freeze the completion time
                 self.state = 'victory'
                 self.locks_picked += 1
                 self.total_time += elapsed
@@ -1126,7 +1128,8 @@ class LockPickerGame:
         self.stdscr.clear()
         h, w = self.stdscr.getmaxyx()
 
-        elapsed = time.time() - self.start_time
+        # Use frozen completion time instead of live timer
+        elapsed = self.completion_time if self.completion_time > 0 else (time.time() - self.start_time)
 
         # Animated celebration: show core rotating
         rotation_frames = [
@@ -1244,6 +1247,11 @@ def run_demo(num_pins=5, difficulty=2, speed=0.05, verbose=False):
     total_rakes = 0
 
     while not lock.is_open and round_num < max_rounds:
+        # Check if pick is broken (Hard/Master difficulty can break picks)
+        if lock.pick_health <= 0:
+            print(f"  ⚠ Pick broke at round {round_num+1}! Cannot continue.")
+            break
+
         # Apply spring decay (simulates one game frame)
         for p in lock.pins:
             if not p.is_set and p.current_height > 0:
@@ -1406,7 +1414,12 @@ def main():
             result = curses.wrapper(curses_main)
         except KeyboardInterrupt:
             print("\nThanks for playing Terminal Lock Picker!")
-        print(f"\nLocks picked this session: {result if result is not None else 'interrupted'}")
+        except Exception as e:
+            print(f"\nError: {e}")
+        if result is not None:
+            print(f"\nLocks picked this session: {result}")
+        else:
+            print("\nSession ended.")
 
 
 if __name__ == '__main__':

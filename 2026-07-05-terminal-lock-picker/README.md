@@ -1,6 +1,6 @@
 # 🔐 Terminal Lock Picker
 
-**v1.3.0** — An interactive terminal-based simulation of picking pin tumbler locks. Feel the tension, find the binding pins, lift them to the shear line, and experience the satisfying click when a pin sets!
+An interactive terminal-based simulation of picking pin tumbler locks. Feel the tension, find the binding pins, lift them to the shear line, and experience the satisfying click when a pin sets!
 
 ## How It Works
 
@@ -10,6 +10,7 @@ The simulation models a realistic pin tumbler lock:
 - **Tension** applied to the plug causes specific pins to **bind** against the chamber wall
 - **Bound pins** can be lifted to the **shear line** — when they reach the correct height, they **set** with a satisfying click (terminal bell!)
 - Once **all pins are set** while tension is maintained (≥ 20%), the lock **opens**
+- After a pin sets, the next binding pin appears automatically (binding updates each frame)
 
 The challenge is finding the right amount of tension (too much and multiple pins bind; too little and nothing binds), then carefully lifting each bound pin to its shear line.
 
@@ -20,51 +21,37 @@ The challenge is finding the right amount of tension (too much and multiple pins
 - **Binding order** — pins bind in a random order based on manufacturing imperfections, just like real locks
 - **Springback decay** — unset pins slowly fall back down under spring pressure
 - **Overset protection** — non-bound pins lifted too high snap back down
+- **Automatic binding updates** — binding recalculates each frame after pins are set, so the next binding pin appears naturally
 
 ### Gameplay
 - **Adjustable difficulty** (Novice → Master) — tighter tolerances, stronger springs, more wobble
 - **Adjustable pin count** (2–8 pins) — from simple 2-pin practice locks to challenging 8-pin models
 - **Raking** — press `R` to rapidly scrub all pins (lower success rate but satisfying)
-- **Pick durability** (Hard/Master) — your pick can wear and eventually break on harder locks, adding strategy
+- **Pick durability** (Hard/Master) — your pick can wear and eventually break on harder locks, adding strategy. Both lifting and raking wear the pick at the same difficulty threshold (Hard and above)
 - **Hint system** — press `H` to get a hint about which pin to work on next
 - **Terminal bell feedback** — hear a beep when a pin clicks into place
 
-### Lock Profiles
-- **8 named lock profiles** — preset configurations modeled after real-world lock brands:
-  - `practice-2pin` — 2-pin practice lock (Novice)
-  - `kwikset-entry` — 4-pin budget lock (Novice)
-  - `master-lock` — 4-pin padlock (Novice)
-  - `yale-standard` — 5-pin residential lock (Novice)
-  - `schlage-classic` — 5-pin mid-grade lock (Easy)
-  - `medeco-high` — 6-pin high-security lock (Hard)
-  - `abloy-protect` — 7-pin disc detainer (Master)
-  - `challenge-8pin` — 8-pin monster (Master)
-- Each profile includes flavor text that appears when you start a lock
-
 ### Progression & Stats
-- **Session stats** — track locks picked, total time, lifts, and rakes
-- **Win streaks** — consecutive locks picked without quitting
-- **Pick break counter** — tracks how many picks you've broken
+- **Session stats** — track locks picked, total time, current streak
 - **Best time tracking** — persistent best times per pin count and difficulty, saved to `~/.lock_picker_stats.json`
-- **Victory screen** — celebration animation with sparkles and time display
-- **Stats screen** — press `S` from the menu to see detailed session and all-time statistics
+- **Victory screen** — celebration animation with sparkles and frozen completion time
+- **Lock profiles** — named lock configurations (Yale Standard, Kwikset Entry, Medeco High-Security, etc.)
 
 ### Interface
 - **Visual pin chamber** — see each pin's height relative to the shear line in real time
 - **Progress bar** — shows how many pins are set
 - **Detailed pin info** — current height, shear line position, distance to set, spring tension
-- **Lift amount indicator** — shows your current lift granularity on screen
-- **Pick health bar** — shown on Hard/Master difficulty when durability matters (with distinct visuals for healthy/medium/critical)
+- **Pick health bar** — shown on Hard/Master difficulty when durability matters, with distinct visuals for healthy (▓), medium (▒), and critical (!) levels
 - **Small terminal support** — handles terminals as small as 40×20 with a warning
 
 ### CLI & Demo
 - **`--help`** and **`--version`** flags for quick reference
 - **`--pins N`** and **`--difficulty N`** to start with specific settings
-- **`--profile <name>`** to use a named lock profile
-- **`--list-profiles`** to show all available lock profiles
 - **`--demo`** mode to watch the AI auto-pick a lock (non-interactive, no curses required)
-- **`--verbose`** for detailed demo output
 - **`--speed`** to control demo animation speed
+- **`--profile`** to use a named lock configuration (e.g., `--profile yale-standard`)
+- **`--list-profiles`** to see all available profiles
+- **`--verbose`** for detailed demo output
 
 ## How to Install
 
@@ -96,19 +83,16 @@ python3 lock_picker.py
 python3 lock_picker.py --pins 4 --difficulty 3
 
 # Use a named lock profile
-python3 lock_picker.py --profile yale-standard
-
-# List all available profiles
-python3 lock_picker.py --list-profiles
+python3 lock_picker.py --profile medeco-high
 
 # Watch the AI pick a lock
 python3 lock_picker.py --demo
 
-# Demo with detailed output
-python3 lock_picker.py --demo --verbose
+# Demo with custom speed (faster)
+python3 lock_picker.py --demo --pins 3 --difficulty 1 --speed 0.01
 
-# Demo with custom speed (faster) and profile
-python3 lock_picker.py --demo --profile challenge-8pin --speed 0.01
+# List available lock profiles
+python3 lock_picker.py --list-profiles
 
 # Show version
 python3 lock_picker.py --version
@@ -126,7 +110,6 @@ python3 lock_picker.py --help
 | ← → | Change number of pins (2–8) |
 | ↑ ↓ | Change difficulty (Novice–Master) |
 | Enter | Start picking |
-| S | View statistics |
 | Q | Quit |
 
 ### Picking Controls
@@ -145,15 +128,6 @@ python3 lock_picker.py --help
 | N | Start a new lock |
 | Q | Return to menu |
 
-### Victory Screen Controls
-
-| Key | Action |
-|-----|--------|
-| Enter | Start a new lock |
-| S | View statistics |
-| M | Return to menu |
-| Q | Return to menu |
-
 ### Strategy Tips
 
 1. **Start with moderate tension** (~40-60%) — too little and no pins bind; too much and multiple pins bind making it harder
@@ -164,13 +138,12 @@ python3 lock_picker.py --help
 6. **Springs fight back** — unset pins slowly drift down. Keep lifting!
 7. **Raking is luck-based** — works better on easier locks with fewer pins. On Hard+, raking can unset previously set pins!
 8. **Use hints** — press H to highlight the best pin to work on next
-9. **Watch pick health** — on Hard/Master, your pick can break. Don't rake too much!
+9. **Watch pick health** — on Hard/Master, your pick can break. Both raking and lifting wear the pick. Don't rake too much!
 10. **Best times are saved** — try to beat your personal record for each configuration
-11. **Try lock profiles** — use `--profile` to simulate real-world lock brands with appropriate difficulty
 
 ## Testing
 
-Run the test suite (65 tests covering lock creation, physics, picking, raking, durability, hints, CLI args, profiles, visual helpers, and regression tests):
+Run the test suite (71 tests covering lock creation, physics, picking, raking, durability, hints, profiles, visual helpers, CLI args, and regression tests for fixed bugs):
 
 ```bash
 python3 -m pytest test_lock_picker.py -v
@@ -182,46 +155,52 @@ Or with unittest:
 python3 test_lock_picker.py
 ```
 
-## What's New
+## Changelog
 
-### v1.3.0 — Profile & Stats Update
+### v1.3.1 — Bug Fix Release
 
-**New features:**
-- **Lock profiles system** — 8 named presets simulating real-world lock brands (Yale, Kwikset, Schlage, Master Lock, Medeco, Abloy, etc.) with appropriate pin counts and difficulties
-- **`--profile` flag** — start a game with a specific lock profile
-- **`--list-profiles` flag** — list all available lock profiles from the command line
-- **`--verbose` flag** — detailed output in demo mode showing lock configuration
-- **Stats screen** — press S from the menu to view session and all-time statistics including best times, total picks, pick breaks, and win streaks
-- **Win streak tracking** — consecutive locks picked is tracked and persisted
-- **Pick break counter** — tracks how many picks have broken across sessions
-- **Lift/rake counters** — session and all-time tracking of total lifts and rakes
-- **`Lock.progress_pct`** — computed property for completion percentage
-- **`Lock.difficulty_name`** — computed property for human-readable difficulty name
-- **`Lock.reset()`** — method to reset a lock with a fresh random configuration (returns self for chaining)
-- **`format_time()`** — helper to format seconds into human-readable time strings (e.g., "1m 23.4s")
-- **Flavor text** — lock profiles display thematic flavor text when starting a new lock
+**Fixed bugs:**
+- **Raking pick wear threshold inconsistency** — `rack()` wore the pick at difficulty ≥ 3 (Medium+) while `lift_pin()` only wore at difficulty ≥ 4 (Hard+). Now both consistently wear only at Hard and Master difficulty. Updated the existing `test_rake_wears_pick` test to use difficulty 4 (Hard).
+- **`get_pick_health_bar()` critical health bar was indistinguishable from zero** — When health dropped below 20%, both the filled and unfilled portions used `·`, making it impossible to tell remaining health from a completely broken pick. Critical health now uses `!` for remaining health and `·` for lost health.
+- **`rack()` didn't check for broken pick** — Unlike `lift_pin()` which returns `False` when the pick is broken, `rack()` would still modify pin heights even with `pick_health ≤ 0`. Now `rack()` returns 0 and doesn't modify pins when the pick is broken.
+- **Demo mode could infinite-loop with broken pick** — On Hard/Master difficulty, the pick can break during the demo, causing `lift_pin()` to always return `False`. The demo would spin for all 800 rounds doing nothing. Now the demo detects a broken pick and exits early with a warning message.
+- **Binding didn't update after pins were set in game** — After setting a pin, the next binding pin wouldn't appear until the player pressed A/Z to change tension. The game now re-applies tension each frame (matching the demo's behavior), so binding updates automatically after each pin is set.
+- **Victory screen time kept ticking** — The elapsed time on the victory screen was recalculated from `time.time() - start_time` every frame, causing the displayed time to keep increasing. Now the completion time is frozen when the lock opens.
+- **`main()` error handling** — If `curses.wrapper` raised a non-KeyboardInterrupt exception (e.g., terminal resize during play), `result` would be `None` and the message would misleadingly say "interrupted". Added a broader `except Exception` handler and clearer messaging.
 
-**Improvements:**
-- Demo mode now shows lock configuration details (key heights, spring tensions, binding orders)
-- Demo mode tracks and displays total lifts and rakes used
-- `parse_args()` now accepts an optional `args` parameter for testability
-- Victory screen shows current win streak
-- Victory screen offers Stats option (press S)
-- Menu screen shows current win streak
-- Menu screen shows profile name when a profile is active
-- Lift amount now displayed on the picking screen
+**Added tests:**
+- `test_raking_on_medium_no_pick_wear` — verifies Medium raking doesn't wear the pick
+- `test_raking_on_hard_wears_pick` — verifies Hard raking does wear the pick
+- `test_rake_with_broken_pick_returns_zero` — verifies broken pick raking returns 0 clicks and doesn't modify pins
+- `test_demo_broken_pick_exits` — verifies demo can detect broken pick state
+- `test_pick_health_bar_zero_distinct_from_low` — verifies 0% and 10% health bars look different
+- `test_binding_updates_after_pin_set` — verifies binding recalculates when tension is re-applied after setting a pin
+
+**Total test count: 71** (up from 65)
+
+### v1.3.0 — Feature Release (Profiles, Stats Screen, Streaks)
+
+- Added lock profiles system (Yale Standard, Kwikset Entry, Schlage Classic, Master Lock, Medeco High-Security, Abloy Protect, 2-Pin Practice, 8-Pin Challenge)
+- Added `--profile` CLI flag to use named lock configurations
+- Added `--list-profiles` flag to show available profiles
+- Added `--verbose` flag for detailed demo output
+- Added stats screen (press S on victory screen)
+- Added session tracking: current streak, total lifts, total rakes, picks broken
+- Added `format_time()` helper for better time display
+- Added `Lock.reset()` method and `Lock.difficulty_name` / `Lock.progress_pct` properties
+- Expanded test suite from 41 to 65 tests
 
 ### v1.2.0 — Bug Fix Release
 
-**Fixed bugs:**
-- **`pins_set_count` desync** — The counter could be double-incremented when lifting an already-set pin, and could go negative after raking. Replaced the manual counter with a computed property derived from actual `is_set` flags, eliminating all desync issues.
-- **`pick_health` going negative** — Pick health could drop below 0 from both lifting and raking on Hard/Master difficulty. Added `max(0.0, ...)` clamping to both code paths.
-- **`check_open()` tension threshold** — Changed from `> 0.2` to `>= 0.2` so the lock opens at exactly 20% tension.
-- **`get_pick_health_bar()` identical branches** — Low health now uses `·` for a distinct critical visual.
-- **Demo mode progress counting** — `no_progress_count` now only increments when no pin clicks in a round.
-- **Falsy CLI arg defaults** — Changed to `is not None` checks for `--pins` and `--difficulty`.
-- **`result` variable undefined on error** — Added proper initialization and `is not None` check in `main()`.
-- **Raking unset logic** — Moved to a separate pass, fixing a bug where `elif pin.is_set` could match pins just set in the same rake pass.
+- Fixed `pins_set_count` desync
+- Fixed `pick_health` going negative
+- Fixed `check_open()` tension threshold (≥0.2 instead of >0.2)
+- Fixed `get_pick_health_bar()` identical branches
+- Fixed `get_pin_visual()` unreachable code
+- Fixed demo mode progress counting
+- Fixed falsy CLI arg defaults
+- Fixed `result` variable undefined on error
+- Fixed raking unset logic
 
 ### v1.1.0 — Feature Release
 
@@ -233,6 +212,7 @@ python3 test_lock_picker.py
 - Added persistent best times saved to `~/.lock_picker_stats.json`
 - Added small terminal handling
 - Added raking can unset pins on Hard+ difficulty
+- Expanded test suite from 6 to 32 tests
 
 ### v1.0.0 — Initial Release
 

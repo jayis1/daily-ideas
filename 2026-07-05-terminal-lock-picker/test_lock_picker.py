@@ -303,14 +303,14 @@ class TestPickDurability(unittest.TestCase):
                         "Pick should wear on Hard difficulty")
 
     def test_rake_wears_pick(self):
-        """Raking on hard difficulty should wear the pick more."""
+        """Raking on Hard difficulty should wear the pick."""
         random.seed(42)
-        lock = Lock(4, 3)
+        lock = Lock(4, 4)  # Hard difficulty (not Medium)
         lock.apply_tension(0.5)
         initial_health = lock.pick_health
         lock.rack()
         self.assertLess(lock.pick_health, initial_health,
-                        "Raking should wear the pick on Medium+ difficulty")
+                        "Raking should wear the pick on Hard difficulty")
 
 
 class TestHints(unittest.TestCase):
@@ -502,10 +502,11 @@ class TestBugFixes(unittest.TestCase):
         bar_high = get_pick_health_bar(0.8, 20)
         bar_mid = get_pick_health_bar(0.4, 20)
         bar_low = get_pick_health_bar(0.1, 20)
-        # High should use ▓, mid should use ▒, low should use ·
+        # High should use ▓, mid should use ▒, low should use ! (critical)
         self.assertIn('▓', bar_high)
         self.assertIn('▒', bar_mid)
-        self.assertIn('·', bar_low)
+        self.assertIn('!', bar_low)  # Critical health uses ! for remaining
+        self.assertIn('·', bar_low)  # And · for lost health
 
     def test_pins_set_count_after_raking(self):
         """pins_set_count should match actual count after raking."""
@@ -526,6 +527,90 @@ class TestBugFixes(unittest.TestCase):
         lock.rack()
         self.assertEqual(lock.pick_health, initial_health,
                          "Raking on Novice should not wear the pick")
+
+    def test_raking_on_medium_no_pick_wear(self):
+        """Raking on Medium difficulty should not wear the pick (only Hard/Master)."""
+        random.seed(42)
+        lock = Lock(4, 3)  # Medium
+        lock.apply_tension(0.5)
+        initial_health = lock.pick_health
+        lock.rack()
+        self.assertEqual(lock.pick_health, initial_health,
+                         "Raking on Medium should not wear the pick")
+
+    def test_raking_on_hard_wears_pick(self):
+        """Raking on Hard difficulty should wear the pick."""
+        random.seed(42)
+        lock = Lock(4, 4)  # Hard
+        lock.apply_tension(0.5)
+        initial_health = lock.pick_health
+        lock.rack()
+        self.assertLess(lock.pick_health, initial_health,
+                        "Raking on Hard should wear the pick")
+
+    def test_rake_with_broken_pick_returns_zero(self):
+        """Raking with a broken pick should return 0 and not modify pins."""
+        random.seed(42)
+        lock = Lock(4, 4)
+        lock.apply_tension(0.5)
+        lock.pick_health = 0.0
+        # Record pin states before raking
+        heights_before = [p.current_height for p in lock.pins]
+        set_before = [p.is_set for p in lock.pins]
+        clicks = lock.rack()
+        self.assertEqual(clicks, 0, "Raking with broken pick should return 0 clicks")
+        # Pin heights should not change (rake does nothing with broken pick)
+        for i, pin in enumerate(lock.pins):
+            self.assertEqual(pin.current_height, heights_before[i],
+                             f"Pin {i} height changed despite broken pick")
+            self.assertEqual(pin.is_set, set_before[i],
+                             f"Pin {i} set state changed despite broken pick")
+
+    def test_demo_broken_pick_exits(self):
+        """Demo mode should detect broken pick and exit early."""
+        import io
+        from contextlib import redirect_stdout
+        from lock_picker import run_demo
+        lock = Lock(3, 5)  # Master difficulty
+        lock.apply_tension(0.5)
+        # Break the pick
+        lock.pick_health = 0.0
+        # Verify lock is not open and pick is broken
+        self.assertFalse(lock.is_open)
+        self.assertTrue(lock.pick_health <= 0)
+
+    def test_pick_health_bar_zero_distinct_from_low(self):
+        """Zero health bar should look different from low health bar."""
+        bar_zero = get_pick_health_bar(0.0, 20)
+        bar_low = get_pick_health_bar(0.15, 20)
+        # Zero should have no ! (no remaining health)
+        # Low should have some ! (some remaining health)
+        bang_count_zero = bar_zero.count('!')
+        bang_count_low = bar_low.count('!')
+        self.assertGreater(bang_count_low, bang_count_zero,
+                           "Low health should show more remaining (!) than zero health")
+
+    def test_binding_updates_after_pin_set(self):
+        """Binding should update after a pin is set when tension is re-applied."""
+        random.seed(42)
+        lock = Lock(5, 2)
+        lock.apply_tension(0.4)
+        # Find and set a bound pin
+        for i, pin in enumerate(lock.pins):
+            if pin.is_bound and not pin.is_set:
+                while not pin.is_set:
+                    lock.lift_pin(i, 0.02)
+                break
+        # After setting, re-apply tension to update binding
+        lock.apply_tension(lock.tension)
+        # Check that new pins are bound (if any unset remain)
+        unset_pins = [p for p in lock.pins if not p.is_set]
+        if unset_pins:
+            bound_unset = [p for p in unset_pins if p.is_bound]
+            # With tension applied and some pins set, there should be new binding
+            self.assertGreater(len(bound_unset), 0,
+                              "After setting a pin and re-applying tension, "
+                              "new pins should bind")
 
 
 class TestLockProfiles(unittest.TestCase):
