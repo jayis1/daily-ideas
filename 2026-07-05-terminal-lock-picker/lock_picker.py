@@ -10,6 +10,8 @@ Usage:
     python3 lock_picker.py --version     # Show version
     python3 lock_picker.py --pins 5 --difficulty 3  # Start with specific settings
     python3 lock_picker.py --demo        # Auto-pick demo mode
+    python3 lock_picker.py --profile yale-standard    # Use a named lock profile
+    python3 lock_picker.py --list-profiles  # Show available lock profiles
 """
 
 import argparse
@@ -23,7 +25,7 @@ import math
 
 # ─── Constants ────────────────────────────────────────────────────────────
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 
 DIFFICULTY_NAMES = ['Novice', 'Easy', 'Medium', 'Hard', 'Master']
 
@@ -35,6 +37,67 @@ SAVE_FILE = os.path.join(os.path.expanduser("~"), ".lock_picker_stats.json")
 # Sound: terminal bell on pin set
 ENABLE_BELL = True
 
+# ─── Lock Profiles ────────────────────────────────────────────────────────
+# Named presets that configure pin count, difficulty, and flavor text.
+
+LOCK_PROFILES = {
+    "yale-standard": {
+        "name": "Yale Standard",
+        "description": "A common 5-pin residential lock. Good for beginners.",
+        "pins": 5,
+        "difficulty": 1,
+        "flavor": "A standard pin tumbler lock found on most front doors.",
+    },
+    "kwikset-entry": {
+        "name": "Kwikset Entry",
+        "description": "A budget 4-pin lock. Perfect for practice.",
+        "pins": 4,
+        "difficulty": 1,
+        "flavor": "A cheap lock from the hardware store. Shouldn't be too hard.",
+    },
+    "schlage-classic": {
+        "name": "Schlage Classic",
+        "description": "A 5-pin mid-grade lock with tighter tolerances.",
+        "pins": 5,
+        "difficulty": 2,
+        "flavor": "A Schlage lock — better quality than budget, but still pickable.",
+    },
+    "master-lock": {
+        "name": "Master Lock No. 3",
+        "description": "The infamous 4-pin padlock. Raking often works here.",
+        "pins": 4,
+        "difficulty": 1,
+        "flavor": "The padlock everyone has. Known for being easy to pick.",
+    },
+    "medeco-high": {
+        "name": "Medeco High-Security",
+        "description": "A 6-pin high-security lock. Very tight tolerances.",
+        "pins": 6,
+        "difficulty": 4,
+        "flavor": "A Medeco lock with sidebar interaction. This will test your skills.",
+    },
+    "abloy-protect": {
+        "name": "Abloy Protect",
+        "description": "A 7-pin disc detainer. Extremely challenging.",
+        "pins": 7,
+        "difficulty": 5,
+        "flavor": "An Abloy disc detainer. Even experts struggle with these.",
+    },
+    "practice-2pin": {
+        "name": "2-Pin Practice Lock",
+        "description": "A cutaway practice lock with just 2 pins. Pure learning.",
+        "pins": 2,
+        "difficulty": 1,
+        "flavor": "A training lock with only 2 pins. Focus on the fundamentals.",
+    },
+    "challenge-8pin": {
+        "name": "8-Pin Challenge",
+        "description": "An 8-pin monster. Only for the most skilled.",
+        "pins": 8,
+        "difficulty": 5,
+        "flavor": "8 pins, Master difficulty. Are you sure about this?",
+    },
+}
 
 # ─── Persistence ──────────────────────────────────────────────────────────
 
@@ -48,6 +111,11 @@ def load_stats():
             "locks_picked": 0,
             "total_time": 0.0,
             "best_times": {},  # key: "pins-difficulty", value: seconds
+            "pick_breaks": 0,
+            "total_rakes": 0,
+            "total_lifts": 0,
+            "streak_current": 0,
+            "streak_best": 0,
         }
 
 
@@ -108,6 +176,7 @@ class Lock:
         self.core_rotation = 0.0
         self.raking_mode = False
         self.pick_health = 1.0  # Pick durability (1.0 = full, 0.0 = broken)
+        self.pick_breaks = 0   # How many times the pick has broken
 
         self._generate_pins()
 
@@ -115,6 +184,16 @@ class Lock:
     def pins_set_count(self):
         """Number of pins currently set (computed from pin states)."""
         return sum(1 for p in self.pins if p.is_set)
+
+    @property
+    def progress_pct(self):
+        """Progress as a percentage (0.0 to 1.0)."""
+        return self.pins_set_count / self.num_pins if self.num_pins > 0 else 0.0
+
+    @property
+    def difficulty_name(self):
+        """Human-readable difficulty name."""
+        return DIFFICULTY_NAMES[self.difficulty - 1]
 
     def _generate_pins(self):
         """Generate random pin heights and binding orders.
@@ -266,6 +345,10 @@ class Lock:
         Returns:
             Number of pins that clicked during the rake.
         """
+        # Can't rake with a broken pick
+        if self.pick_health <= 0:
+            return 0
+
         clicks = 0
         for pin in self.pins:
             if not pin.is_set:
@@ -281,8 +364,8 @@ class Lock:
             for pin in self.pins:
                 if pin.is_set and random.random() < 0.15 * (self.difficulty - 2):
                     pin.is_set = False
-        # Raking is hard on the pick
-        if self.difficulty >= 3:
+        # Raking is hard on the pick (Hard/Master only, consistent with lift_pin)
+        if self.difficulty >= 4:
             self.pick_health = max(0.0, self.pick_health - 0.03)
         return clicks
 
@@ -308,6 +391,20 @@ class Lock:
             return None, "Apply tension first (A key)."
         else:
             return None, "All bound pins are set. Adjust tension to bind more."
+
+    def reset(self):
+        """Reset the lock with a new random configuration.
+
+        Keeps the same pin count and difficulty. Returns self for chaining.
+        """
+        self.pins = []
+        self.tension = 0.0
+        self.is_open = False
+        self.core_rotation = 0.0
+        self.raking_mode = False
+        self.pick_health = 1.0
+        self._generate_pins()
+        return self
 
 
 # ─── Visual Helpers ────────────────────────────────────────────────────────
@@ -353,9 +450,97 @@ def get_pick_health_bar(health, width=20):
     elif health > 0.2:
         bar = '▒' * filled + '░' * (width - filled)
     else:
-        # Critical health: show remaining as warning dots
-        bar = '·' * filled + '·' * (width - filled)
+        # Critical health: use ! for remaining, · for lost
+        bar = '!' * filled + '·' * (width - filled)
     return f"Pick: [{bar}] {health:.0%}"
+
+
+def format_time(seconds):
+    """Format seconds into a human-readable time string.
+
+    Args:
+        seconds: Time in seconds (float).
+
+    Returns:
+        Formatted string like '1m 23.4s' or '8.2s'.
+    """
+    if seconds < 0:
+        return "—"
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    minutes = int(seconds // 60)
+    secs = seconds % 60
+    return f"{minutes}m {secs:.1f}s"
+
+
+# ─── Stats Screen ──────────────────────────────────────────────────────────
+
+def show_stats(stdscr, stats, session_locks, session_time, session_rakes, session_lifts):
+    """Show a statistics screen. Returns True to continue, False to go back to menu."""
+    curses.curs_set(0)
+    stdscr.nodelay(0)  # Blocking input for this screen
+
+    while True:
+        stdscr.clear()
+        h, w = stdscr.getmaxyx()
+
+        # Title
+        title = "╔══════════════════════════════════════╗"
+        title2 = "║       📊 STATISTICS & RECORDS       ║"
+        title3 = "╚══════════════════════════════════════╝"
+        y = max(1, h // 2 - 12)
+        for i, line in enumerate([title, title2, title3]):
+            x = max(0, (w - len(line)) // 2)
+            try:
+                stdscr.addstr(y + i, x, line, curses.color_pair(4) | curses.A_BOLD)
+            except curses.error:
+                pass
+
+        y += 4
+
+        # Session stats
+        lines = [
+            "─── This Session ───",
+            f"  Locks picked:    {session_locks}",
+            f"  Time spent:      {format_time(session_time)}",
+            f"  Total lifts:     {session_lifts}",
+            f"  Total rakes:     {session_rakes}",
+            "",
+            "─── All-Time ───",
+            f"  Locks picked:    {stats.get('locks_picked', 0)}",
+            f"  Total time:      {format_time(stats.get('total_time', 0.0))}",
+            f"  Pick breaks:     {stats.get('pick_breaks', 0)}",
+            f"  Best streak:     {stats.get('streak_best', 0)}",
+            "",
+            "─── Best Times ───",
+        ]
+
+        # Show best times
+        best_times = stats.get("best_times", {})
+        if best_times:
+            for key in sorted(best_times.keys()):
+                time_val = best_times[key]
+                parts = key.split("-")
+                if len(parts) == 2:
+                    pins_str, diff_str = parts
+                    diff_name = DIFFICULTY_NAMES[int(diff_str) - 1] if diff_str.isdigit() else diff_str
+                    lines.append(f"  {pins_str} pins / {diff_name}: {format_time(time_val)}")
+        else:
+            lines.append("  No records yet. Pick a lock!")
+
+        lines.append("")
+        lines.append("Press any key to return to menu...")
+
+        for i, line in enumerate(lines):
+            attr = curses.A_BOLD if line.startswith("───") else curses.A_NORMAL
+            try:
+                stdscr.addstr(y + i, 4, line, attr)
+            except curses.error:
+                pass
+
+        stdscr.refresh()
+        key = stdscr.getch()
+        return True  # Always go back to menu
 
 
 # ─── Main Game ─────────────────────────────────────────────────────────────
@@ -363,7 +548,7 @@ def get_pick_health_bar(health, width=20):
 class LockPickerGame:
     """Interactive terminal lock picking game using curses."""
 
-    def __init__(self, stdscr, start_pins=None, start_difficulty=None):
+    def __init__(self, stdscr, start_pins=None, start_difficulty=None, profile=None):
         self.stdscr = stdscr
         self.lock = None
         self.selected_pin = 0
@@ -375,6 +560,7 @@ class LockPickerGame:
         self.locks_picked = 0
         self.total_time = 0
         self.start_time = 0
+        self.completion_time = 0  # Frozen time when lock was opened
         self.state = 'menu'
         self.num_pins = start_pins if start_pins is not None else 5
         self.difficulty = start_difficulty if start_difficulty is not None else 1
@@ -382,6 +568,17 @@ class LockPickerGame:
         self.hint_cooldown = 0  # Frames until next hint available
         self.last_hint = ""
         self.persistent_stats = load_stats()
+        self.profile_key = profile  # The profile name, if any
+        self.profile = LOCK_PROFILES.get(profile) if profile else None
+        self.session_rakes = 0
+        self.session_lifts = 0
+        self.session_picks_broken = 0
+        self.current_streak = 0
+
+        # If a profile was specified, apply its settings
+        if self.profile:
+            self.num_pins = self.profile["pins"]
+            self.difficulty = self.profile["difficulty"]
 
         # Initialize colors
         curses.start_color()
@@ -411,10 +608,17 @@ class LockPickerGame:
         self.state = 'picking'
         self.hint_cooldown = 0
         self.last_hint = ""
-        self.show_message(
-            f"Lock #{self.attempts} — {self.num_pins} pins, "
-            f"{DIFFICULTY_NAMES[self.difficulty-1]} difficulty"
-        )
+
+        # Show flavor text for profiles
+        if self.profile:
+            self.show_message(
+                f"Lock #{self.attempts} — {self.profile['name']}: {self.profile['flavor']}"
+            )
+        else:
+            self.show_message(
+                f"Lock #{self.attempts} — {self.num_pins} pins, "
+                f"{DIFFICULTY_NAMES[self.difficulty-1]} difficulty"
+            )
 
     def run(self):
         """Main game loop."""
@@ -426,6 +630,11 @@ class LockPickerGame:
                 self._picking_loop()
             elif self.state == 'victory':
                 self._victory_loop()
+            elif self.state == 'stats':
+                show_stats(self.stdscr, self.persistent_stats,
+                           self.locks_picked, self.total_time,
+                           self.session_rakes, self.session_lifts)
+                self.state = 'menu'
 
         # Save stats on exit
         self.persistent_stats["locks_picked"] = (
@@ -434,6 +643,19 @@ class LockPickerGame:
         self.persistent_stats["total_time"] = (
             self.persistent_stats.get("total_time", 0.0) + self.total_time
         )
+        self.persistent_stats["pick_breaks"] = (
+            self.persistent_stats.get("pick_breaks", 0) + self.session_picks_broken
+        )
+        self.persistent_stats["total_rakes"] = (
+            self.persistent_stats.get("total_rakes", 0) + self.session_rakes
+        )
+        self.persistent_stats["total_lifts"] = (
+            self.persistent_stats.get("total_lifts", 0) + self.session_lifts
+        )
+        # Update streaks
+        old_best = self.persistent_stats.get("streak_best", 0)
+        if self.current_streak > old_best:
+            self.persistent_stats["streak_best"] = self.current_streak
         save_stats(self.persistent_stats)
         return self.locks_picked
 
@@ -471,13 +693,19 @@ class LockPickerGame:
         for i, line in enumerate(title_lines):
             self._draw_centered(start_y + i, line, curses.color_pair(4) | curses.A_BOLD)
 
+        # Profile indicator
+        if self.profile:
+            profile_line = f"Profile: {self.profile['name']} — {self.profile['description']}"
+            self._draw_centered(start_y + 5, profile_line, curses.color_pair(5))
+
         # Instructions
-        y = start_y + 6
+        y = start_y + 7
         info_lines = [
             f"Number of pins:  {self.num_pins}  (← → to change)",
             f"Difficulty:      {DIFFICULTY_NAMES[self.difficulty-1]}  (↑ ↓ to change)",
             "",
             "Press ENTER to start picking",
+            "Press S for statistics",
             "Press Q to quit",
             "",
             f"Locks picked this session: {self.locks_picked}",
@@ -488,7 +716,11 @@ class LockPickerGame:
         key = f"{self.num_pins}-{self.difficulty}"
         best = self.persistent_stats.get("best_times", {}).get(key)
         if best is not None:
-            info_lines.append(f"Best time ({self.num_pins}p/{DIFFICULTY_NAMES[self.difficulty-1]}):  {best:.1f}s")
+            info_lines.append(f"Best time ({self.num_pins}p/{DIFFICULTY_NAMES[self.difficulty-1]}):  {format_time(best)}")
+
+        # Show current streak
+        if self.current_streak > 0:
+            info_lines.append(f"Current streak: {self.current_streak}")
 
         for i, line in enumerate(info_lines):
             self._draw_centered(y + i, line)
@@ -524,6 +756,8 @@ class LockPickerGame:
             self.difficulty = max(1, self.difficulty - 1)
         elif key in (ord('\n'), curses.KEY_ENTER):
             self.new_lock()
+        elif key == ord('s') or key == ord('S'):
+            self.state = 'stats'
 
         return True
 
@@ -542,6 +776,10 @@ class LockPickerGame:
 
         # ── Physics update ──────────────────────────────────────────
         if self.lock:
+            # Re-apply tension each frame to update binding after pins are set
+            if self.lock.tension > 0:
+                self.lock.apply_tension(self.lock.tension)
+
             for pin in self.lock.pins:
                 if not pin.is_set and pin.current_height > 0:
                     # Spring slowly pushes pin down
@@ -554,6 +792,7 @@ class LockPickerGame:
                 self.state = 'victory'
                 self.locks_picked += 1
                 self.total_time += elapsed
+                self.current_streak += 1
 
                 # Update best time
                 stat_key = f"{self.lock.num_pins}-{self.difficulty}"
@@ -573,9 +812,12 @@ class LockPickerGame:
         # ── Draw Lock Cross-Section ──────────────────────────────────
         y = 0
 
-        # Header
+        # Header with profile name if applicable
         diff_name = DIFFICULTY_NAMES[self.difficulty - 1]
-        header = f"Lock #{self.attempts} — {self.lock.num_pins} pins — {diff_name}"
+        if self.profile:
+            header = f"Lock #{self.attempts} — {self.profile['name']} — {self.lock.num_pins} pins — {diff_name}"
+        else:
+            header = f"Lock #{self.attempts} — {self.lock.num_pins} pins — {diff_name}"
         self._draw_centered(y, header, curses.color_pair(4) | curses.A_BOLD)
         y += 1
 
@@ -602,7 +844,7 @@ class LockPickerGame:
         # Time + session stats
         elapsed = time.time() - self.start_time
         try:
-            self.stdscr.addstr(y, 2, f"Time: {elapsed:.1f}s    Locks picked: {self.locks_picked}",
+            self.stdscr.addstr(y, 2, f"Time: {elapsed:.1f}s    Locks: {self.locks_picked}    Streak: {self.current_streak}",
                                curses.A_DIM)
         except curses.error:
             pass
@@ -614,8 +856,6 @@ class LockPickerGame:
             y += 1
 
             # Shear line position
-            shear_y = y + 3  # The shear line row
-
             chamber_height = 10
             for row in range(chamber_height):
                 row_str = "  ┃"
@@ -758,6 +998,13 @@ class LockPickerGame:
         except curses.error:
             pass
 
+        # ── Lift amount ────────────────────────────────────────────────
+        try:
+            self.stdscr.addstr(y, 2, f"Lift amount: {self.lift_amount:.3f}  (S/X to adjust)", curses.A_DIM)
+            y += 1
+        except curses.error:
+            pass
+
         # ── Hint display ──────────────────────────────────────────────
         if self.last_hint and self.hint_cooldown > 0:
             try:
@@ -820,6 +1067,7 @@ class LockPickerGame:
         elif key == curses.KEY_UP:
             # Lift pin
             if self.lock.pick_health > 0:
+                self.session_lifts += 1
                 clicked = self.lock.lift_pin(self.selected_pin, self.lift_amount)
                 if clicked:
                     self.show_message(f"✦ CLICK! Pin {self.selected_pin + 1} set! ✦")
@@ -841,6 +1089,7 @@ class LockPickerGame:
         elif key == ord('r') or key == ord('R'):
             # Rake
             if self.lock.pick_health > 0:
+                self.session_rakes += 1
                 self.lock.raking_mode = True
                 clicks = self.lock.rack()
                 if clicks > 0:
@@ -866,6 +1115,10 @@ class LockPickerGame:
             if idx is not None:
                 self.selected_pin = idx
         elif key == ord('n') or key == ord('N'):
+            # Check if pick was broken before new lock
+            if self.lock.pick_health <= 0:
+                self.session_picks_broken += 1
+                self.current_streak = 0  # Breaking a pick resets streak
             self.new_lock()
 
     def _victory_loop(self):
@@ -874,6 +1127,13 @@ class LockPickerGame:
         h, w = self.stdscr.getmaxyx()
 
         elapsed = time.time() - self.start_time
+
+        # Animated celebration: show core rotating
+        rotation_frames = [
+            "╔═══╗",
+            "║ 🔓 ║",
+            "╚═══╝",
+        ]
 
         victory_art = [
             "",
@@ -896,22 +1156,26 @@ class LockPickerGame:
         best_time = self.persistent_stats.get("best_times", {}).get(stat_key)
         is_best = best_time is not None and abs(elapsed - best_time) < 0.05
 
+        # Calculate efficiency metrics
+        efficiency = (self.lock.pins_set_count / max(1, self.session_lifts)) * 100 if self.session_lifts > 0 else 0
+
         stats = [
-            f"Time: {elapsed:.1f} seconds",
+            f"Time: {format_time(elapsed)}",
             f"Pins: {self.lock.num_pins}",
             f"Difficulty: {DIFFICULTY_NAMES[self.difficulty-1]}",
-            f"Total locks picked: {self.locks_picked}",
-            f"Total time: {self.total_time + elapsed:.1f}s",
+            f"Locks picked this session: {self.locks_picked}",
+            f"Current streak: {self.current_streak}",
+            f"Total time: {format_time(self.total_time + elapsed)}",
         ]
+
+        if self.lock.pick_health > 0 and self.difficulty >= 4:
+            stats.append(f"Pick health remaining: {self.lock.pick_health:.0%}")
 
         if is_best:
             stats.append("🏆 NEW BEST TIME! 🏆")
 
-        if self.lock.pick_health > 0:
-            stats.append(f"Pick health remaining: {self.lock.pick_health:.0%}")
-
         stats.append("")
-        stats.append("ENTER — New lock    M — Menu    Q — Quit")
+        stats.append("ENTER — New lock    M — Menu    S — Stats    Q — Quit")
 
         for i, line in enumerate(stats):
             attr = curses.color_pair(5) | curses.A_BOLD if "🏆" in line else curses.A_NORMAL
@@ -937,11 +1201,13 @@ class LockPickerGame:
             self.new_lock()
         elif key == ord('m') or key == ord('M'):
             self.state = 'menu'
+        elif key == ord('s') or key == ord('S'):
+            self.state = 'stats'
 
 
 # ─── Demo Mode ─────────────────────────────────────────────────────────────
 
-def run_demo(num_pins=5, difficulty=2, speed=0.05):
+def run_demo(num_pins=5, difficulty=2, speed=0.05, verbose=False):
     """Auto-pick a lock in demo mode, printing output to terminal.
 
     The demo uses a smarter picking strategy: for each bound pin, it lifts
@@ -952,18 +1218,30 @@ def run_demo(num_pins=5, difficulty=2, speed=0.05):
         num_pins: Number of pins for the demo lock.
         difficulty: Difficulty level (1-5).
         speed: Delay between rounds in seconds.
+        verbose: If True, print detailed step-by-step info.
+
+    Returns:
+        True if the lock was opened, False otherwise.
     """
     print(f"\n🔐 Terminal Lock Picker — Demo Mode")
     print(f"   {num_pins} pins, {DIFFICULTY_NAMES[difficulty-1]} difficulty\n")
 
     lock = Lock(num_pins, difficulty)
     lock.apply_tension(0.3)
-    print(f"Applied initial tension: {lock.tension:.0%}\n")
+
+    # Print initial lock state
+    print("Lock configuration:")
+    for i, pin in enumerate(lock.pins):
+        print(f"  Pin {i+1}: key_height={pin.key_height:.3f}, spring={pin.spring_tension:.3f}, "
+              f"binding_order={pin.binding_order}")
+    print(f"\nApplied initial tension: {lock.tension:.0%}\n")
 
     round_num = 0
     max_rounds = 800
     lift_per_round = 8  # Multiple lifts per round to counteract spring decay
     no_progress_count = 0
+    total_lifts = 0
+    total_rakes = 0
 
     while not lock.is_open and round_num < max_rounds:
         # Apply spring decay (simulates one game frame)
@@ -980,9 +1258,11 @@ def run_demo(num_pins=5, difficulty=2, speed=0.05):
             if pin.is_bound and not pin.is_set:
                 clicked_pin = False
                 for _ in range(lift_per_round):
+                    total_lifts += 1
                     clicked = lock.lift_pin(i, 0.02)
                     if clicked:
-                        print(f"  Round {round_num+1}: ✦ CLICK! Pin {i+1} set! ✦")
+                        print(f"  Round {round_num+1}: ✦ CLICK! Pin {i+1} set! "
+                              f"(height={pin.key_height:.3f}) ✦")
                         no_progress_count = 0
                         clicked_pin = True
                         break
@@ -996,12 +1276,14 @@ def run_demo(num_pins=5, difficulty=2, speed=0.05):
             old_tension = lock.tension
             lock.apply_tension(min(1.0, lock.tension + 0.05))
             if lock.tension > old_tension:
-                print(f"  Round {round_num+1}: Increasing tension to {lock.tension:.0%}")
+                if verbose:
+                    print(f"  Round {round_num+1}: Increasing tension to {lock.tension:.0%}")
             no_progress_count += 1
 
         # If we've been stuck for a while, try raking or adjust tension
         if no_progress_count > 30:
             # Try raking
+            total_rakes += 1
             clicks = lock.rack()
             if clicks > 0:
                 print(f"  Round {round_num+1}: Raked — {clicks} pin(s) set!")
@@ -1017,17 +1299,37 @@ def run_demo(num_pins=5, difficulty=2, speed=0.05):
 
     if lock.is_open:
         print(f"\n🔓 Lock opened in {round_num} rounds!")
-        print(f"   All {num_pins} pins set successfully.\n")
+        print(f"   All {num_pins} pins set successfully.")
+        print(f"   Total lifts: {total_lifts}, Total rakes: {total_rakes}\n")
     else:
         print(f"\n❌ Failed to pick lock in {max_rounds} rounds.\n")
 
     return lock.is_open
 
 
+# ─── Profile Listing ───────────────────────────────────────────────────────
+
+def list_profiles():
+    """Print all available lock profiles and exit."""
+    print("\n🔐 Available Lock Profiles:\n")
+    print(f"{'Key':<22} {'Name':<24} {'Pins':>4}  {'Diff':>8}  Description")
+    print("─" * 90)
+    for key, prof in sorted(LOCK_PROFILES.items()):
+        diff_name = DIFFICULTY_NAMES[prof["difficulty"] - 1]
+        print(f"{key:<22} {prof['name']:<24} {prof['pins']:>4}  {diff_name:>8}  {prof['description']}")
+    print()
+    print("Use with: python3 lock_picker.py --profile <key>")
+    print()
+
+
 # ─── CLI Entry Point ──────────────────────────────────────────────────────
 
-def parse_args():
-    """Parse command-line arguments."""
+def parse_args(args=None):
+    """Parse command-line arguments.
+
+    Args:
+        args: Optional list of argument strings (defaults to sys.argv[1:]).
+    """
     parser = argparse.ArgumentParser(
         description="Terminal Lock Picker — An interactive pin tumbler lock picking simulator",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -1036,8 +1338,10 @@ Examples:
   python3 lock_picker.py                     Interactive mode (default)
   python3 lock_picker.py --pins 4            Start with 4 pins
   python3 lock_picker.py --difficulty 3       Start on Medium difficulty
+  python3 lock_picker.py --profile yale-standard  Use a named lock profile
+  python3 lock_picker.py --list-profiles     Show available lock profiles
   python3 lock_picker.py --demo              Watch the AI pick a lock
-  python3 lock_picker.py --demo --pins 3     Demo with 3-pin lock
+  python3 lock_picker.py --demo --verbose    Demo with detailed output
   python3 lock_picker.py --version            Show version
 """
     )
@@ -1052,26 +1356,51 @@ Examples:
                         help='Run in demo mode (auto-pick, no curses)')
     parser.add_argument('--speed', type=float, default=0.05,
                         help='Demo speed in seconds between steps (default: 0.05)')
-    return parser.parse_args()
+    parser.add_argument('--profile', type=str, default=None,
+                        choices=list(LOCK_PROFILES.keys()),
+                        help='Use a named lock profile (e.g., yale-standard)')
+    parser.add_argument('--list-profiles', action='store_true',
+                        help='List all available lock profiles and exit')
+    parser.add_argument('--verbose', action='store_true',
+                        help='Show detailed output in demo mode')
+    return parser.parse_args(args)
 
 
 def main():
     """Main entry point — parse args and launch appropriate mode."""
     args = parse_args()
 
+    if args.list_profiles:
+        list_profiles()
+        sys.exit(0)
+
     pins = args.pins if args.pins is not None else 5
     difficulty = args.difficulty if args.difficulty is not None else 1
 
+    # If a profile was specified, use its settings (overriding --pins and --difficulty)
+    if args.profile:
+        profile = LOCK_PROFILES[args.profile]
+        pins = profile["pins"]
+        difficulty = profile["difficulty"]
+    else:
+        # Override with explicit --pins/--difficulty if given
+        if args.pins is not None:
+            pins = args.pins
+        if args.difficulty is not None:
+            difficulty = args.difficulty
+
     if args.demo:
         # Non-interactive demo mode
-        success = run_demo(num_pins=pins, difficulty=difficulty, speed=args.speed)
+        success = run_demo(num_pins=pins, difficulty=difficulty, speed=args.speed,
+                           verbose=args.verbose)
         sys.exit(0 if success else 1)
     else:
         # Interactive curses mode
         result = None
         try:
             def curses_main(stdscr):
-                game = LockPickerGame(stdscr, start_pins=args.pins, start_difficulty=args.difficulty)
+                game = LockPickerGame(stdscr, start_pins=args.pins, start_difficulty=args.difficulty,
+                                      profile=args.profile)
                 return game.run()
 
             result = curses.wrapper(curses_main)

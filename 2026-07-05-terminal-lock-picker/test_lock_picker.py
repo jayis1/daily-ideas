@@ -3,7 +3,7 @@
 
 Tests cover lock creation, tension/binding mechanics, pin setting,
 full lock picking, spring physics, raking, pick durability, hints,
-and CLI argument parsing.
+CLI argument parsing, lock profiles, stats formatting, and regression tests.
 """
 
 import random
@@ -11,7 +11,10 @@ import sys
 import unittest
 from io import StringIO
 
-from lock_picker import Lock, Pin, DIFFICULTY_NAMES, MIN_PINS, MAX_PINS, VERSION
+from lock_picker import (Lock, Pin, DIFFICULTY_NAMES, MIN_PINS, MAX_PINS,
+                         VERSION, LOCK_PROFILES, format_time,
+                         height_to_bar, get_pin_visual, get_tension_bar,
+                         get_pick_health_bar, list_profiles, parse_args)
 
 
 class TestLockCreation(unittest.TestCase):
@@ -55,6 +58,11 @@ class TestLockCreation(unittest.TestCase):
         self.assertFalse(lock.is_open)
         self.assertEqual(lock.tension, 0.0)
         self.assertEqual(lock.pick_health, 1.0)
+
+    def test_pick_breaks_counter(self):
+        """New lock should have pick_breaks initialized to 0."""
+        lock = Lock(5, 1)
+        self.assertEqual(lock.pick_breaks, 0)
 
 
 class TestTensionAndBinding(unittest.TestCase):
@@ -388,6 +396,26 @@ class TestCLIArgs(unittest.TestCase):
         self.assertEqual(MIN_PINS, 2)
         self.assertEqual(MAX_PINS, 8)
 
+    def test_parse_args_defaults(self):
+        """Default args should be None for pins and difficulty."""
+        args = parse_args([])
+        self.assertIsNone(args.pins)
+        self.assertIsNone(args.difficulty)
+        self.assertFalse(args.demo)
+        self.assertIsNone(args.profile)
+        self.assertFalse(args.verbose)
+        self.assertFalse(args.list_profiles)
+
+    def test_parse_args_demo(self):
+        """--demo flag should set demo mode."""
+        args = parse_args(['--demo'])
+        self.assertTrue(args.demo)
+
+    def test_parse_args_profile(self):
+        """--profile should set a valid profile key."""
+        args = parse_args(['--profile', 'yale-standard'])
+        self.assertEqual(args.profile, 'yale-standard')
+
 
 class TestBugFixes(unittest.TestCase):
     """Regression tests for bugs found and fixed."""
@@ -471,7 +499,6 @@ class TestBugFixes(unittest.TestCase):
 
     def test_pick_health_bar_distinct_levels(self):
         """Pick health bar should have distinct visuals for different levels."""
-        from lock_picker import get_pick_health_bar
         bar_high = get_pick_health_bar(0.8, 20)
         bar_mid = get_pick_health_bar(0.4, 20)
         bar_low = get_pick_health_bar(0.1, 20)
@@ -499,6 +526,180 @@ class TestBugFixes(unittest.TestCase):
         lock.rack()
         self.assertEqual(lock.pick_health, initial_health,
                          "Raking on Novice should not wear the pick")
+
+
+class TestLockProfiles(unittest.TestCase):
+    """Test lock profile system."""
+
+    def test_profiles_exist(self):
+        """Lock profiles dict should have entries."""
+        self.assertGreater(len(LOCK_PROFILES), 0)
+
+    def test_profile_structure(self):
+        """Each profile should have required keys."""
+        required_keys = {'name', 'description', 'pins', 'difficulty', 'flavor'}
+        for key, profile in LOCK_PROFILES.items():
+            self.assertTrue(required_keys.issubset(set(profile.keys())),
+                            f"Profile '{key}' missing keys: {required_keys - set(profile.keys())}")
+
+    def test_profile_pin_range(self):
+        """Each profile's pin count should be within valid range."""
+        for key, profile in LOCK_PROFILES.items():
+            self.assertGreaterEqual(profile['pins'], MIN_PINS,
+                                    f"Profile '{key}' has too few pins")
+            self.assertLessEqual(profile['pins'], MAX_PINS,
+                                  f"Profile '{key}' has too many pins")
+
+    def test_profile_difficulty_range(self):
+        """Each profile's difficulty should be within valid range."""
+        for key, profile in LOCK_PROFILES.items():
+            self.assertGreaterEqual(profile['difficulty'], 1,
+                                    f"Profile '{key}' difficulty too low")
+            self.assertLessEqual(profile['difficulty'], 5,
+                                  f"Profile '{key}' difficulty too high")
+
+    def test_specific_profiles(self):
+        """Test that key profiles exist with expected values."""
+        self.assertIn('yale-standard', LOCK_PROFILES)
+        self.assertEqual(LOCK_PROFILES['yale-standard']['pins'], 5)
+        self.assertEqual(LOCK_PROFILES['yale-standard']['difficulty'], 1)
+
+        self.assertIn('challenge-8pin', LOCK_PROFILES)
+        self.assertEqual(LOCK_PROFILES['challenge-8pin']['pins'], 8)
+        self.assertEqual(LOCK_PROFILES['challenge-8pin']['difficulty'], 5)
+
+    def test_lock_creation_from_profile(self):
+        """Creating a lock from profile values should work correctly."""
+        for key, profile in LOCK_PROFILES.items():
+            lock = Lock(profile['pins'], profile['difficulty'])
+            self.assertEqual(lock.num_pins, profile['pins'],
+                             f"Profile '{key}' pin count mismatch")
+            self.assertEqual(lock.difficulty, profile['difficulty'],
+                             f"Profile '{key}' difficulty mismatch")
+
+
+class TestFormatTime(unittest.TestCase):
+    """Test the format_time helper function."""
+
+    def test_seconds_format(self):
+        """Times under 60 seconds should show decimal seconds."""
+        self.assertEqual(format_time(8.2), "8.2s")
+        self.assertEqual(format_time(0.5), "0.5s")
+        self.assertEqual(format_time(59.9), "59.9s")
+
+    def test_minutes_format(self):
+        """Times >= 60 seconds should show minutes and seconds."""
+        self.assertEqual(format_time(65.0), "1m 5.0s")
+        self.assertEqual(format_time(122.3), "2m 2.3s")
+
+    def test_negative_time(self):
+        """Negative times should show a dash."""
+        self.assertEqual(format_time(-1), "—")
+
+    def test_zero_time(self):
+        """Zero time should format as seconds."""
+        self.assertEqual(format_time(0), "0.0s")
+
+
+class TestLockProperties(unittest.TestCase):
+    """Test computed properties on the Lock class."""
+
+    def test_progress_pct(self):
+        """progress_pct should reflect pin completion percentage."""
+        random.seed(42)
+        lock = Lock(4, 1)
+        lock.apply_tension(0.5)
+        self.assertAlmostEqual(lock.progress_pct, 0.0)
+
+        # Set one pin
+        for i, pin in enumerate(lock.pins):
+            if pin.is_bound and not pin.is_set:
+                while not pin.is_set:
+                    lock.lift_pin(i, 0.02)
+                break
+
+        self.assertGreater(lock.progress_pct, 0.0)
+        self.assertLessEqual(lock.progress_pct, 1.0)
+
+    def test_difficulty_name(self):
+        """difficulty_name should return the human-readable name."""
+        lock = Lock(5, 1)
+        self.assertEqual(lock.difficulty_name, 'Novice')
+        lock5 = Lock(5, 5)
+        self.assertEqual(lock5.difficulty_name, 'Master')
+
+    def test_reset(self):
+        """Resetting a lock should give fresh pins and reset state."""
+        random.seed(42)
+        lock = Lock(5, 2)
+        lock.apply_tension(0.5)
+        # Set a pin
+        for i, pin in enumerate(lock.pins):
+            if pin.is_bound:
+                while not pin.is_set:
+                    lock.lift_pin(i, 0.02)
+                break
+        self.assertGreater(lock.pins_set_count, 0)
+
+        # Reset
+        result = lock.reset()
+        self.assertIs(result, lock)  # Should return self for chaining
+        self.assertEqual(lock.pins_set_count, 0)
+        self.assertEqual(lock.tension, 0.0)
+        self.assertFalse(lock.is_open)
+        self.assertEqual(lock.pick_health, 1.0)
+        self.assertEqual(len(lock.pins), 5)
+
+
+class TestVisualHelpers(unittest.TestCase):
+    """Test visual helper functions."""
+
+    def test_height_to_bar(self):
+        """height_to_bar should create bar strings."""
+        bar = height_to_bar(0.5, 8)
+        self.assertEqual(len(bar), 8)
+        self.assertIn('█', bar)
+        self.assertIn('░', bar)
+
+    def test_height_to_bar_zero(self):
+        """Zero height should give empty bar."""
+        bar = height_to_bar(0.0, 8)
+        self.assertEqual(bar, '░' * 8)
+
+    def test_height_to_bar_full(self):
+        """Full height should give full bar."""
+        bar = height_to_bar(1.0, 8)
+        self.assertEqual(bar, '█' * 8)
+
+    def test_get_pin_visual_set(self):
+        """Set pins should show 'SET' visual."""
+        pin = Pin(0.5, 0.2)
+        pin.is_set = True
+        visual = get_pin_visual(pin)
+        self.assertIn('SET', visual)
+
+    def test_get_pin_visual_bound(self):
+        """Bound pins should show BOUND indicator."""
+        pin = Pin(0.5, 0.2)
+        pin.is_bound = True
+        visual = get_pin_visual(pin)
+        self.assertIn('BOUND', visual)
+
+    def test_get_tension_bar(self):
+        """Tension bar should show percentage."""
+        bar = get_tension_bar(0.5, 10)
+        self.assertIn('50%', bar)
+
+    def test_list_profiles_runs(self):
+        """list_profiles should run without error (prints to stdout)."""
+        import io
+        from contextlib import redirect_stdout
+        f = io.StringIO()
+        with redirect_stdout(f):
+            list_profiles()
+        output = f.getvalue()
+        self.assertIn('yale-standard', output)
+        self.assertIn('Available Lock Profiles', output)
 
 
 if __name__ == '__main__':
