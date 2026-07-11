@@ -86,7 +86,7 @@ class Lighthouse:
         self.weather = "clear"
         self.weather_timer = random.randint(80, 200)
         self.storm_active = False
-        self.storm_intensity = 0  # 0–100
+        self.storm_intensity = 0.0  # 0–100
 
         # Event and message system
         self.log: List[str] = []
@@ -347,13 +347,17 @@ def _advance_time(state: Lighthouse, minutes: int) -> None:
         state.minutes -= 60
         state.hour += 1
 
+        # Wrap hour past midnight
+        if state.hour >= 24:
+            state.hour -= 24
+
         # Hourly log entry
         state.log.append(f"Hour {state.hour:02d}:00")
         if len(state.log) > 50:
             state.log = state.log[-30:]
 
-    # Dawn check
-    if state.hour >= NIGHT_END and not state.dawn_reached:
+    # Dawn check — only trigger between NIGHT_END (6 AM) and NIGHT_START (6 PM)
+    if state.hour >= NIGHT_END and state.hour < NIGHT_START and not state.dawn_reached:
         state.dawn_reached = True
         state.game_over = True
         state.game_over_reason = "Dawn has broken! You survived the night."
@@ -387,6 +391,10 @@ def tick(state: Lighthouse, dt: float) -> None:
     if state.minutes >= 60:
         state.minutes = 0
         state.hour += 1
+
+        # Wrap hour past midnight
+        if state.hour >= 24:
+            state.hour -= 24
 
         # Hourly log
         state.log.append(f"Hour {state.hour:02d}:00")
@@ -465,6 +473,8 @@ def tick(state: Lighthouse, dt: float) -> None:
         state.beam_intensity += (target - state.beam_intensity) * 0.05
     else:
         state.beam_intensity *= 0.9
+        if state.beam_intensity < 0.1:
+            state.beam_intensity = 0
 
     # ── Weather system ────────────────────────────────────────────
     state.weather_timer -= 1
@@ -503,7 +513,7 @@ def tick(state: Lighthouse, dt: float) -> None:
 
     # Storm effects on lens
     if state.storm_active:
-        state.storm_intensity = min(100, state.storm_intensity + random.uniform(-0.5, 1.0))
+        state.storm_intensity = max(0, min(100, state.storm_intensity + random.uniform(-0.5, 1.0)))
         state.lens_health = max(0, state.lens_health - 0.01 * (state.storm_intensity / 100))
 
     # ── Wind system ───────────────────────────────────────────────
@@ -704,12 +714,14 @@ def render(stdscr, state: Lighthouse) -> None:
     panel_y = 8
     panel_x = 2
 
-    hour_display = state.hour if state.hour > 12 else (state.hour if state.hour != 0 else 12)
+    # 12-hour time display
     ampm = "PM" if state.hour >= 12 else "AM"
     if state.hour > 12:
         hour_display = state.hour - 12
     elif state.hour == 0:
         hour_display = 12
+    else:
+        hour_display = state.hour
 
     time_str = f"{hour_display}:{state.minutes:02d} {ampm}"
 

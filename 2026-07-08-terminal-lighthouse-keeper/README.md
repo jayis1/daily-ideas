@@ -15,8 +15,14 @@ This is a real-time terminal game built with `curses`. Watch the moon traverse t
 - **Resource management** — Balance fuel, lens health, engine temperature, and beam intensity
 - **Ship rescue** — Spot distressed ships and signal them to safety for bonus points
 - **Random events** — Supply crates wash ashore, lens cracks appear, engines surge
-- **Scoring system** — Points for ships saved, fuel remaining, lens health, and engine management
+- **Wind system** — Shifting wind direction and strength affect ship movement across the sea
+- **Economy/Eco mode** — Toggle efficiency mode (E key) to cut fuel consumption by 40%, but beam intensity is capped at 60%
+- **Difficulty levels** — Easy, Normal (default), and Hard with different starting resources, storm frequency, and fuel burn rates
+- **Scoring system** — Points for ships saved, fuel remaining, lens health, engine management, and a difficulty multiplier
+- **High score persistence** — Top 10 scores saved to `~/.lighthouse_scores.json`
+- **Pause/Resume** — Press SPACE to pause and unpause the game
 - **Full night cycle** — Survive from 6 PM to 6 AM with an accelerated clock
+- **CLI flags** — `--help`, `--version`, and `--difficulty` for configuring your run
 
 ## How to Install
 
@@ -27,16 +33,28 @@ No external dependencies needed — just Python 3.6+ with the standard library (
 cd ~/daily-ideas/2026-07-08-terminal-lighthouse-keeper
 ```
 
-**Note for macOS users:** You may need to install a curses wrapper:
+**Note for Windows users:** You may need to install a curses wrapper:
 ```bash
-pip install windows-curses  # Windows
-# macOS and Linux should work out of the box
+pip install windows-curses
 ```
 
 ## How to Run
 
 ```bash
+# Start the game with default (medium) difficulty
 python3 lighthouse.py
+
+# Easy mode — more starting fuel, fewer storms
+python3 lighthouse.py --difficulty easy
+
+# Hard mode — less fuel, more storms, higher score multiplier
+python3 lighthouse.py --difficulty hard
+
+# Show version
+python3 lighthouse.py --version
+
+# Show help
+python3 lighthouse.py --help
 ```
 
 ## Controls
@@ -44,11 +62,15 @@ python3 lighthouse.py
 | Key | Action |
 |-----|--------|
 | `B` | Toggle the lighthouse beam on/off |
-| `R` | Refuel (costs 5 minutes of game time, restores 15-30% fuel) |
-| `F` | Fix the lens (costs 3 minutes, restores 10-25% lens health) |
-| `C` | Cool the engine (costs 2 minutes, reduces engine temp by 15-30°) |
+| `E` | Toggle efficiency (eco) mode — 40% less fuel, beam capped at 60% |
+| `R` | Refuel (costs 5 minutes of game time, restores 15–30% fuel) |
+| `F` | Fix the lens (costs 3 minutes, restores 10–25% lens health) |
+| `C` | Cool the engine (costs 2 minutes, reduces engine temp by 15–30°) |
 | `S` | Signal a distressed ship to guide it to safety (+200 points) |
+| `SPACE` | Pause / unpause the game |
 | `Q` | Quit the game |
+
+After game over: press `R` to restart or `Q` to quit.
 
 ## Gameplay Tips
 
@@ -56,9 +78,25 @@ python3 lighthouse.py
 - **Watch engine temperature** — If it hits 100°, the engine shuts down and the beam turns off
 - **Lens health affects beam intensity** — A cracked lens means a dimmer beam
 - **Turn off the beam strategically** — Saves fuel but risks losing ships
+- **Use eco mode (E)** — When fuel is low, eco mode stretches your supply at the cost of beam power
 - **Rescue distress ships quickly** — They have a timer before they're lost
 - **Storms increase fuel consumption** — Stock up on fuel before bad weather
 - **Supply crates are rare blessings** — They restore both fuel and lens health
+- **Wind direction matters** — Ships move faster with the wind and slower against it
+- **Hard mode has a 1.5× score multiplier** — Bigger risk, bigger reward
+
+## Scoring
+
+Your final score at dawn is calculated as:
+
+- **100 points** per ship saved
+- **5 × fuel remaining %**
+- **3 × lens health %**
+- **2 × (100 − engine temp)**
+- **+50 bonus** if you used eco mode at least once
+- **Difficulty multiplier:** Easy ×0.8, Normal ×1.0, Hard ×1.5
+
+Top 10 scores are automatically saved and persisted across games.
 
 ## What It Does
 
@@ -69,6 +107,6 @@ The game simulates a full night (6 PM to 6 AM) as a lighthouse keeper. Each game
 3. **Engine temperature** — Rises while the beam is on. Cool it with `C`.
 4. **Beam intensity** — Determined by fuel × lens health. Determines how well ships can see you.
 
-Ships sail across the sea — some in distress (marked "SOS!⛵"). Signal them with `S` to rescue them. Your final score depends on ships saved, fuel remaining, lens health, and engine condition at dawn.
+Ships sail across the sea — some in distress (marked "SOS!⛵"). Signal them with `S` to rescue them. Wind pushes ships around, and storms damage your lens while burning more fuel. Your final score depends on ships saved, fuel remaining, lens health, and engine condition at dawn.
 
 Survive the night, keep the light burning, and guide them home. 🏠
