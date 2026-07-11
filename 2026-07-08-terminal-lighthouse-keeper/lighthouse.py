@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 # ─── Version ──────────────────────────────────────────────────────────
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 # ─── Constants ────────────────────────────────────────────────────────
 SCREEN_W = 80
@@ -98,6 +98,7 @@ class Lighthouse:
         # Warnings and flags
         self.fuel_low_warned = False
         self.engine_overheated = False
+        self.fuel_out_ticks = 0  # ticks since fuel ran out
 
         # Rendering state
         self.wave_offset = 0.0
@@ -589,9 +590,17 @@ def tick(state: Lighthouse, dt: float) -> None:
 
     # ── Extra ship losses when the light is out ───────────────────
     if state.fuel <= 0 and not state.beam_on:
+        state.fuel_out_ticks += 1
         if random.random() < 0.005:
             state.ships_lost += 1
             state.log.append("A ship was lost — no light to guide it!")
+        # Lose condition: too many ships lost with no fuel
+        if state.fuel_out_ticks > 300 and state.ships_lost >= 3:
+            state.game_over = True
+            state.game_over_reason = "The light has failed. Too many ships were lost."
+            _calculate_final_score(state)
+    else:
+        state.fuel_out_ticks = 0
 
 
 # ─── High Scores ──────────────────────────────────────────────────────
