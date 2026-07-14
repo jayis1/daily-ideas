@@ -5,6 +5,8 @@ Procedurally generates beautiful stained glass window patterns in the terminal
 using colored Unicode characters with various architectural styles.
 """
 
+__version__ = "1.1.0"
+
 import random
 import sys
 import math
@@ -146,9 +148,16 @@ class StainedGlassGenerator:
         self.width = width
         self.height = height
         self.style_name = style
+        if style not in STYLES:
+            valid = ', '.join(sorted(STYLES.keys()))
+            raise ValueError(f"Unknown style '{style}'. Valid styles: {valid}")
         self.style = STYLES[style]
         self.grid = {}  # (x, y) -> {'color': str, 'char': str, 'is_lead': bool}
-        self.seed = seed or random.randint(0, 999999)
+        # Fix: seed=0 was treated as falsy, generating random seed instead
+        if seed is not None:
+            self.seed = seed
+        else:
+            self.seed = random.randint(1, 999999)
         random.seed(self.seed)
         
     def _color(self, name):
@@ -282,7 +291,7 @@ class StainedGlassGenerator:
                             if (nx, ny) not in visited and self._in_bounds(nx, ny):
                                 queue.append((nx, ny))
                     
-                    if len(region) > 2:
+                    if len(region) > 0:
                         regions.append(region)
         
         return regions
@@ -554,6 +563,8 @@ def main():
                         help='List available architectural styles')
     parser.add_argument('-n', '--count', type=int, default=1,
                         help='Number of windows to generate')
+    parser.add_argument('--version', action='version', version=f'stained_glass.py {__version__}',
+                        help='Show version and exit')
     
     args = parser.parse_args()
     
@@ -567,12 +578,12 @@ def main():
         term_size = shutil.get_terminal_size()
         default_width = min(70, term_size.columns - 2)
         default_height = min(35, term_size.lines - 8)
-    except:
+    except OSError:
         default_width = 70
         default_height = 35
     
-    width = args.width or default_width
-    height = args.height or default_height
+    width = args.width if args.width is not None else default_width
+    height = args.height if args.height is not None else default_height
     
     # Ensure minimum dimensions
     width = max(30, width)
@@ -580,7 +591,8 @@ def main():
     
     styles = list(STYLES.keys())
     chosen_style = args.style or random.choice(styles)
-    seed = args.seed or random.randint(1, 999999)
+    # Fix: seed=0 was treated as falsy with 'or', now uses 'is not None'
+    seed = args.seed if args.seed is not None else random.randint(1, 999999)
     
     for i in range(args.count):
         if i > 0:
