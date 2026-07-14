@@ -2,6 +2,22 @@
 """
 Terminal Procedural Garden Simulator
 Plant, grow, water, and harvest procedural ASCII plants through changing seasons.
+
+Features:
+  - 8 plant types with unique growth patterns, water needs, and season preferences
+  - 4 seasons with dynamic weather (Clear, Cloudy, Rainy, Stormy, Hot, Windy)
+  - Economy system: plant → grow → harvest → buy seeds → repeat
+  - Fertilizer mechanic: boost plant growth with purchased fertilizer
+  - Weather forecast: peek at upcoming days' weather
+  - Pest events: random insects can damage your plants
+  - Composting: clear dead plants to recover some gold
+  - Save/Load: game state persists between sessions
+
+Usage:
+  python3 garden.py              # Interactive mode
+  python3 garden.py --demo       # Demo/preview mode
+  python3 garden.py --stats      # Show saved game statistics
+  python3 garden.py --version    # Show version info
 """
 
 import random
@@ -13,6 +29,8 @@ import math
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Dict, Optional, Tuple
+
+__version__ = "1.1.0"
 
 # --- Constants ---
 GRID_W = 40
@@ -256,6 +274,7 @@ def render_plant(plant_type: PlantType, stage: GrowthStage, height: float, rng: 
 
 @dataclass
 class Plant:
+    """Represents a single plant in the garden grid."""
     plant_type: PlantType
     x: int
     y: int
@@ -264,6 +283,7 @@ class Plant:
     health: float = 100.0  # 0-100
     age_days: int = 0
     rng_seed: int = field(default_factory=lambda: random.randint(0, 999999))
+    fertilized_days: int = 0  # Days of fertilizer boost remaining
     
     @property
     def stage(self) -> GrowthStage:
@@ -295,6 +315,7 @@ class Plant:
 
 @dataclass
 class GameState:
+    """Complete game state including grid, inventory, and position."""
     grid: List[List[Optional[Plant]]] = field(default_factory=lambda: [[None]*GRID_W for _ in range(GRID_H)])
     season: Season = Season.SPRING
     day: int = 1
@@ -310,6 +331,7 @@ class GameState:
     cursor_y: int = 5
     message: str = ""
     message_timer: int = 0
+    fertilizer_count: int = 3  # Starting fertilizer
 
 
 SEASON_ORDER = [Season.SPRING, Season.SUMMER, Season.AUTUMN, Season.WINTER]
@@ -328,6 +350,14 @@ SEASON_EMOJI = {
 
 WEATHER_TYPES = ["Clear", "Cloudy", "Rainy", "Stormy", "Hot", "Windy"]
 WEATHER_RAIN = {"Rainy": 1.0, "Stormy": 0.8, "Cloudy": 0.2}
+WEATHER_EMOJI = {
+    "Clear": "☀️",
+    "Cloudy": "☁️",
+    "Rainy": "🌧️",
+    "Stormy": "⛈️",
+    "Hot": "🔥",
+    "Windy": "💨",
+}
 
 SHOP_PRICES = {
     PlantType.SUNFLOWER: 10,
@@ -340,6 +370,8 @@ SHOP_PRICES = {
     PlantType.VINE: 15,
 }
 
+FERTILIZER_PRICE = 8  # Cost per fertilizer unit in shop
+
 HARVEST_VALUES = {
     PlantType.SUNFLOWER: 25,
     PlantType.ROSE: 35,
@@ -351,42 +383,111 @@ HARVEST_VALUES = {
     PlantType.VINE: 30,
 }
 
+# Compost value: gold recovered when clearing a dead plant
+COMPOST_VALUE = 3
+
+# Pest event probability per day
+PEST_PROBABILITY = 0.12  # 12% chance of a pest event each day
+
+
+def generate_weather(season: Season, day_seed: int = None) -> str:
+    """Generate a random weather type based on the current season."""
+    weights = [4, 3, 2, 1, 1, 1]  # Clear, Cloudy, Rainy, Stormy, Hot, Windy
+    if season == Season.SUMMER:
+        weights[4] = 3  # more hot days
+    elif season == Season.WINTER:
+        weights = [2, 3, 3, 2, 0, 2]
+    elif season == Season.SPRING:
+        weights[2] = 4  # more rain
+    elif season == Season.AUTUMN:
+        weights[1] = 4  # more cloudy
+        weights[2] = 3  # more rain (mushroom season)
+    
+    if day_seed is not None:
+        rng = random.Random(day_seed)
+        return rng.choices(WEATHER_TYPES, weights=weights, k=1)[0]
+    return random.choices(WEATHER_TYPES, weights=weights, k=1)[0]
+
 
 class GardenSimulator:
+    """Main garden simulator class handling game logic and rendering."""
+    
     def __init__(self):
         self.state = GameState()
         self.weather = "Clear"
+        self.forecast: List[str] = []  # Weather forecast for upcoming days
         self.running = True
-        self.mode = "normal"  # normal, plant_select, shop
+        self.mode = "normal"  # normal, plant_select, shop, forecast
         self.selected_plant_idx = 0
-        self.available_seeds_list = []
+        self.available_seeds_list: List[Tuple[PlantType, int]] = []
         self.shop_page = 0
+        self.pest_alert = ""  # Message about current pest event
+        self.pest_alert_timer = 0
     
     def clear_screen(self):
+        """Clear the terminal screen."""
         os.system('clear' if os.name != 'nt' else 'cls')
     
-    def get_season_day(self):
+    def get_season_day(self) -> int:
+        """Get the current day within the season (1-28)."""
         return ((self.state.day - 1) % 28) + 1
     
+    def compute_forecast(self, days: int = 3) -> List[str]:
+        """Compute weather forecast for the next `days` days."""
+        forecast = []
+        for i in range(1, days + 1):
+            future_day = self.state.day + i
+            future_season_idx = ((future_day - 1) // 28) % 4
+            future_season = SEASON_ORDER[future_season_idx]
+            future_weather = generate_weather(future_season, day_seed=future_day * 7919)
+            forecast.append(future_weather)
+        return forecast
+    
     def advance_day(self, days=1):
+        """Advance the game by the specified number of days."""
         for _ in range(days):
             self.state.day += 1
             # Determine season
             season_idx = ((self.state.day - 1) // 28) % 4
             self.state.season = SEASON_ORDER[season_idx]
             # Random weather
-            weights = [4, 3, 2, 1, 1, 1]
-            if self.state.season == Season.SUMMER:
-                weights[4] = 3  # more hot days
-            elif self.state.season == Season.WINTER:
-                weights = [2, 3, 3, 2, 0, 2]
-            elif self.state.season == Season.SPRING:
-                weights[2] = 4  # more rain
-            self.weather = random.choices(WEATHER_TYPES, weights=weights, k=1)[0]
+            self.weather = generate_weather(self.state.season)
+            # Check for pest event
+            self._check_pest_event()
             # Grow plants
             self._grow_plants()
+        # Update forecast
+        self.forecast = self.compute_forecast(3)
+    
+    def _check_pest_event(self):
+        """Randomly trigger a pest event that can damage plants."""
+        self.pest_alert = ""
+        self.pest_alert_timer = 0
+        if random.random() < PEST_PROBABILITY:
+            # Pest event! Determine severity
+            pest_types = ["aphids", "caterpillars", "slugs", "beetles", "mites"]
+            pest = random.choice(pest_types)
+            affected = []
+            for row in self.state.grid:
+                for plant in row:
+                    if plant and plant.stage not in (GrowthStage.DEAD,):
+                        # Some plants resist pests better
+                        resistance = 1.0
+                        if plant.plant_type == PlantType.CACTUS:
+                            resistance = 0.3  # Cacti are tough
+                        elif plant.plant_type == PlantType.FERN:
+                            resistance = 0.7
+                        if random.random() < (0.4 * resistance):
+                            damage = random.randint(3, 12)
+                            plant.health -= damage
+                            plant.health = max(0, plant.health)
+                            affected.append(plant.plant_type.value)
+            if affected:
+                self.pest_alert = f"🐛 {pest.title()} attacked {len(affected)} plant(s)!"
+                self.pest_alert_timer = 40
     
     def _grow_plants(self):
+        """Process growth for all plants for one day."""
         rain_factor = WEATHER_RAIN.get(self.weather, 0.0)
         for row in self.state.grid:
             for plant in row:
@@ -400,11 +501,9 @@ class GardenSimulator:
                 # Natural water loss
                 plant.water_level -= 2
                 plant.water_level = max(0, plant.water_level)
-                # Growth
+                # Growth calculation
                 grow_rate = data["grow_rate"]
-                season_mult = data["season_bonus"].get(self.state.season, 1.0)
-                season_penalty = data["season_penalty"].get(self.state.season, 1.0)
-                # Use the bonus if present, otherwise use penalty, default 1.0
+                # Determine seasonal multiplier
                 if self.state.season in data["season_bonus"]:
                     effective = data["season_bonus"][self.state.season]
                 elif self.state.season in data["season_penalty"]:
@@ -419,6 +518,11 @@ class GardenSimulator:
                     water_mult = 0.6
                 else:
                     water_mult = 0.2
+                # Fertilizer boost
+                fert_mult = 1.0
+                if plant.fertilized_days > 0:
+                    fert_mult = 1.5
+                    plant.fertilized_days -= 1
                 # Health effects
                 if plant.water_level <= 5:
                     plant.health -= 8
@@ -430,11 +534,12 @@ class GardenSimulator:
                 if self.weather == "Stormy":
                     if random.random() < 0.15:
                         plant.health -= random.randint(5, 20)
-                # Hot weather
+                # Hot weather increases water loss
                 if self.weather == "Hot":
                     plant.water_level -= 5
-                
-                plant.growth += grow_rate * effective * water_mult
+                plant.water_level = max(0, plant.water_level)
+                # Apply growth
+                plant.growth += grow_rate * effective * water_mult * fert_mult
                 plant.growth = min(110, plant.growth)  # Can go slightly past 100
                 if plant.growth >= 100:
                     plant.growth -= 0.3  # Slow withering
@@ -443,6 +548,7 @@ class GardenSimulator:
                     plant.growth = max(plant.growth, 0)
     
     def plant_seed(self, plant_type: PlantType, x: int, y: int) -> bool:
+        """Plant a seed at the given position. Returns True on success."""
         if x < 0 or x >= GRID_W or y < 0 or y >= GRID_H:
             return False
         if self.state.grid[y][x] is not None:
@@ -461,42 +567,73 @@ class GardenSimulator:
         return True
     
     def water_plant(self, x: int, y: int):
+        """Water the plant at the given position."""
         if 0 <= x < GRID_W and 0 <= y < GRID_H:
             plant = self.state.grid[y][x]
             if plant and plant.stage not in (GrowthStage.DEAD,):
                 plant.water_level = min(100, plant.water_level + 35)
-                self.state.message = f"Watered {plant.plant_type.value}!"
+                self.state.message = f"Watered {plant.plant_type.value}! 💧"
                 self.state.message_timer = 20
+    
+    def fertilize_plant(self, x: int, y: int):
+        """Apply fertilizer to the plant at the given position."""
+        if not (0 <= x < GRID_W and 0 <= y < GRID_H):
+            return
+        plant = self.state.grid[y][x]
+        if plant is None:
+            self.state.message = "Nothing here to fertilize!"
+            self.state.message_timer = 20
+            return
+        if plant.stage == GrowthStage.DEAD:
+            self.state.message = "Dead plants can't be fertilized!"
+            self.state.message_timer = 20
+            return
+        if self.state.fertilizer_count <= 0:
+            self.state.message = "No fertilizer! Buy some at the shop (F key)."
+            self.state.message_timer = 30
+            return
+        self.state.fertilizer_count -= 1
+        plant.fertilized_days = 3  # Boost for 3 days
+        self.state.message = f"Fertilized {plant.plant_type.value}! (3 days boost) ✨"
+        self.state.message_timer = 25
     
     def harvest_plant(self, x: int, y: int):
-        if 0 <= x < GRID_W and 0 <= y < GRID_H:
-            plant = self.state.grid[y][x]
-            if plant is None:
-                return
-            if plant.stage in (GrowthStage.FLOWERING, GrowthStage.FRUITING):
-                value = HARVEST_VALUES.get(plant.plant_type, 15)
-                # Bonus for fruiting
-                if plant.stage == GrowthStage.FRUITING:
-                    value = int(value * 1.5)
-                self.state.gold += value
-                self.state.total_harvested += 1
-                # Chance to get seeds back
-                if random.random() < 0.6:
-                    self.state.seeds[plant.plant_type] = self.state.seeds.get(plant.plant_type, 0) + 1
-                    self.state.message = f"Harvested {plant.plant_type.value}! +{value}g (+1 seed)"
-                else:
-                    self.state.message = f"Harvested {plant.plant_type.value}! +{value}g"
-                self.state.message_timer = 30
-                self.state.grid[y][x] = None
-            elif plant.stage == GrowthStage.DEAD:
-                self.state.grid[y][x] = None
-                self.state.message = "Cleared dead plant."
-                self.state.message_timer = 20
+        """Harvest or compost the plant at the given position."""
+        if not (0 <= x < GRID_W and 0 <= y < GRID_H):
+            return
+        plant = self.state.grid[y][x]
+        if plant is None:
+            return
+        if plant.stage in (GrowthStage.FLOWERING, GrowthStage.FRUITING):
+            value = HARVEST_VALUES.get(plant.plant_type, 15)
+            # Bonus for fruiting stage
+            if plant.stage == GrowthStage.FRUITING:
+                value = int(value * 1.5)
+            # Fertilized plants give bonus gold
+            if plant.fertilized_days > 0:
+                value = int(value * 1.2)
+            self.state.gold += value
+            self.state.total_harvested += 1
+            # Chance to get seeds back
+            if random.random() < 0.6:
+                self.state.seeds[plant.plant_type] = self.state.seeds.get(plant.plant_type, 0) + 1
+                self.state.message = f"Harvested {plant.plant_type.value}! +{value}g (+1 seed) 🪙"
             else:
-                self.state.message = f"{plant.plant_type.value} not ready to harvest yet!"
-                self.state.message_timer = 30
+                self.state.message = f"Harvested {plant.plant_type.value}! +{value}g 🪙"
+            self.state.message_timer = 30
+            self.state.grid[y][x] = None
+        elif plant.stage == GrowthStage.DEAD:
+            # Composting: recover some gold from dead plants
+            self.state.gold += COMPOST_VALUE
+            self.state.grid[y][x] = None
+            self.state.message = f"Composted {plant.plant_type.value}. +{COMPOST_VALUE}g ♻️"
+            self.state.message_timer = 20
+        else:
+            self.state.message = f"{plant.plant_type.value} not ready to harvest yet!"
+            self.state.message_timer = 30
     
     def remove_plant(self, x: int, y: int):
+        """Remove a plant at the given position (no gold reward)."""
         if 0 <= x < GRID_W and 0 <= y < GRID_H:
             plant = self.state.grid[y][x]
             if plant:
@@ -505,6 +642,7 @@ class GardenSimulator:
                 self.state.message_timer = 20
     
     def buy_seed(self, plant_type: PlantType):
+        """Buy 3 seeds of the given plant type."""
         price = SHOP_PRICES.get(plant_type, 15)
         if self.state.gold >= price:
             self.state.gold -= price
@@ -515,7 +653,19 @@ class GardenSimulator:
             self.state.message = f"Not enough gold! Need {price}g."
             self.state.message_timer = 30
     
+    def buy_fertilizer(self):
+        """Buy one unit of fertilizer."""
+        if self.state.gold >= FERTILIZER_PRICE:
+            self.state.gold -= FERTILIZER_PRICE
+            self.state.fertilizer_count += 1
+            self.state.message = f"Bought fertilizer! -{FERTILIZER_PRICE}g"
+            self.state.message_timer = 30
+        else:
+            self.state.message = f"Not enough gold! Need {FERTILIZER_PRICE}g."
+            self.state.message_timer = 30
+    
     def render_garden(self) -> str:
+        """Render the main garden view as a string."""
         lines = []
         sc = SEASON_COLORS[self.state.season]
         reset = "\033[0m"
@@ -523,7 +673,8 @@ class GardenSimulator:
         # Header
         season_day = self.get_season_day()
         emoji = SEASON_EMOJI[self.state.season]
-        header = f"{sc}{emoji} {self.state.season.value} Day {season_day}{reset}  |  Day {self.state.day}  |  Weather: {self.weather}  |  Gold: {self.state.gold}g"
+        weather_emoji = WEATHER_EMOJI.get(self.weather, "")
+        header = f"{sc}{emoji} {self.state.season.value} Day {season_day}{reset}  |  Day {self.state.day}  |  {weather_emoji} {self.weather}  |  💰 {self.state.gold}g  |  ✨ Fert: {self.state.fertilizer_count}"
         lines.append(header)
         
         # Seed inventory
@@ -549,7 +700,8 @@ class GardenSimulator:
                         stage = plant.stage
                         art = render_plant(plant.plant_type, stage, plant.height, plant.rng)
                         cell = art[-1] if art else "?"
-                        # Show cursor bracket
+                        # Highlight with inverse for cursor
+                        cell = f"\033[7m{cell}{reset}"
                         row_str += cell
                     else:
                         row_str += "\033[7m·\033[0m"
@@ -572,10 +724,16 @@ class GardenSimulator:
         cx, cy = self.state.cursor_x, self.state.cursor_y
         plant = self.state.grid[cy][cx] if 0 <= cy < GRID_H and 0 <= cx < GRID_W else None
         if plant:
-            detail = f"  {plant.plant_type.value} | Stage: {plant.stage.name} | Growth: {plant.growth:.0f}% | Water: {plant.water_level:.0f}% | Health: {plant.health:.0f}%"
+            fert_str = f" \033[93m✨ Fert:{plant.fertilized_days}d\033[0m" if plant.fertilized_days > 0 else ""
+            detail = f"  {plant.plant_type.value} | Stage: {plant.stage.name} | Growth: {plant.growth:.0f}% | Water: {plant.water_level:.0f}% | Health: {plant.health:.0f}%{fert_str}"
         else:
             detail = f"  Empty plot ({cx},{cy})"
         lines.append(detail)
+        
+        # Pest alert
+        if self.pest_alert_timer > 0:
+            lines.append(f"\033[91m  {self.pest_alert}\033[0m")
+            self.pest_alert_timer -= 1
         
         # Message
         if self.state.message_timer > 0:
@@ -587,33 +745,18 @@ class GardenSimulator:
     def render_plant_detail(self, plant: Plant) -> str:
         """Render a larger view of a single plant."""
         art = render_plant(plant.plant_type, plant.stage, plant.height, plant.rng)
-        # Pad to reasonable width
         result_lines = []
         for line in art:
-            # Strip ANSI for width calc
-            clean = ""
-            i = 0
-            while i < len(line):
-                if line[i] == '\033':
-                    end = line.find('m', i)
-                    if end != -1:
-                        clean += line[i:end+1]
-                        i = end + 1
-                    else:
-                        clean += line[i]
-                        i += 1
-                else:
-                    clean += line[i]
-                    i += 1
             result_lines.append(f"  {line}")
         return "\n".join(result_lines)
     
     def render_shop(self) -> str:
+        """Render the seed shop overlay."""
         lines = []
-        lines.append("\033[93m╔════════════════════════════════╗")
-        lines.append("║      🏪 SEED SHOP 🏪          ║")
-        lines.append(f"║      Gold: {self.state.gold}g                  ║")
-        lines.append("╠════════════════════════════════╣")
+        lines.append("\033[93m╔══════════════════════════════════════╗")
+        lines.append("║        🏪 SEED SHOP 🏪               ║")
+        lines.append(f"║        Gold: {self.state.gold}g  Fertilizer: {self.state.fertilizer_count}    ║")
+        lines.append("╠══════════════════════════════════════╣")
         
         plant_types = list(PlantType)
         start = self.shop_page * 4
@@ -625,52 +768,83 @@ class GardenSimulator:
             marker = "→" if idx == self.selected_plant_idx else " "
             owned = self.state.seeds.get(pt, 0)
             data = PLANT_DATA[pt]
-            lines.append(f"║ {marker} {pt.value:10s} {price:3d}g (3 seeds) own:{owned} ║")
-            lines.append(f"║   Water need:{data['water_need']} Grow:{data['grow_rate']}x       ║")
+            lines.append(f"║ {marker} {pt.value:12s} {price:3d}g (3 seeds) own:{owned:2d} ║")
+            lines.append(f"║   Water need:{data['water_need']} Grow:{data['grow_rate']}x              ║")
         
-        lines.append("╠════════════════════════════════╣")
-        lines.append("║ ↑↓ Select  Enter:Buy  Esc:Back║")
-        lines.append("║ ←/→: Page                        ║")
-        lines.append("╚════════════════════════════════╝\033[0m")
+        # Fertilizer option
+        fert_marker = "→" if self.selected_plant_idx == len(plant_types) else " "
+        lines.append("╠══════════════════════════════════════╣")
+        lines.append(f"║ {fert_marker} Fertilizer    {FERTILIZER_PRICE:3d}g (1 unit)  own:{self.state.fertilizer_count:2d} ║")
+        lines.append("╠══════════════════════════════════════╣")
+        lines.append("║ ↑↓ Select  Enter:Buy  Esc:Back      ║")
+        lines.append("║ ←/→: Page                             ║")
+        lines.append("╚══════════════════════════════════════╝\033[0m")
         return "\n".join(lines)
     
     def render_plant_select(self) -> str:
+        """Render the seed selection overlay."""
         lines = []
-        lines.append("\033[92m╔════════════════════════════════╗")
-        lines.append("║    🌱 SELECT SEED TO PLANT    ║")
-        lines.append("╠════════════════════════════════╣")
+        lines.append("\033[92m╔══════════════════════════════════════╗")
+        lines.append("║      🌱 SELECT SEED TO PLANT       ║")
+        lines.append("╠══════════════════════════════════════╣")
         
         self.available_seeds_list = [(pt, c) for pt, c in self.state.seeds.items() if c > 0]
         
         if not self.available_seeds_list:
-            lines.append("║  No seeds available!           ║")
-            lines.append("║  Press S to visit the shop.    ║")
+            lines.append("║  No seeds available!                ║")
+            lines.append("║  Press S to visit the shop.         ║")
         else:
             for i, (pt, count) in enumerate(self.available_seeds_list):
                 marker = "→" if i == self.selected_plant_idx else " "
                 data = PLANT_DATA[pt]
-                lines.append(f"║ {marker} {pt.value:12s} x{count}          ║")
-                lines.append(f"║   Water:{data['water_need']} Grow:{data['grow_rate']}x H:{data['max_height']}     ║")
+                lines.append(f"║ {marker} {pt.value:12s} x{count}               ║")
+                lines.append(f"║   Water:{data['water_need']} Grow:{data['grow_rate']}x H:{data['max_height']}          ║")
         
-        lines.append("╠════════════════════════════════╣")
-        lines.append("║ ↑↓ Select  Enter:Plant  Esc:Cancel║")
-        lines.append("╚════════════════════════════════╝\033[0m")
+        lines.append("╠══════════════════════════════════════╣")
+        lines.append("║ ↑↓ Select  Enter:Plant  Esc:Cancel  ║")
+        lines.append("╚══════════════════════════════════════╝\033[0m")
+        return "\n".join(lines)
+    
+    def render_forecast(self) -> str:
+        """Render the weather forecast overlay."""
+        lines = []
+        lines.append("\033[96m╔══════════════════════════════════════╗")
+        lines.append("║        🌤️  WEATHER FORECAST 🌤️       ║")
+        lines.append("╠══════════════════════════════════════╣")
+        
+        forecast = self.forecast if self.forecast else self.compute_forecast(3)
+        for i, weather in enumerate(forecast):
+            future_day = self.state.day + i + 1
+            future_season_idx = ((future_day - 1) // 28) % 4
+            future_season = SEASON_ORDER[future_season_idx]
+            future_season_day = ((future_day - 1) % 28) + 1
+            emoji = WEATHER_EMOJI.get(weather, "")
+            sc = SEASON_COLORS[future_season]
+            lines.append(f"║  Day {future_day:3d} ({sc}{future_season.value} D{future_season_day}\033[0m)  {emoji} {weather:8s} ║")
+        
+        lines.append("╠══════════════════════════════════════╣")
+        lines.append("║  Press any key to close             ║")
+        lines.append("╚══════════════════════════════════════╝\033[0m")
         return "\n".join(lines)
     
     def render_help(self) -> str:
+        """Render the help screen."""
         return """
 \033[93m═══════════════════════════════════════
         🌻 GARDEN SIMULATOR HELP 🌻
 ═══════════════════════════════════════\033[0m
 
-  \033[1mMovement:\033[0m     Arrow keys / WASD
+  \033[1mMovement:\033[0m     Arrow keys (↑↓←→)
   \033[1mPlant:\033[0m        P - Plant a seed at cursor
   \033[1mWater:\033[0m        W - Water plant at cursor
-  \033[1mHarvest:\033[0m      H - Harvest mature plant
-  \033[1mRemove:\033[0m      X - Remove plant at cursor
-  \033[1mShop:\033[0m         S - Buy new seeds
+  \033[1mFertilize:\033[0m    F - Apply fertilizer (growth boost)
+  \033[1mHarvest:\033[0m      H - Harvest mature / compost dead
+  \033[1mRemove:\033[0m        X - Remove plant at cursor
+  \033[1mShop:\033[0m         S - Buy seeds & fertilizer
+  \033[1mForecast:\033[0m     T - View weather forecast
   \033[1mNext Day:\033[0m     N - Advance one day
   \033[1mNext Week:\033[0m    M - Advance 7 days
+  \033[1mSave:\033[0m         V - Save game
   \033[1mHelp:\033[0m         ? - Show this help
   \033[1mQuit:\033[0m         Q - Exit game
 
@@ -683,18 +857,25 @@ class GardenSimulator:
   • Water your plants! But don't overwater.
   • Harvest at Flowering or Fruiting stage for gold.
   • Fruiting stage gives 1.5x harvest value.
-  • Storms can damage your plants!
-  • Buy seeds at the shop with S key.
+  • Fertilized plants grow 1.5x faster for 3 days.
+  • Fertilized harvests give +20% gold bonus.
+  • Compost dead plants for 3g each (H key).
+  • Storms and pests can damage your plants!
+  • Press T to check upcoming weather.
+  • Buy seeds & fertilizer at the shop (S key).
 \033[93m═══════════════════════════════════════\033[0m
 """
     
     def save_game(self):
+        """Save game state to disk."""
         data = {
+            "version": __version__,
             "day": self.state.day,
             "gold": self.state.gold,
             "seeds": {pt.value: count for pt, count in self.state.seeds.items()},
             "total_harvested": self.state.total_harvested,
             "total_planted": self.state.total_planted,
+            "fertilizer_count": self.state.fertilizer_count,
             "plants": [],
         }
         for row in self.state.grid:
@@ -709,17 +890,19 @@ class GardenSimulator:
                         "health": plant.health,
                         "age_days": plant.age_days,
                         "rng_seed": plant.rng_seed,
+                        "fertilized_days": plant.fertilized_days,
                     })
         try:
             with open(SAVE_FILE, 'w') as f:
-                json.dump(data, f)
-            self.state.message = "Game saved!"
+                json.dump(data, f, indent=2)
+            self.state.message = "Game saved! 💾"
             self.state.message_timer = 20
         except Exception as e:
             self.state.message = f"Save failed: {e}"
             self.state.message_timer = 30
     
     def load_game(self) -> bool:
+        """Load game state from disk. Returns True on success."""
         if not os.path.exists(SAVE_FILE):
             return False
         try:
@@ -730,6 +913,7 @@ class GardenSimulator:
             self.state.seeds = {PlantType(name): count for name, count in data["seeds"].items()}
             self.state.total_harvested = data.get("total_harvested", 0)
             self.state.total_planted = data.get("total_planted", 0)
+            self.state.fertilizer_count = data.get("fertilizer_count", 3)
             self.state.grid = [[None]*GRID_W for _ in range(GRID_H)]
             for pd in data["plants"]:
                 plant = Plant(
@@ -740,19 +924,68 @@ class GardenSimulator:
                     health=pd["health"],
                     age_days=pd["age_days"],
                     rng_seed=pd["rng_seed"],
+                    fertilized_days=pd.get("fertilized_days", 0),
                 )
                 self.state.grid[pd["y"]][pd["x"]] = plant
             # Set season
             season_idx = ((self.state.day - 1) // 28) % 4
             self.state.season = SEASON_ORDER[season_idx]
+            # Generate initial weather and forecast
+            self.weather = generate_weather(self.state.season)
+            self.forecast = self.compute_forecast(3)
             return True
         except Exception:
             return False
     
+    def get_stats(self) -> str:
+        """Return a string with game statistics."""
+        plant_count = 0
+        total_growth = 0.0
+        total_health = 0.0
+        stage_counts = {}
+        for row in self.state.grid:
+            for plant in row:
+                if plant and plant.stage != GrowthStage.DEAD:
+                    plant_count += 1
+                    total_growth += plant.growth
+                    total_health += plant.health
+                    stage_name = plant.stage.name
+                    stage_counts[stage_name] = stage_counts.get(stage_name, 0) + 1
+        
+        avg_growth = total_growth / plant_count if plant_count > 0 else 0
+        avg_health = total_health / plant_count if plant_count > 0 else 0
+        
+        lines = [
+            f"\033[93m{'='*40}\033[0m",
+            f"\033[1m  🌻 Garden Statistics 🌻\033[0m",
+            f"\033[93m{'='*40}\033[0m",
+            f"  Day: {self.state.day}  Season: {self.state.season.value}",
+            f"  Gold: {self.state.gold}g",
+            f"  Plants alive: {plant_count}",
+            f"  Plants planted (all time): {self.state.total_planted}",
+            f"  Plants harvested (all time): {self.state.total_harvested}",
+            f"  Avg growth: {avg_growth:.1f}%",
+            f"  Avg health: {avg_health:.1f}%",
+            f"  Fertilizer: {self.state.fertilizer_count}",
+            f"  Seeds: {sum(self.state.seeds.values())}",
+            "",
+        ]
+        if stage_counts:
+            lines.append("  Growth stages:")
+            for stage in GrowthStage:
+                if stage.name in stage_counts:
+                    lines.append(f"    {stage.name}: {stage_counts[stage.name]}")
+        return "\n".join(lines)
+    
     def run(self):
+        """Main game loop with interactive terminal input."""
         # Try to load saved game
         if os.path.exists(SAVE_FILE):
             self.load_game()
+        
+        # Generate initial weather and forecast
+        self.weather = generate_weather(self.state.season)
+        self.forecast = self.compute_forecast(3)
         
         # Set up terminal for raw input
         try:
@@ -763,9 +996,10 @@ class GardenSimulator:
             tty.setraw(fd)
         except (ImportError, termios.error):
             old_settings = None
+            fd = None
         
         def read_key():
-            """Read a single keypress."""
+            """Read a single keypress from terminal."""
             try:
                 ch = sys.stdin.read(1)
                 if ch == '\x1b':  # ESC sequence
@@ -801,6 +1035,8 @@ class GardenSimulator:
                     print(self.render_shop())
                 elif self.mode == "plant_select":
                     print(self.render_plant_select())
+                elif self.mode == "forecast":
+                    print(self.render_forecast())
                 else:
                     print(self.render_garden())
                 
@@ -810,26 +1046,34 @@ class GardenSimulator:
                     self.running = False
                     break
                 
+                # Forecast mode — any key dismisses
+                if self.mode == "forecast":
+                    self.mode = "normal"
+                    continue
+                
                 # Mode-specific handling
                 if self.mode == "shop":
-                    if key == 'ESC' or key == 'S' or key == 'Q':
+                    total_items = len(PlantType) + 1  # +1 for fertilizer
+                    if key == 'ESC' or key == 'S':
                         self.mode = "normal"
                     elif key == 'UP':
                         self.selected_plant_idx = max(0, self.selected_plant_idx - 1)
                     elif key == 'DOWN':
-                        max_idx = len(PlantType) - 1
+                        max_idx = total_items - 1
                         self.selected_plant_idx = min(max_idx, self.selected_plant_idx + 1)
                     elif key == 'LEFT':
                         self.shop_page = max(0, self.shop_page - 1)
                         self.selected_plant_idx = self.shop_page * 4
                     elif key == 'RIGHT':
-                        max_page = (len(PlantType) - 1) // 4
+                        max_page = (len(PlantType)) // 4
                         self.shop_page = min(max_page, self.shop_page + 1)
                         self.selected_plant_idx = self.shop_page * 4
                     elif key == 'ENTER':
-                        plant_types = list(PlantType)
-                        if self.selected_plant_idx < len(plant_types):
-                            self.buy_seed(plant_types[self.selected_plant_idx])
+                        if self.selected_plant_idx < len(PlantType):
+                            self.buy_seed(list(PlantType)[self.selected_plant_idx])
+                        elif self.selected_plant_idx == len(PlantType):
+                            # Fertilizer
+                            self.buy_fertilizer()
                     continue
                 
                 elif self.mode == "plant_select":
@@ -848,17 +1092,14 @@ class GardenSimulator:
                         self.mode = "normal"
                     continue
                 
-                # Normal mode
-                if key == 'UP' or key == 'W':
+                # Normal mode controls
+                if key == 'UP':
                     self.state.cursor_y = max(0, self.state.cursor_y - 1)
-                elif key == 'DOWN' or key == 'S':
-                    if self.mode != "normal":
-                        pass
-                    else:
-                        self.state.cursor_y = min(GRID_H - 1, self.state.cursor_y + 1)
-                elif key == 'LEFT' or key == 'A':
+                elif key == 'DOWN':
+                    self.state.cursor_y = min(GRID_H - 1, self.state.cursor_y + 1)
+                elif key == 'LEFT':
                     self.state.cursor_x = max(0, self.state.cursor_x - 1)
-                elif key == 'RIGHT' or key == 'D':
+                elif key == 'RIGHT':
                     self.state.cursor_x = min(GRID_W - 1, self.state.cursor_x + 1)
                 elif key == 'P':
                     # Enter plant select mode
@@ -869,57 +1110,84 @@ class GardenSimulator:
                     else:
                         self.state.message = "No seeds! Press S to visit shop."
                         self.state.message_timer = 30
-                elif key == ' ':
+                elif key == 'W':
                     # Water plant
                     self.water_plant(self.state.cursor_x, self.state.cursor_y)
+                elif key == 'F':
+                    # Fertilize plant
+                    self.fertilize_plant(self.state.cursor_x, self.state.cursor_y)
                 elif key == 'H':
-                    # Harvest
+                    # Harvest / compost
                     self.harvest_plant(self.state.cursor_x, self.state.cursor_y)
                 elif key == 'X':
                     # Remove plant
                     self.remove_plant(self.state.cursor_x, self.state.cursor_y)
+                elif key == 'S':
+                    # Open shop
+                    self.mode = "shop"
+                    self.selected_plant_idx = 0
+                    self.shop_page = 0
+                elif key == 'T':
+                    # Weather forecast
+                    self.forecast = self.compute_forecast(3)
+                    self.mode = "forecast"
                 elif key == 'N':
                     # Next day
                     self.advance_day(1)
                 elif key == 'M':
                     # Next week
                     self.advance_day(7)
-                elif key == 'S':
-                    self.mode = "shop"
-                    self.selected_plant_idx = 0
-                    self.shop_page = 0
                 elif key == '?' or key == '/':
                     self.clear_screen()
                     print(self.render_help())
                     input("\nPress Enter to continue...")
+                elif key == 'V':
+                    # Save game
+                    self.save_game()
                 elif key == 'Q':
                     self.running = False
-                elif key == 'V':
-                    # Save
-                    self.save_game()
         
         finally:
-            if old_settings:
+            if old_settings and fd is not None:
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
             self.clear_screen()
-            print("\n\033[93m🌻 Thanks for gardening! 🌻\033[0m")
+            print(f"\n\033[93m🌻 Thanks for gardening! 🌻\033[0m")
             print(f"  Days survived: {self.state.day}")
             print(f"  Gold earned: {self.state.gold}")
             print(f"  Plants harvested: {self.state.total_harvested}")
             print(f"  Plants planted: {self.state.total_planted}\n")
 
 
+def show_stats():
+    """Load a saved game and display statistics, then exit."""
+    game = GardenSimulator()
+    if os.path.exists(SAVE_FILE):
+        game.load_game()
+        print(game.get_stats())
+    else:
+        print("No saved game found at", SAVE_FILE)
+
+
 def main():
+    """Entry point: parse arguments and run the game or display info."""
     import argparse
-    parser = argparse.ArgumentParser(description="Terminal Procedural Garden Simulator")
-    parser.add_argument('--demo', action='store_true', help='Run in demo mode (auto-play)')
+    parser = argparse.ArgumentParser(
+        description="Terminal Procedural Garden Simulator — plant, grow, and harvest ASCII plants through the seasons!",
+        epilog="Run without arguments for interactive mode."
+    )
+    parser.add_argument('--demo', action='store_true', help='Run in demo mode (non-interactive preview)')
+    parser.add_argument('--stats', action='store_true', help='Show statistics from a saved game')
+    parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}')
     args = parser.parse_args()
+    
+    if args.stats:
+        show_stats()
+        return
     
     game = GardenSimulator()
     
     if args.demo:
         # Auto-populate and show garden
-        # Plant some things
         plants_demo = [
             (PlantType.SUNFLOWER, 5, 10),
             (PlantType.ROSE, 10, 8),
@@ -950,6 +1218,7 @@ def main():
         # Simulate a few days of weather
         game.advance_day(0)
         game.weather = "Clear"
+        game.forecast = game.compute_forecast(3)
         
         print(game.render_garden())
         print()
@@ -961,11 +1230,13 @@ def main():
         print("Run without --demo for interactive mode.")
         print()
         print("Controls:")
-        print("  Arrow keys/WASD - Move cursor")
-        print("  P - Plant seed    SPACE - Water")
-        print("  H - Harvest       X - Remove")
-        print("  S - Shop          N - Next day")
-        print("  M - Next week     Q - Quit")
+        print("  Arrow keys     - Move cursor")
+        print("  P - Plant seed    W - Water")
+        print("  F - Fertilize     H - Harvest/Compost")
+        print("  X - Remove        S - Shop")
+        print("  T - Forecast      N - Next day")
+        print("  M - Next week     V - Save")
+        print("  Q - Quit")
         print()
         
         # Show some plants in detail
