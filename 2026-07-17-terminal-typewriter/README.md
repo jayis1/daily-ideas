@@ -1,6 +1,6 @@
 # ⌨ Terminal Typewriter Simulator
 
-**v1.1.0**
+**v1.2.0**
 
 A fully interactive vintage typewriter simulator that runs right in your terminal. Experience the feel of typing on classic machines — from the satisfying clack of an Underwood No. 5 to the precision of an Olivetti Lettera 32 — complete with ink density variation, ribbon wear, paper jams, and the iconic margin bell.
 
@@ -18,15 +18,16 @@ A fully interactive vintage typewriter simulator that runs right in your termina
 - **Ribbon Wear** — the longer you type, the fainter the ink gets. Install a fresh ribbon with `Ctrl+N`
 - **Margin Bell** — hear the classic "ding" when approaching the right margin, just like a real typewriter
 - **Overstrike Corrections** — press Backspace to overprint corrections (marked with ⌫)
-- **Paper Jams** — random jam events that block typing until you clear them with `Ctrl+J` (jam frequency varies by model — the Royal jams most, the IBM Selectric almost never)
+- **Paper Jams** — random jam events that block typing until you clear them with `Ctrl+J` (jam frequency varies by model — the Royal jams most, the IBM Selectric almost never). During auto-type, jams automatically pause playback and resume when cleared.
 - **CAPS LOCK Toggle** — `Ctrl+C` toggles caps lock
-- **Timestamp Stamping** — `Ctrl+T` inserts the current date and time
+- **Timestamp Stamping** — `Ctrl+T` inserts the current date and time (disabled while jammed)
 - **Speed Control** — adjust auto-type playback speed from 0.1x to 10x with `--speed`
-- **Export to File** — save your typed work to a file with `--export`
+- **Export to File** — save your typed work to a file with `--export`; press `Ctrl+E` mid-session to save with visual confirmation
 - **Word & Character Count** — live word count in the status bar
-- **Auto-Type Mode** — feed text from the command line or a file and watch it type itself
+- **Auto-Type Mode** — feed text from the command line or a file and watch it type itself; auto-pauses on paper jams
 - **Ink Colors** — choose black, red, blue, or green ink
 - **Beautiful Paper Rendering** — your text appears on a white "page" with margins and a roller bar
+- **Visual Flash Feedback** — export actions show on-screen confirmation messages
 
 ## Installation
 
@@ -121,7 +122,7 @@ python3 typewriter.py --quiet
 
 ```bash
 python3 typewriter.py --version
-# Output: Terminal Typewriter Simulator v1.1.0
+# Output: Terminal Typewriter Simulator v1.2.0
 ```
 
 ### Show Help
@@ -136,6 +137,7 @@ python3 typewriter.py --help
 |-----|--------|
 | **Any printable key** | Type that character |
 | **Enter** | Carriage return + line feed |
+| **Ctrl+J** | Clear paper jam (when jammed) / Line Feed (when not jammed) |
 | **Backspace** | Overstrike last character (correction) |
 | **Ctrl+U** | New line |
 | **Ctrl+R** | Carriage return (no line feed) |
@@ -144,8 +146,7 @@ python3 typewriter.py --help
 | **Ctrl+P** | Pause/resume auto-type |
 | **Ctrl+C** | Toggle CAPS LOCK |
 | **Ctrl+T** | Insert timestamp (date + time) |
-| **Ctrl+J** | Clear paper jam |
-| **Ctrl+E** | Export to file (if `--export` set) |
+| **Ctrl+E** | Export to file (if `--export` set); shows on-screen confirmation |
 | **Q** | Quit (auto-exports if `--export` is set) |
 
 ## Usage Examples
@@ -187,7 +188,7 @@ Output:
   │ DING! The margin bell rings.                                        │
   └────────────────────────────────────────────────────────────────────┘
 
-  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
 ```
 
 ## How It Works
@@ -202,13 +203,15 @@ The simulator models several aspects of a real typewriter:
 
 4. **Margin Bell** — Each model has a different "ding at" column (where the bell rings to warn you about the right margin). The Underwood dings at column 65, the IBM at 75. This matches the physical margin settings of each machine.
 
-5. **Paper Jams** — Each model has a per-character chance of jamming. The Royal (temperamental!) has the highest jam rate at 0.4%, while the IBM Selectric (electric and reliable) has the lowest at 0.03%. When jammed, no characters can be typed until you clear it with `Ctrl+J`, which produces a satisfying bell acknowledgment.
+5. **Paper Jams** — Each model has a per-character chance of jamming. The Royal (temperamental!) has the highest jam rate at 0.4%, while the IBM Selectric (electric and reliable) has the lowest at 0.03%. When jammed, no characters can be typed until you clear it with `Ctrl+J`, which produces a satisfying bell acknowledgment. In auto-type mode, jams automatically pause playback, and clearing the jam auto-resumes.
 
 6. **Overstrike Corrections** — Rather than erasing, backspace overstrikes with a ⌫ character, mimicking how real typists corrected mistakes by typing X over the error.
 
-7. **Timestamps** — Press `Ctrl+T` to insert a `--- YYYY-MM-DD HH:MM ---` timestamp line, just like stamping a date on a letter.
+7. **Timestamps** — Press `Ctrl+T` to insert a `--- YYYY-MM-DD HH:MM ---` timestamp line, just like stamping a date on a letter. Disabled while jammed (the typewriter can't type through a jam).
 
-8. **Export** — When `--export FILE` is set, your typed content is automatically saved to that file when you quit. You can also press `Ctrl+E` to save mid-session.
+8. **Export** — When `--export FILE` is set, your typed content is automatically saved to that file when you quit. You can also press `Ctrl+E` to save mid-session, which shows a visual "Exported!" or "Export failed!" confirmation on screen.
+
+9. **Escape Sequence Handling** — Terminal escape sequences (arrow keys, function keys, etc.) are properly drained using CSI final byte detection (0x40–0x7E), preventing stray characters from appearing on the page.
 
 ## Testing
 
@@ -229,27 +232,43 @@ The test suite covers:
 - Caps lock behavior
 - Export path handling
 - Paper jam state mechanics
+- Ctrl+J / Enter keycode conflict verification
+- Auto-type jam auto-pause behavior
+- Timestamp insertion while jammed
+- Export feedback (success and failure paths)
+- Escape sequence CSI byte range validation
+
+**63 tests total.**
 
 ## Files
 
 | File | Description |
 |------|-------------|
 | `typewriter.py` | Main application (interactive + demo modes) |
-| `test_typewriter.py` | Comprehensive unit tests (51 tests) |
+| `test_typewriter.py` | Comprehensive unit tests (63 tests) |
 | `test_demo.py` | Demo script showing all 5 typewriter models |
 | `sample_letter.txt` | Sample text file for auto-type testing |
 
 ## Changelog
 
+### v1.2.0 (Bug Fixes)
+- **CRITICAL FIX: Ctrl+J now works to clear paper jams** — Ctrl+J (ASCII 10 / Line Feed) was previously unreachable because the Enter handler caught `key == 10` first. Ctrl+J now takes priority: when jammed it clears the jam, when not jammed it acts as Line Feed (same as Enter). This was the most impactful bug since paper jams could never be cleared, making the game unplayable after a random jam event.
+- **FIX: Auto-type now auto-pauses on paper jam** — Previously, `_auto_type()` would silently skip characters when a jam occurred, losing text. Now it automatically pauses and waits for the user to clear the jam with Ctrl+J. Clearing the jam auto-resumes playback.
+- **FIX: Ctrl+T (timestamp) disabled while jammed** — Previously, pressing Ctrl+T while jammed would call `_type_char()` for each timestamp character, all returning `False` silently. Now Ctrl+T is a no-op while jammed.
+- **FIX: Ctrl+E (export) now shows visual feedback** — Previously, pressing Ctrl+E gave no feedback at all, whether the export succeeded or failed. Now it shows "Exported!" or "Export failed!" on screen. If no export path is set, it shows "No export path set".
+- **FIX: Escape sequence handling improved** — Previously, only one byte after ESC was consumed, causing arrow keys and other multi-byte sequences to leave stray characters. Now properly drains CSI sequences by reading until a final byte (0x40–0x7E).
+- **Added: `_show_flash()` method** for displaying brief on-screen messages.
+- **Added: 12 new tests** covering the fixed bugs (keycode conflict, jam auto-pause, export feedback, escape sequence handling).
+
 ### v1.1.0 (Enhanced)
-- **New: Paper jams** — random jam events with model-specific frequencies; clear with `Ctrl+J`
-- **New: Timestamp stamping** — insert date/time with `Ctrl+T`
-- **New: Export to file** — `--export FILE` saves typed content; `Ctrl+E` mid-session save
-- **New: Speed control** — `--speed FLOAT` adjusts auto-type rate from 0.1x to 10x
-- **New: `--version` flag** — shows version number
-- **New: `--demo` as proper argparse flag** — no longer a raw `sys.argv` check
-- **New: Word count** in status bar
-- **Improved: Error handling** — `PermissionError` handling for file reads, graceful fallback for terminal bell
-- **Improved: Tests** — comprehensive pytest suite with 51 parametrized tests
-- **Improved: Code comments** — thorough docstrings and inline explanations
-- **Improved: Speed affects all delays** — carriage return, margin bell pause, auto-type all respect speed multiplier
+- New: Paper jams — random jam events with model-specific frequencies; clear with Ctrl+J
+- New: Timestamp stamping — insert date/time with Ctrl+T
+- New: Export to file — `--export FILE` saves typed content; `Ctrl+E` mid-session save
+- New: Speed control — `--speed FLOAT` adjusts auto-type rate from 0.1x to 10x
+- New: `--version` flag — shows version number
+- New: `--demo` as proper argparse flag — no longer a raw `sys.argv` check
+- New: Word count in status bar
+- Improved: Error handling — `PermissionError` handling for file reads, graceful fallback for terminal bell
+- Improved: Tests — comprehensive pytest suite with 51 parametrized tests
+- Improved: Code comments — thorough docstrings and inline explanations
+- Improved: Speed affects all delays — carriage return, margin bell pause, auto-type all respect speed multiplier

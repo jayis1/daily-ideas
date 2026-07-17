@@ -14,9 +14,12 @@ Simulates a vintage typewriter in your terminal with:
 - Word count and character count tracking
 - Export typed content to a file
 - Speed multiplier for auto-type mode
-- Paper jam random events
+- Paper jam random events (clear with Ctrl+J)
 - Timestamp stamping (Ctrl+T)
-- Version: 1.1.0
+- Auto-pause on jam during auto-type mode
+- Visual flash feedback for export actions
+- Improved escape sequence handling
+- Version: 1.2.0
 """
 
 import sys
@@ -32,7 +35,7 @@ from enum import Enum
 from collections import deque
 from datetime import datetime
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 
 class TypewriterModel(Enum):
@@ -172,6 +175,25 @@ class TerminalTypewriter:
                 # Not all terminals support beep; silently ignore
                 pass
 
+    def _show_flash(self, message, duration=1.0):
+        """Show a brief flash message on screen for user feedback.
+
+        Displays a message at the bottom of the screen for `duration` seconds.
+        Used for confirming actions like export success/failure.
+        """
+        try:
+            h, w = self.stdscr.getmaxyx()
+            row = h - 1
+            # Center the message
+            msg = f" {message} "
+            col = max(0, (w - len(msg)) // 2)
+            self.stdscr.addstr(row, col, msg, curses.color_pair(10) | curses.A_BOLD)
+            self.stdscr.refresh()
+            time.sleep(duration / max(0.1, self.speed))
+        except curses.error:
+            # If we can't display (small terminal, etc.), just skip
+            pass
+
     def _type_delay(self):
         """Simulate the mechanical delay between key presses, adjusted by speed."""
         props = MODEL_PROPS[self.state.model]
@@ -208,6 +230,9 @@ class TerminalTypewriter:
         """Resolve a paper jam (user pressed Ctrl+J)."""
         self.state.jammed = False
         self.state.jam_timer = 0
+        # If we're in auto-mode and paused because of the jam, resume
+        if self.auto_mode and self.paused:
+            self.paused = False
         self._bell()  # Acknowledge with a ding
 
     def _type_char(self, ch):
@@ -340,7 +365,7 @@ class TerminalTypewriter:
             header_lines.append(f" ║{status:^{w-4}}║")
 
             # Controls
-            ctrl = "Enter=↵  BS=⌫  ^U=newline  ^R=CR  ^D=ding  ^N=ribbon  ^T=stamp  ^J=unjam  ^P=pause  ^C=CAPS  Q=quit"
+            ctrl = "Enter=↵  BS=⌫  ^U=newline  ^R=CR  ^D=ding  ^N=ribbon  ^T=stamp  ^J=unjam/LF  ^E=export  ^P=pause  ^C=CAPS  Q=quit"
             header_lines.append(f" ║{ctrl:^{w-4}}║")
 
             # Jam warning
@@ -516,19 +541,26 @@ class TerminalTypewriter:
 
     def _auto_type(self):
         """Auto-type from provided text."""
-        if self.auto_index < len(self.auto_text):
-            ch = self.auto_text[self.auto_index]
-            self.auto_index += 1
+        if self.auto_index >= len(self.auto_text):
+            return
 
-            if ch == '\n':
-                self._carriage_return()
-                self._new_line()
-            elif ch == '\t':
-                for _ in range(4):
-                    self._type_char(' ')
-            else:
-                self._type_char(ch)
-            self._type_delay()
+        # If jammed, auto-pause and wait for user to clear the jam
+        if self.state.jammed:
+            self.paused = True
+            return
+
+        ch = self.auto_text[self.auto_index]
+        self.auto_index += 1
+
+        if ch == '\n':
+            self._carriage_return()
+            self._new_line()
+        elif ch == '\t':
+            for _ in range(4):
+                self._type_char(' ')
+        else:
+            self._type_char(ch)
+        self._type_delay()
 
     def run(self):
         """Main typewriter loop."""
@@ -557,8 +589,20 @@ class TerminalTypewriter:
                     self._export_to_file()
                 break
 
+            # Ctrl+J = clear paper jam (MUST be before Enter handler,
+            # since Ctrl+J is ASCII 10, same as Line Feed / Enter)
+            if key == 10:
+                if self.state.jammed:
+                    self._resolve_jam()
+                    continue
+                # Not jammed: treat as Enter/Line Feed
+                self._carriage_return()
+                self._new_line()
+                time.sleep(0.05 / max(0.1, self.speed))
+                continue
+
             # Enter = carriage return + line feed
-            if key == curses.KEY_ENTER or key == 10 or key == 13:
+            if key == curses.KEY_ENTER or key == 13:
                 self._carriage_return()
                 self._new_line()
                 # Typewriter return sound
@@ -601,31 +645,41 @@ class TerminalTypewriter:
                 self.state.caps_lock = not self.state.caps_lock
                 continue
 
-            # Ctrl+J = clear paper jam
-            if key == 10:
-                if self.state.jammed:
-                    self._resolve_jam()
-                continue
-
             # Ctrl+T = insert timestamp
             if key == 20:
-                self._insert_timestamp()
+                if self.state.jammed:
+                    # Can't type while jammed
+                    pass
+                else:
+                    self._insert_timestamp()
                 continue
 
             # Ctrl+E = export now
             if key == 5:
                 if self.state.export_path:
                     success = self._export_to_file()
-                    # Brief flash to indicate success/failure would be nice
-                    # but we just continue for now
+                    self._show_flash("Exported!" if success else "Export failed!")
+                else:
+                    self._show_flash("No export path set")
                 continue
 
             # Escape sequences for arrow keys etc.
             if key == 27:
-                # Skip escape sequences
-                time.sleep(0.05)
+                # Skip multi-byte escape sequences
+                # Terminal escape sequences start with ESC (27) followed by
+                # '[' (CSI) and then 2+ more bytes. Drain all of them.
+                time.sleep(0.01)
                 try:
-                    _ = self.stdscr.getch()
+                    next_key = self.stdscr.getch()
+                    if next_key == ord('['):
+                        # CSI sequence: read until a final byte (0x40-0x7E)
+                        while True:
+                            ch = self.stdscr.getch()
+                            if ch == -1:
+                                break
+                            if 0x40 <= ch <= 0x7E:
+                                break
+                    # else: simple ESC + 1 char sequence, already consumed
                 except curses.error:
                     pass
                 continue
@@ -674,7 +728,7 @@ def print_help():
 ║    Ctrl+P          Pause/resume auto-type                ║
 ║    Ctrl+C          Toggle CAPS LOCK                      ║
 ║    Ctrl+T          Insert timestamp                      ║
-║    Ctrl+J          Clear paper jam                       ║
+║    Ctrl+J          Clear paper jam / Line Feed            ║
 ║    Ctrl+E          Export to file (if --export set)      ║
 ║    Q               Quit                                  ║
 ║                                                          ║
