@@ -11,6 +11,12 @@ Simulates a vintage typewriter in your terminal with:
 - Multiple typewriter models with different feels
 - Typewriter bell and margin sounds (terminal bell)
 - Paper texture and margins rendered in ASCII
+- Word count and character count tracking
+- Export typed content to a file
+- Speed multiplier for auto-type mode
+- Paper jam random events
+- Timestamp stamping (Ctrl+T)
+- Version: 1.1.0
 """
 
 import sys
@@ -20,9 +26,13 @@ import time
 import shutil
 import curses
 import string
+import argparse
 from dataclasses import dataclass, field
 from enum import Enum
 from collections import deque
+from datetime import datetime
+
+__version__ = "1.1.0"
 
 
 class TypewriterModel(Enum):
@@ -40,26 +50,31 @@ MODEL_PROPS = {
         "min_delay": 0.03, "max_delay": 0.09, "ink_variance": 0.25,
         "ding_at": 65, "description": "The classic workhorse. Heavy keys, satisfying clack.",
         "key_weight": 0.06,
+        "jam_chance": 0.002,  # Chance of paper jam per character
     },
     TypewriterModel.REMINGTON: {
         "min_delay": 0.025, "max_delay": 0.07, "ink_variance": 0.20,
         "ding_at": 60, "description": "Light and portable. Quick keystrokes.",
         "key_weight": 0.04,
+        "jam_chance": 0.001,
     },
     TypewriterModel.OLIVETTI: {
         "min_delay": 0.02, "max_delay": 0.06, "ink_variance": 0.15,
         "ding_at": 70, "description": "Italian design. Smooth and precise.",
         "key_weight": 0.03,
+        "jam_chance": 0.0008,
     },
     TypewriterModel.IBM_SELECTRIC: {
         "min_delay": 0.015, "max_delay": 0.05, "ink_variance": 0.10,
         "ding_at": 75, "description": "The electric revolution. Fast and consistent.",
         "key_weight": 0.02,
+        "jam_chance": 0.0003,
     },
     TypewriterModel.ROYAL: {
         "min_delay": 0.035, "max_delay": 0.10, "ink_variance": 0.30,
         "ding_at": 62, "description": "Elegant but temperamental. Beautiful but moody ink.",
         "key_weight": 0.07,
+        "jam_chance": 0.004,
     },
 }
 
@@ -97,31 +112,37 @@ class TypewriterState:
     total_chars: int = 0
     caps_lock: bool = False
     paper_offset: int = 0  # vertical scroll offset
+    jammed: bool = False    # Paper jam state
+    jam_timer: int = 0      # Frames remaining for jam animation
+    export_path: str = ""   # File path to export typed content
 
 
 class TerminalTypewriter:
     """Interactive typewriter simulator using curses."""
 
     def __init__(self, stdscr, model=TypewriterModel.UNDERWOOD, color="black",
-                 auto_mode=False, auto_text=None):
+                 auto_mode=False, auto_text=None, speed=1.0, export_path=""):
         self.stdscr = stdscr
         self.state = TypewriterState(model=model, ink_color=color)
         self.state.lines = [deque()]
+        self.state.export_path = export_path
         self.auto_mode = auto_mode
         self.auto_text = auto_text or ""
         self.auto_index = 0
+        self.speed = max(0.1, min(10.0, speed))  # Clamp speed between 0.1x and 10x
         self.sound_enabled = True
         self.show_header = True
         self.paused = False
         self._setup_curses()
 
     def _setup_curses(self):
+        """Initialize curses settings and color pairs."""
         curses.curs_set(0)  # hide cursor
         self.stdscr.nodelay(True)
         self.stdscr.keypad(True)
         if curses.has_colors():
             curses.start_color()
-            # Define color pairs for ink
+            # Define color pairs for ink and UI
             curses.init_pair(1, curses.COLOR_RED, curses.COLOR_WHITE)
             curses.init_pair(2, curses.COLOR_BLUE, curses.COLOR_WHITE)
             curses.init_pair(3, curses.COLOR_GREEN, curses.COLOR_WHITE)
@@ -130,8 +151,13 @@ class TerminalTypewriter:
             curses.init_pair(6, curses.COLOR_CYAN, curses.COLOR_BLACK)
             curses.init_pair(7, curses.COLOR_YELLOW, curses.COLOR_BLACK)
             curses.init_pair(8, curses.COLOR_WHITE, curses.COLOR_BLACK)
+            # Color pair 9: red on black for jam warnings
+            curses.init_pair(9, curses.COLOR_RED, curses.COLOR_BLACK)
+            # Color pair 10: green on white for status highlights
+            curses.init_pair(10, curses.COLOR_GREEN, curses.COLOR_WHITE)
 
     def _get_ink_pair(self):
+        """Return the curses color pair number for the current ink color."""
         color_map = {
             "black": 4, "red": 1, "blue": 2, "green": 3
         }
@@ -142,17 +168,20 @@ class TerminalTypewriter:
         if self.sound_enabled:
             try:
                 curses.beep()
-            except:
+            except curses.error:
+                # Not all terminals support beep; silently ignore
                 pass
 
     def _type_delay(self):
-        """Simulate the mechanical delay between key presses."""
+        """Simulate the mechanical delay between key presses, adjusted by speed."""
         props = MODEL_PROPS[self.state.model]
-        delay = random.uniform(props["min_delay"], props["max_delay"])
+        base_delay = random.uniform(props["min_delay"], props["max_delay"])
         # Add occasional longer delays (finger repositioning)
         if random.random() < 0.03:
-            delay += random.uniform(0.1, 0.3)
-        time.sleep(delay)
+            base_delay += random.uniform(0.1, 0.3)
+        # Apply speed multiplier (higher speed = shorter delay)
+        adjusted = base_delay / self.speed
+        time.sleep(max(0.001, adjusted))
 
     def _get_ink_density(self):
         """Calculate ink density based on ribbon wear and randomness."""
@@ -164,8 +193,29 @@ class TerminalTypewriter:
         density = max(0.2, min(1.0, base + variation))
         return density
 
+    def _check_jam(self):
+        """Check for a random paper jam event. Returns True if jammed."""
+        if self.state.jammed:
+            return True
+        props = MODEL_PROPS[self.state.model]
+        if random.random() < props["jam_chance"]:
+            self.state.jammed = True
+            self.state.jam_timer = 8  # Flash for 8 frames
+            return True
+        return False
+
+    def _resolve_jam(self):
+        """Resolve a paper jam (user pressed Ctrl+J)."""
+        self.state.jammed = False
+        self.state.jam_timer = 0
+        self._bell()  # Acknowledge with a ding
+
     def _type_char(self, ch):
         """Type a single character onto the page."""
+        # If jammed, skip typing
+        if self.state.jammed:
+            return False
+
         line_idx = self.state.line - 1
         if line_idx >= len(self.state.lines):
             for _ in range(line_idx - len(self.state.lines) + 1):
@@ -179,7 +229,7 @@ class TerminalTypewriter:
         if self.state.col >= props["ding_at"] and ch != ' ':
             self._bell()
             # Small pause after the ding
-            time.sleep(0.15)
+            time.sleep(0.15 / self.speed)
 
         # Ink density affects display
         density = self._get_ink_density()
@@ -199,6 +249,10 @@ class TerminalTypewriter:
         # Increment ribbon wear slightly
         self.state.ribbon_wear = min(1.0, self.state.ribbon_wear + 0.0002)
 
+        # Check for paper jam
+        self._check_jam()
+        return True
+
     def _new_line(self):
         """Carriage return + line feed."""
         self.state.line += 1
@@ -214,10 +268,45 @@ class TerminalTypewriter:
         """Simulate backspace/overprint for corrections."""
         line_idx = self.state.line - 1
         if line_idx < len(self.state.lines) and self.state.lines[line_idx]:
-            # Replace last char with X (strikethrough correction)
+            # Replace last char with correction marker (strikethrough)
             last = self.state.lines[line_idx].pop()
             self.state.lines[line_idx].append(('⌫', 0.5))
             self.state.col = max(1, self.state.col - 1)
+            return True
+        return False
+
+    def _insert_timestamp(self):
+        """Insert a timestamp line at the current position."""
+        stamp = f"--- {datetime.now().strftime('%Y-%m-%d %H:%M')} ---"
+        for ch in stamp:
+            self._type_char(ch)
+
+    def _get_word_count(self):
+        """Count words across all typed lines."""
+        text = self._get_full_text()
+        words = text.split()
+        return len(words)
+
+    def _get_full_text(self):
+        """Reconstruct the full text from all typed lines."""
+        lines = []
+        for line in self.state.lines:
+            line_text = "".join(ch for ch, _ in line)
+            lines.append(line_text)
+        return "\n".join(lines)
+
+    def _export_to_file(self):
+        """Export typed content to the configured export file."""
+        path = self.state.export_path
+        if not path:
+            return False
+        try:
+            text = self._get_full_text()
+            with open(path, 'w') as f:
+                f.write(text)
+            return True
+        except (IOError, OSError):
+            return False
 
     def _render_page(self):
         """Render the typewriter page on screen."""
@@ -235,20 +324,30 @@ class TerminalTypewriter:
             header_lines.append(f" ║{title:^{w-4}}║")
             header_lines.append(f" ║{desc:^{w-4}}║")
 
-            # Status bar
+            # Status bar with word count and ribbon info
+            word_count = self._get_word_count()
             status_parts = [
-                f"Line {self.state.line}",
+                f"Ln {self.state.line}",
                 f"Col {self.state.col}",
-                f"Chars {self.state.total_chars}",
+                f"Words {word_count}",
                 f"Ribbon {int((1 - self.state.ribbon_wear) * 100)}%",
                 f"CAPS {'ON' if self.state.caps_lock else 'off'}",
+                f"Speed {self.speed:.1f}x",
             ]
+            if self.state.export_path:
+                status_parts.append(f"Export: {os.path.basename(self.state.export_path)}")
             status = " │ ".join(status_parts)
             header_lines.append(f" ║{status:^{w-4}}║")
 
             # Controls
-            ctrl = "Enter=↵  Backspace=⌫  Ctrl+U=newline  Ctrl+R=carriage return  Ctrl+D=ding  Ctrl+N=new ribbon  Q=quit"
+            ctrl = "Enter=↵  BS=⌫  ^U=newline  ^R=CR  ^D=ding  ^N=ribbon  ^T=stamp  ^J=unjam  ^P=pause  ^C=CAPS  Q=quit"
             header_lines.append(f" ║{ctrl:^{w-4}}║")
+
+            # Jam warning
+            if self.state.jammed:
+                jam_msg = "⚠ PAPER JAM! Press Ctrl+J to clear ⚠"
+                header_lines.append(f" ║{jam_msg:^{w-4}}║")
+
             header_lines.append(f" ╚{'═' * (w - 4)}╝")
 
         # Calculate available lines for paper
@@ -260,7 +359,11 @@ class TerminalTypewriter:
         for i, line in enumerate(header_lines):
             if i < h:
                 try:
-                    self.stdscr.addstr(i, 0, line[:w])
+                    if self.state.jammed and "PAPER JAM" in line:
+                        # Flash jam warning in red
+                        self.stdscr.addstr(i, 0, line[:w], curses.color_pair(9) | curses.A_BOLD)
+                    else:
+                        self.stdscr.addstr(i, 0, line[:w])
                 except curses.error:
                     pass
 
@@ -277,6 +380,7 @@ class TerminalTypewriter:
 
         # Render paper lines
         visible_lines = available_height - 2
+        visible_lines = max(1, visible_lines)
         scroll_offset = max(0, self.state.line - visible_lines)
         self.state.paper_offset = scroll_offset
 
@@ -290,16 +394,7 @@ class TerminalTypewriter:
             if line_idx < len(self.state.lines):
                 line_content = ""
                 for ch, density in self.state.lines[line_idx]:
-                    if ch == '⌫':
-                        line_content += ch
-                    else:
-                        # Use density to vary appearance
-                        if density > 0.8:
-                            line_content += ch
-                        elif density > 0.5:
-                            line_content += ch  # We'll use color to show this
-                        else:
-                            line_content += ch
+                    line_content += ch
 
                 # Pad line to fill paper width
                 display_line = margin_str + line_content
@@ -400,6 +495,23 @@ class TerminalTypewriter:
             except curses.error:
                 pass
 
+        # Draw footer with jam status
+        footer_row = roller_row + 1
+        if footer_row < h and self.state.jammed:
+            try:
+                flash = self.state.jam_timer % 2 == 0
+                msg = "!! PAPER JAM !!  Press Ctrl+J to clear"
+                if flash:
+                    self.stdscr.addstr(footer_row, 2, msg, curses.color_pair(9) | curses.A_BOLD)
+                else:
+                    self.stdscr.addstr(footer_row, 2, msg, curses.color_pair(9))
+                self.state.jam_timer -= 1
+                if self.state.jam_timer <= 0:
+                    # Reset timer but keep jammed until user clears
+                    self.state.jam_timer = 8
+            except curses.error:
+                pass
+
         self.stdscr.refresh()
 
     def _auto_type(self):
@@ -431,7 +543,7 @@ class TerminalTypewriter:
             # Check for input
             try:
                 key = self.stdscr.getch()
-            except:
+            except curses.error:
                 key = -1
 
             if key == -1:
@@ -440,6 +552,9 @@ class TerminalTypewriter:
 
             # Quit
             if key == ord('q') or key == ord('Q'):
+                # Auto-export on quit if export path is set
+                if self.state.export_path:
+                    self._export_to_file()
                 break
 
             # Enter = carriage return + line feed
@@ -447,7 +562,7 @@ class TerminalTypewriter:
                 self._carriage_return()
                 self._new_line()
                 # Typewriter return sound
-                time.sleep(0.05)
+                time.sleep(0.05 / max(0.1, self.speed))
                 continue
 
             # Backspace
@@ -481,9 +596,28 @@ class TerminalTypewriter:
                 self.paused = not self.paused
                 continue
 
-            # Ctrl+C = caps lock
+            # Ctrl+C = caps lock toggle (overrides default interrupt)
             if key == 3:
                 self.state.caps_lock = not self.state.caps_lock
+                continue
+
+            # Ctrl+J = clear paper jam
+            if key == 10:
+                if self.state.jammed:
+                    self._resolve_jam()
+                continue
+
+            # Ctrl+T = insert timestamp
+            if key == 20:
+                self._insert_timestamp()
+                continue
+
+            # Ctrl+E = export now
+            if key == 5:
+                if self.state.export_path:
+                    success = self._export_to_file()
+                    # Brief flash to indicate success/failure would be nice
+                    # but we just continue for now
                 continue
 
             # Escape sequences for arrow keys etc.
@@ -491,8 +625,8 @@ class TerminalTypewriter:
                 # Skip escape sequences
                 time.sleep(0.05)
                 try:
-                    key2 = self.stdscr.getch()
-                except:
+                    _ = self.stdscr.getch()
+                except curses.error:
                     pass
                 continue
 
@@ -505,9 +639,10 @@ class TerminalTypewriter:
 
 def print_help():
     """Print usage help."""
-    print("""
+    print(f"""
 ╔══════════════════════════════════════════════════════════╗
 ║           ⌨  TERMINAL TYPEWRITER SIMULATOR  ⌨           ║
+║                    v{__version__}                             ║
 ╠══════════════════════════════════════════════════════════╣
 ║                                                          ║
 ║  Usage: python typewriter.py [options]                   ║
@@ -523,7 +658,10 @@ def print_help():
 ║    -c, --color COLOR   Ink color: black,red,blue,green   ║
 ║    -t, --text TEXT     Auto-type text (use quotes)       ║
 ║    -f, --file FILE     Auto-type from file               ║
+║    -s, --speed FLOAT   Auto-type speed multiplier (0.1-10)║
+║    -e, --export FILE   Export typed text to file on exit ║
 ║    -q, --quiet         Disable bell sounds               ║
+║    -v, --version       Show version                      ║
 ║    -h, --help          Show this help                    ║
 ║                                                          ║
 ║  Interactive Controls (while running):                    ║
@@ -535,43 +673,67 @@ def print_help():
 ║    Ctrl+N          Install new ribbon                    ║
 ║    Ctrl+P          Pause/resume auto-type                ║
 ║    Ctrl+C          Toggle CAPS LOCK                      ║
+║    Ctrl+T          Insert timestamp                      ║
+║    Ctrl+J          Clear paper jam                       ║
+║    Ctrl+E          Export to file (if --export set)      ║
 ║    Q               Quit                                  ║
 ║                                                          ║
 ║  The typewriter bell rings when you approach the right    ║
 ║  margin, just like a real typewriter! Ink density        ║
 ║  varies with ribbon wear — install a new ribbon with     ║
-║  Ctrl+N when the text gets too faint.                    ║
+║  Ctrl+N when the text gets too faint. Paper jams can    ║
+║  occur randomly — press Ctrl+J to clear them.            ║
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
 """)
 
 
 def main():
-    import argparse
-
+    """Main entry point with argument parsing."""
     parser = argparse.ArgumentParser(
-        description="Terminal Typewriter Simulator",
+        description="Terminal Typewriter Simulator — v" + __version__,
         add_help=False
     )
     parser.add_argument('-m', '--model', default='underwood',
                        choices=['underwood', 'remington', 'olivetti', 'ibm', 'royal'],
-                       help='Typewriter model')
+                       help='Typewriter model (default: underwood)')
     parser.add_argument('-c', '--color', default='black',
                        choices=['black', 'red', 'blue', 'green'],
-                       help='Ink color')
+                       help='Ink color (default: black)')
     parser.add_argument('-t', '--text', default=None,
                        help='Text to auto-type')
     parser.add_argument('-f', '--file', default=None,
                        help='File to auto-type from')
+    parser.add_argument('-s', '--speed', type=float, default=1.0,
+                       help='Auto-type speed multiplier 0.1-10.0 (default: 1.0)')
+    parser.add_argument('-e', '--export', default=None,
+                       help='Export typed text to file on exit')
     parser.add_argument('-q', '--quiet', action='store_true',
                        help='Disable bell sounds')
+    parser.add_argument('--demo', action='store_true',
+                       help='Run non-interactive demo mode')
+    parser.add_argument('-v', '--version', action='store_true',
+                       help='Show version and exit')
     parser.add_argument('-h', '--help', action='store_true',
-                       help='Show help')
+                       help='Show help and exit')
 
     args = parser.parse_args()
 
     if args.help:
         print_help()
+        sys.exit(0)
+
+    if args.version:
+        print(f"Terminal Typewriter Simulator v{__version__}")
+        sys.exit(0)
+
+    # Demo mode — non-interactive
+    if args.demo:
+        demo_text = """The quick brown fox jumps over the lazy dog.
+Every letter of the alphabet, typed with care.
+A typewriter is a mechanical marvel!
+DING! The margin bell rings."""
+        demo_typewriter(demo_text)
         sys.exit(0)
 
     model_map = {
@@ -592,6 +754,11 @@ def main():
         except FileNotFoundError:
             print(f"Error: File '{args.file}' not found.")
             sys.exit(1)
+        except PermissionError:
+            print(f"Error: Permission denied reading '{args.file}'.")
+            sys.exit(1)
+
+    export_path = args.export or ""
 
     def run_typewriter(stdscr):
         tw = TerminalTypewriter(
@@ -599,7 +766,9 @@ def main():
             model=model,
             color=args.color,
             auto_mode=auto_text is not None,
-            auto_text=auto_text
+            auto_text=auto_text,
+            speed=args.speed,
+            export_path=export_path
         )
         if args.quiet:
             tw.sound_enabled = False
@@ -637,14 +806,14 @@ def demo_typewriter(text, model_name="underwood"):
         output = "  │ "
         for ch in line:
             density = max(0.2, min(1.0, 1.0 + random.gauss(0, props["ink_variance"] * 0.3)))
-            if density > 0.8:
-                output += ch
-            elif density > 0.5:
+            if density > 0.5:
                 output += ch
             else:
                 # Use a similar-looking but "fainter" character for demo
-                faint_map = {'a': 'ɑ', 'e': 'ɛ', 'o': 'ο', 'A': 'Α', 'O': 'Ο',
-                             'l': 'ǀ', 'I': 'Ι', 'H': 'Η'}
+                faint_map = {
+                    'a': 'ɑ', 'e': 'ɛ', 'o': 'ο', 'A': 'Α', 'O': 'Ο',
+                    'l': 'ǀ', 'I': 'Ι', 'H': 'Η'
+                }
                 output += faint_map.get(ch, ch)
 
         # Pad line
@@ -660,12 +829,4 @@ def demo_typewriter(text, model_name="underwood"):
 
 
 if __name__ == "__main__":
-    # If --demo flag, run demo mode
-    if '--demo' in sys.argv:
-        demo_text = """The quick brown fox jumps over the lazy dog.
-Every letter of the alphabet, typed with care.
-A typewriter is a mechanical marvel!
-DING! The margin bell rings."""
-        demo_typewriter(demo_text)
-    else:
-        main()
+    main()
