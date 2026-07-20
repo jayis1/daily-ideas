@@ -13,31 +13,37 @@ terminal — pegs, falling balls, stacking bins, and a live overlay of the
 theoretical normal curve computed from running statistics.
 
 ```
-∘
-                          ∘     ∘
-                      ∘      ∘      ∘
-                   ∘      ∘     ∘      ∘
-                ∘     ∘      ∘      ∘     ∘
-            ∘      ∘      ∘     ∘      ∘      ∘
-         ∘     ∘      ∘      ∘     ∘      ∘      ∘
-      ∘     ∘      ∘     ∘      ∘      ∘     ∘      ∘
-──────────────────────────────────────────────────────
-  │      │     │      │  █   │      │     │      │
-  │      │     │  █   │  █   │  █   │     │      │
-  │      │  █  │  █   │  █   │  █   │  █  │      │
-  │  █   │  █  │  █   │  █   │  █   │  █  │  █   │
+                                   ∘
+                               ∘       ∘
+                           ∘       ∘       ∘
+                       ∘       ∘       ∘       ∘
+                  ∘        ∘       ∘       ∘        ∘
+              ∘        ∘       ∘       ∘       ∘        ∘
+          ∘       ∘        ∘       ∘       ∘        ∘       ∘
+      ∘       ∘        ∘       ∘       ∘       ∘        ∘       ∘
+──────────────────────────────────────────────────────────────────────
+      │       │        │       │   █   │       │        │       │     │
+      │       │        │   ▓   │   █   │   █   │        │       │     │
+      │       │        │   █   │   █   │   █   │        │       │     │
+      │       │   █    │   █   │   █   │   █   │    █   │       │     │
+      │   █   │   █    │   █   │   █   │   █   │    █   │   █   │     │
 
-balls=800  mean=4.001  std=1.469  skew=0.040  kurt=-0.129
+balls=200  mean=4.170  std=1.418  skew=-0.070
 ```
+
+The `▓` glyphs show the theoretical normal curve overlaid on the empirical
+histogram — watch them converge as you drop more balls.
 
 ## Features
 
 - **Animated ASCII rendering** of pegs, falling balls, and accumulating bins.
 - **Live normal-distribution fit** overlaid on the histogram (`▓` / `%`).
+  Disable with `--no-curve`.
 - **Running statistics** via Welford-style online moments:
   count, mean, variance, std, skewness, excess kurtosis, min, max.
 - **Three modes:**
-  - *Interactive* — drop balls one at a time with keyboard controls.
+  - *Interactive* — drop balls one at a time with keyboard controls (requires
+    a TTY).
   - *Batch* (`--batch`) — rapid animated dropping of N balls.
   - *Static* (`--static`) — compute N balls with no animation, render the
     final histogram.
@@ -46,9 +52,12 @@ balls=800  mean=4.001  std=1.469  skew=0.040  kurt=-0.129
   ASCII (`--ascii`, `--no-color`).
 - **Seedable RNG** (`--seed`) for reproducible runs.
 - **Export** the final histogram to CSV or JSON (`--export`), including the
-  expected-normal counts per bin.
-- **Built-in self-test suite** (`--test`) — 28 checks covering physics,
-  statistics, rendering, export, and edge cases.
+  expected-normal counts per bin. Export errors (e.g. unwritable path) are
+  caught and reported gracefully.
+- **Built-in self-test suite** (`--test`) — 40 checks covering physics,
+  statistics, rendering, export, CLI validation, and edge cases.
+- **Input validation** — rejects negative `--balls`, `--rate`, or `--rows`,
+  and warns when interactive mode is launched without a TTY.
 - Zero external dependencies — pure Python standard library.
 
 ## Install
@@ -73,13 +82,17 @@ Drop balls and watch them pile up. Keyboard controls:
 
 | Key     | Action                                  |
 |---------|-----------------------------------------|
-| `SPACE` | drop a ball from a random column       |
+| `SPACE` | drop a ball from a random column        |
 | `ENTER` | drop a ball from the center column      |
 | `b`     | toggle continuous batch dropping        |
-| `+`/`-` | increase / decrease the drop rate       |
+| `+`/`-` | increase / decrease the drop rate        |
 | `c`     | clear the bins and reset stats          |
 | `r`     | full reset (bins, stats, balls)         |
 | `q`     | quit and print the final histogram      |
+
+> **Note:** Interactive mode requires a TTY for keyboard input. If stdin is
+> not a TTY (e.g. piped input, cron, CI), it prints an error and exits. Use
+> `--static` or `--batch` for non-interactive runs.
 
 ### Batch (animated, fast)
 
@@ -91,6 +104,12 @@ python3 galton_board.py --batch --rows 12 --balls 5000 --rate 60
 
 ```bash
 python3 galton_board.py --static --rows 10 --balls 10000 --seed 42
+```
+
+### Without the normal-curve overlay
+
+```bash
+python3 galton_board.py --static --rows 10 --balls 5000 --no-curve
 ```
 
 ### With export
@@ -117,11 +136,8 @@ python3 galton_board.py --test
 A quick demonstration that the board converges to the expected distribution:
 
 ```bash
-$ python3 galton_board.py --static --rows 12 --balls 10000 --seed 1 --ascii --no-color 2>/dev/null
-# (ASCII board with a tall, symmetric bell curve in the center bins)
-
 $ python3 galton_board.py --static --rows 12 --balls 10000 --seed 1 2>&1 >/dev/null
-balls=10000  mean=6.002  std=1.734  var=3.007  skew=0.012  kurt=-0.081  min=0  max=12
+balls=10000  mean=5.993  std=1.742  var=3.035  skew=0.003  kurt=-0.187  min=0  max=12
 ```
 
 For `rows = 12`, the theoretical binomial distribution has mean `rows/2 = 6`
@@ -136,9 +152,9 @@ exported histogram to out.csv
 
 $ head -4 out.csv
 bin,count,expected_normal
-0,2,1.102
-1,17,15.479
-2,82,84.263
+0,7,8.797
+1,68,54.403
+2,188,200.380
 ```
 
 ## How it works
@@ -157,12 +173,59 @@ storage of individual samples.
 
 The normal-curve overlay is drawn by evaluating the Gaussian PDF at each
 bin center, using the running mean and std, and scaling to the current peak
-bin height — so you can literally watch the empirical histogram and the
-theoretical curve converge as more balls drop.
+bin height. The curve fills empty cells above the bars so you can literally
+watch the empirical histogram and the theoretical curve converge as more
+balls drop.
 
 ## Files
 
 - `galton_board.py` — the complete simulator (model, renderer, CLI, tests).
+
+## Changelog
+
+### v1.0.1 — bug fixes
+
+- **Fixed `--no-curve` flag being dead code.** The flag was parsed but never
+  passed to any `render()` call — all calls hardcoded `overlay_curve=True`.
+  Now it correctly disables the normal-curve overlay in all modes.
+- **Fixed duplicate stats output.** `main()` printed the stats line to stderr
+  unconditionally after the run function had already printed it to stdout,
+  causing it to appear twice in mixed `2>&1` output. Removed the redundant
+  print.
+- **Fixed interactive mode infinite loop on non-TTY stdin.** When stdin was
+  not a TTY (piped input, cron, CI), `run_interactive` would loop forever
+  because no keyboard input could ever arrive and there was no other exit
+  condition. Now `main()` detects the non-TTY case, prints a helpful error,
+  and exits with code 2.
+- **Fixed unhandled `FileNotFoundError` crash on `--export` to a
+  nonexistent directory.** Export I/O errors are now caught and reported
+  gracefully with a clear error message and exit code 1.
+- **Fixed negative `--balls` silently becoming 1000.** Negative values are
+  now rejected with a validation error (exit code 2). Same for negative
+  `--rate`.
+- **Fixed latent `UnboundLocalError` in the test runner.** The nested
+  `check()` function used `failures += 1` without a `nonlocal`
+  declaration, so the test runner would crash with `UnboundLocalError` if
+  *any* test ever failed. Added `nonlocal failures`.
+- **Fixed curve overlay drawing order.** The curve was drawn *before* bin
+  walls, causing walls to overwrite the curve. Now the curve is drawn
+  *after* walls and only fills empty cells, producing a cleaner visual.
+- **Removed dead `grid_x` glyph reference** in `_draw_curve` (the glyph
+  was defined but never drawn on the canvas).
+- **Cleaned up no-op expression** in `_bin_x`: `(b.rows - b.rows) / 2.0`
+  always equals 0; replaced with a clear comment explaining bin centering.
+- **Added help text** to all argparse flags (`--width`, `--height`,
+  `--seed`, `--no-color`, `--version`) that previously had no `help=`.
+- **Added 12 new self-tests** (28 → 40) covering the `--no-curve` flag,
+  `_bin_x` correctness, CLI validation (negative `--balls`/`--rate`),
+  export error handling, `--version`, non-TTY rejection, and `--no-curve`
+  CLI integration.
+
+### v1.0.0 — initial release
+
+Animated Galton board simulator with live normal-curve overlay, Welford
+running statistics, three modes (interactive/batch/static), CSV/JSON
+export, seedable RNG, and 28 built-in self-tests.
 
 ## License
 

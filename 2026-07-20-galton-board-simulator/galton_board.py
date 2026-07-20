@@ -63,7 +63,7 @@ except Exception:  # pragma: no cover - non-posix fallback
     select = None  # type: ignore[assignment]
     _POSIX = False
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 # ---------------------------------------------------------------------------
 # Glyph sets
@@ -326,11 +326,7 @@ class BoardRenderer:
                 if 0 <= h - 1 < h:
                     pass
 
-        # normal curve overlay
-        if overlay_curve and b.stats.n > 5 and b.stats.variance > 0:
-            self._draw_curve(canvas, bin_top)
-
-        # bin walls
+        # bin walls (drawn before curve so curve can fill between them)
         for i in range(b.num_bins + 1):
             bx = self._bin_wall_x(i)
             if bx is not None and 0 <= bx < w:
@@ -342,6 +338,10 @@ class BoardRenderer:
         if bin_top - 1 >= 0 and bin_top - 1 < h:
             for x in range(w):
                 canvas[bin_top - 1][x] = self._c(self.glyphs["bin_floor"], DIM)
+
+        # normal curve overlay (drawn last so it's visible on top of bars/walls)
+        if overlay_curve and b.stats.n > 5 and b.stats.variance > 0:
+            self._draw_curve(canvas, bin_top)
 
         lines = ["".join(row) for row in canvas]
         return "\n".join(lines)
@@ -374,7 +374,8 @@ class BoardRenderer:
                 cy = h - 1 - yy
                 if cy < bin_top:
                     break
-                if canvas[cy][bx] in (" ", self.glyphs["grid_x"]):
+                # Only fill empty cells; preserve bars, walls, and floor
+                if canvas[cy][bx] == " ":
                     canvas[cy][bx] = self._c(self.glyphs["curve"], MAGENTA)
 
     # -- coordinate helpers --------------------------------------------------
@@ -391,12 +392,10 @@ class BoardRenderer:
 
     def _bin_x(self, i: int) -> Optional[int]:
         b = self.board
-        # bin i center in col units = i + (rows - rows)/2 = i (centered)
-        col_units = i + (b.rows - b.rows) / 2.0  # = i  but shifted to center
-        # Actually we want bins aligned with the *bottom* row pegs.
-        # Bottom row pegs at row=rows, col 0..rows.  Bins between pegs.
-        col_units = i + (b.rows - b.rows) / 2.0
-        return int(round(b._col_to_x(col_units)))
+        # Bin i is centered at column position i (in board col units [0, rows]).
+        # The bottom peg row is at row=rows with pegs at col 0..rows; bins sit
+        # between them, so bin i's center is at col_units = i.
+        return int(round(b._col_to_x(float(i))))
 
     def _bin_wall_x(self, i: int) -> Optional[int]:
         b = self.board
@@ -468,7 +467,8 @@ class _RawInput:
 # ---------------------------------------------------------------------------
 
 def run_batch(board: GaltonBoard, num_balls: int, renderer: BoardRenderer,
-              rate: float = 30.0, frames: bool = True) -> None:
+              rate: float = 30.0, frames: bool = True,
+              overlay_curve: bool = True) -> None:
     """Drop balls in rapid succession with light animation."""
     balls: List[Ball] = []
     per_frame = max(1, int(rate * 0.05))
@@ -489,7 +489,7 @@ def run_batch(board: GaltonBoard, num_balls: int, renderer: BoardRenderer,
         balls = still
         if frames:
             sys.stdout.write(term_clear)
-            sys.stdout.write(renderer.render(balls, overlay_curve=True))
+            sys.stdout.write(renderer.render(balls, overlay_curve=overlay_curve))
             sys.stdout.write("\n")
             sys.stdout.write(stats_line(board, renderer.use_color) + "\n")
             sys.stdout.write(f"dropped {dropped}/{num_balls}  active={len(balls)}\n")
@@ -497,26 +497,28 @@ def run_batch(board: GaltonBoard, num_balls: int, renderer: BoardRenderer,
             time.sleep(0.05)
     if frames:
         sys.stdout.write(term_clear)
-        sys.stdout.write(renderer.render([], overlay_curve=True))
+        sys.stdout.write(renderer.render([], overlay_curve=overlay_curve))
         sys.stdout.write("\n")
         sys.stdout.write(stats_line(board, renderer.use_color) + "\n")
         sys.stdout.flush()
 
 
-def run_static(board: GaltonBoard, num_balls: int, renderer: BoardRenderer) -> None:
+def run_static(board: GaltonBoard, num_balls: int, renderer: BoardRenderer,
+               overlay_curve: bool = True) -> None:
     """Drop all balls with no animation; just compute then render final."""
     for _ in range(num_balls):
         ball = board.drop_ball()
         while not ball.done:
             board.step_ball(ball)
     renderer.board = board
-    print(renderer.render([], overlay_curve=True))
+    print(renderer.render([], overlay_curve=overlay_curve))
     print()
     print(stats_line(board, renderer.use_color))
 
 
 def run_interactive(board: GaltonBoard, renderer: BoardRenderer,
-                    rate: float = 5.0, auto_balls: int = 0) -> None:
+                    rate: float = 5.0, auto_balls: int = 0,
+                    overlay_curve: bool = True) -> None:
     """Interactive animated mode with keyboard controls."""
     balls: List[Ball] = []
     drop_rate = rate  # balls per second
@@ -586,7 +588,7 @@ def run_interactive(board: GaltonBoard, renderer: BoardRenderer,
 
                 # render
                 sys.stdout.write(term_clear)
-                sys.stdout.write(renderer.render(balls, overlay_curve=True))
+                sys.stdout.write(renderer.render(balls, overlay_curve=overlay_curve))
                 sys.stdout.write("\n")
                 sys.stdout.write(stats_line(board, renderer.use_color) + "\n")
                 ctrl = ("SPACE drop  ENTER center  b batch  +/- rate  "
@@ -606,7 +608,7 @@ def run_interactive(board: GaltonBoard, renderer: BoardRenderer,
 
     # final render
     sys.stdout.write(term_clear)
-    sys.stdout.write(renderer.render([], overlay_curve=True))
+    sys.stdout.write(renderer.render([], overlay_curve=overlay_curve))
     sys.stdout.write("\n")
     print(stats_line(board, renderer.use_color))
 
@@ -677,6 +679,7 @@ def run_tests() -> int:
     tests = []
 
     def check(name, cond):
+        nonlocal failures
         tests.append(name)
         if not cond:
             failures += 1
@@ -804,6 +807,65 @@ def run_tests() -> int:
             b8.step_ball(ball8)
     check("batch dropped 100", b8.stats.n == 100)
 
+    # 16. --no-curve overlay actually disables the curve (regression for dead flag)
+    b9 = GaltonBoard(rows=8, rng=random.Random(1), width=70, height=24)
+    for _ in range(200):  # few balls so curve is visible above bars
+        ball9 = b9.drop_ball()
+        while not ball9.done:
+            b9.step_ball(ball9)
+    r9 = BoardRenderer(b9, use_color=False, utf8=False)
+    with_curve = r9.render([], overlay_curve=True)
+    without_curve = r9.render([], overlay_curve=False)
+    check("overlay=True produces curve glyph", "%" in with_curve)
+    check("overlay=False omits curve glyph", "%" not in without_curve)
+
+    # 17. _bin_x returns integer (no no-op expression artifacts)
+    bx0 = r9._bin_x(0)
+    bx_mid = r9._bin_x(b9.num_bins // 2)
+    check("_bin_x(0) is int", isinstance(bx0, int))
+    check("_bin_x(mid) is int", isinstance(bx_mid, int))
+    check("_bin_x(0) < _bin_x(mid)", (bx0 or 0) < (bx_mid or 0))
+
+    # 18. CLI rejects negative --balls (regression for silent 1000 default)
+    rc = main(["--static", "--balls", "-5", "--rows", "4", "--no-color", "--ascii"])
+    check("negative --balls rejected", rc == 2)
+
+    # 19. CLI rejects negative --rate
+    rc2 = main(["--static", "--rate", "-1", "--rows", "4", "--no-color", "--ascii"])
+    check("negative --rate rejected", rc2 == 2)
+
+    # 20. CLI export to nonexistent directory gives error, not crash
+    import tempfile
+    bad_path = os.path.join(tempfile.gettempdir(), "nonexistent_dir_xyz", "out.csv")
+    rc3 = main(["--static", "--rows", "4", "--balls", "10",
+                "--no-color", "--ascii", "--export", bad_path])
+    check("export to bad dir returns error code", rc3 == 1)
+
+    # 21. CLI --version prints version
+    import io as _io, contextlib
+    buf = _io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc4 = main(["--version"])
+    check("--version returns 0", rc4 == 0)
+    check("--version prints version", __version__ in buf.getvalue())
+
+    # 22. Non-tty interactive mode is rejected (no infinite loop)
+    import io as _io2
+    old_stdin = sys.stdin
+    try:
+        sys.stdin = _io2.StringIO("")  # not a tty
+        rc5 = main(["--rows", "4"])
+    finally:
+        sys.stdin = old_stdin
+    check("non-tty interactive rejected", rc5 == 2)
+
+    # 23. --no-curve flag wired through CLI static mode
+    buf2 = _io.StringIO()
+    with contextlib.redirect_stdout(buf2):
+        main(["--static", "--rows", "8", "--balls", "2000",
+              "--no-color", "--ascii", "--no-curve", "--seed", "1"])
+    check("--no-curve CLI omits curve glyph", "%" not in buf2.getvalue())
+
     print(f"\n{len(tests) - failures}/{len(tests)} passed.")
     if failures:
         print(f"{failures} FAILED")
@@ -828,16 +890,20 @@ def main(argv: Optional[List[str]] = None) -> int:
                         help="number of peg rows (default 12)")
     parser.add_argument("--balls", type=int, default=0,
                         help="number of balls to drop (interactive if 0)")
-    parser.add_argument("--width", type=int, default=70)
-    parser.add_argument("--height", type=int, default=24)
+    parser.add_argument("--width", type=int, default=70,
+                        help="board width in characters (min 20, default 70)")
+    parser.add_argument("--height", type=int, default=24,
+                        help="board height in characters (min 8, default 24)")
     parser.add_argument("--rate", type=float, default=8.0,
                         help="drop rate in balls/second (batch/interactive)")
-    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--seed", type=int, default=None,
+                        help="random seed for reproducible runs")
     parser.add_argument("--batch", action="store_true",
                         help="animated batch mode (drops --balls quickly)")
     parser.add_argument("--static", action="store_true",
                         help="compute without animation, render final state")
-    parser.add_argument("--no-color", action="store_true")
+    parser.add_argument("--no-color", action="store_true",
+                        help="disable ANSI color output")
     parser.add_argument("--ascii", action="store_true",
                         help="use ASCII-only glyphs")
     parser.add_argument("--export", type=str, default=None,
@@ -846,7 +912,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                         help="disable normal-curve overlay")
     parser.add_argument("--test", action="store_true",
                         help="run self-tests and exit")
-    parser.add_argument("--version", action="store_true")
+    parser.add_argument("--version", action="store_true",
+                        help="print version and exit")
     args = parser.parse_args(argv)
 
     if args.version:
@@ -860,6 +927,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.rows < 0:
         print("error: --rows must be >= 0", file=sys.stderr)
         return 2
+    if args.balls < 0:
+        print("error: --balls must be >= 0", file=sys.stderr)
+        return 2
+    if args.rate < 0:
+        print("error: --rate must be >= 0", file=sys.stderr)
+        return 2
     if args.width < 20 or args.height < 8:
         print("error: --width >= 20 and --height >= 8 required",
               file=sys.stderr)
@@ -871,25 +944,38 @@ def main(argv: Optional[List[str]] = None) -> int:
     use_color = not args.no_color and sys.stdout.isatty()
     utf8 = not args.ascii and _detect_utf8()
     renderer = BoardRenderer(board, use_color=use_color, utf8=utf8)
+    show_curve = not args.no_curve
 
     # decide mode
     if args.static:
-        run_static(board, max(1, args.balls if args.balls > 0 else 1000), renderer)
+        run_static(board, max(1, args.balls if args.balls > 0 else 1000),
+                   renderer, overlay_curve=show_curve)
     elif args.batch or args.balls > 0:
         n = max(1, args.balls if args.balls > 0 else 1000)
-        run_batch(board, n, renderer, rate=max(1.0, args.rate))
+        run_batch(board, n, renderer, rate=max(1.0, args.rate),
+                  overlay_curve=show_curve)
     else:
-        run_interactive(board, renderer, rate=max(1.0, args.rate))
+        # Interactive mode requires a TTY for keyboard input.
+        if not sys.stdin.isatty():
+            print("error: interactive mode requires a TTY for keyboard input.\n"
+                  "       Use --static or --batch with --balls N for non-interactive runs.",
+                  file=sys.stderr)
+            return 2
+        run_interactive(board, renderer, rate=max(1.0, args.rate),
+                        overlay_curve=show_curve)
 
     if args.export:
-        if args.export.endswith(".json"):
-            export_json(board, args.export)
-        else:
-            export_csv(board, args.export)
+        try:
+            if args.export.endswith(".json"):
+                export_json(board, args.export)
+            else:
+                export_csv(board, args.export)
+        except OSError as exc:
+            print(f"error: could not write export file '{args.export}': {exc}",
+                  file=sys.stderr)
+            return 1
         print(f"exported histogram to {args.export}")
 
-    # always print final stats to stderr so they're visible even with animation
-    print(stats_line(board, use_color), file=sys.stderr)
     return 0
 
 
