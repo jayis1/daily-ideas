@@ -1,8 +1,8 @@
 # ⌨ Terminal Typewriter Simulator
 
-**v1.2.0**
+**v1.3.0**
 
-A fully interactive vintage typewriter simulator that runs right in your terminal. Experience the feel of typing on classic machines — from the satisfying clack of an Underwood No. 5 to the precision of an Olivetti Lettera 32 — complete with ink density variation, ribbon wear, paper jams, and the iconic margin bell.
+A fully interactive vintage typewriter simulator that runs right in your terminal. Experience the feel of typing on classic machines — from the satisfying clack of an Underwood No. 5 to the precision of an Olivetti Lettera 32 — complete with ink density variation, ribbon wear, paper jams, the iconic margin bell, deterministic playback, auto-wrap, session statistics, and more.
 
 ## Features
 
@@ -16,7 +16,7 @@ A fully interactive vintage typewriter simulator that runs right in your termina
 ### Simulation Mechanics
 - **Ink Density Simulation** — characters vary in darkness based on ribbon wear and random variation, just like a real typewriter
 - **Ribbon Wear** — the longer you type, the fainter the ink gets. Install a fresh ribbon with `Ctrl+N`
-- **Margin Bell** — hear the classic "ding" when approaching the right margin, just like a real typewriter
+- **Margin Bell** — hear the classic "ding" when approaching the right margin
 - **Overstrike Corrections** — press Backspace to overprint corrections (marked with ⌫)
 - **Paper Jams** — random jam events that block typing until you clear them with `Ctrl+J` (jam frequency varies by model — the Royal jams most, the IBM Selectric almost never). During auto-type, jams automatically pause playback and resume when cleared.
 - **CAPS LOCK Toggle** — `Ctrl+C` toggles caps lock
@@ -29,6 +29,16 @@ A fully interactive vintage typewriter simulator that runs right in your termina
 - **Beautiful Paper Rendering** — your text appears on a white "page" with margins and a roller bar
 - **Visual Flash Feedback** — export actions show on-screen confirmation messages
 
+### New in v1.3.0
+- **Deterministic Mode (`--seed N`)** — seed the random number generator so ink variation, typing delays, and jam rolls are reproducible run-to-run. Great for demos, testing, and scripting.
+- **Auto-Wrap at Margin (`--wrap`)** — when enabled, the carriage automatically returns to the next line once you pass the margin, just like a real typewriter whose carriage hit the right stop. No more running off the page.
+- **Hide Header (`--no-header`)** — suppress the status/controls banner for a clean, distraction-free writing surface.
+- **Runtime Sound Toggle (`Ctrl+S`)** — turn the bell on or off mid-session without restarting. The status bar shows the current sound state.
+- **Tab Key Support** — pressing Tab in interactive mode inserts 4 spaces, like setting a tab stop on a real machine.
+- **Session Statistics (`--stats FILE`)** — on quit, writes a human-readable summary (characters, words, lines, ribbon wear, duration, chars/sec) to a file.
+- **Terminal Size Guard** — if the terminal is too small (under 50×12), a friendly message is shown instead of a garbled display.
+- **Seeded Demo Mode** — `--demo --seed N` produces identical output every time, handy for screenshots and regression checks.
+
 ## Installation
 
 No external dependencies required — uses only Python's standard library (`curses`, `random`, `time`, `argparse`).
@@ -40,7 +50,7 @@ cd daily-ideas/2026-07-17-terminal-typewriter/
 chmod +x typewriter.py
 ```
 
-**Requirements:** Python 3.6+ and a terminal with curses support (most Linux/macOS terminals). For the best experience, use a terminal that supports colors and the terminal bell.
+**Requirements:** Python 3.6+ and a terminal with curses support (most Linux/macOS terminals). For the best experience, use a terminal that supports colors and the terminal bell, with a size of at least 50 columns × 12 rows.
 
 ## How to Run
 
@@ -94,6 +104,22 @@ python3 typewriter.py -f poem.txt -s 0.5
 
 Speed range: 0.1 (very slow) to 10.0 (very fast), default is 1.0.
 
+### Auto-Wrap at Margin
+
+```bash
+# The carriage returns automatically when you reach the margin
+python3 typewriter.py --wrap
+python3 typewriter.py --wrap -t "A very long line that would normally run past the right margin and disappear."
+```
+
+### Deterministic / Reproducible Mode
+
+```bash
+# Same seed → same ink variation, delays, and jam rolls every time
+python3 typewriter.py --seed 42
+python3 typewriter.py --seed 42 -t "Reproducible typing demo"
+```
+
 ### Export Typed Content to File
 
 ```bash
@@ -104,10 +130,39 @@ python3 typewriter.py --export my_letter.txt
 python3 typewriter.py -f input.txt --export output.txt -s 5.0
 ```
 
+### Write Session Statistics
+
+```bash
+# On quit, writes character/word/line counts and timing to stats.txt
+python3 typewriter.py --stats session_stats.txt
+python3 typewriter.py -f sample_letter.txt --stats stats.txt --export out.txt
+```
+
+Example `stats.txt` content:
+```
+Typewriter: Underwood No. 5
+Characters: 138
+Words: 22
+Lines: 7
+Ribbon wear: 2.8%
+Session duration: 12.4s
+Characters/sec: 11.13
+```
+
+### Hide the Header
+
+```bash
+# Clean, distraction-free writing surface — no status bar or controls banner
+python3 typewriter.py --no-header
+```
+
 ### Demo Mode (non-interactive)
 
 ```bash
 python3 typewriter.py --demo
+
+# Seeded demo for reproducible output
+python3 typewriter.py --demo --seed 42
 ```
 
 Prints a static typewriter-styled demo to stdout (no curses required).
@@ -118,11 +173,13 @@ Prints a static typewriter-styled demo to stdout (no curses required).
 python3 typewriter.py --quiet
 ```
 
+You can also toggle the bell at runtime with `Ctrl+S`.
+
 ### Show Version
 
 ```bash
 python3 typewriter.py --version
-# Output: Terminal Typewriter Simulator v1.2.0
+# Output: Terminal Typewriter Simulator v1.3.0
 ```
 
 ### Show Help
@@ -136,18 +193,20 @@ python3 typewriter.py --help
 | Key | Action |
 |-----|--------|
 | **Any printable key** | Type that character |
+| **Tab** | Insert 4 spaces (indent) |
 | **Enter** | Carriage return + line feed |
 | **Ctrl+J** | Clear paper jam (when jammed) / Line Feed (when not jammed) |
 | **Backspace** | Overstrike last character (correction) |
 | **Ctrl+U** | New line |
 | **Ctrl+R** | Carriage return (no line feed) |
 | **Ctrl+D** | Ring the bell manually |
+| **Ctrl+S** | Toggle bell sound on/off |
 | **Ctrl+N** | Install a fresh ribbon (reset ink density) |
 | **Ctrl+P** | Pause/resume auto-type |
 | **Ctrl+C** | Toggle CAPS LOCK |
 | **Ctrl+T** | Insert timestamp (date + time) |
 | **Ctrl+E** | Export to file (if `--export` set); shows on-screen confirmation |
-| **Q** | Quit (auto-exports if `--export` is set) |
+| **Q** | Quit (auto-exports if `--export` is set; writes stats if `--stats` is set) |
 
 ## Usage Examples
 
@@ -169,10 +228,16 @@ python3 typewriter.py -m olivetti -c blue -f my_poem.txt -s 2.0
 python3 typewriter.py --export my_document.txt
 ```
 
-### Quick demo to see what it looks like
+### Distraction-free writing with auto-wrap and stats
 
 ```bash
-python3 typewriter.py --demo
+python3 typewriter.py --no-header --wrap --export novel.txt --stats novel_stats.txt
+```
+
+### Reproducible demo for a screenshot
+
+```bash
+python3 typewriter.py --demo --seed 42
 ```
 
 Output:
@@ -211,7 +276,13 @@ The simulator models several aspects of a real typewriter:
 
 8. **Export** — When `--export FILE` is set, your typed content is automatically saved to that file when you quit. You can also press `Ctrl+E` to save mid-session, which shows a visual "Exported!" or "Export failed!" confirmation on screen.
 
-9. **Escape Sequence Handling** — Terminal escape sequences (arrow keys, function keys, etc.) are properly drained using CSI final byte detection (0x40–0x7E), preventing stray characters from appearing on the page.
+9. **Auto-Wrap** — With `--wrap`, once the carriage passes the margin (`ding_at + 5` columns), a carriage return + line feed is automatically performed. This mirrors a real typewriter where the carriage physically can't go further right — the typist must return it.
+
+10. **Deterministic Mode** — With `--seed N`, all random calls (typing delays, ink density variation, jam probability rolls) draw from a seeded `random.Random` instance instead of the global RNG. Two runs with the same seed and same input produce identical results — essential for reproducible demos, regression testing, and scripting.
+
+11. **Session Statistics** — With `--stats FILE`, the simulator records the model name, total characters, word count, line count, ribbon wear percentage, session duration, and characters-per-second rate, written to the file on quit. Useful for tracking writing sessions.
+
+12. **Escape Sequence Handling** — Terminal escape sequences (arrow keys, function keys, etc.) are properly drained using CSI final byte detection (0x40–0x7E), preventing stray characters from appearing on the page.
 
 ## Testing
 
@@ -237,38 +308,46 @@ The test suite covers:
 - Timestamp insertion while jammed
 - Export feedback (success and failure paths)
 - Escape sequence CSI byte range validation
+- **Deterministic seed reproducibility** (v1.3.0)
+- **Stats file output** (v1.3.0)
+- **Auto-wrap at margin** (v1.3.0)
+- **Terminal size guard constants** (v1.3.0)
+- **New keycodes (Tab, Ctrl+S)** (v1.3.0)
+- **Seeded demo mode** (v1.3.0)
 
-**63 tests total.**
+**79 tests total.**
 
 ## Files
 
 | File | Description |
 |------|-------------|
 | `typewriter.py` | Main application (interactive + demo modes) |
-| `test_typewriter.py` | Comprehensive unit tests (63 tests) |
+| `test_typewriter.py` | Comprehensive unit tests (79 tests) |
 | `test_demo.py` | Demo script showing all 5 typewriter models |
 | `sample_letter.txt` | Sample text file for auto-type testing |
 
 ## Changelog
 
+### v1.3.0 (Enhancement)
+- **New: `--seed N` deterministic mode** — ink variation, typing delays, and jam rolls become reproducible run-to-run via a seeded RNG.
+- **New: `--wrap` auto-wrap at margin** — the carriage automatically returns once you pass the margin, like a real typewriter.
+- **New: `--no-header`** — hide the status/controls banner for distraction-free writing.
+- **New: `Ctrl+S` runtime sound toggle** — turn the bell on/off mid-session; status bar reflects the current state.
+- **New: Tab key support** — inserts 4 spaces in interactive mode.
+- **New: `--stats FILE`** — writes session statistics (chars, words, lines, ribbon wear, duration, chars/sec) on quit.
+- **New: terminal size guard** — friendly message if terminal is under 50×12 instead of a garbled display.
+- **New: seeded demo mode** — `--demo --seed N` produces identical output every time.
+- **Added: 16 new tests** covering all v1.3.0 features (79 tests total).
+
 ### v1.2.0 (Bug Fixes)
-- **CRITICAL FIX: Ctrl+J now works to clear paper jams** — Ctrl+J (ASCII 10 / Line Feed) was previously unreachable because the Enter handler caught `key == 10` first. Ctrl+J now takes priority: when jammed it clears the jam, when not jammed it acts as Line Feed (same as Enter). This was the most impactful bug since paper jams could never be cleared, making the game unplayable after a random jam event.
-- **FIX: Auto-type now auto-pauses on paper jam** — Previously, `_auto_type()` would silently skip characters when a jam occurred, losing text. Now it automatically pauses and waits for the user to clear the jam with Ctrl+J. Clearing the jam auto-resumes playback.
-- **FIX: Ctrl+T (timestamp) disabled while jammed** — Previously, pressing Ctrl+T while jammed would call `_type_char()` for each timestamp character, all returning `False` silently. Now Ctrl+T is a no-op while jammed.
-- **FIX: Ctrl+E (export) now shows visual feedback** — Previously, pressing Ctrl+E gave no feedback at all, whether the export succeeded or failed. Now it shows "Exported!" or "Export failed!" on screen. If no export path is set, it shows "No export path set".
-- **FIX: Escape sequence handling improved** — Previously, only one byte after ESC was consumed, causing arrow keys and other multi-byte sequences to leave stray characters. Now properly drains CSI sequences by reading until a final byte (0x40–0x7E).
+- **CRITICAL FIX: Ctrl+J now works to clear paper jams** — Ctrl+J (ASCII 10 / Line Feed) was previously unreachable because the Enter handler caught `key == 10` first. Ctrl+J now takes priority: when jammed it clears the jam, when not jammed it acts as Line Feed (same as Enter).
+- **FIX: Auto-type now auto-pauses on paper jam** — previously `_auto_type()` would silently skip characters when a jam occurred, losing text. Now it automatically pauses and waits for the user to clear the jam with Ctrl+J.
+- **FIX: Ctrl+T (timestamp) disabled while jammed** — now a no-op while jammed.
+- **FIX: Ctrl+E (export) now shows visual feedback** — "Exported!" or "Export failed!" on screen.
+- **FIX: Escape sequence handling improved** — properly drains CSI sequences by reading until a final byte (0x40–0x7E).
 - **Added: `_show_flash()` method** for displaying brief on-screen messages.
-- **Added: 12 new tests** covering the fixed bugs (keycode conflict, jam auto-pause, export feedback, escape sequence handling).
+- **Added: 12 new tests** covering the fixed bugs.
 
 ### v1.1.0 (Enhanced)
-- New: Paper jams — random jam events with model-specific frequencies; clear with Ctrl+J
-- New: Timestamp stamping — insert date/time with Ctrl+T
-- New: Export to file — `--export FILE` saves typed content; `Ctrl+E` mid-session save
-- New: Speed control — `--speed FLOAT` adjusts auto-type rate from 0.1x to 10x
-- New: `--version` flag — shows version number
-- New: `--demo` as proper argparse flag — no longer a raw `sys.argv` check
-- New: Word count in status bar
-- Improved: Error handling — `PermissionError` handling for file reads, graceful fallback for terminal bell
-- Improved: Tests — comprehensive pytest suite with 51 parametrized tests
-- Improved: Code comments — thorough docstrings and inline explanations
-- Improved: Speed affects all delays — carriage return, margin bell pause, auto-type all respect speed multiplier
+- New: Paper jams, timestamp stamping, export to file, speed control, `--version` flag, `--demo` as proper argparse flag, word count in status bar.
+- Improved: Error handling, comprehensive pytest suite, code comments, speed affects all delays.

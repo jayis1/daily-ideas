@@ -644,6 +644,24 @@ class TerminalTypewriter:
 
     def run(self):
         """Main typewriter loop."""
+        # Terminal size guard: warn if too small for a usable experience.
+        h, w = self.stdscr.getmaxyx()
+        if w < MIN_TERM_WIDTH or h < MIN_TERM_HEIGHT:
+            self.stdscr.clear()
+            msg = (f"Terminal too small ({w}x{h}). Need at least "
+                   f"{MIN_TERM_WIDTH}x{MIN_TERM_HEIGHT}. Resize and rerun.")
+            try:
+                self.stdscr.addstr(0, 0, msg[:w - 1])
+                self.stdscr.addstr(2, 0, "Press Q to quit.")
+                self.stdscr.refresh()
+            except curses.error:
+                pass
+            while True:
+                key = self.stdscr.getch()
+                if key in (ord('q'), ord('Q')):
+                    return
+                time.sleep(0.05)
+
         while True:
             self._render_page()
 
@@ -667,6 +685,9 @@ class TerminalTypewriter:
                 # Auto-export on quit if export path is set
                 if self.state.export_path:
                     self._export_to_file()
+                # Write stats on quit if stats path is set (best-effort)
+                if self.state.stats_path:
+                    self._write_stats()
                 break
 
             # Ctrl+J = clear paper jam (MUST be before Enter handler,
@@ -694,6 +715,12 @@ class TerminalTypewriter:
                 self._backspace()
                 continue
 
+            # Tab = indent (4 spaces), like setting a tab stop
+            if key == 9 or key == curses.KEY_BTAB:
+                for _ in range(4):
+                    self._type_char(' ')
+                continue
+
             # Ctrl+U = new line
             if key == 21:
                 self._carriage_return()
@@ -703,6 +730,11 @@ class TerminalTypewriter:
             # Ctrl+R = carriage return only (no line feed)
             if key == 18:
                 self._carriage_return()
+                continue
+
+            # Ctrl+S = toggle bell sound on/off at runtime
+            if key == 19:
+                self.sound_enabled = not self.sound_enabled
                 continue
 
             # Ctrl+D = ding bell manually
@@ -795,15 +827,21 @@ def print_help():
 ║    -s, --speed FLOAT   Auto-type speed multiplier (0.1-10)║
 ║    -e, --export FILE   Export typed text to file on exit ║
 ║    -q, --quiet         Disable bell sounds               ║
+║        --seed N        Deterministic RNG (reproducible)  ║
+║        --wrap          Auto-wrap at margin (carriage ret)║
+║        --no-header     Hide header/status banner         ║
+║        --stats FILE   Write session stats to file on exit║
 ║    -v, --version       Show version                      ║
 ║    -h, --help          Show this help                    ║
 ║                                                          ║
 ║  Interactive Controls (while running):                    ║
 ║    Enter           Carriage return + line feed           ║
+║    Tab             Indent 4 spaces                       ║
 ║    Backspace       Overstrike last character              ║
 ║    Ctrl+U          New line                              ║
 ║    Ctrl+R          Carriage return (no line feed)        ║
 ║    Ctrl+D          Ring bell manually                     ║
+║    Ctrl+S          Toggle bell sound on/off              ║
 ║    Ctrl+N          Install new ribbon                    ║
 ║    Ctrl+P          Pause/resume auto-type                ║
 ║    Ctrl+C          Toggle CAPS LOCK                      ║
@@ -844,6 +882,14 @@ def main():
                        help='Export typed text to file on exit')
     parser.add_argument('-q', '--quiet', action='store_true',
                        help='Disable bell sounds')
+    parser.add_argument('--seed', type=int, default=None,
+                       help='Random seed for deterministic ink variation & jams')
+    parser.add_argument('--wrap', action='store_true',
+                       help='Auto-wrap at margin (carriage return)')
+    parser.add_argument('--no-header', action='store_true',
+                       help='Hide the header/status banner')
+    parser.add_argument('--stats', default=None,
+                       help='Write session statistics to file on exit')
     parser.add_argument('--demo', action='store_true',
                        help='Run non-interactive demo mode')
     parser.add_argument('-v', '--version', action='store_true',
@@ -867,7 +913,7 @@ def main():
 Every letter of the alphabet, typed with care.
 A typewriter is a mechanical marvel!
 DING! The margin bell rings."""
-        demo_typewriter(demo_text)
+        demo_typewriter(demo_text, seed=args.seed)
         sys.exit(0)
 
     model_map = {
@@ -893,6 +939,7 @@ DING! The margin bell rings."""
             sys.exit(1)
 
     export_path = args.export or ""
+    stats_path = args.stats or ""
 
     def run_typewriter(stdscr):
         tw = TerminalTypewriter(
@@ -902,7 +949,11 @@ DING! The margin bell rings."""
             auto_mode=auto_text is not None,
             auto_text=auto_text,
             speed=args.speed,
-            export_path=export_path
+            export_path=export_path,
+            seed=args.seed,
+            auto_wrap=args.wrap,
+            no_header=args.no_header,
+            stats_path=stats_path,
         )
         if args.quiet:
             tw.sound_enabled = False
@@ -916,8 +967,11 @@ DING! The margin bell rings."""
 
 # ─── Demo mode: non-interactive ASCII output for README examples ───
 
-def demo_typewriter(text, model_name="underwood"):
-    """Non-interactive demo that prints typewriter-styled text to stdout."""
+def demo_typewriter(text, model_name="underwood", seed=None):
+    """Non-interactive demo that prints typewriter-styled text to stdout.
+
+    If `seed` is provided, ink-density variation is deterministic.
+    """
     model_map = {
         'underwood': TypewriterModel.UNDERWOOD,
         'remington': TypewriterModel.REMINGTON,
@@ -927,6 +981,7 @@ def demo_typewriter(text, model_name="underwood"):
     }
     model = model_map.get(model_name, TypewriterModel.UNDERWOOD)
     props = MODEL_PROPS[model]
+    rng = random.Random(seed) if seed is not None else random
 
     print()
     print(f"  ╔{'═' * 68}╗")
@@ -939,7 +994,7 @@ def demo_typewriter(text, model_name="underwood"):
     for line in lines:
         output = "  │ "
         for ch in line:
-            density = max(0.2, min(1.0, 1.0 + random.gauss(0, props["ink_variance"] * 0.3)))
+            density = max(0.2, min(1.0, 1.0 + rng.gauss(0, props["ink_variance"] * 0.3)))
             if density > 0.5:
                 output += ch
             else:

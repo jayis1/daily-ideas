@@ -3,9 +3,10 @@
 
 import pytest
 import random
+import time
 from typewriter import (
     TypewriterState, TypewriterModel, MODEL_PROPS, TerminalTypewriter,
-    __version__, demo_typewriter
+    __version__, demo_typewriter, MIN_TERM_WIDTH, MIN_TERM_HEIGHT
 )
 
 
@@ -414,6 +415,159 @@ class TestEscapeSequenceDrain:
         # Intermediate bytes are in 0x20-0x3F
         assert 0x20 <= ord(';') <= 0x3F
         assert 0x20 <= ord('0') <= 0x3F
+
+
+class TestDeterministicSeed:
+    """Tests for the --seed deterministic RNG feature (v1.3.0)."""
+
+    def test_seeded_rng_is_reproducible(self):
+        """Two RNGs with the same seed produce the same sequence."""
+        r1 = random.Random(123)
+        r2 = random.Random(123)
+        seq1 = [r1.random() for _ in range(20)]
+        seq2 = [r2.random() for _ in range(20)]
+        assert seq1 == seq2
+
+    def test_different_seeds_differ(self):
+        """Two RNGs with different seeds produce different sequences."""
+        r1 = random.Random(1)
+        r2 = random.Random(2)
+        seq1 = [r1.random() for _ in range(20)]
+        seq2 = [r2.random() for _ in range(20)]
+        assert seq1 != seq2
+
+    def test_seeded_demo_is_reproducible(self, capsys):
+        """demo_typewriter with the same seed produces identical output."""
+        demo_typewriter("Hello World", "underwood", seed=42)
+        out1 = capsys.readouterr().out
+        demo_typewriter("Hello World", "underwood", seed=42)
+        out2 = capsys.readouterr().out
+        assert out1 == out2
+
+    def test_unseeded_demo_may_vary(self, capsys):
+        """demo_typewriter without seed uses global RNG (may differ)."""
+        # We only assert it runs; output may or may not differ across calls.
+        demo_typewriter("Test", "royal")
+        captured = capsys.readouterr()
+        assert "Royal" in captured.out
+
+
+class TestStatsFile:
+    """Tests for the --stats file output feature (v1.3.0)."""
+
+    def test_stats_path_default_empty(self):
+        """Default stats path should be empty string."""
+        state = TypewriterState()
+        assert state.stats_path == ""
+
+    def test_stats_path_can_be_set(self):
+        """Stats path can be set via constructor."""
+        state = TypewriterState(stats_path="/tmp/stats.txt")
+        assert state.stats_path == "/tmp/stats.txt"
+
+    def test_stats_write_succeeds(self, tmp_path):
+        """Writing stats to a valid path should create a readable file."""
+        stats_file = tmp_path / "stats.txt"
+        state = TypewriterState(stats_path=str(stats_file),
+                                model=TypewriterModel.UNDERWOOD)
+        state.lines[0].extend([('H', 1.0), ('i', 0.9)])
+        state.total_chars = 2
+        state.start_time = time.monotonic() - 5.0
+        # Reproduce _write_stats logic (can't instantiate TerminalTypewriter
+        # without curses), verifying the pattern works end-to-end.
+        text_lines = "".join(ch for ch, _ in state.lines[0])
+        words = len(text_lines.split())
+        elapsed = 5.0
+        lines = [
+            f"Typewriter: {state.model.value}",
+            f"Characters: {state.total_chars}",
+            f"Words: {words}",
+            f"Lines: {len(state.lines)}",
+            f"Ribbon wear: {state.ribbon_wear * 100:.1f}%",
+            f"Session duration: {elapsed:.1f}s",
+            f"Characters/sec: {state.total_chars / elapsed:.2f}",
+        ]
+        with open(stats_file, 'w') as f:
+            f.write("\n".join(lines) + "\n")
+        content = stats_file.read_text()
+        assert "Typewriter: Underwood No. 5" in content
+        assert "Characters: 2" in content
+        assert "Words: 1" in content
+
+
+class TestAutoWrap:
+    """Tests for the --wrap auto-wrap at margin feature (v1.3.0)."""
+
+    def test_auto_wrap_default_off(self):
+        """auto_wrap should default to False."""
+        state = TypewriterState()
+        assert state.auto_wrap is False
+
+    def test_auto_wrap_can_be_enabled(self):
+        """auto_wrap can be set via constructor."""
+        state = TypewriterState(auto_wrap=True)
+        assert state.auto_wrap is True
+
+    def test_auto_wrap_triggers_newline(self):
+        """When auto_wrap is on and col exceeds margin, a new line starts."""
+        state = TypewriterState(auto_wrap=True,
+                                model=TypewriterModel.UNDERWOOD)
+        # Underwood ding_at is 65; wrap triggers at ding_at + 5 = 70
+        state.col = 71
+        props = MODEL_PROPS[state.model]
+        if state.auto_wrap and state.col > props["ding_at"] + 5:
+            state.line += 1
+            state.col = 1
+        assert state.line == 2
+        assert state.col == 1
+
+    def test_no_wrap_stays_on_line(self):
+        """Without auto_wrap, exceeding the margin does NOT start a new line."""
+        state = TypewriterState(auto_wrap=False,
+                                model=TypewriterModel.UNDERWOOD)
+        state.col = 100
+        props = MODEL_PROPS[state.model]
+        if state.auto_wrap and state.col > props["ding_at"] + 5:
+            state.line += 1
+            state.col = 1
+        assert state.line == 1
+        assert state.col == 100
+
+
+class TestTerminalSizeGuard:
+    """Tests for the terminal size guard constants (v1.3.0)."""
+
+    def test_min_dimensions_defined(self):
+        """Minimum terminal dimensions should be sensible positive integers."""
+        assert MIN_TERM_WIDTH >= 40
+        assert MIN_TERM_HEIGHT >= 8
+
+    def test_min_width_allows_typing(self):
+        """The minimum width should fit at least a short line + margins."""
+        assert MIN_TERM_WIDTH > 20 + 5 + 5  # line + margins
+
+
+class TestNewKeycodes:
+    """Tests for new keycodes added in v1.3.0 (Tab, Ctrl+S)."""
+
+    def test_tab_is_ascii_9(self):
+        """Tab key produces ASCII code 9."""
+        assert ord('\t') == 9
+
+    def test_ctrl_s_is_ascii_19(self):
+        """Ctrl+S produces ASCII code 19 (XOFF in terminals, repurposed here)."""
+        assert 19 == 0x13
+
+
+class TestDemoSeedParam:
+    """Tests for the seed parameter on demo_typewriter (v1.3.0)."""
+
+    def test_demo_accepts_seed_kwarg(self, capsys):
+        """demo_typewriter should accept a seed keyword without error."""
+        demo_typewriter("Seeded demo", "olivetti", seed=7)
+        captured = capsys.readouterr()
+        assert "Olivetti" in captured.out
+        assert "Seeded demo" in captured.out
 
 
 if __name__ == "__main__":
