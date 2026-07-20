@@ -19,7 +19,14 @@ Simulates a vintage typewriter in your terminal with:
 - Auto-pause on jam during auto-type mode
 - Visual flash feedback for export actions
 - Improved escape sequence handling
-- Version: 1.2.0
+- Deterministic mode (--seed) for reproducible ink/jams
+- Auto-wrap at margin (--wrap) like a real carriage return
+- Optional header (--no-header to hide)
+- Runtime sound toggle (Ctrl+S)
+- Tab key support in interactive mode
+- Stats file output (--stats) with word/char/line counts
+- Terminal size guard with friendly message
+- Version: 1.3.0
 """
 
 import sys
@@ -35,7 +42,11 @@ from enum import Enum
 from collections import deque
 from datetime import datetime
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
+
+# Minimum terminal dimensions for a usable experience.
+MIN_TERM_WIDTH = 50
+MIN_TERM_HEIGHT = 12
 
 
 class TypewriterModel(Enum):
@@ -118,24 +129,36 @@ class TypewriterState:
     jammed: bool = False    # Paper jam state
     jam_timer: int = 0      # Frames remaining for jam animation
     export_path: str = ""   # File path to export typed content
+    stats_path: str = ""    # File path for statistics dump on exit
+    auto_wrap: bool = False # Auto-wrap at margin (carriage return)
+    start_time: float = 0.0 # Session start time (monotonic) for stats
 
 
 class TerminalTypewriter:
     """Interactive typewriter simulator using curses."""
 
     def __init__(self, stdscr, model=TypewriterModel.UNDERWOOD, color="black",
-                 auto_mode=False, auto_text=None, speed=1.0, export_path=""):
+                 auto_mode=False, auto_text=None, speed=1.0, export_path="",
+                 seed=None, auto_wrap=False, no_header=False, stats_path=""):
         self.stdscr = stdscr
         self.state = TypewriterState(model=model, ink_color=color)
         self.state.lines = [deque()]
         self.state.export_path = export_path
+        self.state.stats_path = stats_path
+        self.state.auto_wrap = auto_wrap
+        self.state.start_time = time.monotonic()
         self.auto_mode = auto_mode
         self.auto_text = auto_text or ""
         self.auto_index = 0
         self.speed = max(0.1, min(10.0, speed))  # Clamp speed between 0.1x and 10x
         self.sound_enabled = True
-        self.show_header = True
+        # Header visibility: --no-header hides the status/controls banner.
+        self.show_header = not no_header
         self.paused = False
+        # Deterministic RNG: when --seed is given, ink variation and jam rolls
+        # draw from this generator instead of the global `random` module, so
+        # runs are reproducible (useful for tests and demos).
+        self._rng = random.Random(seed) if seed is not None else None
         self._setup_curses()
 
     def _setup_curses(self):
@@ -158,6 +181,24 @@ class TerminalTypewriter:
             curses.init_pair(9, curses.COLOR_RED, curses.COLOR_BLACK)
             # Color pair 10: green on white for status highlights
             curses.init_pair(10, curses.COLOR_GREEN, curses.COLOR_WHITE)
+
+    def _uniform(self, a, b):
+        """Seeded-aware random uniform. Uses self._rng if --seed was set."""
+        if self._rng is not None:
+            return self._rng.uniform(a, b)
+        return random.uniform(a, b)
+
+    def _gauss(self, mu, sigma):
+        """Seeded-aware random gauss. Uses self._rng if --seed was set."""
+        if self._rng is not None:
+            return self._rng.gauss(mu, sigma)
+        return random.gauss(mu, sigma)
+
+    def _random(self):
+        """Seeded-aware random [0,1). Uses self._rng if --seed was set."""
+        if self._rng is not None:
+            return self._rng.random()
+        return random.random()
 
     def _get_ink_pair(self):
         """Return the curses color pair number for the current ink color."""
@@ -197,10 +238,10 @@ class TerminalTypewriter:
     def _type_delay(self):
         """Simulate the mechanical delay between key presses, adjusted by speed."""
         props = MODEL_PROPS[self.state.model]
-        base_delay = random.uniform(props["min_delay"], props["max_delay"])
+        base_delay = self._uniform(props["min_delay"], props["max_delay"])
         # Add occasional longer delays (finger repositioning)
-        if random.random() < 0.03:
-            base_delay += random.uniform(0.1, 0.3)
+        if self._random() < 0.03:
+            base_delay += self._uniform(0.1, 0.3)
         # Apply speed multiplier (higher speed = shorter delay)
         adjusted = base_delay / self.speed
         time.sleep(max(0.001, adjusted))
@@ -211,7 +252,7 @@ class TerminalTypewriter:
         base = 1.0 - self.state.ribbon_wear * 0.6
         variance = props["ink_variance"]
         # Random variation per character
-        variation = random.gauss(0, variance * 0.3)
+        variation = self._gauss(0, variance * 0.3)
         density = max(0.2, min(1.0, base + variation))
         return density
 
@@ -220,7 +261,7 @@ class TerminalTypewriter:
         if self.state.jammed:
             return True
         props = MODEL_PROPS[self.state.model]
-        if random.random() < props["jam_chance"]:
+        if self._random() < props["jam_chance"]:
             self.state.jammed = True
             self.state.jam_timer = 8  # Flash for 8 frames
             return True
@@ -270,6 +311,13 @@ class TerminalTypewriter:
 
         self.state.col += 1
         self.state.total_chars += 1
+
+        # Auto-wrap: if --wrap is on and we passed the margin, do a
+        # carriage return + line feed just like a real typewriter whose
+        # carriage hit the right stop.
+        if self.state.auto_wrap and self.state.col > props["ding_at"] + 5:
+            self._carriage_return()
+            self._new_line()
 
         # Increment ribbon wear slightly
         self.state.ribbon_wear = min(1.0, self.state.ribbon_wear + 0.0002)
@@ -333,6 +381,37 @@ class TerminalTypewriter:
         except (IOError, OSError):
             return False
 
+    def _write_stats(self):
+        """Write session statistics to the configured stats file.
+
+        Produces a human-readable summary with word/char/line counts,
+        ribbon wear, model name, and session duration. Called on quit
+        when --stats is set. Never raises — stats are best-effort.
+        """
+        path = self.state.stats_path
+        if not path:
+            return False
+        try:
+            elapsed = max(0.0, time.monotonic() - self.state.start_time)
+            words = self._get_word_count()
+            nlines = len(self.state.lines)
+            props = MODEL_PROPS[self.state.model]
+            lines = [
+                f"Typewriter: {self.state.model.value}",
+                f"Characters: {self.state.total_chars}",
+                f"Words: {words}",
+                f"Lines: {nlines}",
+                f"Ribbon wear: {self.state.ribbon_wear * 100:.1f}%",
+                f"Session duration: {elapsed:.1f}s",
+            ]
+            if elapsed > 0:
+                lines.append(f"Characters/sec: {self.state.total_chars / elapsed:.2f}")
+            with open(path, 'w') as f:
+                f.write("\n".join(lines) + "\n")
+            return True
+        except (IOError, OSError):
+            return False
+
     def _render_page(self):
         """Render the typewriter page on screen."""
         self.stdscr.clear()
@@ -357,6 +436,7 @@ class TerminalTypewriter:
                 f"Words {word_count}",
                 f"Ribbon {int((1 - self.state.ribbon_wear) * 100)}%",
                 f"CAPS {'ON' if self.state.caps_lock else 'off'}",
+                f"Sound {'ON' if self.sound_enabled else 'off'}",
                 f"Speed {self.speed:.1f}x",
             ]
             if self.state.export_path:
@@ -365,7 +445,7 @@ class TerminalTypewriter:
             header_lines.append(f" ║{status:^{w-4}}║")
 
             # Controls
-            ctrl = "Enter=↵  BS=⌫  ^U=newline  ^R=CR  ^D=ding  ^N=ribbon  ^T=stamp  ^J=unjam/LF  ^E=export  ^P=pause  ^C=CAPS  Q=quit"
+            ctrl = "Enter=↵  BS=⌫  Tab=indent  ^U=newline  ^R=CR  ^D=ding  ^N=ribbon  ^T=stamp  ^J=unjam/LF  ^E=export  ^S=sound  ^P=pause  ^C=CAPS  Q=quit"
             header_lines.append(f" ║{ctrl:^{w-4}}║")
 
             # Jam warning
