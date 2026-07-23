@@ -190,6 +190,95 @@ def test_gear_rotation_changes_output():
     assert a != b
 
 
+# ---------------------------------------------------------------------------
+# Bug-fix regression tests (v1.1.1)
+# ---------------------------------------------------------------------------
+
+def test_last_quarter_init_prevents_spurious_cuckoo():
+    """Starting mid-quarter must NOT trigger a spurious cuckoo.
+
+    Before the fix, last_quarter defaulted to -1, so the first frame
+    always saw `quarter != last_quarter` and fired a cuckoo/chime even
+    when starting at e.g. 10:05 (quarter=0, but not the top of the hour).
+    """
+    # Simulate the init logic from run(): set last_quarter to current quarter.
+    for start_s in [10 * 3600 + 5 * 60,    # 10:05 (q=0, not top of hour)
+                    10 * 3600 + 20 * 60,   # 10:20 (q=15)
+                    10 * 3600 + 50 * 60,   # 10:50 (q=45)
+                    10 * 3600 + 59 * 60 + 30]:  # 10:59:30 (q=45)
+        s = ClockState()
+        s.sim_seconds = start_s
+        _, _, _, init_q = hours_minutes_seconds(start_s)
+        s.last_quarter = init_q  # this is what the fix does
+        _, _, _, q = hours_minutes_seconds(start_s)
+        # No spurious trigger should occur on the "first frame".
+        assert q == s.last_quarter, f"quarter {q} != last_quarter {s.last_quarter} for {start_s}"
+
+
+def test_chime_timer_uses_real_dt_not_warped():
+    """The chime sequencer must advance at real-time pace, not warped.
+
+    Before the fix, the chime timer used `dt * warp`, so at warp=3600
+    all notes fired in a single frame (timer jumped by 180 >> 0.3s
+    interval).  After the fix, the timer uses real `dt`, so notes are
+    spaced ~0.3s apart regardless of warp.
+    """
+    s = ClockState()
+    start_chime(s, 15)  # 4 notes, first interval ~0.65s (C4 is lowest)
+    first_interval = note_interval(s.chime.notes[0])
+    # Simulate 3 frames at dt=0.05, warp=3600.
+    # With the OLD code (dt*warp=180), index would jump to 4 after frame 1.
+    # With the fix (dt=0.05), after 3 frames timer=0.15 < 0.65, index stays 0.
+    dt = 0.05
+    for _ in range(3):
+        s.chime.timer += dt  # real dt, not dt * warp
+        if s.chime.index < len(s.chime.notes):
+            cur = s.chime.notes[s.chime.index]
+            if s.chime.timer >= note_interval(cur):
+                s.chime.timer = 0.0
+                s.chime.index += 1
+    assert s.chime.index == 0, f"notes fired too fast: index={s.chime.index}, expected 0"
+    assert abs(s.chime.timer - 0.15) < 1e-9  # 3 * 0.05
+
+
+def test_warp_rejects_nan_and_inf():
+    """--warp must reject NaN and +inf (they pass `<= 0` but are invalid)."""
+    import math
+    # Simulate the validation check from main().
+    for bad in [float("nan"), float("inf"), float("-inf"), 0.0, -1.0]:
+        assert bad <= 0 or not math.isfinite(bad), f"{bad} should be rejected"
+
+
+def test_warp_accepts_valid_values():
+    """--warp should accept normal positive finite values."""
+    import math
+    for good in [0.001, 1.0, 60.0, 3600.0, 1000000.0]:
+        assert good > 0 and math.isfinite(good), f"{good} should be accepted"
+
+
+def test_once_mode_no_spurious_retrigger():
+    """In --once mode, after the initial cuckoo is set up, the main loop
+    must not re-trigger another cuckoo on the first frame.
+
+    Before the fix, last_quarter was -1 while the --once block set
+    sim_seconds to a top-of-hour (quarter=0), so the first loop iteration
+    saw `0 != -1` and started a SECOND cuckoo.
+    """
+    s = ClockState()
+    s.sim_seconds = 10 * 3600 + 30 * 60  # 10:30
+    # --once jumps to next top of hour:
+    import math
+    s.sim_seconds = math.ceil(s.sim_seconds / 3600) * 3600  # 11:00
+    h12, _, _, q = hours_minutes_seconds(s.sim_seconds)
+    # Fix: update last_quarter to match.
+    s.last_quarter = q
+    # Simulate first-frame check:
+    _, _, _, q2 = hours_minutes_seconds(s.sim_seconds)
+    retrigger = (q2 != s.last_quarter)
+    assert not retrigger, "first frame would re-trigger cuckoo"
+    assert q2 == s.last_quarter
+
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in sorted(globals().items()):

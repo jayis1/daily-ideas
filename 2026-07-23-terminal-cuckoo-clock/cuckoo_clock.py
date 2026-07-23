@@ -29,7 +29,7 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 
 # ---------------------------------------------------------------------------
@@ -530,6 +530,12 @@ def run(stdscr, args) -> None:
         now = time.localtime()
         state.sim_seconds = now.tm_hour * 3600 + now.tm_min * 60 + now.tm_sec
 
+    # Initialize last_quarter to the current quarter so the first frame
+    # doesn't falsely detect a quarter-boundary crossing (which would
+    # spuriously trigger a chime or cuckoo when starting mid-quarter).
+    _, _, _, init_quarter = hours_minutes_seconds(state.sim_seconds)
+    state.last_quarter = init_quarter
+
     warp = args.warp
     t_last = time.monotonic()
 
@@ -538,6 +544,8 @@ def run(stdscr, args) -> None:
         # jump to a top-of-hour boundary
         state.sim_seconds = math.ceil(state.sim_seconds / 3600) * 3600
         hour12, _, _, quarter = hours_minutes_seconds(state.sim_seconds)
+        # Update last_quarter so the main loop doesn't re-trigger.
+        state.last_quarter = quarter
         if quarter == 0:
             start_cuckoo(state, hour12 if hour12 != 0 else 12)
 
@@ -586,7 +594,10 @@ def run(stdscr, args) -> None:
 
         # ---- chime sequencer stepping ----
         if state.chime.active:
-            state.chime.timer += dt * warp
+            # The chime timer runs in *real* seconds (not warped) so that
+            # notes are spaced audibly regardless of --warp.  Otherwise at
+            # high warp all notes would fire in a single frame.
+            state.chime.timer += dt
             if state.chime.index < len(state.chime.notes):
                 cur_note = state.chime.notes[state.chime.index]
                 if state.chime.timer >= note_interval(cur_note):
@@ -646,8 +657,8 @@ def main() -> None:
         except ValueError as e:
             ap.error(f"--start: {e}")
 
-    if args.warp <= 0:
-        ap.error("--warp must be a positive number")
+    if args.warp <= 0 or not math.isfinite(args.warp):
+        ap.error("--warp must be a positive, finite number")
 
     try:
         curses.wrapper(run, args)

@@ -17,9 +17,9 @@ and `dataclasses`. Nothing to install.
 ```
                  ▲
                 ╱^╲
-        ╔══════════════════════════════════════════╗
-        ║          · CUCKOO ·                       ║
-        ║         ___                              ║
+        ╔════════════════════════════════════════╗
+        ║          · CUCKOO ·                     ║
+        ║         ___                             ║
         ║        / o \                             ║
         ║       | \_/ |                            ║
         ║        \___/     •••                     ║
@@ -62,21 +62,27 @@ and `dataclasses`. Nothing to install.
 - **Westminster quarter chimes** — at :15, :30, and :45 the clock plays the
   Westminster motif **note-by-note**, spacing the terminal-bell taps at
   note-appropriate intervals (lower notes ring longer). The current note and
-  progress (`🔔 Chime: E4  (2/7)`) is shown live in the status line.
+  progress (`🔔 Chime: E4  (2/7)`) is shown live in the status line. Chime
+  notes are spaced in real time regardless of the `--warp` speed, so the motif
+  is always audible.
 - **Hourly cuckoo strike** — on the top of the hour the cuckoo door swings
   open, the bird emerges with an alternating open/closed beak animation, and
   cuckoos once for each hour (1–12). Each cuckoo sounds the terminal bell.
+  The strike animation pace scales with `--warp` so high-speed demos complete
+  quickly.
 - **Bell (`\a`)** is used for all chimes; the bell character works in most Unix
   terminals.
 
 ### Interaction & options
 - **`--warp SPEED`** — accelerate the clock by any factor so you can watch a
-  whole day in a minute. `1` = real-time, `3600` = one hour per second.
+  whole day in a minute. `1` = real-time, `3600` = one hour per second. Must
+  be a positive, finite number (NaN and infinity are rejected).
 - **`--once`** — fast-forwards to the next top of the hour, fires a single
   strike, and exits. Handy for smoke-testing or a one-shot cuckoo in a shell
   prompt.
 - **`--start HH:MM:SS`** — begin the clock at a custom time (e.g. `11:00` or
-  `23:59:30`). Useful for demoing a specific strike count.
+  `23:59:30`). Useful for demoing a specific strike count. Out-of-range
+  values are rejected before the clock starts.
 - **`--silent`** — suppress the terminal bell. Chime motifs are still sequenced
   and logged in the side panel, so you can see what would have played.
 - **`--version` / `--help`** — standard flags.
@@ -157,7 +163,9 @@ python3 cuckoo_clock.py --warp 4800 --silent
 ## What it does
 
 1. Seeds its simulated clock from the system wall clock at startup (or from
-   `--start`), so the dial and readout match your chosen time.
+   `--start`), so the dial and readout match your chosen time. The current
+   quarter is recorded at startup so no spurious chime or cuckoo fires on the
+   first frame.
 2. Each frame advances the simulation by `dt * warp` seconds, so `--warp 1` is
    real-time and `--warp 3600` is one hour per second.
 3. The pendulum angle is `sin(t·π)·0.35` — a 1 Hz swing with ~20° amplitude.
@@ -166,7 +174,8 @@ python3 cuckoo_clock.py --warp 4800 --silent
 5. Whenever the simulated minute crosses a 15-minute boundary, the
    corresponding Westminster motif is started on the chime sequencer. The
    sequencer plays each note in turn, spacing bell taps by the note's
-   pitch-derived duration, and logs the motif in the side panel.
+   pitch-derived duration (in real time, independent of `--warp`), and logs
+   the motif in the side panel.
 6. On the top of the hour the cuckoo door opens and the bird alternates an
    open-beak and closed-beak glyph once for each strike count
    (1 at 1:00/13:00, …, 12 at noon/midnight).
@@ -177,17 +186,18 @@ python3 cuckoo_clock.py --warp 4800 --silent
 
 Pure-logic unit tests (no curses required) cover the time math, gear
 rendering, overlay clipping, cuckoo state machine, chime sequencer,
-note-interval timing, time formatting, and `--start` parsing:
+note-interval timing, time formatting, `--start` parsing, `--warp`
+validation, and the startup quarter-initialization fix:
 
 ```bash
-python3 -m pytest test_cuckoo_clock.py        # via pytest
+python3 -m pytest test_cuckoo_clock.py        # via pytest (26 tests)
 python3 test_cuckoo_clock.py                  # standalone runner
 ```
 
 ## Files
 
 - `cuckoo_clock.py` — the simulator (single file, stdlib only).
-- `test_cuckoo_clock.py` — pure-logic unit tests (21 tests).
+- `test_cuckoo_clock.py` — pure-logic unit tests (26 tests).
 
 ## Notes
 
@@ -199,5 +209,54 @@ python3 test_cuckoo_clock.py                  # standalone runner
   cuckoo 11 times (for 11:00) and exit.
 - `--start` accepts `HH:MM` or `HH:MM:SS`; out-of-range values are rejected
   with a clear error before the clock starts.
+- `--warp` must be a positive, finite number. NaN, infinity, zero, and
+  negative values are all rejected with a clear error.
 - Color is enabled automatically when the terminal advertises color support;
   no flag is needed.
+
+## Changelog
+
+### v1.1.1 — bug fixes
+
+- **Fixed spurious cuckoo/chime on startup.** `last_quarter` was initialized to
+  `-1`, so the first frame always detected a quarter-boundary crossing. This
+  caused a spurious cuckoo strike when starting at any time in the first
+  quarter-hour (e.g. 10:05 → 10 false cuckoos), and a spurious chime when
+  starting mid-quarter (e.g. 10:20 → false Q15 chime). Now `last_quarter` is
+  initialized to the current quarter at startup.
+- **Fixed chime notes firing all at once under `--warp`.** The chime sequencer
+  timer was advanced by `dt * warp` (simulated seconds), but `note_interval()`
+  returns real seconds (~0.22–0.65 s). At any warp above ~5×, the timer blew
+  past the interval in a single frame, so all notes fired instantly instead of
+  being spaced note-by-note. The timer now advances by real `dt`, so the
+  Westminster motif is always audible at the correct spacing regardless of the
+  simulation speed.
+- **Fixed `--warp` accepting NaN and +infinity.** `float('nan') <= 0` is `False`
+  in Python, so NaN and +inf passed the `warp <= 0` validation and would
+  produce garbage simulation times. Both are now rejected with a clear error
+  (`--warp must be a positive, finite number`).
+- **Fixed `--once` double-cuckoo.** In `--once` mode the cuckoo was started in
+  the setup block, but `last_quarter` was still `-1` while the sim time was
+  jumped to a top-of-hour (quarter=0). The first main-loop iteration then saw
+  `0 != -1` and started a *second* cuckoo. Now `last_quarter` is updated to
+  match the jumped-to quarter before the loop begins.
+- Added 5 regression tests (21 → 26 total) covering the startup
+  quarter initialization, chime timer scaling, `--warp` NaN/inf rejection,
+  valid `--warp` acceptance, and `--once` re-trigger prevention.
+
+### v1.1.0 — feature enhancements
+
+- Note-by-note Westminster chime sequencer with live note/progress indicator.
+- Curses color support (case, dial, hands, bird, gears, pendulum, log, chime).
+- `--start HH:MM:SS` flag for custom start time.
+- `--version` flag.
+- `h` key to toggle 12h/24h digital readout.
+- `c` key to manually trigger the current quarter chime.
+- Fixed digital readout bug, removed dead `gear_c` field, added input
+  validation for `--warp`, clamped cuckoo count to [1, 12].
+- Added 14 tests (7 → 21 total).
+
+### v1.0.0 — initial release
+
+- ASCII cuckoo clock with dial, hands, gears, pendulum, cuckoo bird,
+  Westminster quarter chimes, digital readout, `--warp`, `--once`, `--silent`.
