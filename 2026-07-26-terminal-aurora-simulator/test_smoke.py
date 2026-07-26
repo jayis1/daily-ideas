@@ -172,6 +172,49 @@ assert aurora.make_mountains(0, 20, 1) == []
 assert aurora.make_mountains(1, 20, 1) == [19]
 
 
+# ---------------------------------------------------------------------------
+# Regression: build_frame must not crash on very short terminals (h < 4).
+# Previously sky_h was forced to max(4, ...) which overflowed the row buffer.
+# ---------------------------------------------------------------------------
+for h in [1, 2, 3]:
+    s = aurora.init_state(80, h, 42, "green")
+    s.time = 1.0
+    f = aurora.build_frame(s)
+    assert isinstance(f, str) and f != ""
+    # frame should have at most h content rows (plus control lines)
+    assert f.count("\n") <= 2 * h + 2
+
+
+# ---------------------------------------------------------------------------
+# Regression: noise functions must not raise on non-finite inputs (inf/nan).
+# Previously int(math.floor(inf)) raised OverflowError.
+# ---------------------------------------------------------------------------
+import math
+assert aurora.value_noise_1d([0.5, 0.7], float("inf")) == 0.0
+assert aurora.value_noise_1d([0.5, 0.7], float("nan")) == 0.0
+assert aurora.value_noise_2d([[0.5]], float("inf"), 1.0) == 0.0
+assert aurora.value_noise_2d([[0.5]], 1.0, float("nan")) == 0.0
+assert aurora.value_noise_2d([[0.5]], float("inf"), float("inf")) == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Regression: make_screenshot.parse_ansi_frame correctly skips control lines.
+# Previously it treated HOME/CLEAR_LINE/RESET escape lines as screen rows,
+# misaligning the entire screenshot.
+# ---------------------------------------------------------------------------
+import make_screenshot
+s = aurora.init_state(30, 6, 42, "magnetic")
+s.time = 3.0
+frame = aurora.build_frame(s)
+colors, chars = make_screenshot.parse_ansi_frame(frame, 30, 6)
+# Row 0 (top sky) should have content, not be empty as before the fix.
+content_in_row0 = any(c != " " for c in chars[0])
+content_in_row3 = any(c != " " for c in chars[3])  # mountain row
+assert content_in_row0, "screenshot row 0 was empty (control-line misparse bug)"
+assert content_in_row3, "screenshot row 3 was empty (control-line misparse bug)"
+
+
 print("OK: all palettes render, resize + keys work, "
       "new features (moon, shooting stars, lake, toggles) verified, "
-      "empty-grid + speed-clamp regressions pass")
+      "empty-grid + speed-clamp + short-terminal + inf-noise + "
+      "screenshot-parse regressions pass")

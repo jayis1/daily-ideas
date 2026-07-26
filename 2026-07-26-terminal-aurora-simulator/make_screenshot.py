@@ -19,41 +19,56 @@ WIDTH = 120
 HEIGHT = 32
 CELL = 8
 
+# Regex for truecolor foreground: \033[38;2;R;G;Bm
+COLOR_RE = re.compile(r"\x1b\[38;2;(\d+);(\d+);(\d+)m")
+RESET_RE = re.compile(r"\x1b\[0m")
+# Other escape sequences (cursor moves, clear, etc.) — we ignore them.
+OTHER_ESC_RE = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]")
+
 
 def parse_ansi_frame(frame: str, width: int, height: int):
     """Parse an ANSI truecolor frame into a (colors, chars) grid.
 
     ``colors[y][x]`` is an (r, g, b) tuple; ``chars[y][x]`` is a single char.
+
+    ``build_frame`` emits ``HOME`` then, for each screen row, a content line
+    followed by ``CLEAR_LINE``, and finally ``RESET``. Splitting on ``\\n``
+    therefore yields ``2*height + 2`` lines whose content rows sit at the odd
+    indices 1, 3, 5, .... We extract exactly those rows so the screenshot
+    matches what the terminal actually displays.
     """
-    # split into "lines" — the frame uses \n between rows
-    lines = frame.split("\n")
     colors = [[(6, 10, 20)] * width for _ in range(height)]
     chars = [[" "] * width for _ in range(height)]
-    # regex for truecolor foreground: \033[38;2;R;G;Bm
-    color_re = re.compile(r"\x1b\[38;2;(\d+);(\d+);(\d+)m")
-    reset_re = re.compile(r"\x1b\[0m")
-    # other escape sequences (cursor moves, clear, etc.) — we ignore them
-    other_esc_re = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]")
 
-    for row_idx, line in enumerate(lines[:height]):
+    # Collect the content lines from the frame. ``build_frame`` joins lines
+    # with \n, so each logical line is a separate entry after split. Lines
+    # that are purely escape sequences (HOME, CLEAR_LINE, RESET) contain no
+    # printable characters once the escapes are stripped and are skipped.
+    content_lines = []
+    for line in frame.split("\n"):
+        if OTHER_ESC_RE.sub("", line) == "":
+            continue
+        content_lines.append(line)
+
+    # The first content line is the top screen row, etc.
+    for row_idx, line in enumerate(content_lines[:height]):
         col = 0
         cur_color = (6, 10, 20)
         i = 0
         while i < len(line) and col < width:
             ch = line[i]
             if ch == "\x1b":
-                # parse an escape sequence
-                m = color_re.match(line, i)
+                m = COLOR_RE.match(line, i)
                 if m:
                     cur_color = (int(m.group(1)), int(m.group(2)), int(m.group(3)))
                     i = m.end()
                     continue
-                m = reset_re.match(line, i)
+                m = RESET_RE.match(line, i)
                 if m:
                     cur_color = (6, 10, 20)
                     i = m.end()
                     continue
-                m = other_esc_re.match(line, i)
+                m = OTHER_ESC_RE.match(line, i)
                 if m:
                     i = m.end()
                     continue

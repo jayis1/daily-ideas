@@ -46,6 +46,8 @@ mathematics at runtime.
   can all be flipped while running.
 - **Resize-aware** — detects terminal resize and regenerates the starfield,
   mountains, and moon to fit.
+- **Robust on tiny terminals** — gracefully handles heights as small as 1 row
+  without crashing (the sky band is clamped to the available height).
 - **Snapshot mode** (`--once`) — renders a single frame and exits, perfect for
   screenshots, piping, or CI smoke tests. Auto-enabled when stdout is not a
   TTY.
@@ -181,14 +183,16 @@ python3 test_smoke.py
 1. **Value noise.** A fixed-size grid of random values is sampled with
    smoothstep interpolation to produce 1D and 2D value noise. Fractal noise
    (a sum of octaves with decreasing amplitude) gives the curtains their
-   natural-looking variation. Degenerate (empty) grids return `0.0` instead
-   of crashing.
+   natural-looking variation. Degenerate (empty) grids and non-finite
+   (inf/nan) coordinates return `0.0` instead of crashing.
 2. **Curtains.** For each screen column, four layered noise functions — each
    with its own frequency, speed, phase, brightness, and color contribution
    — are summed into a column intensity and a color coordinate `t`.
 3. **Vertical profile.** A Gaussian falloff centered on a band in the upper
    sky, shifted by the column intensity, concentrates the light into a
-   ribbon. A 2D noise field multiplies through as "ray" streaks.
+   ribbon. A 2D noise field multiplies through as "ray" streaks. The sky
+   band height is clamped to the canvas height so very short terminals
+   (1–3 rows) render safely.
 4. **Color.** The column's `t` value is blended with the vertical position and
    the streak noise, then looked up in the active palette's gradient stops
    to produce a 24-bit RGB color. Intensity darkens the color and selects the
@@ -216,11 +220,57 @@ python3 test_smoke.py
 
 - `aurora.py` — the simulator (single file, stdlib only).
 - `make_screenshot.py` — imports the real `aurora` renderer and emits an SVG
-  screenshot for the README.
+  screenshot for the README. Parses the ANSI frame by skipping the
+  `HOME`/`CLEAR_LINE`/`RESET` control lines so screen rows map correctly.
 - `test_smoke.py` — a smoke + regression test suite that exercises every
-  palette, the resize path, the key handler, the new feature toggles
-  (moon, stars, lake, mountains), shooting-star spawn/decay, and edge cases
-  (empty noise grids, speed clamping, tiny/huge terminals, negative seeds).
+  palette, the resize path, the key handler, the feature toggles
+  (moon, stars, lake, mountains), shooting-star spawn/decay, edge cases
+  (empty noise grids, non-finite noise inputs, speed clamping, tiny/huge
+  terminals, negative seeds), and the screenshot parser.
+
+## Known issues
+
+- On terminals without 24-bit truecolor support, colors fall back to the
+  default terminal palette; the character ramp still conveys shape.
+- The moon's lit "O" glyph only appears for quarter/gibbous/full phases;
+  thin crescents render as dim dots, which is intentional.
+
+## Changelog
+
+### v1.1.1 (2026-07-26)
+
+Bug-fix release. Found and fixed three bugs by executing the code against
+edge cases:
+
+- **Fixed `IndexError` crash on short terminals (height < 4).**
+  `build_frame` computed `sky_h = max(4, int(h * 0.62))`, which forced the
+  sky band to 4 rows even when the canvas had only 1–3 rows. The star and
+  aurora loops then indexed past the end of the row buffer and crashed.
+  `sky_h` is now clamped to `min(h, ...)` for `h < 4`, so tiny terminals
+  render gracefully.
+- **Fixed the SVG screenshot misrendering.**
+  `make_screenshot.parse_ansi_frame` split the ANSI frame by `\n` and
+  treated the first `height` lines as screen rows. But `build_frame` emits
+  `HOME`, then a content line + `CLEAR_LINE` per row, then `RESET` — so the
+  first `height` split-lines were mostly escape sequences, leaving the
+  top half of the screenshot blank and the bottom half shifted. The parser
+  now skips pure control-sequence lines and maps content rows correctly.
+  The regenerated `screenshot.svg` now shows the mountain silhouette and
+  lake ripples that were previously missing.
+- **Hardened noise functions against non-finite inputs.**
+  `value_noise_1d` and `value_noise_2d` crashed with `OverflowError` when
+  given `inf` or `nan` coordinates (because `int(math.floor(inf))` is not
+  representable). They now return `0.0` for non-finite inputs, matching
+  the existing empty-grid guard.
+
+Test suite expanded with regression tests for all three fixes.
+
+### v1.1.0 (2026-07-26)
+
+Initial enhanced release: phased moon, shooting stars, lake reflection,
+`magnetic` palette, `--width`/`--height` flags, mountain toggle, and the
+`--list-palettes`/`--version` flags. Fixed empty-grid `ZeroDivisionError`,
+speed-stuck-at-zero, and the dead `--no-cursor` flag.
 
 ## License
 

@@ -33,7 +33,7 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Tuple
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 # ---------------------------------------------------------------------------
 # Terminal helpers (raw mode + ANSI truecolor)
@@ -66,11 +66,12 @@ def smoothstep(t: float) -> float:
 def value_noise_1d(seed_grid: List[float], x: float) -> float:
     """1D smooth value noise sampled at floating-point x over a fixed grid.
 
-    Returns 0.0 for an empty grid (avoids ZeroDivisionError) so callers can
+    Returns 0.0 for an empty grid (avoids ZeroDivisionError) or a non-finite
+    ``x`` (avoids OverflowError from ``int(math.floor(inf))``), so callers can
     safely pass degenerate grids.
     """
     n = len(seed_grid)
-    if n == 0:
+    if n == 0 or not math.isfinite(x):
         return 0.0
     i0 = int(math.floor(x)) % n
     i1 = (i0 + 1) % n
@@ -81,13 +82,14 @@ def value_noise_1d(seed_grid: List[float], x: float) -> float:
 def value_noise_2d(grid: List[List[float]], x: float, y: float) -> float:
     """2D smooth value noise on a wrapped grid.
 
-    Returns 0.0 for empty/zero-width grids (avoids ZeroDivisionError).
+    Returns 0.0 for empty/zero-width grids (avoids ZeroDivisionError) or
+    non-finite coordinates (avoids OverflowError).
     """
     h = len(grid)
     if h == 0:
         return 0.0
     w = len(grid[0]) if h else 0
-    if w == 0:
+    if w == 0 or not (math.isfinite(x) and math.isfinite(y)):
         return 0.0
     xi = math.floor(x)
     yi = math.floor(y)
@@ -431,7 +433,10 @@ def build_frame(state: State) -> str:
     if w <= 0 or h <= 0:
         return ""
 
-    sky_h = max(4, int(h * 0.62))
+    # Sky occupies the upper portion of the canvas. Clamp to h so we never
+    # index past the end of `rows`/`color_rows` on very short terminals
+    # (height < 4 would otherwise force sky_h = 4 and overflow).
+    sky_h = min(h, max(4, int(h * 0.62))) if h >= 4 else h
     # buffer: list of rows, each row a list of characters
     rows: List[List[str]] = []
     for _ in range(h):
