@@ -37,7 +37,7 @@ from datetime import datetime
 # Version
 # ---------------------------------------------------------------------------
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 # ---------------------------------------------------------------------------
 # Board layout
@@ -215,7 +215,11 @@ def set_no_color(enabled: bool):
 
 
 def clear_screen():
-    os.system("cls" if os.name == "nt" else "clear")
+    if sys.stdout.isatty():
+        os.system("cls" if os.name == "nt" else "clear")
+    else:
+        # Non-interactive (piped/CI): print a separator instead of clearing
+        sys.stdout.write("\n")
 
 
 def hide_cursor():
@@ -334,9 +338,9 @@ def render_board(spirit_color, planchette_pos, trail=None):
     # Build output buffer
     out = []
     out.append(sc + bold + "  ╔" + "═" * (BOARD_WIDTH) + "╗" + reset)
-    # Title bar
+    # Title bar (must include the same "  " prefix as the border lines)
     title = "  THE SPIRIT BOARD  "
-    title_line = "║" + title.center(BOARD_WIDTH) + "║"
+    title_line = "  ║" + title.center(BOARD_WIDTH) + "║"
     out.append(sc + bold + title_line + reset)
     out.append(sc + bold + "  ╠" + "═" * (BOARD_WIDTH) + "╣" + reset)
 
@@ -498,6 +502,9 @@ def generate_response(spirit, question):
     vocab = spirit["vocabulary"]
     favor_yes = spirit["favor_yes"]
 
+    # Guard against None / non-string / non-str question input
+    if question is None or not isinstance(question, str):
+        question = ""
     q_lower = question.lower().strip()
     if not q_lower:
         # Empty / whitespace question → spirit says something cryptic anyway
@@ -583,11 +590,17 @@ class SessionLog:
         self.entries = []
         if path:
             # Write a header if the file is new / empty
-            already_exists = os.path.exists(path) and os.path.getsize(path) > 0
-            with open(path, "a", encoding="utf-8") as f:
-                if not already_exists:
-                    f.write("# Terminal Séance — Session Log\n")
-                    f.write(f"# Created {datetime.now().isoformat(timespec='seconds')}\n\n")
+            try:
+                already_exists = os.path.exists(path) and os.path.getsize(path) > 0
+                with open(path, "a", encoding="utf-8") as f:
+                    if not already_exists:
+                        f.write("# Terminal Séance — Session Log\n")
+                        f.write(f"# Created {datetime.now().isoformat(timespec='seconds')}\n\n")
+            except OSError as e:
+                # Can't write to the log (bad path, no permission, missing dir).
+                # Warn the user and disable logging so the séance can continue.
+                print(f"  {_c(DIM)}⚠ Could not open log file '{path}': {e}{_c(ANSI_RESET)}")
+                self.path = None
 
     def add(self, spirit_name, question, answer):
         entry = {
@@ -598,10 +611,14 @@ class SessionLog:
         }
         self.entries.append(entry)
         if self.path:
-            with open(self.path, "a", encoding="utf-8") as f:
-                f.write(f"## {entry['timestamp']} — {spirit_name}\n")
-                f.write(f"**Q:** {question}\n")
-                f.write(f"**A:** {answer}\n\n")
+            try:
+                with open(self.path, "a", encoding="utf-8") as f:
+                    f.write(f"## {entry['timestamp']} — {spirit_name}\n")
+                    f.write(f"**Q:** {question}\n")
+                    f.write(f"**A:** {answer}\n\n")
+            except OSError as e:
+                print(f"  {_c(DIM)}⚠ Could not write to log: {e}{_c(ANSI_RESET)}")
+                self.path = None  # stop trying
 
     def summary(self):
         if not self.entries:
@@ -690,7 +707,10 @@ def conduct_seance(args):
     time.sleep(1.5)
 
     print_intro(spirit)
-    input()
+    try:
+        input()
+    except (EOFError, KeyboardInterrupt):
+        return
     clear_screen()
 
     info_lines = [f"{_c(DIM)}The planchette begins to tremble...{_c(ANSI_RESET)}"]
@@ -713,7 +733,10 @@ def conduct_seance(args):
             trail = []
             spelled = []
             print_intro(spirit)
-            input()
+            try:
+                input()
+            except (EOFError, KeyboardInterrupt):
+                break
             clear_screen()
             info_lines = [f"{_c(DIM)}A new presence stirs...{_c(ANSI_RESET)}"]
             draw_frame(spirit_color, PLANCHETTE_HOME, trail, info_lines, None, None,
@@ -728,13 +751,23 @@ def conduct_seance(args):
             print(f"  q       end the séance")
             print(f"  Ctrl+C  quit immediately")
             print()
-            input(f"  {_c(DIM)}Press ENTER to return...{_c(ANSI_RESET)}")
+            try:
+                input(f"  {_c(DIM)}Press ENTER to return...{_c(ANSI_RESET)}")
+            except (EOFError, KeyboardInterrupt):
+                break
             draw_frame(spirit_color, PLANCHETTE_HOME, trail, info_lines, None, None,
                        "Ask your question and press ENTER")
             continue
         if user_input.lower() == "s":
-            if session_log and session_log.entries:
-                print(f"  {_c(DIM)}Session log saved to {args.log}{_c(ANSI_RESET)}")
+            if session_log and session_log.path:
+                # The log is already written incrementally by SessionLog.add(),
+                # but we offer to write a fresh snapshot of the session so far.
+                try:
+                    with open(session_log.path, "a", encoding="utf-8") as f:
+                        f.write(f"\n<!-- Save requested at {datetime.now().isoformat(timespec='seconds')} — {len(session_log.entries)} exchange(s) so far -->\n")
+                    print(f"  {_c(DIM)}Session log saved to {session_log.path}{_c(ANSI_RESET)}")
+                except OSError as e:
+                    print(f"  {_c(DIM)}⚠ Could not save log: {e}{_c(ANSI_RESET)}")
             elif session_log:
                 print(f"  {_c(DIM)}Log file is open ({args.log}) but no exchanges yet.{_c(ANSI_RESET)}")
             else:
@@ -898,6 +931,10 @@ def main():
     if args.seed is not None:
         random.seed(args.seed)
 
+    # Validate mutually exclusive speed flags (before any mode dispatch)
+    if args.slow and args.fast:
+        parser.error("--slow and --fast are mutually exclusive")
+
     # --list-spirits: print and exit
     if args.list_spirits:
         list_spirits()
@@ -907,10 +944,6 @@ def main():
     if args.demo:
         run_demo(args)
         return
-
-    # Validate mutually exclusive speed flags
-    if args.slow and args.fast:
-        parser.error("--slow and --fast are mutually exclusive")
 
     try:
         hide_cursor()

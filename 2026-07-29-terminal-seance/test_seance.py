@@ -232,6 +232,62 @@ def test_seeded_reproducibility():
 
 
 # ---------------------------------------------------------------------------
+# Bug-fix tests (v1.1.1)
+# ---------------------------------------------------------------------------
+
+def test_generate_response_none_question():
+    """generate_response should handle None question without crashing."""
+    random.seed(1)
+    tokens = ouija.generate_response(ouija.SPIRITS[0], None)
+    assert len(tokens) > 0, "None question should still produce tokens"
+    print("  ✓ generate_response handles None question gracefully")
+
+
+def test_generate_response_non_string_question():
+    """generate_response should handle non-string (int) question without crashing."""
+    random.seed(1)
+    tokens = ouija.generate_response(ouija.SPIRITS[0], 12345)
+    assert len(tokens) > 0, "Non-string question should still produce tokens"
+    print("  ✓ generate_response handles non-string question gracefully")
+
+
+def test_session_log_bad_path():
+    """SessionLog should not crash on a nonexistent directory path."""
+    log = ouija.SessionLog("/nonexistent/dir/that/does/not/exist/test.md")
+    assert log.path is None, "SessionLog should disable itself on bad path"
+    log.add("Test Spirit", "Is this safe?", "YES")
+    assert len(log.entries) == 1, "Entry should still be recorded in memory"
+    print("  ✓ SessionLog handles nonexistent directory gracefully")
+
+
+def test_title_alignment():
+    """Board title line should be the same width as the border lines."""
+    ouija.set_no_color(True)
+    try:
+        board, _ = ouija.render_board(ouija.SPIRITS[0]["color"],
+                                       ouija.PLANCHETTE_HOME)
+        lines = board.split("\n")
+        border_width = len(lines[0])
+        title_width = len(lines[1])
+        assert border_width == title_width, (
+            f"Title line width {title_width} != border width {border_width}")
+    finally:
+        ouija.set_no_color(False)
+    print("  ✓ Board title line aligns with border")
+
+
+def test_slow_fast_mutual_exclusion():
+    """--slow --fast together should error even with --demo."""
+    import subprocess
+    result = subprocess.run(
+        [sys.executable, "ouija.py", "--demo", "--slow", "--fast"],
+        capture_output=True, text=True, cwd=os.path.dirname(__file__))
+    assert result.returncode != 0, "--slow --fast should error even with --demo"
+    assert "mutually exclusive" in result.stderr
+    print("  ✓ --slow --fast mutual exclusion enforced before --demo")
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -251,6 +307,11 @@ ALL_TESTS = [
     ("version", test_version),
     ("demo_runs", test_demo_runs),
     ("seeded_reproducibility", test_seeded_reproducibility),
+    ("generate_response_none_question", test_generate_response_none_question),
+    ("generate_response_non_string_question", test_generate_response_non_string_question),
+    ("session_log_bad_path", test_session_log_bad_path),
+    ("title_alignment", test_title_alignment),
+    ("slow_fast_mutual_exclusion", test_slow_fast_mutual_exclusion),
 ]
 
 

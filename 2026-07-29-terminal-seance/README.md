@@ -2,7 +2,7 @@
 
 🕯️ Conduct a séance right in your terminal. Place your fingers on the planchette, ask the spirits a question, and watch as the planchette glides across an ANSI-rendered Ouija board, spelling out messages from beyond the veil.
 
-![Terminal Séance](https://img.shields.io/badge/theme-supernatural-purple) ![Python](https://img.shields.io/badge/python-3.8+-blue) ![No Dependencies](https://img.shields.io/badge/dependencies-zero-success) ![Version](https://img.shields.io/badge/version-1.1.0-orange)
+![Terminal Séance](https://img.shields.io/badge/theme-supernatural-purple) ![Python](https://img.shields.io/badge/python-3.8+-blue) ![No Dependencies](https://img.shields.io/badge/dependencies-zero-success) ![Version](https://img.shields.io/badge/version-1.1.1-orange)
 
 ---
 
@@ -102,6 +102,8 @@ python3 ouija.py --list-spirits
 python3 ouija.py --help
 ```
 
+**Note:** `--slow` and `--fast` are mutually exclusive. Using both together will produce an error regardless of which mode you're running.
+
 ## 💬 Usage Examples
 
 ### Interactive Session
@@ -125,16 +127,10 @@ You type: `Is anyone there?`
 
 The planchette glides to **Y** → **E** → **S**, then drifts to the **YES** corner. The spirit spells: `[YES] SHADOWS`
 
-You type: `What do you want?`
-
-The planchette moves to **R** → **E** → **M** → **E** → **M** → **B** → **E** → **R**, pausing at each letter. The spirit spells: `REMEMBER`
-
-Finally, the planchette slides to **GOODBYE** and the séance ends for that question.
-
 ### Demo Mode Output
 
 ```bash
-python3 ouija.py --demo
+python3 ouija.py --demo --fast --no-color
 ```
 
 Cycles through every spirit non-interactively — great for screenshots or environments without a TTY:
@@ -143,7 +139,7 @@ Cycles through every spirit non-interactively — great for screenshots or envir
   ☽  The Whisperer
        a faint, sorrowful presence
   Q: Is anyone there?
-  A: [YES] WAITING
+  A: [NO]
 
   ☽  Captain Aldous
        an old sea captain lost in 1887
@@ -181,7 +177,7 @@ At the end of the session a summary is printed listing every exchange.
 python3 test_seance.py
 ```
 
-The test suite (15 tests) verifies:
+The test suite (20 tests) verifies:
 
 - All 26 letters + 10 digits have valid board positions
 - All 8 spirits are well-formed with required fields
@@ -198,6 +194,10 @@ The test suite (15 tests) verifies:
 - The version string is valid semver
 - Demo mode runs without errors and covers all spirits
 - Seeded random produces reproducible responses
+- `generate_response` handles None and non-string questions without crashing
+- `SessionLog` handles nonexistent directory paths gracefully
+- The board title line aligns with the border lines
+- `--slow` and `--fast` mutual exclusion is enforced even with `--demo`
 
 ## 🔮 Features
 
@@ -209,22 +209,22 @@ The test suite (15 tests) verifies:
 - **Question-aware responses** — yes/no questions get YES/NO answers more often; open questions get spelled-out words
 - **Atmospheric ANSI styling** — each spirit has its own color theme
 
-### New in v1.1.0
-- **2 new spirits** — The Inventor (mechanical) and The Mourner (sorrowful)
-- **`--spirit NAME`** — summon a specific spirit by name (case-insensitive)
-- **`--list-spirits`** — print a formatted table of all spirits and exit
-- **`--no-color`** — disable ANSI colors for accessibility or pipe-friendly output
-- **`--log FILE`** — save the full Q&A transcript to a Markdown file
-- **`--demo`** — non-interactive auto-séance that cycles through all spirits (no TTY needed, CI-friendly)
-- **`--seed N`** — deterministic random seed for reproducible séances
-- **`--fast`** — impatient mode for faster planchette movement
-- **`--version`** and **`--help`** flags
-- **In-séance `h` help** and **`s` save** commands
-- **Terminal size detection** with a warning if the board won't fit
-- **Session summary** printed at the end when logging is enabled
-- **Improved error handling** — eased function clamping, empty-question support, unknown-token fallback
-- **Expanded test suite** — 15 tests (up from 7) covering all new features
-- **Zero dependencies** — still pure Python standard library
+### CLI flags
+- `--version` — print version and exit
+- `--list-spirits` — print a formatted table of all spirits and exit
+- `--spirit NAME` — summon a specific spirit by name (case-insensitive)
+- `--no-color` — disable ANSI colors (accessibility / pipe-friendly)
+- `--slow` / `--fast` — control planchette speed (mutually exclusive)
+- `--log FILE` — append session Q&A to FILE (Markdown)
+- `--demo` — non-interactive auto-séance (cycles through spirits, no TTY needed)
+- `--seed N` — deterministic random seed for reproducible séances
+- `--help` — show help
+
+### In-séance commands
+- `r` — re-roll the spirit (new personality)
+- `q` — quit the séance
+- `h` — show help / controls
+- `s` — save session transcript
 
 ## 🛠️ Technical Details
 
@@ -234,14 +234,46 @@ The test suite (15 tests) verifies:
 - **Response generation**: Each spirit draws from its vocabulary to construct 1–3 word responses, with a chance of YES/NO for yes/no questions and a small chance of GOODBYE
 - **Color handling**: A global `_c()` helper strips ANSI codes when `--no-color` is active, making output safe for pipes and accessible terminals
 - **Session logging**: A `SessionLog` class appends each exchange to a Markdown file with timestamps, and prints a summary at session end
+- **Non-TTY safety**: `clear_screen()` detects whether stdout is a TTY and falls back to a newline separator in piped/CI environments
 
 ## 📁 Files
 
 | File | Description |
 |------|-------------|
 | `ouija.py` | Main program — the séance simulator (CLI + interactive + demo modes) |
-| `test_seance.py` | 15-test suite covering core logic and new features |
+| `test_seance.py` | 20-test suite covering core logic, new features, and bug fixes |
 | `render_demo.py` | Renders a static board frame for screenshots (supports `--no-color`) |
+
+## 📋 Changelog
+
+### v1.1.1 — Bug fixes
+- **Fixed board title misalignment**: The "THE SPIRIT BOARD" title line was 2 characters narrower than the border lines (missing the `"  "` prefix), causing visual misalignment. Now properly aligned.
+- **Fixed `generate_response` crash on None/non-string input**: Passing `None` or a non-string (e.g., `int`) as the question caused an `AttributeError` on `.lower()`. Now coerces non-string input to an empty string, which produces a cryptic default response.
+- **Fixed `SessionLog` crash on nonexistent directory**: Providing `--log /nonexistent/dir/file.md` caused an unhandled `FileNotFoundError` that crashed the program. Now catches `OSError`, prints a warning, and disables logging so the séance can continue.
+- **Fixed `--slow --fast` mutual exclusion bypass**: The validation was placed after the `--demo` and `--list-spirits` dispatch, so `--demo --slow --fast` would silently run demo mode instead of erroring. Now validated before any mode dispatch.
+- **Fixed unprotected `input()` calls**: Three `input()` calls (after `print_intro`, in the `r` re-roll command, and in the `h` help command) were not wrapped in `EOFError`/`KeyboardInterrupt` handlers, causing crashes when stdin was closed (e.g., piped input, Ctrl+D). All now handled gracefully.
+- **Fixed misleading `'s'` save command**: The save command claimed "Session log saved" but didn't actually write anything new — the log is already written incrementally. Now appends a timestamped save marker to the log file and reports the actual path from `session_log.path` (which may differ from `args.log` if logging was disabled).
+- **Fixed `SessionLog.add()` write error handling**: If the log file became unwritable mid-session (e.g., disk full, permissions changed), `add()` would crash. Now catches `OSError`, prints a warning, and disables further logging attempts.
+- **Fixed `clear_screen` in non-TTY environments**: `os.system("clear")` printed "TERM environment variable not set" when stdout was piped. Now detects TTY status and falls back to a newline separator.
+- **Added 5 new tests** (15 → 20) covering all bug fixes: None/non-string question handling, bad log path, title alignment, and slow/fast mutual exclusion.
+- **Version bumped** from 1.1.0 to 1.1.1.
+
+### v1.1.0 — Feature enhancements
+- 2 new spirits (The Inventor, The Mourner)
+- `--spirit NAME`, `--list-spirits`, `--no-color`, `--log FILE`, `--demo`, `--seed N`, `--fast` flags
+- `--version` and `--help` with epilog
+- In-séance `h` (help) and `s` (save log) commands
+- Terminal size detection with warnings
+- Easing function clamping, empty-question support, unknown-token fallback
+- Expanded test suite (7 → 15)
+- Zero dependencies — pure Python standard library
+
+### v1.0.0 — Initial release
+- 6 spirits with distinct personalities
+- Animated planchette with easing and wobble
+- Full Ouija board rendering (letters, numbers, YES/NO/GOODBYE, sun, moon, stars)
+- Interactive séance loop with re-roll, quit controls
+- 7-test suite
 
 ---
 
