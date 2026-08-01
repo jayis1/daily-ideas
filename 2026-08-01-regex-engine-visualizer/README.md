@@ -1,9 +1,9 @@
 # Regex Engine Visualizer
 
 A tiny **backtracking regex engine** that *records every step* of the matching
-process and then renders a readable, colorized trace of how a pattern is
-applied to an input string — showing the cursor position, the active pattern
-node, and every **match / fail / backtrack** decision.
+process and renders a readable, colorized trace of how a pattern is applied to
+an input string — showing the cursor position, the active pattern node, and
+every **match / fail / backtrack** decision.
 
 This is an **educational tool**: it does **not** use Python's `re` module for
 matching. It implements its own recursive-descent parser and generator-based
@@ -23,9 +23,9 @@ it walks the input.
 - **Unanchored search** — like `re.search`, tries the pattern at every start
   position until it matches.
 - **Step-limit safety** — guards against catastrophic backtracking with a
-  configurable step cap.
-- **Verified against `re`** — the engine's match spans agree with Python's
-  `re` module on a battery of cross-check cases.
+  configurable step cap; on exhaustion the match stops gracefully (no crash).
+- **Cross-checked against `re`** — the engine's match spans agree with
+  Python's `re` module across a broad battery of cases.
 
 ### Supported syntax
 
@@ -36,17 +36,14 @@ it walks the input.
 | Star (greedy/lazy) | `a*`, `a*?` | `a*b` |
 | Plus (greedy/lazy) | `a+`, `a+?` | `a+b` |
 | Optional (greedy/lazy) | `a?`, `a??` | `colou?r` |
-| **Bounded repetition** (greedy/lazy) | `a{n}`, `a{n,}`, `a{n,m}`, `a{3,5}?` | `a{2,4}` |
+| Bounded repetition (greedy/lazy) | `a{n}`, `a{n,}`, `a{n,m}`, `a{,m}`, `a{,}`, `a{3,5}?` | `a{2,4}` |
 | Char class | `[abc]`, `[a-z]`, `[^0-9]` | `[0-9]+` |
-| **Shorthands in classes** | `[\d]`, `[\s]`, `[\D]`, `[a-z\d]` | `[\d\s]+` |
+| Shorthands in classes | `[\d]`, `[\s]`, `[\D]`, `[a-z\d]` | `[\d\s]+` |
 | Anchors | `^`, `$` | `^foo$` |
-| **Word boundary** | `\b`, `\B` | `\bfoo\b` |
+| Word boundary | `\b`, `\B` | `\bfoo\b` |
 | Groups | `(...)` | `(ab)+` |
 | Alternation | `a\|b` | `cat\|dog` |
 | Escapes | `\d \w \s \D \W \S \b \B \. \\ \n \t \r \f \v \0 \a` | `\d+` |
-
-> Items in **bold** are new in this release (v1.1.0). See
-> [Changelog](#changelog) below.
 
 ### CLI
 
@@ -91,7 +88,7 @@ python3 regex_viz.py --demo --max-steps 20
 # Print the version
 python3 regex_viz.py --version
 
-# Run the test suite (61 cases)
+# Run the test suite (91 cases)
 python3 test_regex_viz.py
 ```
 
@@ -280,9 +277,53 @@ follow.
 | File | Description |
 |---|---|
 | `regex_viz.py` | The engine, parser, matcher, and CLI. |
-| `test_regex_viz.py` | Correctness + smoke tests (61 cases). |
+| `test_regex_viz.py` | Correctness + smoke tests (91 cases). |
 
 ## Changelog
+
+### v1.2.0
+
+**Bug fixes (correctness):**
+
+- **`{,m}` and `{,}` brace quantifiers were treated as literals.** Python's
+  `re` (and other engines) treat `{,m}` as `{0,m}` and `{,}` as `{0,}`. The
+  parser now accepts these forms.
+- **`\B` matched the empty string — it must not.** CPython's SRE returns no
+  match for both `\b` and `\B` when the input is empty (the `beginning == end`
+  special case). The `WordBoundary` node now replicates this.
+- **`Repeat` with a zero-width-capable child failed to match.** Patterns like
+  `(a*){2}`, `(){2}`, `(.*){2}`, `(\b){2}` all wrongly failed because the
+  mandatory-minimum loop bailed on the first zero-width match instead of
+  counting it. A zero-width child match now counts toward the minimum and
+  fast-forwards the remaining count (matching `re`).
+- **`Plus` with a zero-width first match failed.** `()+`, `(\b)+`, `(a*)+`
+  at end-of-input wrongly failed because `+` rejected a zero-width first
+  match. A zero-width first match now satisfies the "one or more"
+  requirement (yielding `pos` once), matching `re`'s
+  `re.search('()+', 'abc') == (0, 0)`.
+- **Step-limit `RuntimeError` escaped to the caller.** When the recorded-step
+  budget was exhausted mid-search, the next outer "search from pos N"
+  bookkeeping step re-raised the `RuntimeError` *outside* the try/except,
+  crashing the CLI with a traceback. Introduced a dedicated
+  `StepLimitExceeded` exception caught at both the inner and outer loop in
+  `run_match`, so exhaustion now stops gracefully (returns the partial
+  result) instead of crashing.
+
+**Bug fixes (silent misparses now rejected clearly):**
+
+- **`(?...)` extension syntax silently misparsed.** `(?:...)`, `(?=...)`,
+  `(?!...)`, `(?<=...)`, `(?<!...)`, `(?P<name>...)`, `(?i)`, etc. were
+  silently treated as a normal group containing a literal `?`, producing
+  wrong matches with no warning. These now raise a clear `ParseError`
+  naming the unsupported feature.
+- **Double quantifiers silently misparsed.** `a**`, `a++`, `a*+`, `a?*`,
+  `a*{2}`, `a???` silently treated the stray second quantifier as a literal.
+  These now raise `ParseError("multiple repeat ...")`, matching `re`'s
+  "nothing to repeat" / "multiple repeat" rejection.
+
+**Tests:** expanded from 61 to 91 cases covering every fix above, including
+the empty-`\B`, `{,m}`, zero-width `Repeat`/`Plus`, `(?...)` rejection, and
+double-quantifier rejection cases.
 
 ### v1.1.0
 
@@ -326,11 +367,17 @@ trace visualization.
 
 ## Limitations
 
-- No backreferences, lookaround, or named captures.
-- No possessive quantifiers (the engine treats `a*+` as `a*` followed by a `+`
-  quantifier on the star node, which is benign).
-- The step cap prevents runaway backtracking but very pathological patterns
-  will hit it and stop early.
+- No backreferences, lookaround, named captures, or non-capturing groups —
+  these `(?...)` forms raise a clear `ParseError` naming the unsupported
+  feature (rather than silently misparsing).
+- No possessive quantifiers (`a++`, `a*+`) — these raise a `ParseError`
+  ("multiple repeat"). (Python 3.11+ `re` supports them; this educational
+  engine does not.)
+- Quantifying a zero-width assertion directly (`^*`, `$*`, `\b*`) is
+  *accepted* by this engine (unlike `re`, which rejects it as "nothing to
+  repeat"); it is benign but may surprise — `re` and this engine differ here.
+- The step cap prevents runaway backtracking; very pathological patterns will
+  hit it and stop early (gracefully, returning a partial result).
 - Greedy mandatory-minimum matches in `{n}` take the first success of each
   child (standard greedy behavior); only the *extra* matches beyond the
   minimum are backtrackable.

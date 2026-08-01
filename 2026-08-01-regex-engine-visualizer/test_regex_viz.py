@@ -116,6 +116,31 @@ def main():
         ("literal-brace", "a{", "a{", True, (0, 2)),
         ("escape-brace", r"a\{2\}", "a{2}", True, (0, 4)),
         ("complex-phone", r"\d{3}-\d{4}", "call 555-1234", True, (5, 13)),
+
+        # --- bug fixes: word boundary \B on empty input (must not match) ---
+        ("B-empty-nomatch", r"\B", "", False, None),
+        ("b-empty-nomatch", r"\b", "", False, None),
+        ("B-space-match", r"\B", " ", True, (0, 0)),
+        ("B-nonword", r"\B", "!", True, (0, 0)),
+        ("B-in-word", r"\B", "ab", True, (1, 1)),
+
+        # --- bug fixes: {,m} and {,} brace quantifiers (== {0,m} / {0,}) ---
+        ("brace-comma-max", "a{,3}", "aaa", True, (0, 3)),
+        ("brace-comma-open", "a{,}", "aaa", True, (0, 3)),
+        ("brace-comma-zero", "a{,2}", "bbb", True, (0, 0)),
+        ("brace-comma-bounded", "a{,2}b", "aab", True, (0, 3)),
+
+        # --- bug fixes: Repeat with zero-width-capable child ---
+        ("repeat-star-child", "(a*){2}", "aaa", True, (0, 3)),
+        ("repeat-empty-group", "(){2}", "abc", True, (0, 0)),
+        ("repeat-dotstar-child", "(.*){2}", "abc", True, (0, 3)),
+        ("repeat-boundary-child", r"(\b){2}", "ab", True, (0, 0)),
+        ("repeat-alt-zero", "(a|){2}", "a", True, (0, 1)),
+
+        # --- bug fixes: Plus with zero-width first match ---
+        ("plus-empty-group", "()+", "abc", True, (0, 0)),
+        ("plus-boundary", r"(\b)+", "ab", True, (0, 0)),
+        ("plus-star-child", "(a*)+", "aaa", True, (0, 3)),
     ]
     passed = 0
     for t in tests:
@@ -128,6 +153,21 @@ def main():
         ("trailing-backslash", "\\"),
         ("repeat-min-gt-max", "a{3,2}"),
         ("trailing-backslash-class", "[a\\"),
+        # --- bug fixes: unsupported (?...) extension syntax (clear error) ---
+        ("noncapturing-group", "(?:a)"),
+        ("lookahead", "a(?=b)"),
+        ("neg-lookahead", "a(?!b)"),
+        ("lookbehind", "(?<=a)b"),
+        ("named-group", "(?P<n>a)"),
+        ("inline-flags", "(?i)abc"),
+        ("unknown-ext", "(?z)"),
+        # --- bug fixes: multiple repeat (double quantifier) ---
+        ("double-star", "a**"),
+        ("double-plus", "a++"),
+        ("star-then-plus", "a*+"),
+        ("opt-then-star", "a?*"),
+        ("star-then-brace", "a*{2}"),
+        ("triple-question", "a???"),
     ]
     for t in parse_tests:
         if check_parse_error(*t):

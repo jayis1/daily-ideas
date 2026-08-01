@@ -45,7 +45,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Callable
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # Shorthand character-class predicates -------------------------------------- #
 # Each lowercase shorthand maps to the list of (lo, hi) ranges that define
@@ -241,6 +241,13 @@ class WordBoundary(Node):
         return before != after
 
     def match(self, ctx, pos):
+        # Match Python's `re` semantics: on an empty input string neither
+        # \b nor \B matches at all (CPython's SRE returns 0 for both
+        # AT_BOUNDARY and AT_NON_BOUNDARY when beginning == end).
+        if len(ctx.input) == 0:
+            ctx.step(pos, self, "FAIL",
+                     f"{self.label()} on empty input (never matches)")
+            return
         boundary = self._is_boundary(ctx.input, pos)
         ok = (not boundary) if self.negate else boundary
         ctx.step(pos, self, "MATCH" if ok else "FAIL",
@@ -349,19 +356,36 @@ class Plus(Node):
                   yielding from longest to shortest.
         Lazy    : require one match, then yield that position first and only
                   consume more if the rest of the pattern fails downstream.
+
+        A zero-width first match (e.g. ``()+`` or ``(a*)+`` at end of input)
+        still satisfies the "one or more" requirement -- it yields `pos` once
+        and stops, since further iterations would loop forever without
+        advancing.  This mirrors Python's ``re`` (``re.search('()+', 'abc')``
+        matches the empty string at pos 0).
         """
         # First match is mandatory in both modes.
         got = False
         first_pos = pos
+        zero_width = False
         for nxt in self.child.match(ctx, pos):
             if nxt == pos:
-                ctx.step(pos, self, "STOP", "zero-width match in +")
-                return
+                # Zero-width: counts as the mandatory one match, but no
+                # further progress is possible.
+                zero_width = True
+                got = True
+                ctx.step(pos, self, "STOP",
+                         "zero-width first match in + (counts as the one)")
+                break
             first_pos = nxt
             got = True
             break
         if not got:
             ctx.step(pos, self, "FAIL", "+ needs at least one match")
+            return
+
+        if zero_width:
+            ctx.step(pos, self, "YIELD", "+ matched once (zero-width) -> pos")
+            yield pos
             return
 
         if self.greedy:
@@ -454,17 +478,36 @@ class Repeat(Node):
         return f"{child}{rep}{'?' if not self.greedy else ''}"
 
     def match(self, ctx, pos):
-        # Mandatory minimum matches (no backtracking on the count itself):
-        # we must get exactly `lo` matches, taking the first success of each.
+        """Bounded backtracking repetition.
+
+        Mandatory minimum matches: we need exactly `lo` child matches.  We
+        take the first success of each iteration.  A zero-width child match
+        (e.g. ``(a*)`` matching the empty tail of the input) still *counts*
+        toward the minimum -- further iterations at the same position would
+        also be zero-width, so we fast-forward the remaining count instead of
+        looping forever (this mirrors Python's ``re`` semantics, where
+        ``(a*){2}`` matches ``'aaa'``: the first ``a*`` consumes ``aaa``, the
+        second matches empty at pos 3).
+        """
         cur = pos
-        for _ in range(self.lo):
+        done = 0
+        zero_width = False
+        while done < self.lo:
             got = False
             for nxt in self.child.match(ctx, cur):
                 if nxt == cur:
+                    # Zero-width: counts as one iteration; all remaining
+                    # minimum iterations would also be zero-width here, so
+                    # satisfy the rest of the minimum at once.
+                    done = self.lo
+                    zero_width = True
+                    got = True
                     ctx.step(cur, self, "STOP",
-                             f"zero-width match in {{{self.lo}}} minimum")
-                    return
+                             f"zero-width match in {{{self.lo}}} minimum "
+                             f"(satisfied {self.lo} min)")
+                    break
                 cur = nxt
+                done += 1
                 got = True
                 break
             if not got:
@@ -477,10 +520,13 @@ class Repeat(Node):
 
         if self.greedy:
             # Consume as many extra as possible (up to cap), then backtrack.
+            # A zero-width extra match would loop forever, so we stop.
             positions = [mandatory_pos]
             c = mandatory_pos
             count = 0
             while extra_cap is None or count < extra_cap:
+                if zero_width:
+                    break  # child matched zero-width in minimum; no progress
                 advanced = False
                 for nxt in self.child.match(ctx, c):
                     if nxt == c:
@@ -498,11 +544,14 @@ class Repeat(Node):
                 yield p
         else:
             # Lazy: yield minimum first, then progressively more.
-            yield from self._lazy_repeat(ctx, mandatory_pos, extra_cap, 0)
+            yield from self._lazy_repeat(ctx, mandatory_pos, extra_cap, 0,
+                                         zero_width)
 
-    def _lazy_repeat(self, ctx, pos, cap, used):
+    def _lazy_repeat(self, ctx, pos, cap, used, zero_width=False):
         ctx.step(pos, self, "YIELD", f"{self.label()} -> pos {pos}")
         yield pos
+        if zero_width:
+            return  # no further progress possible
         if cap is not None and used >= cap:
             return
         for nxt in self.child.match(ctx, pos):
@@ -514,6 +563,15 @@ class Repeat(Node):
 # --------------------------------------------------------------------------- #
 # Match context -- records the trace
 # --------------------------------------------------------------------------- #
+
+
+class StepLimitExceeded(Exception):
+    """Raised internally when the recorded-step budget is exhausted.
+
+    This is a safety guard against catastrophic backtracking.  It is caught
+    by `run_match` so the limit never escapes to the caller -- the match
+    simply stops early and the partial result (if any) is returned.
+    """
 
 
 @dataclass
@@ -528,7 +586,8 @@ class MatchContext:
 
     def step(self, pos: int, node: Node, action: str, note: str = ""):
         if len(self.steps) >= self.max_steps:
-            raise RuntimeError("step limit exceeded (possible catastrophic backtracking)")
+            raise StepLimitExceeded(
+                "step limit exceeded (possible catastrophic backtracking)")
         self.steps.append(Step(pos=pos, node=node, action=action, note=note,
                                depth=len(self.steps)))
 
@@ -611,40 +670,56 @@ class Parser:
     def parse_atom_quant(self) -> Node:
         """atom followed by an optional quantifier (*, +, ?, {n}, {n,}, {n,m}).
 
-        Each quantifier may be followed by a `?` to make it lazy.
+        Each quantifier may be followed by a `?` to make it lazy.  A second
+        quantifier immediately after the first (e.g. `a**`, `a++`, `a*+`,
+        `a?{2}`) is a "multiple repeat" error -- Python's `re` rejects it and
+        we do too, rather than silently treating the stray `*`/`+`/`?` as a
+        literal.
         """
         atom = self.parse_atom()
         if self.eof():
             return atom
         ch = self.peek()
+        quantified = False
         if ch == "*":
             self.next()
             greedy = self._consume_lazy()
-            return Star(child=atom, greedy=greedy)
+            atom = Star(child=atom, greedy=greedy)
+            quantified = True
         elif ch == "+":
             self.next()
             greedy = self._consume_lazy()
-            return Plus(child=atom, greedy=greedy)
+            atom = Plus(child=atom, greedy=greedy)
+            quantified = True
         elif ch == "?":
             self.next()
             greedy = self._consume_lazy()
-            return OptionalNode(child=atom, greedy=greedy)
+            atom = OptionalNode(child=atom, greedy=greedy)
+            quantified = True
         elif ch == "{":
             rep = self._try_parse_brace_quant()
             if rep is not None:
                 lo, hi = rep
                 greedy = self._consume_lazy()
-                return Repeat(child=atom, lo=lo, hi=hi, greedy=greedy)
-            # Not a valid quantifier -- treat '{' as a literal (already consumed
-            # by parse_atom if it reached here, so just return the atom).
+                atom = Repeat(child=atom, lo=lo, hi=hi, greedy=greedy)
+                quantified = True
+            # Not a valid quantifier -- treat '{' as a literal (already
+            # consumed by parse_atom if it reached here, so just return atom).
+        if quantified and not self.eof() and self.peek() in ("*", "+", "?", "{"):
+            raise ParseError(
+                f"multiple repeat at position {self.i}: nothing to repeat "
+                f"after a quantifier ({self.peek()!r})")
         return atom
 
     def _try_parse_brace_quant(self) -> Optional[Tuple[int, Optional[int]]]:
-        """Attempt to parse `{n}`, `{n,}`, or `{n,m}` starting at the `{`.
+        """Attempt to parse `{n}`, `{n,}`, `{n,m}`, `{,m}`, or `{,}` starting
+        at the `{`.
 
-        Returns `(lo, hi)` on success (hi is None for `{n,}`), or `None` if the
-        text starting at the cursor is not a valid brace quantifier (in which
-        case the cursor is left untouched so `{` is treated as a literal).
+        Returns `(lo, hi)` on success (hi is None for `{n,}` / `{,}`), or `None`
+        if the text starting at the cursor is not a valid brace quantifier (in
+        which case the cursor is left untouched so `{` is treated as a literal).
+
+        Per Python's `re`, `{,m}` is equivalent to `{0,m}` and `{,}` to `{0,}`.
         """
         assert self.peek() == "{"
         start = self.i  # remember position of '{' for rollback
@@ -652,18 +727,24 @@ class Parser:
         digits = ""
         while self.peek() is not None and self.peek().isdigit():
             digits += self.next()
-        if not digits:
-            # Not a quantifier; roll back.
-            self.i = start
-            return None
-        lo = int(digits)
-        hi: Optional[int] = lo
         if self.peek() == ",":
-            self.next()
+            # `{,m}` or `{,}` -- empty lower bound means 0 (matches `re`).
+            if not digits:
+                lo = 0
+            else:
+                lo = int(digits)
+            self.next()  # consume ','
             digits2 = ""
             while self.peek() is not None and self.peek().isdigit():
                 digits2 += self.next()
             hi = int(digits2) if digits2 else None  # None == infinity
+        elif not digits:
+            # Not a quantifier (e.g. `{` or `{abc`); roll back.
+            self.i = start
+            return None
+        else:
+            lo = int(digits)
+            hi = lo  # `{n}` exact count
         if self.peek() != "}":
             # Malformed -- roll back and treat as literal text.
             self.i = start
@@ -705,6 +786,23 @@ class Parser:
 
     def parse_group(self) -> Node:
         assert self.next() == "("
+        # Detect `(?...)` extension syntax.  These are not supported by this
+        # educational engine (no lookaround, named groups, or inline flags),
+        # but we must NOT silently parse the `?` as a literal inside a normal
+        # group -- that would mislead users into thinking the pattern worked.
+        # Raise a clear ParseError instead.
+        if self.peek() == "?":
+            nxt = self.p[self.i + 1] if self.i + 1 < len(self.p) else ""
+            kind = {
+                ":": "non-capturing group (?:...)",
+                "=": "lookahead (?=...)",
+                "!": "negative lookahead (?!...)",
+                "<": "lookbehind (?<=... / (?<!...)",
+                "P": "named group (?P<name>...) / backreference (?P=name)",
+            }.get(nxt, f"unknown (?{nxt} extension")
+            raise ParseError(
+                f"unsupported group syntax '(?{nxt}': {kind} is not supported "
+                f"by this engine")
         self.group_count += 1
         idx = self.group_count
         children = self.parse_alt()
@@ -848,6 +946,10 @@ def run_match(pattern: str, text: str, max_steps: int = 100000) -> Tuple[bool, M
 
     The match is unanchored (like re.search): it succeeds if the pattern
     matches starting at any position.
+
+    If the step budget (`max_steps`) is exhausted, matching stops early and
+    whatever partial result (if any) is returned without raising -- the step
+    limit is a safety guard against catastrophic backtracking, not a crash.
     """
     parser = Parser(pattern)
     try:
@@ -857,7 +959,14 @@ def run_match(pattern: str, text: str, max_steps: int = 100000) -> Tuple[bool, M
 
     ctx = MatchContext(input=text, max_steps=max_steps)
     for start in range(len(text) + 1):
-        ctx.step(start, Anchor(kind="^"), "TRY", f"search from pos {start}")
+        # The "search from pos N" bookkeeping step is itself recorded via
+        # ctx.step, which can raise StepLimitExceeded if the budget was
+        # exhausted during the previous position's attempt.  Guard it so the
+        # limit never escapes to the caller.
+        try:
+            ctx.step(start, Anchor(kind="^"), "TRY", f"search from pos {start}")
+        except StepLimitExceeded:
+            break
         found = False
         try:
             for end in ctx.match_sequence(ast, start, Anchor()):
@@ -866,7 +975,7 @@ def run_match(pattern: str, text: str, max_steps: int = 100000) -> Tuple[bool, M
                 ctx.match_end = end
                 found = True
                 break
-        except RuntimeError:
+        except StepLimitExceeded:
             break
         if found:
             return True, ctx
