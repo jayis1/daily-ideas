@@ -45,6 +45,26 @@ import sys
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Callable
 
+__version__ = "1.1.0"
+
+# Shorthand character-class predicates -------------------------------------- #
+# Each lowercase shorthand maps to the list of (lo, hi) ranges that define
+# the characters it matches.  Uppercase variants (\D \W \S) match the
+# *negation* of these sets and are handled by combining the same ranges with
+# the `negated` flag of a CharClass (standalone) or a `shorthand_negations`
+# entry (inside a character class).
+SHORTHAND_RANGES = {
+    "d": [("0", "9")],
+    "w": [("a", "z"), ("A", "Z"), ("0", "9"), ("_", "_")],
+    "s": [(" ", " "), ("\t", "\t"), ("\n", "\n"), ("\r", "\r"),
+          ("\f", "\f"), ("\v", "\v")],
+}
+
+
+def _is_word_char(ch: str) -> bool:
+    """Match Python's `\\w` semantics: alphanumeric or underscore."""
+    return ch.isalnum() or ch == "_"
+
 # --------------------------------------------------------------------------- #
 # ANSI color helpers
 # --------------------------------------------------------------------------- #
@@ -130,6 +150,9 @@ class AnyChar(Node):
 class CharClass(Node):
     ranges: List[Tuple[str, str]] = field(default_factory=list)
     negated: bool = False
+    # Ranges whose *complement* also matches (for `[\D \w]`-style unions).
+    # Each entry is the set of ranges that must NOT contain the char.
+    shorthand_negations: List[List[Tuple[str, str]]] = field(default_factory=list)
     name: str = "Class"
 
     def label(self) -> str:
@@ -137,11 +160,26 @@ class CharClass(Node):
         for a, b in self.ranges:
             parts.append(a if a == b else f"{a}-{b}")
         body = "".join(parts)
+        for neg in self.shorthand_negations:
+            nparts = []
+            for a, b in neg:
+                nparts.append(a if a == b else f"{a}-{b}")
+            body += "(^" + "".join(nparts) + ")"
         return f"[{'^' if self.negated else ''}{body}]"
 
     def _in(self, ch: str) -> bool:
+        r"""True if `ch` is a member of this class's *positive* definition.
+
+        A character is a member if it falls inside any explicit range OR it
+        satisfies any negated shorthand (a `\D`-style member means "any char
+        NOT in the digit set", so a non-digit char is a member).
+        """
         for a, b in self.ranges:
             if a <= ch <= b:
+                return True
+        for neg in self.shorthand_negations:
+            inside_neg = any(a <= ch <= b for a, b in neg)
+            if not inside_neg:
                 return True
         return False
 
@@ -176,6 +214,37 @@ class Anchor(Node):
             ok = (pos == len(ctx.input))
             ctx.step(pos, self, "MATCH" if ok else "FAIL",
                      f"$ at pos {pos} (end={ok})")
+        if ok:
+            yield pos
+
+
+@dataclass
+class WordBoundary(Node):
+    """Matches `\\b` -- a zero-width assertion at a word/non-word boundary.
+
+    A boundary exists at position `pos` when exactly one of the characters
+    on either side is a "word character" (`\\w`).
+    """
+    negate: bool = False  # True for `\B`
+    name: str = "Boundary"
+
+    def label(self) -> str:
+        return r"\B" if self.negate else r"\b"
+
+    @staticmethod
+    def _word_at(text: str, i: int) -> bool:
+        return 0 <= i < len(text) and _is_word_char(text[i])
+
+    def _is_boundary(self, text: str, pos: int) -> bool:
+        before = self._word_at(text, pos - 1)
+        after = self._word_at(text, pos)
+        return before != after
+
+    def match(self, ctx, pos):
+        boundary = self._is_boundary(ctx.input, pos)
+        ok = (not boundary) if self.negate else boundary
+        ctx.step(pos, self, "MATCH" if ok else "FAIL",
+                 f"{self.label()} at pos {pos}")
         if ok:
             yield pos
 
@@ -217,45 +286,46 @@ class Star(Node):
     name: str = "Star"
 
     def label(self) -> str:
-        return f"{self.child.label() if self.child else ''}*"
+        return f"{self.child.label() if self.child else ''}*{'?' if not self.greedy else ''}"
 
     def match(self, ctx, pos):
-        # Greedy: try to consume as many as possible, then backtrack.
-        # We implement as recursive generator.
+        """Backtracking star.
+
+        Greedy  : consume as many as possible, then yield from longest to
+                  shortest so the rest of the pattern can backtrack into the
+                  captured text.
+        Lazy    : yield the current (zero-match) position first, then try to
+                  consume one more and recurse -- yielding progressively longer
+                  matches only if a shorter one fails downstream.
+        """
         if self.greedy:
-            # try one more, then zero more (backtrack)
-            count = 0
-            cur = pos
+            # Collect all reachable positions by repeatedly consuming one child.
             positions = [pos]
-            # Collect all possible forward positions greedily
+            cur = pos
             while True:
-                found = False
+                advanced = False
                 for nxt in self.child.match(ctx, cur):
                     if nxt == cur:
-                        # zero-width match would loop forever; stop
+                        # Zero-width match would loop forever; stop here.
                         ctx.step(cur, self, "STOP", "zero-width match in *")
                         break
                     cur = nxt
-                    count += 1
                     positions.append(cur)
-                    found = True
+                    advanced = True
                     break
-                if not found:
+                if not advanced:
                     break
-            # Yield positions from greediest to least
+            # Yield greediest-first so the engine can backtrack into it.
             for p in reversed(positions):
-                ctx.step(p, self, "YIELD", f"* matched {len(positions)-1} times -> pos {p}")
+                ctx.step(p, self, "YIELD",
+                         f"* matched {len(positions)-1} times -> pos {p}")
                 yield p
-        else:  # lazy
-            yield pos
-            for nxt in self.child.match(ctx, pos):
-                if nxt == pos:
-                    return
-                yield from self._lazy_chain(ctx, nxt)
-
+        else:  # lazy: try zero first, then progressively more
+            yield from self._lazy_chain(ctx, pos)
 
     def _lazy_chain(self, ctx, pos):
-        """Lazy `*`: yield `pos`, then try one more match and recurse."""
+        """Lazy `*`: yield `pos` first, then try one more match and recurse."""
+        ctx.step(pos, self, "YIELD", f"*? -> pos {pos}")
         yield pos
         for nxt in self.child.match(ctx, pos):
             if nxt == pos:
@@ -270,43 +340,61 @@ class Plus(Node):
     name: str = "Plus"
 
     def label(self) -> str:
-        return f"{self.child.label() if self.child else ''}+"
+        return f"{self.child.label() if self.child else ''}+{'?' if not self.greedy else ''}"
 
     def match(self, ctx, pos):
-        # one required, then star
-        count = 0
-        positions: List[int] = []
-        cur = pos
-        # first match (required)
+        """Backtracking plus (one or more).
+
+        Greedy  : require one match, then consume as many more as possible,
+                  yielding from longest to shortest.
+        Lazy    : require one match, then yield that position first and only
+                  consume more if the rest of the pattern fails downstream.
+        """
+        # First match is mandatory in both modes.
         got = False
-        for nxt in self.child.match(ctx, cur):
-            if nxt == cur:
-                ctx.step(cur, self, "STOP", "zero-width match in +")
+        first_pos = pos
+        for nxt in self.child.match(ctx, pos):
+            if nxt == pos:
+                ctx.step(pos, self, "STOP", "zero-width match in +")
                 return
-            cur = nxt
-            count = 1
-            positions.append(cur)
+            first_pos = nxt
             got = True
             break
         if not got:
             ctx.step(pos, self, "FAIL", "+ needs at least one match")
             return
-        # subsequent matches (greedy)
-        while True:
-            found = False
-            for nxt in self.child.match(ctx, cur):
-                if nxt == cur:
+
+        if self.greedy:
+            # Keep consuming greedily, then backtrack from longest to shortest.
+            positions = [first_pos]
+            cur = first_pos
+            while True:
+                advanced = False
+                for nxt in self.child.match(ctx, cur):
+                    if nxt == cur:
+                        break
+                    cur = nxt
+                    positions.append(cur)
+                    advanced = True
                     break
-                cur = nxt
-                count += 1
-                positions.append(cur)
-                found = True
-                break
-            if not found:
-                break
-        for p in reversed(positions):
-            ctx.step(p, self, "YIELD", f"+ matched {len(positions)} times -> pos {p}")
-            yield p
+                if not advanced:
+                    break
+            for p in reversed(positions):
+                ctx.step(p, self, "YIELD",
+                         f"+ matched {len(positions)} times -> pos {p}")
+                yield p
+        else:
+            # Lazy: yield the minimum (one match) first, then try more.
+            yield from self._lazy_plus_chain(ctx, first_pos)
+
+    def _lazy_plus_chain(self, ctx, pos):
+        """Lazy `+`: yield `pos`, then try one more match and recurse."""
+        ctx.step(pos, self, "YIELD", f"+? -> pos {pos}")
+        yield pos
+        for nxt in self.child.match(ctx, pos):
+            if nxt == pos:
+                return
+            yield from self._lazy_plus_chain(ctx, nxt)
 
 
 @dataclass
@@ -316,19 +404,111 @@ class OptionalNode(Node):
     name: str = "Opt"
 
     def label(self) -> str:
-        return f"{self.child.label() if self.child else ''}?"
+        return f"{self.child.label() if self.child else ''}?{'?' if not self.greedy else ''}"
 
     def match(self, ctx, pos):
-        matched = False
-        for nxt in self.child.match(ctx, pos):
-            matched = True
-            ctx.step(nxt, self, "YIELD", f"? matched once -> pos {nxt}")
-            yield nxt
-        if not matched:
-            ctx.step(pos, self, "YIELD", "? matched zero times")
-        # always allow skipping
-        ctx.step(pos, self, "YIELD", f"? skipping -> pos {pos}")
+        """Backtracking optional (zero or one).
+
+        Greedy  : try to match once first, then fall back to skipping.
+        Lazy    : skip first, then try to match once as a fallback.
+        """
+        if self.greedy:
+            matched = False
+            for nxt in self.child.match(ctx, pos):
+                matched = True
+                ctx.step(nxt, self, "YIELD", f"? matched once -> pos {nxt}")
+                yield nxt
+            if not matched:
+                ctx.step(pos, self, "YIELD", "? matched zero times")
+            # Always allow skipping as the final fallback.
+            ctx.step(pos, self, "YIELD", f"? skipping -> pos {pos}")
+            yield pos
+        else:  # lazy: skip first, then try matching once
+            ctx.step(pos, self, "YIELD", f"?? skipping -> pos {pos}")
+            yield pos
+            for nxt in self.child.match(ctx, pos):
+                ctx.step(nxt, self, "YIELD", f"?? matched once -> pos {nxt}")
+                yield nxt
+
+
+@dataclass
+class Repeat(Node):
+    """Bounded repetition: `{n}`, `{n,}`, `{n,m}` (greedy or lazy).
+
+    Implemented as "at least `lo` matches, at most `hi` extra matches" where
+    `hi=None` means unbounded.  Greedy mode consumes extra matches first and
+    backtracks; lazy mode yields the minimum first.
+    """
+    child: Optional["Node"] = None
+    lo: int = 0
+    hi: Optional[int] = None  # None == infinity
+    greedy: bool = True
+    name: str = "Repeat"
+
+    def label(self) -> str:
+        child = self.child.label() if self.child else ""
+        if self.hi is None:
+            rep = f"{{{self.lo},}}"
+        else:
+            rep = f"{{{self.lo},{self.hi}}}" if self.lo != self.hi else f"{{{self.lo}}}"
+        return f"{child}{rep}{'?' if not self.greedy else ''}"
+
+    def match(self, ctx, pos):
+        # Mandatory minimum matches (no backtracking on the count itself):
+        # we must get exactly `lo` matches, taking the first success of each.
+        cur = pos
+        for _ in range(self.lo):
+            got = False
+            for nxt in self.child.match(ctx, cur):
+                if nxt == cur:
+                    ctx.step(cur, self, "STOP",
+                             f"zero-width match in {{{self.lo}}} minimum")
+                    return
+                cur = nxt
+                got = True
+                break
+            if not got:
+                ctx.step(pos, self, "FAIL",
+                         f"{{{self.lo}}} needs {self.lo} matches")
+                return
+        mandatory_pos = cur
+
+        extra_cap = None if self.hi is None else max(self.hi - self.lo, 0)
+
+        if self.greedy:
+            # Consume as many extra as possible (up to cap), then backtrack.
+            positions = [mandatory_pos]
+            c = mandatory_pos
+            count = 0
+            while extra_cap is None or count < extra_cap:
+                advanced = False
+                for nxt in self.child.match(ctx, c):
+                    if nxt == c:
+                        break
+                    c = nxt
+                    positions.append(c)
+                    count += 1
+                    advanced = True
+                    break
+                if not advanced:
+                    break
+            for p in reversed(positions):
+                ctx.step(p, self, "YIELD",
+                         f"{self.label()} -> pos {p}")
+                yield p
+        else:
+            # Lazy: yield minimum first, then progressively more.
+            yield from self._lazy_repeat(ctx, mandatory_pos, extra_cap, 0)
+
+    def _lazy_repeat(self, ctx, pos, cap, used):
+        ctx.step(pos, self, "YIELD", f"{self.label()} -> pos {pos}")
         yield pos
+        if cap is not None and used >= cap:
+            return
+        for nxt in self.child.match(ctx, pos):
+            if nxt == pos:
+                return
+            yield from self._lazy_repeat(ctx, nxt, cap, used + 1)
 
 
 # --------------------------------------------------------------------------- #
@@ -429,7 +609,10 @@ class Parser:
         return nodes
 
     def parse_atom_quant(self) -> Node:
-        """atom followed by optional quantifier"""
+        """atom followed by an optional quantifier (*, +, ?, {n}, {n,}, {n,m}).
+
+        Each quantifier may be followed by a `?` to make it lazy.
+        """
         atom = self.parse_atom()
         if self.eof():
             return atom
@@ -446,7 +629,49 @@ class Parser:
             self.next()
             greedy = self._consume_lazy()
             return OptionalNode(child=atom, greedy=greedy)
+        elif ch == "{":
+            rep = self._try_parse_brace_quant()
+            if rep is not None:
+                lo, hi = rep
+                greedy = self._consume_lazy()
+                return Repeat(child=atom, lo=lo, hi=hi, greedy=greedy)
+            # Not a valid quantifier -- treat '{' as a literal (already consumed
+            # by parse_atom if it reached here, so just return the atom).
         return atom
+
+    def _try_parse_brace_quant(self) -> Optional[Tuple[int, Optional[int]]]:
+        """Attempt to parse `{n}`, `{n,}`, or `{n,m}` starting at the `{`.
+
+        Returns `(lo, hi)` on success (hi is None for `{n,}`), or `None` if the
+        text starting at the cursor is not a valid brace quantifier (in which
+        case the cursor is left untouched so `{` is treated as a literal).
+        """
+        assert self.peek() == "{"
+        start = self.i  # remember position of '{' for rollback
+        self.next()  # consume '{'
+        digits = ""
+        while self.peek() is not None and self.peek().isdigit():
+            digits += self.next()
+        if not digits:
+            # Not a quantifier; roll back.
+            self.i = start
+            return None
+        lo = int(digits)
+        hi: Optional[int] = lo
+        if self.peek() == ",":
+            self.next()
+            digits2 = ""
+            while self.peek() is not None and self.peek().isdigit():
+                digits2 += self.next()
+            hi = int(digits2) if digits2 else None  # None == infinity
+        if self.peek() != "}":
+            # Malformed -- roll back and treat as literal text.
+            self.i = start
+            return None
+        self.next()  # consume '}'
+        if hi is not None and hi < lo:
+            raise ParseError(f"{{{lo},{hi}}}: min > max")
+        return lo, hi
 
     def _consume_lazy(self) -> bool:
         # support lazy '?'
@@ -495,7 +720,8 @@ class Parser:
             negated = True
             self.next()
         ranges: List[Tuple[str, str]] = []
-        # ] as first char is a literal
+        shorthand_negations: List[List[Tuple[str, str]]] = []
+        # `]` as the very first char is treated as a literal member.
         first = True
         while True:
             ch = self.peek()
@@ -505,71 +731,110 @@ class Parser:
                 self.next()
                 break
             first = False
-            # handle escape inside class
+            # Handle escape inside class.
             if ch == "\\":
                 self.next()
+                if self.eof():
+                    raise ParseError("trailing backslash in character class")
                 esc = self.next()
                 resolved = self._resolve_escape(esc)
-                # escapes like \d \w \s expand to ranges
                 if isinstance(resolved, list):
+                    # Positive shorthand (\d \w \s) -- add its ranges.
                     ranges.extend(resolved)
+                    continue
+                if isinstance(resolved, tuple) and resolved[0] == "__negate__":
+                    # Negated shorthand (\D \W \S) inside a class -- the char
+                    # matches if it is NOT in the listed ranges.
+                    shorthand_negations.append(resolved[1])
                     continue
                 lo = resolved
             else:
                 lo = self.next()
-            # range?
-            if self.peek() == "-" and self.i + 1 < len(self.p) and self.p[self.i + 1] != "]":
-                self.next()  # consume -
+            # Range?  e.g. a-z, 0-9
+            if (self.peek() == "-" and self.i + 1 < len(self.p)
+                    and self.p[self.i + 1] != "]"):
+                self.next()  # consume '-'
                 hi = self.peek()
                 if hi == "\\":
                     self.next()
                     hi = self._resolve_escape(self.next())
-                    if isinstance(hi, list):
-                        # unusual; treat each as separate
-                        for h in hi:
-                            ranges.append((lo, h))
+                    if isinstance(hi, list) or isinstance(hi, tuple):
+                        # A shorthand as the *end* of a range doesn't make
+                        # sense; treat each element as a separate singleton.
+                        ranges.append((lo, lo))
+                        if isinstance(hi, list):
+                            for h in hi:
+                                ranges.append((h, h))
                         continue
                 else:
                     hi = self.next()
+                if lo > hi:
+                    raise ParseError(f"invalid range {lo!r}-{hi!r} in class")
                 ranges.append((lo, hi))
             else:
                 ranges.append((lo, lo))
-        return CharClass(ranges=ranges, negated=negated)
+        return CharClass(ranges=ranges, negated=negated,
+                        shorthand_negations=shorthand_negations)
 
     def parse_escape(self) -> Node:
-        assert self.next() == "\\"
-        esc = self.next()
-        resolved = self._resolve_escape(esc)
-        if isinstance(resolved, list):
-            # \d \w \s -> char class
-            return CharClass(ranges=resolved, negated=False)
-        if esc in "dwsDWS":
-            # shouldn't reach because resolved is a list for those
-            return Literal(char=resolved)
-        return Literal(char=resolved)
+        """Parse a `\\X` escape sequence and return the matching AST node.
 
-    def _resolve_escape(self, esc: str):
-        """Return a literal char, or a list of (a,b) ranges for classes."""
-        classes = {
-            "d": [("0", "9")],
-            "w": [("a", "z"), ("A", "Z"), ("0", "9"), ("_", "_")],
-            "s": [(" ", " "), ("\t", "\t"), ("\n", "\n")],
-        }
-        if esc in classes:
-            return classes[esc]
-        if esc in "DWS":
-            base = esc.lower()
-            # we represent negated class escapes as a CharClass with negated
-            ranges = classes[base]
-            # We need to return a Node, but _resolve_escape is shared with
-            # class parsing. Handle uppercase escapes specially here.
-            return CharClass(ranges=ranges, negated=True)
+        Lowercase shorthands (`\\d \\w \\s`) become positive CharClass nodes.
+        Uppercase shorthands (`\\D \\W \\S`) become *negated* CharClass nodes
+        matching the complement of the corresponding lowercase set.
+        `\\b` / `\\B` become word-boundary assertions; everything else resolves
+        to a single literal character.
+        """
+        assert self.next() == "\\"
+        if self.eof():
+            raise ParseError("trailing backslash at end of pattern")
+        esc = self.next()
+        if esc == "b":
+            return WordBoundary(negate=False)
+        if esc == "B":
+            return WordBoundary(negate=True)
+        if esc in SHORTHAND_RANGES:
+            return CharClass(ranges=list(SHORTHAND_RANGES[esc]), negated=False)
+        if esc in ("D", "W", "S"):
+            return CharClass(ranges=list(SHORTHAND_RANGES[esc.lower()]),
+                             negated=True)
+        # Literal escape -- resolve to a single character.
         mapping = {
-            "n": "\n", "t": "\t", "r": "\r",
+            "n": "\n", "t": "\t", "r": "\r", "f": "\f", "v": "\v",
+            "0": "\0", "a": "\a",
             ".": ".", "\\": "\\", "[": "[", "]": "]",
             "(": "(", ")": ")", "|": "|", "*": "*", "+": "+",
             "?": "?", "^": "^", "$": "$", "/": "/",
-            "0": "\0",
+            "{": "{", "}": "}", "-": "-", " ": " ",
+        }
+        return Literal(char=mapping.get(esc, esc))
+
+    def _resolve_escape(self, esc: str):
+        """Resolve an escape for use *inside a character class*.
+
+        Returns either a list of `(lo, hi)` ranges (for shorthands like `\\d`,
+        `\\w`, `\\s` -- including negated uppercase forms which contribute a
+        `shorthand_negations` entry to the surrounding CharClass) or a single
+        literal character string.
+
+        Note: `\\b` inside a class means backspace (U+0008), not a boundary.
+        """
+        if esc in SHORTHAND_RANGES:
+            return list(SHORTHAND_RANGES[esc])
+        if esc in ("D", "W", "S"):
+            # Negated shorthand inside a class.  We signal this by returning a
+            # tuple tagged with the ranges to negate; parse_class turns that
+            # into a shorthand_negations entry.  We use a distinct marker type.
+            return ("__negate__", list(SHORTHAND_RANGES[esc.lower()]))
+        if esc == "b":
+            return "\b"  # backspace inside a character class
+        mapping = {
+            "n": "\n", "t": "\t", "r": "\r", "f": "\f", "v": "\v",
+            "0": "\0", "a": "\a",
+            ".": ".", "\\": "\\", "[": "[", "]": "]",
+            "(": "(", ")": ")", "|": "|", "*": "*", "+": "+",
+            "?": "?", "^": "^", "$": "$", "/": "/",
+            "{": "{", "}": "}", "-": "-",
         }
         return mapping.get(esc, esc)
 
@@ -705,6 +970,7 @@ def render_summary(ctx: MatchContext, pattern: str, text: str, color: bool) -> s
 # --------------------------------------------------------------------------- #
 
 def build_demo() -> List[Tuple[str, str, str]]:
+    """Curated demo examples that showcase each engine feature."""
     return [
         ("hello", "hello world", "literal match at start"),
         ("a*b", "aaaab", "greedy star then literal"),
@@ -712,9 +978,15 @@ def build_demo() -> List[Tuple[str, str, str]]:
         ("(ab)+", "ababab", "group repetition"),
         ("[0-9]+", "year 2026", "char class for digits"),
         ("a.*z", "abc...xyz", "greedy dot-star"),
+        ("a.*?z", "abczxyz", "lazy dot-star (stops early)"),
         ("^foo$", "foo", "anchored full match"),
         ("cat|dog", "I have a dog", "alternation"),
         ("colou?r", "color", "optional letter"),
+        ("a{3}", "aaaa", "exact repetition {n}"),
+        ("a{2,4}", "aaaaa", "bounded repetition {n,m}"),
+        (r"\bfoo\b", "a foo b", "word boundary \\b"),
+        (r"\d{3}-\d{4}", "call 555-1234", "phone-number pattern"),
+        (r"\D+", "abc123", "negated shorthand \\D"),
     ]
 
 
@@ -728,11 +1000,18 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     parser.add_argument("pattern", nargs="?", help="regex pattern")
     parser.add_argument("input", nargs="?", help="input string to match against")
-    parser.add_argument("--demo", action="store_true", help="run built-in demo examples")
-    parser.add_argument("--no-color", action="store_true", help="disable ANSI colors")
-    parser.add_argument("--steps", action="store_true", help="show every step (not truncated)")
+    parser.add_argument("--demo", action="store_true",
+                        help="run built-in demo examples")
+    parser.add_argument("--no-color", action="store_true",
+                        help="disable ANSI colors (for piping / logs)")
+    parser.add_argument("--steps", action="store_true",
+                        help="show every step (not truncated)")
     parser.add_argument("--max-steps", type=int, default=40,
                         help="max steps to display per example (default 40)")
+    parser.add_argument("--quiet", "-q", action="store_true",
+                        help="suppress the trace; print only the result line")
+    parser.add_argument("--version", action="version",
+                        version=f"regex_viz {__version__}")
     args = parser.parse_args(argv)
 
     if args.no_color:
@@ -740,7 +1019,8 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.demo:
         print(_c("Regex Engine Visualizer — Demo", BOLD, color))
-        print(_c("Each example shows the step-by-step backtracking trace.\n", DIM, color))
+        print(_c("Each example shows the step-by-step backtracking trace.\n",
+                 DIM, color))
         for pat, text, desc in build_demo():
             print(_c("─" * 60, GRAY, color))
             print(_c(f"DEMO: {desc}", BOLD + CYAN, color))
@@ -770,6 +1050,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     if ctx is None:
         print(_c("Parse error", RED, color), file=sys.stderr)
         return 2
+
+    if args.quiet:
+        # Scripting mode: a single machine-friendly line.
+        if ok:
+            print(f"MATCH {ctx.match_start} {ctx.match_end} "
+                  f"{text[ctx.match_start:ctx.match_end]!r}")
+        else:
+            print("NOMATCH")
+        return 0 if ok else 1
 
     print(render_trace(ctx.steps, text, pat, color,
                        max_steps=None if args.steps else args.max_steps,
