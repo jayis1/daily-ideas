@@ -1,7 +1,8 @@
 # 🕸️ Terminal Pendulum Wave Simulator
 
 A physics-based ASCII animation of the **pendulum wave** — one of the most
-mesmerizing demonstrations in classical mechanics.
+mesmerizing demonstrations in classical mechanics. Pure Python, zero
+dependencies, runs in any terminal.
 
 A row of pendulums, each with a carefully chosen length, swings from a common
 pivot. Because each pendulum has a slightly different period, the bobs drift
@@ -22,10 +23,10 @@ chaos, and then a perfect resynchronization. Then the whole cycle repeats.
                                                        │││
                                                          │││
                                                            ●││
-                                                            ●●●│
-                                                               ●●│
-                                                                 ●●│
-                                                                   ●││
+                                                            ●●●
+                                                               ●●
+                                                                 ●●
+                                                                   ●│
                                                                     ● ●
 ```
 
@@ -57,11 +58,24 @@ so the physics is always exact, regardless of the parameters you choose.
   2. Trail only — pure wave pattern
   3. Strings + bobs (no trail)
   4. Bobs only
-- **Interactive controls** — pause, speed up/down, toggle trail, switch modes
+- **Interactive controls** — pause, speed up/down, toggle trail, switch modes,
+  toggle colour
+- **Monochrome mode** (`--no-color`) for accessibility or terminals without
+  24-bit colour support
+- **Pure-ASCII mode** (`--ascii`) for terminals that lack UTF-8 support
+- **Snapshot mode** (`--snapshot`) — prints five key frames across one full
+  cycle (start, ¼, ½, ¾, resync) for quick visualisation without animation
+- **Energy reporting** — `--info` now includes the mechanical energy of each
+  pendulum, and the `Pendulum.energy()` / `Pendulum.angular_velocity()`
+  methods are available programmatically
 - **Static frame mode** — render individual frames for screenshots or CI
-- **Physics info mode** — print a table of lengths, periods, and swing counts
+- **Physics info mode** — print a table of lengths, periods, swing counts,
+  and energy
+- **Input validation** — bad parameters produce a clear error instead of a
+  crash or silent garbage
 - **Resizes automatically** when the terminal size changes
-- **No external dependencies** — pure Python standard library
+- **`--version` flag** for version checking
+- **No external dependencies** — pure Python standard library (3.8+)
 
 ## Installation
 
@@ -109,6 +123,29 @@ python3 pendulum_wave.py --frame 15.0 --width 80 --height 24
 python3 pendulum_wave.py --static --frames 8
 ```
 
+### Snapshot mode (new)
+
+Prints five key moments of one full cycle — start, quarter, half,
+three-quarter, and the final resync — each with a descriptive label.
+
+```bash
+python3 pendulum_wave.py --snapshot -n 10
+python3 pendulum_wave.py --snapshot --no-color --ascii --width 70 --height 12
+```
+
+### Accessibility / restricted terminals
+
+```bash
+# Monochrome — no ANSI colour escapes at all
+python3 pendulum_wave.py --no-color
+
+# Pure ASCII — uses 'O' for bobs, '|' for strings, '+' for pivots
+python3 pendulum_wave.py --ascii
+
+# Both together (maximally portable)
+python3 pendulum_wave.py --no-color --ascii
+```
+
 ### Physics info only
 
 ```bash
@@ -116,19 +153,28 @@ python3 pendulum_wave.py --info -n 16
 ```
 
 Output:
+
 ```
 Pendulum Wave — 16 pendulums
 Longest pendulum: 50.00 cm  (period 1.4187 s)
 Resync cycle: 72.36 s  (longest swings 51×)
-  #  length(cm)  period(s)   swings
---------------------------------------
-  0       50.00     1.4187       51
-  1       48.10     1.3915       52
-  2       46.30     1.3652       53
+
+  #  length(cm)  period(s)   swings   energy(mJ)
+--------------------------------------------------
+  0       50.00     1.4187       51     107.5420
+  1       48.10     1.3915       52     103.4455
+  2       46.30     1.3652       53      99.5787
   ...
- 15       38.66     1.2475       66
+ 15       38.66     1.2475       66      83.0197
 
 After 72.36s all pendulums realign.
+```
+
+### Version
+
+```bash
+python3 pendulum_wave.py --version
+# pendulum-wave 1.1.0
 ```
 
 ## Interactive Controls
@@ -137,6 +183,7 @@ After 72.36s all pendulums realign.
 |-----|--------|
 | `SPACE` | Pause / resume |
 | `T` | Toggle trail on/off |
+| `C` | Toggle colour on/off |
 | `R` | Reduced-motion mode (disables trail) |
 | `+` / `=` | Speed up (up to 8×) |
 | `-` / `_` | Slow down (down to 0.1×) |
@@ -169,20 +216,37 @@ revealing the travelling-wave pattern as a flowing ribbon of colour.
 python3 pendulum_wave.py --frame 36.18 --mode 1 --width 100 --height 30
 ```
 
+### ASCII-only for a CI log or pipe
+
+```bash
+python3 pendulum_wave.py --snapshot --ascii --no-color -n 8 | head -40
+```
+
 ## Running the Tests
 
 ```bash
 python3 test_pendulum_wave.py
 ```
 
-Tests verify:
+The test suite (23 tests, no external framework required) verifies:
+
 - Correct pendulum count
 - Periods and lengths decrease monotonically
 - Period formula `T = 2π√(L/g)` is exact
 - All pendulums resynchronize at the derived cycle time
+- Quarter-cycle alignment of the longest pendulum
 - Angle stays within amplitude bounds
 - Half-period produces the opposite extreme
 - Static rendering produces valid output in all four modes
+- Monochrome rendering emits no colour escapes
+- ASCII rendering uses `O` / `|` instead of `●` / `│`
+- Energy is conserved (time-invariant) for the harmonic model
+- Energy formula `E = ½ m g L A²` is exact
+- Angular velocity is zero at the extremes and maximal at quarter period
+- `--version` flag works
+- Input validation rejects bad parameters
+- Renderer survives zero-valued max dimensions
+- Trails accumulate and are capped at `trail_len`
 
 ## How It Works
 
@@ -190,12 +254,16 @@ Tests verify:
    desired swing counts using `L = g(T/2π)²`, anchored to the longest pendulum.
 
 2. **Physics** — each pendulum's angle at time *t* is
-   `θ(t) = A·cos(ωt)` where `ω = 2π/T` (small-angle approximation).
+   `θ(t) = A·cos(ωt)` where `ω = 2π/T` (small-angle approximation). The
+   angular velocity is `θ̇(t) = -Aω·sin(ωt)`, and the mechanical energy is
+   `E = ½ m g L A²` (constant for the harmonic model).
 
 3. **Rendering** — physical `(x, y)` coordinates are mapped to terminal
    `(col, row)`. Strings are drawn with Bresenham line interpolation. Trails
    are stored as a ring buffer of recent positions, rendered with a gradient
-   of characters (` .·:-=+*#%@`) and fading colours.
+   of characters (` .·:-=+*#%@`, or ` .:-=+*#%X` in ASCII mode) and fading
+   colours. A `--no-color` flag strips all ANSI colour escapes; `--ascii`
+   swaps the Unicode glyph set for a pure-ASCII fallback.
 
 4. **Input** — a minimal raw-mode reader sets stdin to non-blocking, allowing
    single-key input without blocking the animation loop.
