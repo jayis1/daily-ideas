@@ -247,8 +247,11 @@ class Renderer:
     def __init__(self, width: int, height: int, pendulums: List[Pendulum],
                  max_x: float, max_y: float, mode: int = 1,
                  use_color: bool = True, charset: str = "unicode"):
-        self.w = max(1, width)
-        self.h = max(1, height)
+        # Enforce a minimum usable size so that internal fixed rows
+        # (bar_row = 1, status row = h-1) always have valid indices.
+        # Anything smaller than 2 rows / 2 cols is degenerate.
+        self.w = max(2, width)
+        self.h = max(2, height)
         self.pendulums = pendulums
         self.max_x = max_x if max_x > 0 else 1e-6
         self.max_y = max_y if max_y > 0 else 1e-6
@@ -424,6 +427,18 @@ def run_animation(pendulums: List[Pendulum], cycle_time: float,
                   use_color: bool = True, charset: str = "unicode"):
     """Run the interactive animation loop until the user quits."""
     import shutil
+
+    # The interactive animation needs a real TTY for raw-mode key input.
+    # If stdin isn't a terminal (piped, redirected, CI, cron) we can't read
+    # keys, so fall back to a helpful message instead of crashing with an
+    # obscure termios error.
+    if not sys.stdin.isatty():
+        print("error: animated mode requires an interactive terminal (TTY).",
+              file=sys.stderr)
+        print("hint:  use --frame <t>, --static, or --snapshot for non-interactive output.",
+              file=sys.stderr)
+        return 1
+
     w, h = shutil.get_terminal_size((80, 24))
     renderer = Renderer(w, h, pendulums, max_x, max_y, mode=1,
                         use_color=use_color, charset=charset)
@@ -485,9 +500,11 @@ def run_animation(pendulums: List[Pendulum], cycle_time: float,
                 sleep = dt_cap - elapsed
                 if sleep > 0:
                     time.sleep(sleep)
+        return 0  # normal quit via Q/Esc
     finally:
         sys.stdout.write(ANSI["show"] + ANSI["reset"] + "\n")
         sys.stdout.flush()
+    return 0
 
 
 # ── Static / demo frame (no raw mode) ────────────────────────────────────────
@@ -616,6 +633,10 @@ def validate_args(args) -> str | None:
         return "fps must be at least 1"
     if args.frames < 1:
         return "frames must be at least 1"
+    if args.width is not None and args.width < 2:
+        return "width must be at least 2 columns"
+    if args.height is not None and args.height < 2:
+        return "height must be at least 2 rows"
     return None
 
 
@@ -681,9 +702,8 @@ def main(argv=None):
         return 0
 
     # animated mode
-    run_animation(pendulums, args.cycle, max_x, max_y_total, fps=args.fps,
-                  use_color=use_color, charset=charset)
-    return 0
+    return run_animation(pendulums, args.cycle, max_x, max_y_total, fps=args.fps,
+                         use_color=use_color, charset=charset)
 
 
 if __name__ == "__main__":

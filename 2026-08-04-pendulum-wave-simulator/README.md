@@ -65,14 +65,16 @@ so the physics is always exact, regardless of the parameters you choose.
 - **Pure-ASCII mode** (`--ascii`) for terminals that lack UTF-8 support
 - **Snapshot mode** (`--snapshot`) — prints five key frames across one full
   cycle (start, ¼, ½, ¾, resync) for quick visualisation without animation
-- **Energy reporting** — `--info` now includes the mechanical energy of each
-  pendulum, and the `Pendulum.energy()` / `Pendulum.angular_velocity()`
-  methods are available programmatically
+- **Energy reporting** — `--info` includes the mechanical energy of each
+  pendulum; `Pendulum.energy()` / `Pendulum.angular_velocity()` available
+  programmatically
 - **Static frame mode** — render individual frames for screenshots or CI
 - **Physics info mode** — print a table of lengths, periods, swing counts,
   and energy
-- **Input validation** — bad parameters produce a clear error instead of a
-  crash or silent garbage
+- **Robust input validation** — bad parameters (including negative/zero
+  `--width`/`--height`) produce a clear error instead of a crash
+- **Non-interactive safety** — animated mode detects when stdin isn't a TTY
+  (piped, CI, cron) and prints a helpful hint instead of crashing
 - **Resizes automatically** when the terminal size changes
 - **`--version` flag** for version checking
 - **No external dependencies** — pure Python standard library (3.8+)
@@ -95,6 +97,11 @@ python3 pendulum_wave.py
 ```
 
 Default: 16 pendulums, longest = 50 cm, 51 swings per cycle (~72 s cycle).
+
+> **Note:** Animated mode requires an interactive terminal (TTY). If you
+> pipe input or run in a non-interactive context (CI, cron), it will print
+> a helpful hint and exit instead of crashing. Use `--frame`, `--static`,
+> or `--snapshot` for non-interactive output.
 
 ### Custom parameters
 
@@ -123,7 +130,7 @@ python3 pendulum_wave.py --frame 15.0 --width 80 --height 24
 python3 pendulum_wave.py --static --frames 8
 ```
 
-### Snapshot mode (new)
+### Snapshot mode
 
 Prints five key moments of one full cycle — start, quarter, half,
 three-quarter, and the final resync — each with a descriptive label.
@@ -165,7 +172,7 @@ Resync cycle: 72.36 s  (longest swings 51×)
   1       48.10     1.3915       52     103.4455
   2       46.30     1.3652       53      99.5787
   ...
- 15       38.66     1.2475       66      83.0197
+ 15       29.86     1.0963       66      64.2141
 
 After 72.36s all pendulums realign.
 ```
@@ -228,7 +235,7 @@ python3 pendulum_wave.py --snapshot --ascii --no-color -n 8 | head -40
 python3 test_pendulum_wave.py
 ```
 
-The test suite (23 tests, no external framework required) verifies:
+The test suite (26 tests, no external framework required) verifies:
 
 - Correct pendulum count
 - Periods and lengths decrease monotonically
@@ -244,9 +251,11 @@ The test suite (23 tests, no external framework required) verifies:
 - Energy formula `E = ½ m g L A²` is exact
 - Angular velocity is zero at the extremes and maximal at quarter period
 - `--version` flag works
-- Input validation rejects bad parameters
-- Renderer survives zero-valued max dimensions
-- Trails accumulate and are capped at `trail_len`
+- Input validation rejects bad parameters (count, cycle, amplitude, fps, etc.)
+- Input validation rejects bad dimensions (negative/zero `--width`/`--height`)
+- Renderer survives zero-valued max physical dimensions
+- Renderer survives degenerate (1×1, 0×0, negative) terminal dimensions
+- `render_static` survives tiny dimensions without crashing
 
 ## How It Works
 
@@ -263,10 +272,13 @@ The test suite (23 tests, no external framework required) verifies:
    are stored as a ring buffer of recent positions, rendered with a gradient
    of characters (` .·:-=+*#%@`, or ` .:-=+*#%X` in ASCII mode) and fading
    colours. A `--no-color` flag strips all ANSI colour escapes; `--ascii`
-   swaps the Unicode glyph set for a pure-ASCII fallback.
+   swaps the Unicode glyph set for a pure-ASCII fallback. The renderer
+   clamps its internal dimensions to a minimum of 2×2 so that fixed rows
+   (the support bar and status line) always have valid indices.
 
 4. **Input** — a minimal raw-mode reader sets stdin to non-blocking, allowing
-   single-key input without blocking the animation loop.
+   single-key input without blocking the animation loop. If stdin isn't a
+   TTY the program detects this and exits with a hint instead of crashing.
 
 ## File Overview
 
@@ -274,6 +286,46 @@ The test suite (23 tests, no external framework required) verifies:
 |------|-------------|
 | `pendulum_wave.py` | Main simulator (physics, renderer, CLI, animation loop) |
 | `test_pendulum_wave.py` | Test suite (run with `python3 test_pendulum_wave.py`) |
+
+## Known Issues
+
+- None currently known. All edge cases tested (empty/tiny/negative dimensions,
+  non-TTY stdin, extreme parameter values) are handled gracefully.
+
+## Changelog
+
+### v1.1.1 (bug-fix release)
+
+- **Fixed:** `IndexError` crash when rendering with `--height` of 0, 1, or
+  negative values. The `Renderer` now clamps internal dimensions to a
+  minimum of 2×2, ensuring the support-bar row (index 1) and status row
+  always exist.
+- **Fixed:** `IndexError` crash in `--snapshot` and `--static` modes with
+  negative `--height` (same root cause as above).
+- **Fixed:** Unhandled `termios.error` crash in animated mode when stdin
+  is not a TTY (piped, redirected, CI, cron). The program now detects
+  non-interactive stdin, prints a helpful hint suggesting `--frame`,
+  `--static`, or `--snapshot`, and exits with code 1.
+- **Fixed:** `--width` and `--height` were not validated by
+  `validate_args()`, allowing negative or zero values to reach the
+  renderer. They are now rejected upfront with a clear error message.
+- **Fixed:** `run_animation()` return value was ignored by `main()`, so a
+  non-TTY failure would still report exit code 0. `main()` now propagates
+  the exit code correctly.
+- **Added:** 3 new tests covering degenerate renderer dimensions,
+  `--width`/`--height` validation, and tiny `render_static` dimensions
+  (26 tests total, all passing).
+
+### v1.1.0
+
+- Added `--version` / `-V` flag, `--no-color` mode, `--ascii` mode,
+  `--snapshot` mode, energy reporting, input validation, and expanded
+  tests (10 → 23).
+
+### v1.0.0
+
+- Initial release: real-time ASCII animation, four visualization modes,
+  trail rendering, interactive controls, physics info mode, static frames.
 
 ## License
 

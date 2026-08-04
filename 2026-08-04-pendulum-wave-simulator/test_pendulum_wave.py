@@ -252,6 +252,42 @@ def test_renderer_trail_accumulation():
     assert all(len(t) <= r.trail_len for t in r.trails)
 
 
+def test_renderer_tiny_dimensions():
+    """Renderer must not crash with height=1 or width=1 (degenerate sizes)."""
+    pens = build_pendulums(4, 60.0, 51, 0.5, 12.0)
+    for w, h in [(1, 1), (1, 24), (80, 1), (0, 0), (-5, -5)]:
+        r = Renderer(w, h, pens, 0.2, 0.6, mode=1, use_color=False)
+        out = r.render(5.0)
+        assert isinstance(out, str)
+        assert len(out) > 0, f"empty output for dims ({w}, {h})"
+        # Internal dimensions must be clamped to at least 2
+        assert r.w >= 2 and r.h >= 2
+
+
+def test_validate_args_rejects_bad_dimensions():
+    """Negative or too-small --width / --height are rejected."""
+    from pendulum_wave import validate_args, parse_args
+    args = parse_args(["--frame", "0", "--width", "0"])
+    assert validate_args(args) is not None
+    args = parse_args(["--frame", "0", "--width", "-1"])
+    assert validate_args(args) is not None
+    args = parse_args(["--frame", "0", "--height", "1"])
+    assert validate_args(args) is not None
+    args = parse_args(["--frame", "0", "--height", "-5"])
+    assert validate_args(args) is not None
+    # Valid dimensions → None
+    args = parse_args(["--frame", "0", "--width", "80", "--height", "24"])
+    assert validate_args(args) is None
+
+
+def test_render_static_tiny_dimensions():
+    """render_static must not crash with degenerate dimensions."""
+    pens = build_pendulums(4, 60.0, 51, 0.5, 12.0)
+    for w, h in [(1, 1), (2, 2), (5, 3)]:
+        out = render_static(pens, 1.0, w, h, 0.2, 0.6, mode=1, use_color=False)
+        assert isinstance(out, str) and len(out) > 0
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     passed = 0
