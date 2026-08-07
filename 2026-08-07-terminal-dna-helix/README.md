@@ -5,7 +5,7 @@ Watch base pairs connect across the strands, mutate sequences on the fly,
 transcribe DNA into mRNA and proteins, and inspect sequence statistics —
 all in real time, with zero dependencies.
 
-![DNA Helix](https://img.shields.io/badge/genre-visualization-green) ![Python](https://img.shields.io/badge/python-3.8+-blue) ![No deps](https://img.shields.io/badge/dependencies-zero-orange) ![Tests](https://img.shields.io/badge/tests-29%20passing-brightgreen)
+![DNA Helix](https://img.shields.io/badge/genre-visualization-green) ![Python](https://img.shields.io/badge/python-3.8+-blue) ![No deps](https://img.shields.io/badge/dependencies-zero-orange) ![Tests](https://img.shields.io/badge/tests-40%20passing-brightgreen)
 
 ---
 
@@ -24,7 +24,7 @@ all in real time, with zero dependencies.
 
 ### CLI tools
 - **Custom sequences** — pass any DNA string with `-s` to render your own gene
-  (accepts `U` as well as `T`).
+  (accepts `U` as well as `T`; lowercase is uppercased automatically).
 - **Protein-only mode** — `--protein` prints the translated protein for a
   sequence without animation, with reading-frame selection (`--frame 0/1/2`).
 - **Sequence statistics** — `--stats` prints base composition with ASCII bars,
@@ -37,13 +37,19 @@ all in real time, with zero dependencies.
 - **Reproducible mode** — `--seed N` makes random genomes reproducible.
 - **No-colour mode** — `--no-color` disables ANSI codes for piping / logs.
 - **`--help` and `--version`** flags for standard CLI discoverability.
+- **Input validation** — invalid DNA characters, empty sequences, negative
+  lengths/frames/delays, and mutually-exclusive output modes are all reported
+  with clear error or warning messages instead of failing silently.
 
 ### Quality
-- **Input validation** — invalid DNA characters are rejected with a clear
-  error message.
+- **Robust rendering** — the renderer no longer crashes on tiny/empty genomes,
+  zero-width/height terminals, or genomes shorter than the display area.
+- **Normalised genome storage** — `Genome` uppercases bases and converts
+  `U → T` on construction, so `complement()`, `reverse_complement()`, and the
+  `template` property always work regardless of how the genome was built.
 - **Zero dependencies** — pure Python standard library, no `pip install` needed.
-- **Test suite** — 29 tests / 110 assertions covering biology, edge cases,
-  and CLI helpers.
+- **Test suite** — 40 tests / 127 assertions covering biology, edge cases,
+  genome normalisation, and renderer robustness (no framework needed).
 
 ---
 
@@ -73,6 +79,16 @@ python3 dna_helix.py
 
 ```bash
 python3 dna_helix.py -s ATGGCATGAACCTTTGGCCCAATAG
+```
+
+### Multi-line / whitespace-containing sequences
+
+Whitespace (including internal newlines and spaces) is stripped, so sequences
+pasted from files or split across lines work correctly:
+
+```bash
+python3 dna_helix.py -s "$(printf 'ATG\nGCA')" --protein
+# treated as ATGGCA
 ```
 
 ### Show transcription overlay from the start
@@ -105,6 +121,18 @@ DNA    : ATGAAACCCTTTGGGCATTAA
 mRNA   : AUGAAACCCUUUGGGCAUUAA
 Protein: MKPFGH*
         (Met, Lys, Pro, Phe, Gly, His, STOP)
+```
+
+When the sequence has no start codon, the output is informative:
+
+```bash
+python3 dna_helix.py -s AT --protein
+```
+```
+DNA    : AT
+mRNA   : AU
+Protein:
+        (no start codon found; empty translation)
 ```
 
 ### Translate using a different reading frame
@@ -174,6 +202,28 @@ python3 dna_helix.py -s ATGAAACCCTTTGGGCATTAA --stats --no-color
 python3 test_dna_helix.py
 ```
 
+### Empty-genome / zero-length rendering (no crash)
+
+```bash
+python3 dna_helix.py --length 0 --snapshot --frames 1 --delay 0.01 --no-color
+```
+
+---
+
+## ⚠️ Error & warning behaviour
+
+The CLI now validates its arguments and reports problems clearly instead of
+failing silently or crashing:
+
+| Situation                              | Behaviour                                      |
+|----------------------------------------|------------------------------------------------|
+| Invalid bases in `-s` sequence          | `error: invalid bases [...]` → exit code 2     |
+| Empty `-s ""` sequence                  | `error: sequence is empty after normalisation` |
+| `--length` / `--frames` / `--delay` < 0 | `error: <flag> must be >= 0` → exit code 2     |
+| Multiple output modes (e.g. `--revcomp --complement`) | `warning:` to stderr; first mode wins |
+| Genome shorter than display area / `--length 0` | renders gracefully, no `IndexError`    |
+| Terminal reports 0 width/height         | clamped to 1; renders gracefully               |
+
 ---
 
 ## 🎮 Controls (interactive mode)
@@ -193,8 +243,10 @@ python3 test_dna_helix.py
 ## 🧪 What It Does
 
 1. **Generates a genome** — a random (or user-supplied) DNA coding strand.
+   Any `U` bases are normalised to `T` on construction so the genome is always
+   DNA-only internally.
 2. **Computes the complementary template strand** using standard base-pairing
-   rules (A↔T, G↔C).
+   rules (A↔T, G↔C; U↔A for RNA input).
 3. **Animates the helix** by plotting each base pair at a sinusoidal x-offset
    that rotates over time, creating the illusion of a spinning 3D double helix.
 4. **Transcribes** the coding strand to mRNA (T→U) and **translates** it into
@@ -222,7 +274,7 @@ python3 test_dna_helix.py
 ```
 2026-08-07-terminal-dna-helix/
 ├── dna_helix.py       # the entire program (single file, no deps)
-├── test_dna_helix.py  # test suite (29 tests, no framework needed)
+├── test_dna_helix.py  # test suite (40 tests, no framework needed)
 └── README.md
 ```
 
@@ -230,12 +282,39 @@ python3 test_dna_helix.py
 
 ## 📝 Version History
 
+- **v1.2.0** — Bug-fix release. Fixed: empty `-s ""` silently ignored (now
+  rejected); `IndexError` crash in `helix_frame` on genomes shorter than the
+  display area / `--length 0` / zero or negative terminal width or height
+  (backbone positions and base-pair letters are now clamped to bounds);
+  `KeyError` on `complement()`/`reverse_complement()`/`template` when a
+  `Genome` was built with `U` (now normalised to `T` in `__post_init__`, and
+  `COMPLEMENT` includes `U: A`); `validate_sequence` now strips *all*
+  whitespace including internal newlines/spaces (multi-line sequences work);
+  `--protein` with no start codon now prints an informative message instead
+  of `()`; added validation for negative `--frames`/`--delay`/`--speed`/
+  `--length`; added a warning when multiple output modes are combined;
+  replaced the per-codon dict literal in `to_protein` with a precompiled
+  `str.maketrans` for clarity. Added 11 new tests (40 total / 127 assertions)
+  covering genome normalisation, renderer edge cases, and input validation.
 - **v1.1.0** — Added `--stats`, `--revcomp`, `--complement`, `--frame`,
   `--seed`, `--no-color`, `--version` flags; GC-content gauge; mutation
   counter; input validation; `g` keyboard toggle; 29-test suite; refactored
   renderer with colour abstraction.
 - **v1.0.0** — Initial release: animated helix, mutation, transcription
   overlay, `--protein`, `--snapshot`.
+
+---
+
+## 🐛 Known issues
+
+- The interactive animation requires a Unix TTY with `termios` support; on
+  Windows it falls back to snapshot mode. A native Windows console backend is
+  not provided.
+- The melting-temperature formula is a rough approximation (Wallace rule for
+  short oligos, a simple GC%-based estimate for longer sequences) and is not
+  suitable for laboratory use.
+- Molecular weight is an approximate ssDNA estimate and does not account for
+  modifications, circularisation, or double-strandedness.
 
 ---
 

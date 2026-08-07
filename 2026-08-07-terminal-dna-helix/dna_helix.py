@@ -34,7 +34,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # --------------------------------------------------------------------------- #
 #  ANSI helpers
@@ -62,7 +62,7 @@ BASE_COLOR = {
     "U": ANSI["magenta"],
 }
 
-COMPLEMENT = {"A": "T", "T": "A", "G": "C", "C": "G"}
+COMPLEMENT = {"A": "T", "T": "A", "G": "C", "C": "G", "U": "A"}
 VALID_BASES = set("ATGCU")
 
 # Codon table (standard genetic code) -> single-letter amino acid
@@ -106,9 +106,21 @@ class Genome:
     """A double-stranded DNA sequence.
 
     Stores only the 5'->3' coding (sense) strand; the template strand is
-    derived on demand via the ``template`` property.
+    derived on demand via the ``template`` property.  Any ``U`` bases in the
+    input are normalised to ``T`` so the genome always holds DNA bases.
     """
     coding: list[str] = field(default_factory=list)  # 5'->3' coding strand
+
+    def __post_init__(self) -> None:
+        """Normalise bases: uppercase and convert U -> T (DNA-only genome)."""
+        self.coding = ["T" if b == "u" or b == "U" else b.upper()
+                       for b in self.coding]
+        # validate that every base is a known DNA/RNA nucleotide
+        bad = sorted(set(self.coding) - VALID_BASES)
+        if bad:
+            raise ValueError(
+                f"invalid bases {bad!r} in genome — only A, T, G, C, U allowed"
+            )
 
     @property
     def template(self) -> list[str]:
@@ -163,10 +175,11 @@ class Genome:
         if start == -1:
             start = frame
         protein = []
+        # CODON_TABLE is keyed by DNA bases, so convert U->T for lookup
+        _u2t = str.maketrans("U", "T")
         for i in range(start, len(rna) - 2, 3):
             codon = rna[i:i + 3]
-            # CODON_TABLE is keyed by DNA bases, so convert U->T for lookup
-            aa = CODON_TABLE.get("".join({"U": "T"}.get(c, c) for c in codon), "?")
+            aa = CODON_TABLE.get(codon.translate(_u2t), "?")
             protein.append(aa)
             if aa == "*":
                 break
@@ -238,10 +251,11 @@ def validate_sequence(seq: str) -> str:
 
     - Uppercases the string
     - Converts U -> T (accept RNA input too)
-    - Strips whitespace
+    - Strips *all* whitespace (including internal newlines/spaces, so that
+      multi-line sequences pasted from files work correctly)
     - Raises ValueError on invalid characters
     """
-    seq = seq.upper().strip().replace("U", "T")
+    seq = "".join(seq.upper().split()).replace("U", "T")
     invalid = set(seq) - VALID_BASES
     if invalid:
         raise ValueError(
@@ -302,13 +316,20 @@ def helix_frame(genome: Genome, phase: float, cols: int, rows: int,
         def c(code: str, text: str) -> str:
             return f"{code}{text}{ANSI['reset']}"
 
+    # guard against absurd terminal sizes (must happen before half_w is used)
+    if cols < 1:
+        cols = 1
+    if rows < 1:
+        rows = 1
+
     half_w = cols // 2
     overlay_lines = 8 if show_transcription else 4
     if show_gc:
         overlay_lines += 1
     visible = min(genome.length, rows - overlay_lines)
-    if visible < 4:
-        visible = 4
+    # never render more bases than the genome actually has, and never claim a
+    # minimum of 4 when the genome is shorter than that (avoids IndexError).
+    visible = max(0, min(visible, genome.length))
 
     lines: list[str] = []
 
@@ -335,14 +356,18 @@ def helix_frame(genome: Genome, phase: float, cols: int, rows: int,
         left_x = int(round(half_w + math.sin(angle) * (half_w - 6)))
         right_x = int(round(half_w + math.sin(angle + math.pi) * (half_w - 6)))
 
+        # clamp backbone positions to the terminal width
+        left_x = max(0, min(cols - 1, left_x))
+        right_x = max(0, min(cols - 1, right_x))
+
         # depth: which strand is in front?
         depth_l = math.cos(angle)
         front_is_left = depth_l >= 0
 
         # build the line as a list of chars, then colourise
         line = [" "] * cols
-        line[max(0, min(cols - 1, left_x))] = "║"
-        line[max(0, min(cols - 1, right_x))] = "║"
+        line[left_x] = "║"
+        line[right_x] = "║"
 
         # connect base pairs between the two strands
         lo, hi = sorted((left_x, right_x))
@@ -350,10 +375,12 @@ def helix_frame(genome: Genome, phase: float, cols: int, rows: int,
         if hi - lo > 2:
             for x in range(lo + 1, hi):
                 line[x] = "·"
-        # place the letters near the midpoint
+        # place the letters near the midpoint (guard against running off the row)
         if hi - lo >= 4:
-            line[mid - 1] = base
-            line[mid + 1] = comp
+            if 0 <= mid - 1 < cols:
+                line[mid - 1] = base
+            if 0 <= mid + 1 < cols:
+                line[mid + 1] = comp
 
         # colourise
         coloured = []
@@ -573,7 +600,7 @@ def print_stats(genome: Genome, use_color: bool = True) -> None:
 # --------------------------------------------------------------------------- #
 def build_genome(args) -> Genome:
     """Construct a Genome from CLI arguments (sequence or random)."""
-    if args.sequence:
+    if args.sequence is not None:
         seq = validate_sequence(args.sequence)
         if not seq:
             raise ValueError("sequence is empty after normalisation")
@@ -622,6 +649,30 @@ def main() -> None:
     parser.set_defaults(color=True)
     args = parser.parse_args()
 
+    # ---- Validate numeric arguments -------------------------------------- #
+    if args.frames < 0:
+        print("error: --frames must be >= 0", file=sys.stderr)
+        sys.exit(2)
+    if args.delay < 0:
+        print("error: --delay must be >= 0", file=sys.stderr)
+        sys.exit(2)
+    if args.speed < 0:
+        print("error: --speed must be >= 0", file=sys.stderr)
+        sys.exit(2)
+    if args.length < 0:
+        print("error: --length must be >= 0", file=sys.stderr)
+        sys.exit(2)
+
+    # ---- Warn about mutually-exclusive modes ----------------------------- #
+    exclusive = [("--revcomp", args.revcomp),
+                 ("--complement", args.complement),
+                 ("--stats", args.stats),
+                 ("--protein", args.protein)]
+    chosen = [name for name, flag in exclusive if flag]
+    if len(chosen) > 1:
+        print(f"warning: multiple output modes specified ({', '.join(chosen)}); "
+              f"only the first ({chosen[0]}) will be used.", file=sys.stderr)
+
     # Seed early so random_genome is reproducible
     if args.seed is not None:
         random.seed(args.seed)
@@ -653,7 +704,10 @@ def main() -> None:
         print(f"DNA    : {''.join(genome.coding)}")
         print(f"mRNA   : {genome.to_mrna()}")
         print(f"Protein: {protein}")
-        print(f"        ({', '.join(AMINO_NAME.get(a, '?') for a in protein)})")
+        if protein:
+            print(f"        ({', '.join(AMINO_NAME.get(a, '?') for a in protein)})")
+        else:
+            print("        (no start codon found; empty translation)")
         return
 
     # ---- Subcommand: snapshot -------------------------------------------- #

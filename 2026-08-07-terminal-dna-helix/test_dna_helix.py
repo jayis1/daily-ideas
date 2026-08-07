@@ -15,6 +15,7 @@ from dna_helix import (
     Genome,
     random_genome,
     validate_sequence,
+    helix_frame,
     COMPLEMENT,
     CODON_TABLE,
     AMINO_NAME,
@@ -247,6 +248,53 @@ def test_validate_empty():
     check(validate_sequence("") == "", "empty string validates to empty")
 
 
+def test_validate_internal_whitespace():
+    """Internal whitespace (newlines/spaces) is stripped."""
+    check(validate_sequence("AT\nGC") == "ATGC", "internal newline stripped")
+    check(validate_sequence("AT GC") == "ATGC", "internal space stripped")
+    check(validate_sequence("A T\nG C\t") == "ATGC", "mixed whitespace stripped")
+
+
+def test_validate_numbers():
+    """Numeric characters are rejected as invalid bases."""
+    try:
+        validate_sequence("AT123GC")
+        check(False, "numbers should raise ValueError")
+    except ValueError:
+        check(True, "numbers raise ValueError")
+
+
+# ── Genome normalisation tests ───────────────────────────────────────────────
+
+def test_genome_normalises_u():
+    """Genome should convert U -> T on construction (DNA-only store)."""
+    g = Genome(coding=list("AUGC"))
+    check(g.coding == list("ATGC"), "Genome normalises U->T on construction")
+
+
+def test_genome_normalises_lowercase():
+    """Genome should uppercase lowercase bases on construction."""
+    g = Genome(coding=list("atgc"))
+    check(g.coding == list("ATGC"), "Genome uppercases lowercase bases")
+
+
+def test_genome_rejects_invalid():
+    """Genome should raise ValueError on truly invalid bases."""
+    try:
+        Genome(coding=list("ATGCX"))
+        check(False, "Genome should reject invalid base X")
+    except ValueError:
+        check(True, "Genome rejects invalid bases")
+
+
+def test_genome_complement_with_u_input():
+    """complement/revcomp/template work even if U was passed (normalised)."""
+    g = Genome(coding=list("AUGC"))
+    check(g.complement() == "TACG", "complement after U normalisation")
+    check(g.reverse_complement() == "GCAT", "revcomp after U normalisation")
+    check(g.template == list("TACG"), "template after U normalisation")
+
+
 # ── Codon table integrity ─────────────────────────────────────────────────────
 
 def test_codon_table_completeness():
@@ -269,6 +317,56 @@ def test_stop_codons():
 def test_start_codon():
     """ATG (Methionine) is the start codon."""
     check(CODON_TABLE["ATG"] == "M", "ATG -> M")
+
+
+# ── Renderer edge cases ────────────────────────────────────────────────────────
+
+def test_helix_frame_empty_genome():
+    """helix_frame must not crash on an empty genome."""
+    try:
+        out = helix_frame(Genome(coding=[]), 0.0, 80, 24, False, False, False)
+        check(isinstance(out, list) and len(out) >= 2, "empty genome renders")
+    except Exception as exc:
+        check(False, f"helix_frame empty genome crashed: {exc}")
+
+
+def test_helix_frame_tiny_genome():
+    """helix_frame must not crash on genomes shorter than the min visible."""
+    for n in (1, 2, 3):
+        try:
+            out = helix_frame(Genome(coding=list("ATGC"[:n])), 0.0, 80, 24,
+                              False, False, False)
+            check(isinstance(out, list), f"helix_frame len={n} renders")
+        except Exception as exc:
+            check(False, f"helix_frame len={n} crashed: {exc}")
+
+
+def test_helix_frame_zero_cols():
+    """helix_frame must not crash with zero or negative terminal width."""
+    try:
+        out = helix_frame(Genome(coding=list("ATGC")), 0.0, 0, 24,
+                          False, False, False)
+        check(isinstance(out, list), "helix_frame zero cols renders")
+    except Exception as exc:
+        check(False, f"helix_frame zero cols crashed: {exc}")
+
+
+def test_helix_frame_zero_rows():
+    """helix_frame must not crash with zero or negative terminal height."""
+    try:
+        out = helix_frame(Genome(coding=list("ATGC")), 0.0, 80, 0,
+                          False, False, False)
+        check(isinstance(out, list), "helix_frame zero rows renders")
+    except Exception as exc:
+        check(False, f"helix_frame zero rows crashed: {exc}")
+
+
+def test_helix_frame_no_color():
+    """helix_frame with use_color=False should produce no ANSI escape codes."""
+    out = helix_frame(Genome(coding=list("ATGCATGC")), 0.0, 80, 24,
+                     False, False, False)
+    joined = "\n".join(out)
+    check("\033[" not in joined, "no-color mode emits no ANSI codes")
 
 
 # ── Version ───────────────────────────────────────────────────────────────────
@@ -307,9 +405,20 @@ def main() -> int:
         test_validate_whitespace,
         test_validate_invalid,
         test_validate_empty,
+        test_validate_internal_whitespace,
+        test_validate_numbers,
+        test_genome_normalises_u,
+        test_genome_normalises_lowercase,
+        test_genome_rejects_invalid,
+        test_genome_complement_with_u_input,
         test_codon_table_completeness,
         test_stop_codons,
         test_start_codon,
+        test_helix_frame_empty_genome,
+        test_helix_frame_tiny_genome,
+        test_helix_frame_zero_cols,
+        test_helix_frame_zero_rows,
+        test_helix_frame_no_color,
         test_version,
     ]
 
