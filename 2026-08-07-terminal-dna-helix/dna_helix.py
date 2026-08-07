@@ -109,7 +109,9 @@ class Genome:
         return f"pos {index}: {old}->{new}"
 
     def to_mrna(self) -> str:
-        return "".join({"A": "U", "T": "A", "G": "C", "C": "G"}[b] for b in self.coding)
+        # The coding (sense) strand has the same sequence as mRNA, with T→U.
+        # (The template/antisense strand is what gets complemented in vivo.)
+        return "".join("U" if b == "T" else b for b in self.coding)
 
     def to_protein(self) -> str:
         """Translate from the first start codon (or from position 0)."""

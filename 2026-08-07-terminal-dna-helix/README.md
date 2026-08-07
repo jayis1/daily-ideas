@@ -63,15 +63,15 @@ python3 dna_helix.py -t
 ### Just translate a sequence to protein
 
 ```bash
-python3 dna_helix.py -s ATGGCATGAACCTTTGGCCCAATAG --protein
+python3 dna_helix.py -s ATGAAACCCTTTGGGCATTAA --protein
 ```
 
 Output:
 ```
-DNA   : ATGGCATGAACCTTTGGCCCAATAG
-mRNA  : UACCGUACUUGGAAACCGGGUUAUC
-Protein: MAETFGLPS
-       (Met, Ala, Glu, Thr, Phe, Gly, Leu, Pro, Ser)
+DNA   : ATGAAACCCTTTGGGCATTAA
+mRNA  : AUGAAACCCUUUGGGCAUUAA
+Protein: MKPFGH*
+       (Met, Lys, Pro, Phe, Gly, His, STOP)
 ```
 
 ### Snapshot (non-interactive) mode
