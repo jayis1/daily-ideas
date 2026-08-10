@@ -31,10 +31,11 @@ from __future__ import annotations
 import argparse
 import math
 import random
+import re
 import sys
 import time
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # ── ANSI helpers ──────────────────────────────────────────────────────
 CLEAR = "\033[2J"
@@ -58,6 +59,17 @@ FG = {
 # When --no-color is requested, every color code maps to "" so the rest of
 # the rendering logic stays unchanged.
 _FG_NO_COLOR = {k: "" for k in FG}
+
+
+# Regex to strip ANSI escape sequences from a string — used by the renderer
+# to check whether a grid cell is "empty" or contains a ground character
+# even when color codes are embedded in the cell.
+_ANSI_RE = re.compile(r"\033\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes from *text* and return the bare content."""
+    return _ANSI_RE.sub("", text)
 
 # ── Physics model (heavily simplified) ────────────────────────────────
 # Domino states:
@@ -118,7 +130,7 @@ class Domino:
     @property
     def top_x(self) -> float:
         """x-coord of the top of the domino, accounting for rotation."""
-        rad = math.radians(self.angle)
+        rad = math.radians(abs(self.angle))
         return self.col + self.height * math.sin(rad) * self.fall_dir
 
     @property
@@ -176,6 +188,7 @@ class ChainSimulator:
         self.frame = 0
         self.ground_row = 14   # the floor; below this is the base
         self._falls_this_step = 0  # bell bookkeeping
+        self._animate = False  # set True by run(animate=True)
 
     # Colour helper: respects --no-color.
     @property
@@ -221,7 +234,13 @@ class ChainSimulator:
 
         Returns True if a domino was actually triggered, False otherwise
         (e.g. index out of range or domino already falling).
+
+        ``direction`` must be +1 (rightward) or -1 (leftward); any other
+        value is rejected to prevent dominoes getting stuck in FALLING
+        forever with a zero angular velocity.
         """
+        if direction not in (1, -1):
+            return False
         if 0 <= idx < len(self.dominoes) and self.dominoes[idx].state == STANDING:
             self.dominoes[idx].state = FALLING
             self.dominoes[idx].fall_dir = direction
@@ -261,7 +280,9 @@ class ChainSimulator:
         for d in self.dominoes:
             d.update(dt)
         self.check_collisions()
-        if self.sound and self._falls_this_step > 0:
+        # Only emit sound during animated runs — headless/CI mode should
+        # not produce terminal bells.
+        if self.sound and self._animate and self._falls_this_step > 0:
             sys.stdout.write(BELL)
             sys.stdout.flush()
 
@@ -364,10 +385,10 @@ class ChainSimulator:
             start = d.col if d.fall_dir > 0 else d.col - length + 1
             end = start + length
             for x in range(max(0, start), min(cols, end)):
+                # Draw the fallen bar one row above the ground line so we
+                # don't overwrite the ground ▔ characters.
                 if 0 <= gr - 1 < rows:
                     grid[gr - 1][x] = color + "█" + rst
-                if 0 <= gr < rows:
-                    grid[gr][x] = color + "▁" + rst
             return
 
         # falling: interpolate between vertical and horizontal
@@ -385,8 +406,12 @@ class ChainSimulator:
             x = int(round(d.col + dx))
             y = int(round(gr + dy))
             if 0 <= y < rows and 0 <= x < cols:
-                # overwrite only if empty or our own color
-                if grid[y][x].strip() in ("", "▔"):
+                # Strip ANSI escape codes before checking so we can
+                # correctly detect empty or ground cells even when
+                # color is enabled.
+                raw = grid[y][x]
+                stripped = _strip_ansi(raw)
+                if stripped in ("", "▔", " "):
                     grid[y][x] = color + "█" + rst
         # pivot base
         if 0 <= gr < rows and 0 <= d.col < cols:
@@ -414,9 +439,13 @@ class ChainSimulator:
         physics until the chain settles — useful for scripts/CI.
         """
         if not animate:
+            self._animate = False
             self._run_headless()
             return
 
+        rst = self.reset
+        self._animate = True
+        completed = False
         try:
             sys.stdout.write(HIDE_CURSOR)
             dt = 1.0 / self.fps
@@ -434,10 +463,10 @@ class ChainSimulator:
                 sys.stdout.write(HOME)
                 sys.stdout.write(CLEAR)
                 sys.stdout.write("\n")
-                # header
+                # header — use rst (self.reset) not RESET so --no-color works
                 header = (
-                    f"{self.fg['magenta']}╔══ Domino Chain Simulator v{__version__} ══╗{RESET}\n"
-                    f"{self.fg['magenta']}╚═════════════════════════════════════╝{RESET}\n\n"
+                    f"{self.fg['magenta']}╔══ Domino Chain Simulator v{__version__} ══╗{rst}\n"
+                    f"{self.fg['magenta']}╚═════════════════════════════════════╝{rst}\n\n"
                 )
                 sys.stdout.write(header)
                 sys.stdout.write(scene + "\n")
@@ -446,15 +475,16 @@ class ChainSimulator:
 
                 if self.all_settled() and self.frame > 10:
                     time.sleep(1.0)
-                    # final summary
+                    # final summary — use rst not RESET for --no-color
                     sys.stdout.write(
                         f"\n{self.fg['green']}Chain complete! "
-                        f"{fallen}/{total} dominoes fell.{RESET}\n"
+                        f"{fallen}/{total} dominoes fell.{rst}\n"
                     )
                     sys.stdout.write(
-                        f"{self.fg['gray']}Press Ctrl+C to exit.{RESET}\n"
+                        f"{self.fg['gray']}Press Ctrl+C to exit.{rst}\n"
                     )
                     sys.stdout.flush()
+                    completed = True
                     break
 
                 time.sleep(dt)
@@ -462,8 +492,12 @@ class ChainSimulator:
             pass
         finally:
             sys.stdout.write(SHOW_CURSOR)
-            sys.stdout.write(CLEAR)
-            sys.stdout.write(HOME)
+            # Only clear the screen if we didn't complete successfully —
+            # when the chain finishes we want the completion message to
+            # remain visible instead of being erased immediately.
+            if not completed:
+                sys.stdout.write(CLEAR)
+                sys.stdout.write(HOME)
             sys.stdout.flush()
 
     def _run_headless(self) -> None:
@@ -506,7 +540,13 @@ def _validate_args(args: argparse.Namespace) -> None:
     if args.trigger is not None and args.trigger < 0:
         raise SystemExit(f"error: --trigger index must be >= 0, got {args.trigger}")
     # Mutually exclusive setup modes
-    setup_modes = sum(1 for x in (args.random, args.uniform is not None) if x)
+    # Use `is not None` for both so that --random 0 is correctly detected
+    # (0 is falsy but is a valid, intentional value).
+    setup_modes = 0
+    if args.random is not None:
+        setup_modes += 1
+    if args.uniform is not None:
+        setup_modes += 1
     if setup_modes > 1:
         raise SystemExit("error: --random and --uniform are mutually exclusive")
 

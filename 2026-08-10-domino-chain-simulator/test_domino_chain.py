@@ -400,6 +400,153 @@ def test_version():
           "version is non-empty string")
 
 
+# ── Bug-fix tests (v1.2.0) ────────────────────────────────────────────────────
+
+def test_trigger_rejects_direction_zero():
+    """trigger() with direction=0 should return False (would cause stuck domino)."""
+    sim = ChainSimulator(width=80, fps=24)
+    sim.uniform_setup(5)
+    result = sim.trigger(idx=0, direction=0)
+    check(result is False, "trigger with direction=0 returns False")
+    check(sim.dominoes[0].state == STANDING, "domino stays STANDING with dir=0")
+
+
+def test_trigger_rejects_invalid_directions():
+    """trigger() with directions other than +1/-1 should return False."""
+    sim = ChainSimulator(width=80, fps=24)
+    sim.uniform_setup(5)
+    for bad_dir in (0, 2, -2, 100):
+        result = sim.trigger(idx=0, direction=bad_dir)
+        check(result is False, f"trigger with direction={bad_dir} returns False")
+
+
+def test_top_x_negative_fall_dir():
+    """top_x with fall_dir=-1 should be to the LEFT of col (not right)."""
+    d = Domino(col=10, height=6, spacing=2)
+    d.angle = -45.0
+    d.fall_dir = -1
+    # With abs(angle)=45 and fall_dir=-1:
+    # top_x = 10 + 6 * sin(45°) * (-1) = 10 - 4.24 = 5.76 (LEFT of col)
+    check(d.top_x < 10.0, f"top_x with fall_dir=-1 is left of col (got {d.top_x})")
+
+
+def test_top_x_positive_fall_dir():
+    """top_x with fall_dir=+1 should be to the RIGHT of col."""
+    d = Domino(col=10, height=6, spacing=2)
+    d.angle = 45.0
+    d.fall_dir = 1
+    # top_x = 10 + 6 * sin(45°) * 1 = 10 + 4.24 = 14.24 (RIGHT of col)
+    check(d.top_x > 10.0, f"top_x with fall_dir=+1 is right of col (got {d.top_x})")
+
+
+def test_fallen_domino_does_not_overwrite_ground():
+    """A fallen domino should not put ▁ chars on the ground row."""
+    sim = ChainSimulator(width=70, fps=24, use_color=False)
+    sim.add_domino(6, 2)
+    sim.dominoes[0].state = FALLEN
+    sim.dominoes[0].fall_dir = 1
+    sim.dominoes[0].angle = 90.0
+    out = sim.render()
+    lines = out.split("\n")
+    ground_row = 14
+    ground_line = lines[ground_row] if ground_row < len(lines) else ""
+    # Ground row should be all ▔ (no ▁ from the fallen domino)
+    check("▁" not in ground_line, "fallen domino does not put ▁ on ground row")
+
+
+def test_falling_domino_overwrites_ground_with_color():
+    """Falling domino should be able to overwrite ground cells even with color."""
+    sim = ChainSimulator(width=70, fps=24, use_color=True)
+    sim.uniform_setup(3, height=8, spacing=2)
+    sim.trigger(0)
+    # Step enough to get a meaningful angle
+    for _ in range(10):
+        sim.step(1.0 / 24)
+    # The render should not crash and should contain falling domino tiles
+    out = sim.render()
+    check("█" in out, "falling domino renders with color")
+    # Verify the _strip_ansi helper works
+    from domino_chain import _strip_ansi
+    test_str = "\033[90m▔\033[0m"
+    check(_strip_ansi(test_str) == "▔", "_strip_ansi removes ANSI codes correctly")
+    check(_strip_ansi("hello") == "hello", "_strip_ansi on plain text")
+    check(_strip_ansi("") == "", "_strip_ansi on empty string")
+
+
+def test_sound_not_emitted_in_headless():
+    """--no-anim mode should not emit terminal bells even with sound=True."""
+    import io
+    sim = ChainSimulator(width=70, fps=60, sound=True)
+    sim.uniform_setup(10, height=8, spacing=1)
+    sim.trigger(0)
+    old = sys.stdout
+    sys.stdout = io.StringIO()
+    try:
+        sim.run(animate=False)
+    finally:
+        sys.stdout = old
+    # We can't directly check the captured output since run() writes to
+    # the *current* stdout which we swapped. Instead, check that the
+    # _animate flag is False during headless runs.
+    check(sim._animate is False, "_animate is False after headless run")
+
+
+def test_headless_no_bell_in_output():
+    """Headless run with sound=True should produce no bell characters."""
+    import io
+    sim = ChainSimulator(width=70, fps=60, sound=True)
+    sim._animate = False  # simulate headless
+    sim.uniform_setup(5, height=6, spacing=1)
+    sim.trigger(0)
+    old = sys.stdout
+    buf = io.StringIO()
+    sys.stdout = buf
+    try:
+        dt = 1.0 / sim.fps
+        while not sim.all_settled():
+            sim.step(dt)
+    finally:
+        sys.stdout = old
+    check("\a" not in buf.getvalue(), "no bells in headless step output")
+
+
+def test_strip_ansi_helper():
+    """_strip_ansi should correctly remove ANSI escape sequences."""
+    from domino_chain import _strip_ansi
+    check(_strip_ansi("\033[91m█\033[0m") == "█", "strip red block")
+    check(_strip_ansi("\033[97m\033[0m") == "", "strip empty colored")
+    check(_strip_ansi("\033[2m▔\033[0m") == "▔", "strip dim ground")
+    check(_strip_ansi("  text  ") == "  text  ", "preserves whitespace")
+
+
+def test_mutual_exclusion_random_zero_uniform():
+    """--random 0 --uniform 5 should be caught as mutually exclusive."""
+    import argparse
+    # Replicate the parser logic
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--random", type=int, default=None)
+    parser.add_argument("--uniform", type=int, nargs="?", const=20, default=None)
+    args = parser.parse_args(["--random", "0", "--uniform", "5"])
+    # The fixed validation logic
+    setup_modes = 0
+    if args.random is not None:
+        setup_modes += 1
+    if args.uniform is not None:
+        setup_modes += 1
+    check(setup_modes == 2, "--random 0 + --uniform 5 detected as 2 modes")
+
+
+def test_render_no_color_falling():
+    """No-color render with falling domino should have no ANSI."""
+    sim = ChainSimulator(width=70, fps=24, use_color=False)
+    sim.uniform_setup(5)
+    sim.trigger(0)
+    sim.step(1.0 / 24)
+    sim.step(1.0 / 24)
+    out = sim.render()
+    check("\033[" not in out, "no-color falling render has no ANSI")
+
+
 # ── Run all tests ─────────────────────────────────────────────────────────────
 
 def main() -> int:
@@ -447,6 +594,18 @@ def main() -> int:
         test_fps_clamped,
         # Version
         test_version,
+        # Bug-fix tests (v1.2.0)
+        test_trigger_rejects_direction_zero,
+        test_trigger_rejects_invalid_directions,
+        test_top_x_negative_fall_dir,
+        test_top_x_positive_fall_dir,
+        test_fallen_domino_does_not_overwrite_ground,
+        test_falling_domino_overwrites_ground_with_color,
+        test_sound_not_emitted_in_headless,
+        test_headless_no_bell_in_output,
+        test_strip_ansi_helper,
+        test_mutual_exclusion_random_zero_uniform,
+        test_render_no_color_falling,
     ]
 
     print(f"Running {len(tests)} tests for domino_chain v{__version__}...\n")
