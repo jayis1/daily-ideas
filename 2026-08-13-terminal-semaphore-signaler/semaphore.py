@@ -14,9 +14,15 @@ and special commands.
 
 This tool:
   - Encodes text letter-by-letter into semaphore flag positions
+  - Decodes semaphore position pairs back into text
   - Renders an animated ASCII stick figure holding the flags
-  - Supports interactive mode, file mode, and demo mode
+  - Supports interactive mode, file mode, demo mode, and export mode
   - Shows the flag angle diagram and letter meaning for each frame
+  - Supports optional ANSI color output for richer visualization
+  - Includes special signals: Attention, Error/Cancel, Correct, Rest
+  - Can output machine-readable JSON for integration with other tools
+
+Version: 2.0.0
 """
 
 import argparse
@@ -25,28 +31,15 @@ import time
 import math
 import string
 import os
+import json as json_module
+
+__version__ = "2.0.0"
 
 # ---------------------------------------------------------------------------
 # Semaphore encoding
 # ---------------------------------------------------------------------------
 # The eight flag positions are numbered 1–8, clockwise from the signaler's
 # perspective, starting at the "down" position:
-#
-#        7   8
-#         \ /
-#      6-- O --2
-#         / \
-#        5   4
-#         (3 = straight down, not drawn well diagonally but it's "down")
-#
-# Actually the standard convention:
-#   Position 1 = straight down
-#   Position 2 = down-left (45°)
-#   Position 3 = horizontal left (90°)
-#   ... etc.
-# But different sources use different numbering. We use the widely-adopted
-# "clock" convention where positions are numbered 1-8 like clock hours but
-# starting from bottom:
 #
 #       6    7    8
 #        \   |   /
@@ -58,10 +51,7 @@ import os
 # "rest/down" on the right side in our convention.
 
 # Flag positions as angles in degrees (0 = right/east, 90 = up, etc.)
-# We'll define 8 compass directions the arm can point.
 # Key: position number -> angle in degrees from horizontal-right, CCW
-# Using standard semaphore numbering (1=down-right, going CCW):
-
 POSITIONS = {
     1: -90,    # straight down
     2: -45,    # down-right
@@ -73,9 +63,20 @@ POSITIONS = {
     8: 225,    # down-left  (== -135)
 }
 
+# Human-readable names for each position
+POSITION_NAMES = {
+    1: "down",
+    2: "down-right",
+    3: "right",
+    4: "up-right",
+    5: "up",
+    6: "up-left",
+    7: "left",
+    8: "down-left",
+}
+
 # Semaphore letter encoding: letter -> (left_arm_pos, right_arm_pos)
 # Using the standard ITU flag semaphore chart.
-# Positions 1-8 as per the diagram above.
 SEMAPHORE = {
     'A': (1, 8),
     'B': (1, 7),
@@ -105,9 +106,17 @@ SEMAPHORE = {
     'Z': (6, 8),
 }
 
+# Build a reverse lookup: (left, right) -> letter.
+# Note: semaphore pairs are unordered (left/right is symmetric), so we
+# store both orderings.
+SEMAPHORE_REVERSE = {}
+for _letter, (_lp, _rp) in SEMAPHORE.items():
+    SEMAPHORE_REVERSE[(_lp, _rp)] = _letter
+    SEMAPHORE_REVERSE[(_rp, _lp)] = _letter
+
 # Numeric flag: the "J" position is used to switch to numbers.
-# In number mode, letters map differently. For simplicity, we handle
-# digits by using a "numerals" preamble (J) then the letter-based codes.
+# In number mode, letters map differently. We handle digits by using a
+# "numerals" preamble (J) then the letter-based codes.
 NUMERAL_MAP = {
     '0': 'J',  # J in number mode = 0
     '1': 'A',
@@ -121,8 +130,20 @@ NUMERAL_MAP = {
     '9': 'I',
 }
 
-# Special signals
-REST = (1, 1)  # both arms down = rest / attention
+# Reverse numeral map: letter -> digit
+NUMERAL_REVERSE = {v: k for k, v in NUMERAL_MAP.items()}
+
+# Special signals (standard semaphore commands)
+SPECIAL_SIGNALS = {
+    'REST':       (1, 1),    # both arms down = rest / attention
+    'ATTENTION':  (5, 5),    # both flags up = attention / start of message
+    'ERROR':      (4, 8),    # flags crossed = error / cancel last character
+    'CORRECT':    (2, 4),    # acknowledge / correct / ready to receive
+    'NUMERALS':   (2, 6),    # same as J — switch to number mode
+    'LETTERS':    (3, 6),    # same as P — return to letter mode
+}
+
+REST = SPECIAL_SIGNALS['REST']
 
 
 def encode_text(text):
@@ -130,6 +151,7 @@ def encode_text(text):
     Encode text into a sequence of semaphore frames.
     Returns a list of (char, left_pos, right_pos, label) tuples.
     Handles letters, digits, and spaces (space = rest position).
+    Unknown characters produce a rest frame with a descriptive label.
     """
     frames = []
     in_number_mode = False
@@ -142,7 +164,7 @@ def encode_text(text):
 
         if ch in string.ascii_uppercase:
             if in_number_mode:
-                # Letters return to letter mode (use "C" = resume letters)
+                # Letters return to letter mode (use "P" = resume letters)
                 # For simplicity we just switch back.
                 in_number_mode = False
             left, right = SEMAPHORE[ch]
@@ -166,6 +188,125 @@ def encode_text(text):
     return frames
 
 
+def decode_positions(positions):
+    """
+    Decode a sequence of semaphore position pairs back into text.
+
+    Args:
+        positions: A list of (left, right) tuples representing semaphore
+                   flag positions. Each pair is treated as one frame.
+
+    Returns:
+        The decoded text string. Number mode is handled via the J/numerals
+        signal. Unknown pairs produce '?'.
+
+    Example:
+        >>> decode_positions([(8, 1), (7, 1), (12, 12)])
+        'AB'
+    """
+    result = []
+    in_number_mode = False
+
+    for pair in positions:
+        # Normalize the pair to a sorted tuple for lookup
+        left, right = pair
+        key = (left, right)
+
+        # Check for rest / space
+        if key == REST or (left == 1 and right == 1):
+            result.append(' ')
+            in_number_mode = False
+            continue
+
+        # Check for numerals signal (J position = (2, 6))
+        if key == SEMAPHORE['J'] or (left, right) == (6, 2):
+            # This could be letter J or the numerals preamble.
+            # In decoding, if the next frame decodes as a digit-mapped
+            # letter, we treat this as the numerals signal.
+            in_number_mode = True
+            # Don't append anything — it's a mode switch
+            continue
+
+        # Look up the letter
+        letter = SEMAPHORE_REVERSE.get(key)
+        if letter is None:
+            result.append('?')
+            continue
+
+        if in_number_mode:
+            # Map letter to digit if possible
+            digit = NUMERAL_REVERSE.get(letter)
+            if digit is not None:
+                result.append(digit)
+            else:
+                # Not a valid numeral letter — exit number mode
+                in_number_mode = False
+                result.append(letter)
+        else:
+            result.append(letter)
+
+    return ''.join(result)
+
+
+def decode_position_string(pos_str):
+    """
+    Parse a string of position pairs and decode them.
+
+    Accepts formats like:
+      "1,8 1,7 3,7"     (space-separated pairs)
+      "1,8;1,7;3,7"     (semicolon-separated)
+      "8-1 7-1 7-3"     (dash-separated within pair)
+
+    Returns the decoded text.
+    """
+    # Normalize separators: replace semicolons with spaces
+    pos_str = pos_str.replace(';', ' ')
+    # Split into tokens by whitespace
+    tokens = pos_str.split()
+
+    positions = []
+    for token in tokens:
+        # Each token should be like "1,8" or "1-8" or "1:8"
+        for sep in [',', '-', ':', '/']:
+            if sep in token:
+                parts = token.split(sep)
+                if len(parts) == 2:
+                    try:
+                        left = int(parts[0].strip())
+                        right = int(parts[1].strip())
+                        positions.append((left, right))
+                    except ValueError:
+                        pass  # skip malformed tokens
+                break
+
+    return decode_positions(positions)
+
+
+# ---------------------------------------------------------------------------
+# ANSI Color support
+# ---------------------------------------------------------------------------
+
+# ANSI color codes
+COLORS = {
+    'reset':  '\033[0m',
+    'red':    '\033[31m',
+    'green':  '\033[32m',
+    'yellow': '\033[33m',
+    'blue':   '\033[34m',
+    'magenta':'\033[35m',
+    'cyan':   '\033[36m',
+    'white':  '\033[37m',
+    'bold':   '\033[1m',
+}
+
+
+def colorize(text, color, enabled=True):
+    """Wrap text in ANSI color codes if color is enabled."""
+    if not enabled or color not in COLORS:
+        return text
+    return f"{COLORS[color]}{text}{COLORS['reset']}"
+
+
 # ---------------------------------------------------------------------------
 # ASCII rendering
 # ---------------------------------------------------------------------------
@@ -180,7 +321,7 @@ def make_canvas():
 
 
 def set_pixel(canvas, x, y, ch):
-    """Safely set a pixel on the canvas."""
+    """Safely set a pixel on the canvas. Ignores out-of-bounds writes."""
     if 0 <= y < CANVAS_H and 0 <= x < CANVAS_W:
         canvas[y][x] = ch
 
@@ -234,7 +375,7 @@ def render_figure(left_pos, right_pos):
     # Body center (shoulders)
     cx, cy = CANVAS_W // 2, 10
 
-    # Head
+    # Head — draw a small circle
     head_r = 2
     for ang in range(0, 360, 30):
         rad = math.radians(ang)
@@ -273,10 +414,129 @@ def render_figure(left_pos, right_pos):
     return [''.join(row) for row in canvas]
 
 
+def render_figure_colored(left_pos, right_pos):
+    """
+    Render the stick figure with ANSI color codes applied.
+    Returns the canvas as a list of strings with color escape sequences.
+    The head is cyan, the torso/legs are white, the left arm/flag are
+    yellow, and the right arm/flag are green.
+    """
+    canvas = make_canvas()
+
+    cx, cy = CANVAS_W // 2, 10
+
+    # Head (cyan)
+    head_r = 2
+    for ang in range(0, 360, 30):
+        rad = math.radians(ang)
+        hx = cx + round(head_r * math.cos(rad))
+        hy = cy - 3 + round(-head_r * math.sin(rad))
+        set_pixel(canvas, hx, hy, '@')
+    set_pixel(canvas, cx, cy - 3, '@')
+
+    # Torso (white)
+    draw_line(canvas, cx, cy, cx, cy + 5, '|')
+
+    # Legs (white)
+    draw_line(canvas, cx, cy + 5, cx - 3, cy + 9, '\\')
+    draw_line(canvas, cx, cy + 5, cx + 3, cy + 9, '/')
+
+    # Left arm (yellow)
+    l_angle = POSITIONS.get(left_pos, -90)
+    l_dx, l_dy = angle_to_delta(l_angle, length=6)
+    lsx, lsy = cx - 1, cy
+    ltx, lty = lsx + l_dx, lsy + l_dy
+    draw_line(canvas, lsx, lsy, ltx, lty, '-')
+    draw_flag(canvas, ltx, lty, '#')
+
+    # Right arm (green)
+    r_angle = POSITIONS.get(right_pos, -90)
+    r_dx, r_dy = angle_to_delta(r_angle, length=6)
+    rsx, rsy = cx + 1, cy
+    rtx, rty = rsx + r_dx, rsy + r_dy
+    draw_line(canvas, rsx, rsy, rtx, rty, '-')
+    draw_flag(canvas, rtx, rty, '#')
+
+    # Now convert to strings with color applied
+    # Track which pixels are which color
+    color_map = {}  # (x, y) -> color name
+    # Head
+    for ang in range(0, 360, 30):
+        rad = math.radians(ang)
+        hx = cx + round(head_r * math.cos(rad))
+        hy = cy - 3 + round(-head_r * math.sin(rad))
+        if 0 <= hy < CANVAS_H and 0 <= hx < CANVAS_W:
+            color_map[(hx, hy)] = 'cyan'
+    if 0 <= (cy - 3) < CANVAS_H and 0 <= cx < CANVAS_W:
+        color_map[(cx, cy - 3)] = 'cyan'
+
+    # Mark left arm pixels
+    l_pixels = _line_pixels(lsx, lsy, ltx, lty)
+    for px, py in l_pixels:
+        color_map[(px, py)] = 'yellow'
+    for dy in range(-1, 2):
+        for dx in range(-1, 2):
+            color_map[(ltx + dx, lty + dy)] = 'yellow'
+
+    # Mark right arm pixels
+    r_pixels = _line_pixels(rsx, rsy, rtx, rty)
+    for px, py in r_pixels:
+        color_map[(px, py)] = 'green'
+    for dy in range(-1, 2):
+        for dx in range(-1, 2):
+            color_map[(rtx + dx, rty + dy)] = 'green'
+
+    # Torso and legs = white
+    for y in range(CANVAS_H):
+        for x in range(CANVAS_W):
+            ch = canvas[y][x]
+            if ch in '|/\\':
+                color_map[(x, y)] = 'white'
+
+    # Build colored output
+    lines = []
+    for y in range(CANVAS_H):
+        row = []
+        for x in range(CANVAS_W):
+            ch = canvas[y][x]
+            if ch == ' ':
+                row.append(' ')
+            else:
+                color = color_map.get((x, y), 'white')
+                row.append(colorize(ch, color, enabled=True))
+        lines.append(''.join(row))
+
+    return lines
+
+
+def _line_pixels(x0, y0, x1, y1):
+    """Return list of (x, y) pixels for a Bresenham line (without drawing)."""
+    pixels = []
+    dx = abs(x1 - x0)
+    dy = abs(y1 - y0)
+    sx = 1 if x0 < x1 else -1
+    sy = 1 if y0 < y1 else -1
+    err = dx - dy
+    while True:
+        pixels.append((x0, y0))
+        if x0 == x1 and y0 == y1:
+            break
+        e2 = 2 * err
+        if e2 > -dy:
+            err -= dy
+            x0 += sx
+        if e2 < dx:
+            err += dx
+            y0 += sy
+    return pixels
+
+
 def render_diagram(left_pos, right_pos):
     """
     Render a small compass-diagram showing which positions are active.
+    Active positions are highlighted with [brackets].
     """
+    # Base grid with position numbers
     grid = [
         "      6    7    8      ",
         "       \\  |  /        ",
@@ -284,9 +544,8 @@ def render_diagram(left_pos, right_pos):
         "       /  |  \\        ",
         "      4    3    2      ",
     ]
-    # Highlight active positions
-    lines = grid[:]
-    # We'll mark active positions with brackets
+
+    # Coordinates of each position number in the grid
     pos_coords = {
         1: (12, 2),
         2: (19, 4),
@@ -297,20 +556,23 @@ def render_diagram(left_pos, right_pos):
         7: (12, 0),
         8: (18, 0),
     }
-    # Build a highlight overlay
+
+    # Build highlighted version
     result = []
     for y, line in enumerate(grid):
         chars = list(line)
         for pos, (px, py) in pos_coords.items():
             if py == y and (pos == left_pos or pos == right_pos):
                 if px < len(chars):
-                    # Surround with brackets
-                    pass  # keep simple — just mark with [ ]
+                    # Highlight the position number with brackets
+                    chars[px] = f"[{chars[px]}]"
+        # Rejoin carefully — we may have expanded some chars
         result.append(''.join(chars))
 
-    # Simpler: just annotate
+    # Add active positions label
     active = sorted(set([left_pos, right_pos]))
-    label_line = f"  Active positions: {', '.join(str(p) for p in active)}"
+    pos_descs = [f"{p}({POSITION_NAMES.get(p, '?')})" for p in active]
+    label_line = f"  Active positions: {', '.join(str(p) for p in active)}  ({', '.join(pos_descs)})"
     return result + [label_line]
 
 
@@ -319,24 +581,47 @@ def render_diagram(left_pos, right_pos):
 # ---------------------------------------------------------------------------
 
 def clear_screen():
+    """Clear the terminal screen (cross-platform)."""
     os.system('cls' if os.name == 'nt' else 'clear')
 
 
-def display_frame(frame, show_diagram=True):
-    """Display a single semaphore frame."""
+def display_frame(frame, show_diagram=True, use_color=False):
+    """
+    Display a single semaphore frame.
+
+    Args:
+        frame: A (char, left, right, label) tuple.
+        show_diagram: Whether to show the compass diagram.
+        use_color: Whether to use ANSI color in the figure.
+    """
     char, left, right, label = frame
-    figure = render_figure(left, right)
+
+    if use_color:
+        figure = render_figure_colored(left, right)
+    else:
+        figure = render_figure(left, right)
 
     # Top border
     width = max(len(line) for line in figure)
+    # Account for ANSI codes when measuring visible width
     border = '+' + '-' * (width + 2) + '+'
 
     lines = [border]
-    lines.append(f"|  Semaphore Signaler  {' ' * (width - 19)}|")
+    title = "Semaphore Signaler"
+    lines.append(f"|  {title}  {' ' * (width - len(title) - 2)}|")
     lines.append(border)
 
     for line in figure:
-        lines.append(f"| {line.ljust(width)} |")
+        # For colored lines, we need to pad based on visible width
+        visible_len = len(line)
+        # Strip ANSI codes for width calculation
+        if use_color:
+            clean = line.replace('\033[0m', '').replace('\033[31m', '').replace('\033[32m', '')
+            clean = clean.replace('\033[33m', '').replace('\033[34m', '').replace('\033[35m', '')
+            clean = clean.replace('\033[36m', '').replace('\033[37m', '').replace('\033[1m', '')
+            visible_len = len(clean)
+        pad = ' ' * (width - visible_len)
+        lines.append(f"| {line}{pad} |")
 
     lines.append(border)
 
@@ -356,8 +641,17 @@ def display_frame(frame, show_diagram=True):
     print('\n'.join(lines))
 
 
-def animate(text, delay=1.2, show_diagram=True, loop=False):
-    """Animate the semaphore encoding of text."""
+def animate(text, delay=1.2, show_diagram=True, loop=False, use_color=False):
+    """
+    Animate the semaphore encoding of text.
+
+    Args:
+        text: The text to signal.
+        delay: Seconds between frames.
+        show_diagram: Whether to show the compass diagram.
+        loop: If True, repeat the animation until Ctrl+C.
+        use_color: If True, use ANSI color in the figure.
+    """
     frames = encode_text(text)
 
     if not frames:
@@ -368,7 +662,7 @@ def animate(text, delay=1.2, show_diagram=True, loop=False):
         while True:
             for i, frame in enumerate(frames):
                 clear_screen()
-                display_frame(frame, show_diagram=show_diagram)
+                display_frame(frame, show_diagram=show_diagram, use_color=use_color)
                 print(f"\n  Frame {i + 1}/{len(frames)}  |  Text: \"{text}\"")
                 print("  Press Ctrl+C to stop.")
                 time.sleep(delay)
@@ -380,15 +674,87 @@ def animate(text, delay=1.2, show_diagram=True, loop=False):
         print("\n\n  Signaling stopped.")
 
 
+def export_frames(text, filepath, show_diagram=True, use_color=False):
+    """
+    Export semaphore frames to a text file (no animation).
+
+    Args:
+        text: The text to signal.
+        filepath: Output file path.
+        show_diagram: Whether to include diagrams.
+        use_color: Whether to use ANSI color (note: will include escape codes in file).
+    """
+    frames = encode_text(text)
+    if not frames:
+        print("Nothing to export.")
+        return
+
+    all_lines = []
+    all_lines.append(f"# Semaphore Signal Export")
+    all_lines.append(f"# Text: {text}")
+    all_lines.append(f"# Frames: {len(frames)}")
+    all_lines.append(f"# Generated by Terminal Semaphore Flag Signaler v{__version__}")
+    all_lines.append("")
+
+    for i, frame in enumerate(frames):
+        char, left, right, label = frame
+        all_lines.append(f"--- Frame {i + 1}/{len(frames)}: {label} ---")
+
+        if use_color:
+            figure = render_figure_colored(left, right)
+        else:
+            figure = render_figure(left, right)
+
+        for line in figure:
+            if use_color:
+                # Strip ANSI codes for file export
+                clean = line
+                for code in COLORS.values():
+                    clean = clean.replace(code, '')
+                all_lines.append(clean)
+            else:
+                all_lines.append(line)
+
+        all_lines.append(f"  Character: {repr(char)}  |  L={left}  R={right}  |  {label}")
+
+        if show_diagram:
+            diag = render_diagram(left, right)
+            all_lines.append("")
+            all_lines.extend(diag)
+
+        all_lines.append("")
+
+    try:
+        with open(filepath, 'w') as f:
+            f.write('\n'.join(all_lines))
+        print(f"Exported {len(frames)} frames to '{filepath}'")
+    except IOError as e:
+        print(f"Error writing to '{filepath}': {e}", file=sys.stderr)
+        sys.exit(1)
+
+
 # ---------------------------------------------------------------------------
 # Interactive mode
 # ---------------------------------------------------------------------------
 
-def interactive_mode(show_diagram=True, delay=1.2):
-    """Run an interactive REPL for encoding text."""
+def interactive_mode(show_diagram=True, delay=1.2, use_color=False):
+    """
+    Run an interactive REPL for encoding text.
+
+    Supports special commands:
+      :demo     - run a demo sequence
+      :chart    - show the full semaphore chart
+      :file X   - signal contents of file X
+      :decode X - decode position pairs (e.g. "1,8 1,7")
+      :special  - show special semaphore signals
+      :color    - toggle color mode
+      :help     - show available commands
+      :quit     - exit
+    """
+    color_enabled = use_color
     print("=" * 50)
     print("  Terminal Semaphore Flag Signaler")
-    print("  Interactive Mode")
+    print(f"  Interactive Mode  (v{__version__})")
     print("=" * 50)
     print()
     print("  Type text to signal, then press Enter.")
@@ -396,12 +762,17 @@ def interactive_mode(show_diagram=True, delay=1.2):
     print("    :demo    - run a demo sequence")
     print("    :chart   - show the full semaphore chart")
     print("    :file X  - signal contents of file X")
+    print("    :decode X - decode position pairs (e.g. \"1,8 1,7\")")
+    print("    :special - show special semaphore signals")
+    print("    :color   - toggle color mode")
+    print("    :help    - show available commands")
     print("    :quit    - exit")
     print()
 
     while True:
         try:
-            text = input("  > ").strip()
+            prompt = "  > "
+            text = input(prompt).strip()
         except (EOFError, KeyboardInterrupt):
             print("\n  Goodbye!")
             break
@@ -412,22 +783,51 @@ def interactive_mode(show_diagram=True, delay=1.2):
         if text == ":quit":
             print("  Goodbye!")
             break
+        elif text == ":help":
+            _print_interactive_help()
         elif text == ":demo":
-            animate("SOS HELLO 42", delay=delay, show_diagram=show_diagram)
+            animate("SOS HELLO 42", delay=delay, show_diagram=show_diagram, use_color=color_enabled)
         elif text == ":chart":
             show_full_chart()
+        elif text == ":special":
+            show_special_signals()
+        elif text == ":color":
+            color_enabled = not color_enabled
+            print(f"  Color mode: {'ON' if color_enabled else 'OFF'}")
         elif text.startswith(":file "):
             filepath = text[6:].strip()
             try:
                 with open(filepath, 'r') as f:
                     content = f.read()
-                animate(content, delay=delay, show_diagram=show_diagram)
+                animate(content, delay=delay, show_diagram=show_diagram, use_color=color_enabled)
             except FileNotFoundError:
                 print(f"  File not found: {filepath}")
+            except IOError as e:
+                print(f"  Error reading file: {e}")
+        elif text.startswith(":decode "):
+            pos_str = text[9:].strip()
+            decoded = decode_position_string(pos_str)
+            print(f"  Decoded: {decoded}")
         else:
-            animate(text, delay=delay, show_diagram=show_diagram)
+            animate(text, delay=delay, show_diagram=show_diagram, use_color=color_enabled)
 
         print()
+
+
+def _print_interactive_help():
+    """Print help for interactive mode commands."""
+    print()
+    print("  Available commands:")
+    print("    <text>     - signal the given text")
+    print("    :demo      - signal a demo sequence (\"SOS HELLO 42\")")
+    print("    :chart     - display the full semaphore alphabet chart")
+    print("    :file PATH - signal contents of a file")
+    print("    :decode X  - decode position pairs, e.g. :decode 1,8 1,7 3,7")
+    print("    :special   - show special semaphore signals (attention, error, etc.)")
+    print("    :color     - toggle ANSI color output")
+    print("    :help      - show this help")
+    print("    :quit      - exit the program")
+    print()
 
 
 def show_full_chart():
@@ -437,12 +837,14 @@ def show_full_chart():
     print("  Complete Semaphore Alphabet Chart")
     print("=" * 60)
     print()
-    print("  Letter | Left Pos | Right Pos")
-    print("  -------|----------|----------")
+    print("  Letter | Left Pos | Right Pos | Description")
+    print("  -------|----------|----------|---------------------------")
 
     for letter in string.ascii_uppercase:
         left, right = SEMAPHORE[letter]
-        print(f"   {letter}     |    {left}     |    {right}")
+        l_name = POSITION_NAMES.get(left, '?')
+        r_name = POSITION_NAMES.get(right, '?')
+        print(f"   {letter}     |    {left}     |    {right}     | {l_name} / {r_name}")
 
     print()
     print("  Position guide:")
@@ -457,13 +859,54 @@ def show_full_chart():
     input("  Press Enter to continue...")
 
 
+def show_special_signals():
+    """Display the special semaphore signals reference."""
+    clear_screen()
+    print("=" * 60)
+    print("  Special Semaphore Signals")
+    print("=" * 60)
+    print()
+    print("  Signal       | Positions | Description")
+    print("  -------------|-----------|---------------------------")
+
+    descriptions = {
+        'REST':      'Both arms down — rest / attention',
+        'ATTENTION': 'Both flags up — start of message / attention',
+        'ERROR':     'Flags crossed — error / cancel last character',
+        'CORRECT':   'Acknowledge / correct / ready to receive',
+        'NUMERALS':  'Switch to number mode (same as J position)',
+        'LETTERS':   'Return to letter mode (same as P position)',
+    }
+
+    for name, (l, r) in SPECIAL_SIGNALS.items():
+        desc = descriptions.get(name, '')
+        print(f"  {name:12s} |   {l}, {r}    | {desc}")
+
+    print()
+    input("  Press Enter to continue...")
+
+
 # ---------------------------------------------------------------------------
-# Main
+# Main / CLI
 # ---------------------------------------------------------------------------
 
-def main():
+def build_parser():
+    """Build and return the argparse argument parser."""
     parser = argparse.ArgumentParser(
-        description="Terminal Semaphore Flag Signaler — translate text into animated semaphore flag positions."
+        description="Terminal Semaphore Flag Signaler — translate text into animated semaphore flag positions.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+examples:
+  %(prog)s "SOS"                    Signal "SOS" with animation
+  %(prog)s "HELLO WORLD" --color    Signal with ANSI color
+  %(prog)s "SOS" --encode           Show positions without animation
+  %(prog)s "SOS" --json             Output JSON-encoded frames
+  %(prog)s "SOS" --export out.txt   Save frames to a file
+  %(prog)s --decode "4,8 3,7 4,8"  Decode positions back to text
+  %(prog)s --chart                  Print the semaphore alphabet chart
+  %(prog)s --special                Show special semaphore signals
+  %(prog)s                          Enter interactive mode
+"""
     )
     parser.add_argument(
         'text',
@@ -487,9 +930,19 @@ def main():
         help='Loop the animation continuously'
     )
     parser.add_argument(
+        '--color',
+        action='store_true',
+        help='Enable ANSI color output for the stick figure'
+    )
+    parser.add_argument(
         '--chart',
         action='store_true',
         help='Print the full semaphore chart and exit'
+    )
+    parser.add_argument(
+        '--special',
+        action='store_true',
+        help='Print the special semaphore signals reference and exit'
     )
     parser.add_argument(
         '--file',
@@ -501,10 +954,38 @@ def main():
         action='store_true',
         help='Print the encoded positions without animation (text mode)'
     )
+    parser.add_argument(
+        '--json',
+        action='store_true',
+        help='Output encoded frames as JSON (machine-readable)'
+    )
+    parser.add_argument(
+        '--export',
+        type=str,
+        metavar='FILEPATH',
+        help='Export animation frames to a text file'
+    )
+    parser.add_argument(
+        '--decode',
+        type=str,
+        metavar='POSITIONS',
+        help='Decode semaphore position pairs to text (e.g. "4,8 3,7 4,8")'
+    )
+    parser.add_argument(
+        '--version',
+        action='version',
+        version=f'%(prog)s {__version__}'
+    )
+    return parser
 
+
+def main():
+    """Main entry point — parse arguments and dispatch to the appropriate mode."""
+    parser = build_parser()
     args = parser.parse_args()
     show_diagram = not args.no_diagram
 
+    # --chart mode
     if args.chart:
         print("=" * 40)
         print("  Semaphore Alphabet Chart")
@@ -522,6 +1003,34 @@ def main():
         print("       4    3    2")
         return
 
+    # --special mode
+    if args.special:
+        print("=" * 50)
+        print("  Special Semaphore Signals")
+        print("=" * 50)
+        print()
+        descriptions = {
+            'REST':      'Both arms down — rest / attention',
+            'ATTENTION': 'Both flags up — start of message / attention',
+            'ERROR':     'Flags crossed — error / cancel last character',
+            'CORRECT':   'Acknowledge / correct / ready to receive',
+            'NUMERALS':  'Switch to number mode (same as J position)',
+            'LETTERS':   'Return to letter mode (same as P position)',
+        }
+        print("  Signal       | Positions | Description")
+        print("  -------------|-----------|---------------------------")
+        for name, (l, r) in SPECIAL_SIGNALS.items():
+            desc = descriptions.get(name, '')
+            print(f"  {name:12s} |   {l}, {r}    | {desc}")
+        return
+
+    # --decode mode
+    if args.decode is not None:
+        decoded = decode_position_string(args.decode)
+        print(f"  Decoded: {decoded}")
+        return
+
+    # Determine the text source
     if args.file:
         try:
             with open(args.file, 'r') as f:
@@ -529,15 +1038,41 @@ def main():
         except FileNotFoundError:
             print(f"Error: file '{args.file}' not found.", file=sys.stderr)
             sys.exit(1)
+        except IOError as e:
+            print(f"Error reading file '{args.file}': {e}", file=sys.stderr)
+            sys.exit(1)
     elif args.text:
         text = ' '.join(args.text)
+    elif args.export is None and not args.json:
+        # Interactive mode (only if no other output mode specified)
+        interactive_mode(show_diagram=show_diagram, delay=args.delay, use_color=args.color)
+        return
     else:
-        # Interactive mode
-        interactive_mode(show_diagram=show_diagram, delay=args.delay)
+        # --export or --json without text — need text
+        print("Error: --export and --json require text input (positional or --file).", file=sys.stderr)
+        sys.exit(1)
+
+    # --json mode
+    if args.json:
+        frames = encode_text(text)
+        output = {
+            "text": text,
+            "frame_count": len(frames),
+            "frames": [
+                {
+                    "char": char,
+                    "left_position": left,
+                    "right_position": right,
+                    "label": label
+                }
+                for char, left, right, label in frames
+            ]
+        }
+        print(json_module.dumps(output, indent=2))
         return
 
+    # --encode mode (text output)
     if args.encode:
-        # Text-only mode: print positions
         frames = encode_text(text)
         print(f"Text: {text}")
         print(f"Frames: {len(frames)}")
@@ -546,7 +1081,13 @@ def main():
             print(f"  {repr(char):>6}  ->  L={left}  R={right}   ({label})")
         return
 
-    animate(text, delay=args.delay, show_diagram=show_diagram, loop=args.loop)
+    # --export mode
+    if args.export:
+        export_frames(text, args.export, show_diagram=show_diagram, use_color=args.color)
+        return
+
+    # Default: animate
+    animate(text, delay=args.delay, show_diagram=show_diagram, loop=args.loop, use_color=args.color)
 
 
 if __name__ == '__main__':
