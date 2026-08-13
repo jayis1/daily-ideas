@@ -39,9 +39,12 @@ from semaphore import (
     # Color
     colorize,
     COLORS,
+    strip_ansi,
+    visible_len,
     # CLI
     build_parser,
     export_frames,
+    display_frame,
 )
 
 
@@ -625,13 +628,143 @@ def test_version_string():
 
 
 # ---------------------------------------------------------------------------
+# Bug-fix regression tests (v2.1.0)
+# ---------------------------------------------------------------------------
+
+def test_decode_letter_j_alone():
+    """Letter J decoded alone should produce 'J', not empty string.
+
+    Regression: (2,6) was always treated as numerals preamble, so
+    decoding J alone produced ''.
+    """
+    result = decode_positions([(2, 6)])
+    assert result == "J", f"Expected 'J', got '{result}'"
+    # Reversed order too
+    result = decode_positions([(6, 2)])
+    assert result == "J", f"Expected 'J', got '{result}'"
+    print("✓ Decoding letter J alone works")
+
+
+def test_decode_letter_j_in_sequence():
+    """Letter J followed by a non-digit letter should decode as J.
+
+    Regression: J followed by S was decoded as just 'S' (J swallowed).
+    """
+    result = decode_positions([(2, 6), (4, 8)])  # J, S
+    assert result == "JS", f"Expected 'JS', got '{result}'"
+    print("✓ Decoding letter J in sequence works")
+
+
+def test_decode_numerals_preamble_still_works():
+    """J followed by a digit-mapped letter should be treated as numerals."""
+    # J=(2,6), A=(1,8) -> in number mode A=1
+    result = decode_positions([(2, 6), (1, 8)])
+    assert result == "1", f"Expected '1', got '{result}'"
+    print("✓ Numerals preamble decoding still works with J fix")
+
+
+def test_decode_j_at_end_of_digit_sequence():
+    """J after digits but with no following digit should decode as 0 in number mode.
+
+    In number mode, J maps to digit 0 (NUMERAL_MAP['0'] = 'J'). So a J
+    that appears within a number run (no LETTERS signal to exit) correctly
+    decodes as '0', not as the letter J.
+    """
+    # numerals(J), 1(A), J — last J is in number mode, J=0
+    result = decode_positions([(2, 6), (1, 8), (2, 6)])
+    assert result == "10", f"Expected '10', got '{result}'"
+    print("✓ J in number mode decodes as 0")
+
+
+def test_decode_position_string_colon_separator():
+    """Colon should work as a between-pair separator.
+
+    Regression: "1,8:1,7" was parsed incorrectly because colon was
+    treated as a within-pair separator, splitting "1,8:1,7" into 3 parts.
+    """
+    result = decode_position_string("1,8:1,7")
+    assert result == "AB", f"Expected 'AB', got '{result}'"
+    print("✓ Colon between-pair separator works")
+
+
+def test_decode_position_string_compact_digits():
+    """Two-digit tokens without separator should parse as (left, right).
+
+    Regression: "18 17" produced '' because no separator was found.
+    """
+    result = decode_position_string("18 17")
+    assert result == "AB", f"Expected 'AB', got '{result}'"
+    print("✓ Compact digit token parsing works")
+
+
+def test_diagram_all_positions_bracketed():
+    """Every position should be bracketable in the diagram.
+
+    Regression: positions 2, 3, 7, 8 had wrong coordinates and were
+    never bracketed (brackets appeared at wrong locations).
+    """
+    for pos in range(1, 9):
+        diag = render_diagram(pos, pos)
+        joined = '\n'.join(diag)
+        assert f"[{pos}]" in joined, f"Position {pos} not bracketed in diagram"
+    print("✓ All 8 positions correctly bracketed in diagram")
+
+
+def test_strip_ansi():
+    """strip_ansi should remove all ANSI escape codes."""
+    text = "\033[31mhello\033[0m world \033[36m"
+    result = strip_ansi(text)
+    assert result == "hello world ", f"Expected 'hello world ', got '{result}'"
+    print("✓ strip_ansi removes ANSI codes")
+
+
+def test_visible_len():
+    """visible_len should return the visible length, not the raw length."""
+    text = "\033[31mhello\033[0m"
+    assert visible_len(text) == 5, f"Expected 5, got {visible_len(text)}"
+    assert visible_len("plain") == 5
+    print("✓ visible_len returns correct visible width")
+
+
+def test_display_frame_color_border_width():
+    """display_frame with color should produce a border of normal width.
+
+    Regression: border width was computed from raw string length including
+    ANSI codes, producing a border ~89 chars wide instead of ~44.
+    """
+    old_stdout = sys.stdout
+    sys.stdout = io.StringIO()
+    try:
+        display_frame(('A', 1, 8, "Letter 'A'"), show_diagram=False, use_color=True)
+        output = sys.stdout.getvalue()
+    finally:
+        sys.stdout = old_stdout
+    first_line = output.split('\n')[0]
+    # The border should be 40+4 = 44 chars (canvas width + padding + borders)
+    assert len(first_line) <= 50, \
+        f"Border too wide: {len(first_line)} chars (expected ~44). Line: {first_line!r}"
+    print(f"✓ Colored display_frame border width correct ({len(first_line)} chars)")
+
+
+def test_negative_delay_rejected_in_animation():
+    """Negative delay should be rejected for animation mode."""
+    import subprocess
+    semaphore_path = os.path.join(os.path.dirname(__file__), 'semaphore.py')
+    r = subprocess.run([sys.executable, semaphore_path, 'A', '--delay', '-1'],
+                       capture_output=True, text=True, timeout=5)
+    assert r.returncode != 0, "Negative delay should cause error in animation mode"
+    assert 'positive' in r.stderr.lower(), f"Expected 'positive' in error, got: {r.stderr}"
+    print("✓ Negative delay rejected for animation mode")
+
+
+# ---------------------------------------------------------------------------
 # Test runner
 # ---------------------------------------------------------------------------
 
 def run_all_tests():
     """Run all tests."""
     print("\n" + "=" * 50)
-    print("  Semaphore Signaler — Test Suite (v2.0.0)")
+    print("  Semaphore Signaler — Test Suite (v2.1.0)")
     print("=" * 50 + "\n")
 
     tests = [
@@ -701,6 +834,18 @@ def run_all_tests():
         test_sos_encoding,
         test_all_positions_unique_angles,
         test_version_string,
+        # Bug-fix regressions (v2.1.0)
+        test_decode_letter_j_alone,
+        test_decode_letter_j_in_sequence,
+        test_decode_numerals_preamble_still_works,
+        test_decode_j_at_end_of_digit_sequence,
+        test_decode_position_string_colon_separator,
+        test_decode_position_string_compact_digits,
+        test_diagram_all_positions_bracketed,
+        test_strip_ansi,
+        test_visible_len,
+        test_display_frame_color_border_width,
+        test_negative_delay_rejected_in_animation,
     ]
 
     passed = 0

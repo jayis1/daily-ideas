@@ -22,7 +22,7 @@ This tool:
   - Includes special signals: Attention, Error/Cancel, Correct, Rest
   - Can output machine-readable JSON for integration with other tools
 
-Version: 2.0.0
+Version: 2.1.0
 """
 
 import argparse
@@ -33,7 +33,7 @@ import string
 import os
 import json as json_module
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 
 # ---------------------------------------------------------------------------
 # Semaphore encoding
@@ -200,15 +200,24 @@ def decode_positions(positions):
         The decoded text string. Number mode is handled via the J/numerals
         signal. Unknown pairs produce '?'.
 
+    The J position (2,6) is ambiguous: it can be the letter J or the
+    "numerals" preamble. We use lookahead — if the *next* frame decodes
+    as a digit-mapped letter (A–I), then J is treated as the numerals
+    preamble; otherwise it is the letter J.
+
     Example:
-        >>> decode_positions([(8, 1), (7, 1), (12, 12)])
+        >>> decode_positions([(8, 1), (7, 1)])
         'AB'
     """
     result = []
     in_number_mode = False
+    j_key = SEMAPHORE['J']  # (2, 6)
+    j_keys = {j_key, (j_key[1], j_key[0])}  # both orderings
+    digit_letters = set(NUMERAL_MAP.values())  # letters A-I that map to digits
 
-    for pair in positions:
-        # Normalize the pair to a sorted tuple for lookup
+    i = 0
+    while i < len(positions):
+        pair = positions[i]
         left, right = pair
         key = (left, right)
 
@@ -216,21 +225,38 @@ def decode_positions(positions):
         if key == REST or (left == 1 and right == 1):
             result.append(' ')
             in_number_mode = False
+            i += 1
             continue
 
-        # Check for numerals signal (J position = (2, 6))
-        if key == SEMAPHORE['J'] or (left, right) == (6, 2):
-            # This could be letter J or the numerals preamble.
-            # In decoding, if the next frame decodes as a digit-mapped
-            # letter, we treat this as the numerals signal.
-            in_number_mode = True
-            # Don't append anything — it's a mode switch
+        # Check for numerals signal (J position = (2, 6) or (6, 2))
+        if key in j_keys:
+            # Lookahead: is the next frame a digit-mapped letter?
+            if i + 1 < len(positions):
+                next_key = positions[i + 1]
+                next_letter = SEMAPHORE_REVERSE.get(next_key)
+                if next_letter is not None and next_letter in digit_letters:
+                    # This J is the numerals preamble
+                    in_number_mode = True
+                    i += 1
+                    continue
+            # No valid digit follows — treat as letter J
+            if in_number_mode:
+                digit = NUMERAL_REVERSE.get('J')
+                if digit is not None:
+                    result.append(digit)
+                else:
+                    in_number_mode = False
+                    result.append('J')
+            else:
+                result.append('J')
+            i += 1
             continue
 
         # Look up the letter
         letter = SEMAPHORE_REVERSE.get(key)
         if letter is None:
             result.append('?')
+            i += 1
             continue
 
         if in_number_mode:
@@ -244,6 +270,7 @@ def decode_positions(positions):
                 result.append(letter)
         else:
             result.append(letter)
+        i += 1
 
     return ''.join(result)
 
@@ -253,31 +280,41 @@ def decode_position_string(pos_str):
     Parse a string of position pairs and decode them.
 
     Accepts formats like:
-      "1,8 1,7 3,7"     (space-separated pairs)
-      "1,8;1,7;3,7"     (semicolon-separated)
-      "8-1 7-1 7-3"     (dash-separated within pair)
+      "1,8 1,7 3,7"     (space-separated pairs, comma within pair)
+      "1,8;1,7;3,7"     (semicolon-separated pairs)
+      "1,8:1,7:3,7"     (colon-separated pairs)
+      "8-1 7-1 7-3"     (dash within pair, space between)
+      "1/8 2/7"         (slash within pair, space between)
+
+    Between-pair separators: whitespace, semicolons, colons.
+    Within-pair separators: commas, dashes, slashes.
 
     Returns the decoded text.
     """
-    # Normalize separators: replace semicolons with spaces
-    pos_str = pos_str.replace(';', ' ')
+    import re
+
+    # Normalize between-pair separators: replace ; and : with spaces
+    pos_str = pos_str.replace(';', ' ').replace(':', ' ')
     # Split into tokens by whitespace
     tokens = pos_str.split()
 
     positions = []
     for token in tokens:
-        # Each token should be like "1,8" or "1-8" or "1:8"
-        for sep in [',', '-', ':', '/']:
-            if sep in token:
-                parts = token.split(sep)
-                if len(parts) == 2:
-                    try:
-                        left = int(parts[0].strip())
-                        right = int(parts[1].strip())
-                        positions.append((left, right))
-                    except ValueError:
-                        pass  # skip malformed tokens
-                break
+        # Try to split on the first within-pair separator (comma, dash, slash)
+        match = re.split(r'[,\-/]', token, maxsplit=1)
+        if len(match) == 2:
+            try:
+                left = int(match[0].strip())
+                right = int(match[1].strip())
+                positions.append((left, right))
+            except ValueError:
+                pass  # skip malformed tokens
+        else:
+            # No separator found — try parsing as two single-digit numbers
+            # concatenated (e.g. "18" -> (1, 8))
+            if len(token) == 2 and token.isdigit():
+                positions.append((int(token[0]), int(token[1])))
+            # Otherwise skip the malformed token
 
     return decode_positions(positions)
 
@@ -545,29 +582,41 @@ def render_diagram(left_pos, right_pos):
         "      4    3    2      ",
     ]
 
-    # Coordinates of each position number in the grid
+    # Coordinates of each position number in the grid.
+    # These must point at the digit character for each position in the
+    # grid strings above. Verified by scanning the grid for digit chars.
     pos_coords = {
-        1: (12, 2),
-        2: (19, 4),
-        3: (12, 4),
-        4: (6, 4),
-        5: (4, 2),
-        6: (6, 0),
-        7: (12, 0),
-        8: (18, 0),
+        1: (12, 2),   # row 2: "    5-- O --1          "  -> '1' at index 12
+        2: (16, 4),   # row 4: "      4    3    2      "  -> '2' at index 16
+        3: (11, 4),   # row 4: "      4    3    2      "  -> '3' at index 11
+        4: (6, 4),    # row 4: "      4    3    2      "  -> '4' at index 6
+        5: (4, 2),    # row 2: "    5-- O --1          "  -> '5' at index 4
+        6: (6, 0),    # row 0: "      6    7    8      "  -> '6' at index 6
+        7: (11, 0),   # row 0: "      6    7    8      "  -> '7' at index 11
+        8: (16, 0),   # row 0: "      6    7    8      "  -> '8' at index 16
     }
 
-    # Build highlighted version
+    # Build highlighted version. We need to replace single characters
+    # with bracketed versions like "[N]", which changes the string length.
+    # Track replacements per row and rebuild each row string at the end.
+    replacements = {}  # (row_idx, col_idx) -> replacement string
+    for pos, (px, py) in pos_coords.items():
+        if pos == left_pos or pos == right_pos:
+            if py < len(grid) and px < len(grid[py]):
+                replacements[(py, px)] = f"[{grid[py][px]}]"
+
     result = []
     for y, line in enumerate(grid):
         chars = list(line)
-        for pos, (px, py) in pos_coords.items():
-            if py == y and (pos == left_pos or pos == right_pos):
-                if px < len(chars):
-                    # Highlight the position number with brackets
-                    chars[px] = f"[{chars[px]}]"
-        # Rejoin carefully — we may have expanded some chars
-        result.append(''.join(chars))
+        # Apply replacements left-to-right, building a new string.
+        # Since replacements expand single chars, we track an offset.
+        out = []
+        for x, ch in enumerate(chars):
+            if (y, x) in replacements:
+                out.append(replacements[(y, x)])
+            else:
+                out.append(ch)
+        result.append(''.join(out))
 
     # Add active positions label
     active = sorted(set([left_pos, right_pos]))
@@ -583,6 +632,24 @@ def render_diagram(left_pos, right_pos):
 def clear_screen():
     """Clear the terminal screen (cross-platform)."""
     os.system('cls' if os.name == 'nt' else 'clear')
+
+
+# Regex for stripping ANSI escape codes from strings
+_ANSI_RE = None
+
+
+def strip_ansi(text):
+    """Remove all ANSI escape sequences from *text*."""
+    global _ANSI_RE
+    if _ANSI_RE is None:
+        import re
+        _ANSI_RE = re.compile(r'\033\[[0-9;]*m')
+    return _ANSI_RE.sub('', text)
+
+
+def visible_len(text):
+    """Return the visible (non-ANSI) length of *text*."""
+    return len(strip_ansi(text))
 
 
 def display_frame(frame, show_diagram=True, use_color=False):
@@ -601,9 +668,8 @@ def display_frame(frame, show_diagram=True, use_color=False):
     else:
         figure = render_figure(left, right)
 
-    # Top border
-    width = max(len(line) for line in figure)
-    # Account for ANSI codes when measuring visible width
+    # Calculate width based on visible (non-ANSI) characters
+    width = max(visible_len(line) for line in figure)
     border = '+' + '-' * (width + 2) + '+'
 
     lines = [border]
@@ -612,15 +678,8 @@ def display_frame(frame, show_diagram=True, use_color=False):
     lines.append(border)
 
     for line in figure:
-        # For colored lines, we need to pad based on visible width
-        visible_len = len(line)
-        # Strip ANSI codes for width calculation
-        if use_color:
-            clean = line.replace('\033[0m', '').replace('\033[31m', '').replace('\033[32m', '')
-            clean = clean.replace('\033[33m', '').replace('\033[34m', '').replace('\033[35m', '')
-            clean = clean.replace('\033[36m', '').replace('\033[37m', '').replace('\033[1m', '')
-            visible_len = len(clean)
-        pad = ' ' * (width - visible_len)
+        vlen = visible_len(line)
+        pad = ' ' * (width - vlen)
         lines.append(f"| {line}{pad} |")
 
     lines.append(border)
@@ -658,6 +717,10 @@ def animate(text, delay=1.2, show_diagram=True, loop=False, use_color=False):
         print("Nothing to signal.")
         return
 
+    # Guard against non-positive delay (time.sleep raises ValueError for
+    # negative values)
+    effective_delay = max(delay, 0.01)
+
     try:
         while True:
             for i, frame in enumerate(frames):
@@ -665,11 +728,11 @@ def animate(text, delay=1.2, show_diagram=True, loop=False, use_color=False):
                 display_frame(frame, show_diagram=show_diagram, use_color=use_color)
                 print(f"\n  Frame {i + 1}/{len(frames)}  |  Text: \"{text}\"")
                 print("  Press Ctrl+C to stop.")
-                time.sleep(delay)
+                time.sleep(effective_delay)
             if not loop:
                 break
             # Pause before looping
-            time.sleep(delay * 2)
+            time.sleep(effective_delay * 2)
     except KeyboardInterrupt:
         print("\n\n  Signaling stopped.")
 
@@ -682,7 +745,7 @@ def export_frames(text, filepath, show_diagram=True, use_color=False):
         text: The text to signal.
         filepath: Output file path.
         show_diagram: Whether to include diagrams.
-        use_color: Whether to use ANSI color (note: will include escape codes in file).
+        use_color: Whether to use ANSI color (codes are stripped from file output).
     """
     frames = encode_text(text)
     if not frames:
@@ -708,10 +771,7 @@ def export_frames(text, filepath, show_diagram=True, use_color=False):
         for line in figure:
             if use_color:
                 # Strip ANSI codes for file export
-                clean = line
-                for code in COLORS.values():
-                    clean = clean.replace(code, '')
-                all_lines.append(clean)
+                all_lines.append(strip_ansi(line))
             else:
                 all_lines.append(line)
 
@@ -805,7 +865,7 @@ def interactive_mode(show_diagram=True, delay=1.2, use_color=False):
             except IOError as e:
                 print(f"  Error reading file: {e}")
         elif text.startswith(":decode "):
-            pos_str = text[9:].strip()
+            pos_str = text[len(":decode "):].strip()  # 8 chars in ":decode "
             decoded = decode_position_string(pos_str)
             print(f"  Decoded: {decoded}")
         else:
@@ -917,7 +977,7 @@ examples:
         '-d', '--delay',
         type=float,
         default=1.2,
-        help='Delay between frames in seconds (default: 1.2)'
+        help='Delay between frames in seconds (default: 1.2, must be > 0)'
     )
     parser.add_argument(
         '--no-diagram',
@@ -1087,6 +1147,10 @@ def main():
         return
 
     # Default: animate
+    if args.delay <= 0:
+        print("Error: --delay must be a positive number for animation mode.",
+              file=sys.stderr)
+        sys.exit(1)
     animate(text, delay=args.delay, show_diagram=show_diagram, loop=args.loop, use_color=args.color)
 
 
