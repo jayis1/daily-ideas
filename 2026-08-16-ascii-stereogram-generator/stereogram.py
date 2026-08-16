@@ -9,22 +9,32 @@ either crosses their eyes (cross-eyed) or relaxes them (wall-eyed), the
 left and right copies fuse and the depth pattern pops out in 3D.
 
 Usage:
-    python3 stereogram.py [pattern] [width] [height]
+    python3 stereogram.py [pattern] [options]
 
-    pattern : sphere | torus | cone | pyramid | wave | steps | heart | text:ABC | random
-    width   : character width of the stereogram  (default 72)
-    height  : character height of the stereogram  (default 24)
+Examples:
+    python3 stereogram.py                       # default sphere
+    python3 stereogram.py heart                 # a 3D heart
+    python3 stereogram.py text:HI               # the word "HI" in 3D
+    python3 stereogram.py torus 100 30          # bigger donut
+    python3 stereogram.py spiral --seed 42      # reproducible run
+    python3 stereogram.py cone --invert         # cone sinks away
+    python3 stereogram.py --list-patterns       # list all patterns
+    python3 stereogram.py sphere --show-depth    # print depth map instead
+    python3 stereogram.py heart --save out.txt  # write to file
 """
 
+import argparse
 import math
 import random
 import sys
+
+__version__ = "1.1.0"
 
 # Characters ordered from sparse -> dense to give subtle texture variety.
 # Using mostly similar-density characters so that the stereogram texture
 # itself doesn't give away the shape (it should be hidden in the noise).
 RAMP = " .:-=+*#%@"
-NOISE_CHARS = ".,:;~=+*o#%@#"  # pool for random texture
+NOISE_CHARS = ".,:;~=+*o#%@#"
 
 
 # --------------------------------------------------------------------------- #
@@ -34,11 +44,12 @@ NOISE_CHARS = ".,:;~=+*o#%@#"  # pool for random texture
 # --------------------------------------------------------------------------- #
 
 def _empty(w, h):
+    """Return a w×h grid filled with 0.0 (no depth)."""
     return [[0.0 for _ in range(w)] for _ in range(h)]
 
 
 def depth_sphere(w, h):
-    """A sphere centered in the image."""
+    """A sphere centered in the image (front hemisphere)."""
     grid = _empty(w, h)
     cx, cy = w / 2, h / 2
     r = min(w, h * 2) / 2 * 0.75  # account for char aspect ratio
@@ -66,7 +77,6 @@ def depth_torus(w, h):
             dist = math.sqrt(dx * dx + dy * dy)
             # distance from the ring circle
             dring = dist - R
-            d2 = dring * dring + 0  # we treat as flat in z-plane
             if abs(dring) <= r:
                 z = math.sqrt(r * r - dring * dring)
                 grid[y][x] = z / r
@@ -134,7 +144,7 @@ def depth_steps(w, h):
 
 
 def depth_heart(w, h):
-    """A heart shape."""
+    """A heart shape using the implicit heart curve."""
     grid = _empty(w, h)
     cx, cy = w / 2, h / 2 - h * 0.05
     scale = min(w, h * 2) / 3.5
@@ -151,17 +161,84 @@ def depth_heart(w, h):
     return grid
 
 
+def depth_diamond(w, h):
+    """A diamond (rotated square) pointing toward the viewer."""
+    grid = _empty(w, h)
+    cx, cy = w / 2, h / 2
+    half = min(w, h * 2) / 2 * 0.85
+    for y in range(h):
+        for x in range(w):
+            dx = abs(x - cx)
+            dy = abs(y - cy) * 2
+            manh = dx + dy  # Manhattan distance gives a diamond
+            if manh <= half:
+                grid[y][x] = 1.0 - manh / half
+    return grid
+
+
+def depth_spiral(w, h):
+    """An Archimedean spiral ramp — depth rises as you follow the arm."""
+    grid = _empty(w, h)
+    cx, cy = w / 2, h / 2
+    rmax = min(w, h * 2) / 2
+    turns = 2.5
+    for y in range(h):
+        for x in range(w):
+            dx = (x - cx)
+            dy = (y - cy) * 2
+            dist = math.sqrt(dx * dx + dy * dy)
+            if dist <= rmax and dist > 0.5:
+                theta = math.atan2(dy, dx)
+                # Unwind angle so it increases monotonically with radius.
+                # atan2 returns [-pi, pi]; add 2*pi for negative to get [0, 2pi).
+                if theta < 0:
+                    theta += 2 * math.pi
+                # Number of full turns reached at this radius:
+                r_turns = (dist / rmax) * turns
+                # Fractional position within the current turn (0..1):
+                frac = r_turns - math.floor(r_turns)
+                # Depth is high on the inner half of each turn arm, low between.
+                grid[y][x] = max(0.0, min(1.0, 1.0 - abs(frac - 0.5) * 2)) * (dist / rmax)
+    return grid
+
+
+def depth_tunnel(w, h):
+    """A tunnel / vortex — concentric rings getting deeper toward the center."""
+    grid = _empty(w, h)
+    cx, cy = w / 2, h / 2
+    rmax = min(w, h * 2) / 2
+    rings = 6
+    for y in range(h):
+        for x in range(w):
+            dx = (x - cx)
+            dy = (y - cy) * 2
+            dist = math.sqrt(dx * dx + dy * dy)
+            if dist <= rmax:
+                # Distance as a fraction of rmax:
+                frac = dist / rmax
+                # Sawtooth that repeats `rings` times across the radius:
+                ring_frac = (frac * rings) % 1.0
+                # Closer to center = closer to viewer (pop out), rings recede:
+                base = 1.0 - frac
+                grid[y][x] = max(0.0, min(1.0, base * (0.5 + 0.5 * ring_frac)))
+    return grid
+
+
 def depth_text(text, w, h):
-    """Render text as a depth map using a built-in 5x5 bitmap font."""
+    """Render text as a depth map using a built-in 5×5 bitmap font."""
     glyphs = _build_font()
     grid = _empty(w, h)
+    if not text:
+        return grid
     # Layout the text horizontally, centered.
-    total_w = sum(len(glyphs.get(ch.upper(), glyphs.get("?", []))[0]) + 1
-                  for ch in text)
+    def _glyph_width(ch):
+        g = glyphs.get(ch.upper(), glyphs.get("?", glyphs["A"]))
+        return len(g[0])
+
+    total_w = sum(_glyph_width(ch) + 1 for ch in text)
     if total_w >= w:
         text = text[: max(1, w // 6)]
-        total_w = sum(len(glyphs.get(ch.upper(), glyphs.get("?", []))[0]) + 1
-                      for ch in text)
+        total_w = sum(_glyph_width(ch) + 1 for ch in text)
     start_x = (w - total_w) // 2
     start_y = (h - 5) // 2
     cx = start_x
@@ -178,15 +255,20 @@ def depth_text(text, w, h):
     return grid
 
 
-def depth_random(w, h):
-    """Random blurry blobs — pure fun to practice seeing stereograms."""
+def depth_random(w, h, rng=None):
+    """Random blurry blobs — pure fun to practice seeing stereograms.
+
+    Accepts an optional random.Random instance for reproducible output.
+    """
+    if rng is None:
+        rng = random
     grid = _empty(w, h)
-    num_blobs = random.randint(3, 7)
+    num_blobs = rng.randint(3, 7)
     for _ in range(num_blobs):
-        bx = random.uniform(0, w)
-        by = random.uniform(0, h)
-        br = random.uniform(w * 0.1, w * 0.3)
-        peak = random.uniform(0.5, 1.0)
+        bx = rng.uniform(0, w)
+        by = rng.uniform(0, h)
+        br = rng.uniform(w * 0.1, w * 0.3)
+        peak = rng.uniform(0.5, 1.0)
         for y in range(h):
             for x in range(w):
                 d = math.sqrt((x - bx) ** 2 + ((y - by) * 2) ** 2)
@@ -198,11 +280,13 @@ def depth_random(w, h):
 
 
 # --------------------------------------------------------------------------- #
-# Minimal 5x5 bitmap font for text stereograms                                #
+# Minimal 5×5 bitmap font for text stereograms                                #
 # --------------------------------------------------------------------------- #
 def _build_font():
     """Return a dict mapping uppercase letters & digits to 5-row glyph arrays.
-    Each glyph is a list of 5 lists (rows) of 0/1."""
+
+    Each glyph is a list of 5 lists (rows) of 0/1.
+    """
     raw = {
         "A": "01110/10001/10001/11111/10001",
         "B": "11110/10001/11110/10001/11110",
@@ -245,6 +329,9 @@ def _build_font():
         "?": "01110/10001/00110/00000/00100",
         ".": "00000/00000/00000/00000/00100",
         ",": "00000/00000/00000/00100/01000",
+        "-": "00000/00000/11111/00000/00000",
+        "/": "00001/00010/00100/01000/10000",
+        ":": "00000/00100/00000/00100/00000",
     }
     font = {}
     for ch, spec in raw.items():
@@ -257,7 +344,8 @@ def _build_font():
 # Stereogram renderer                                                         #
 # --------------------------------------------------------------------------- #
 
-def render_stereogram(depth, width, height, eye_separation=14, depth_mul=0.33):
+def render_stereogram(depth, width, height, eye_separation=14, depth_mul=0.33,
+                      rng=None):
     """Render a depth map into an ASCII single-image random dot stereogram.
 
     Algorithm (per-row):
@@ -270,10 +358,24 @@ def render_stereogram(depth, width, height, eye_separation=14, depth_mul=0.33):
          causing the fused image to pop *toward* the viewer.
       4. If the shifted position is already within the row, copy that character
          so the left/right eyes see the same symbol at the two positions.
+
+    Args:
+        depth: 2D list [height][width] of floats in [0.0, 1.0].
+        width: Character width of the output.
+        height: Character height of the output.
+        eye_separation: Base pixel separation for the repeating pattern.
+        depth_mul: Multiplier controlling how strongly depth shifts the
+            pattern (0.0 = flat, ~0.33 = typical, >0.5 = dramatic/hard to fuse).
+        rng: Optional random.Random instance for reproducible output.
+
+    Returns:
+        A single string with `height` newline-separated rows of `width` chars.
     """
+    if rng is None:
+        rng = random
     lines = []
     for y in range(height):
-        row = list(random.choice(NOISE_CHARS) for _ in range(width))
+        row = [rng.choice(NOISE_CHARS) for _ in range(width)]
 
         for x in range(width):
             d = depth[y][x]
@@ -284,13 +386,39 @@ def render_stereogram(depth, width, height, eye_separation=14, depth_mul=0.33):
             if sep < 2:
                 sep = 2
             left = x - sep
-            if left >= 0 and left < width:
+            if 0 <= left < width:
                 # Copy the character from the left matching position so that
                 # when the eyes fuse, both see the same symbol here.
                 row[x] = row[left]
 
         lines.append("".join(row))
     return "\n".join(lines)
+
+
+def render_depth_map(depth, width, height):
+    """Render a depth map as a human-readable ASCII shading for debugging.
+
+    Maps depth values through RAMP so you can see the shape without needing
+    to fuse the stereogram.
+    """
+    lines = []
+    for y in range(height):
+        row = []
+        for x in range(width):
+            d = depth[y][x]
+            idx = min(len(RAMP) - 1, int(d * (len(RAMP) - 1)))
+            row.append(RAMP[idx])
+        lines.append("".join(row))
+    return "\n".join(lines)
+
+
+def invert_depth(depth, width, height):
+    """Return a new depth grid with depth inverted (1 - d).
+
+    Makes pop-out shapes sink in, and vice versa. Useful for cross-eyed
+    viewers who perceive depth reversed, or just for variety.
+    """
+    return [[1.0 - depth[y][x] for x in range(width)] for y in range(height)]
 
 
 # --------------------------------------------------------------------------- #
@@ -305,18 +433,56 @@ PATTERNS = {
     "wave": depth_wave,
     "steps": depth_steps,
     "heart": depth_heart,
+    "diamond": depth_diamond,
+    "spiral": depth_spiral,
+    "tunnel": depth_tunnel,
     "random": depth_random,
 }
 
 
-def make_depth(pattern, w, h):
+def make_depth(pattern, w, h, rng=None):
+    """Build a depth map for the given pattern name or 'text:STRING'.
+
+    Args:
+        pattern: One of the keys in PATTERNS, or 'text:STRING'.
+        w: Width in characters.
+        h: Height in characters.
+        rng: Optional random.Random for reproducible 'random' pattern.
+
+    Returns:
+        A 2D list [h][w] of floats in [0.0, 1.0].
+    """
     if pattern.startswith("text:"):
         return depth_text(pattern[5:], w, h)
     fn = PATTERNS.get(pattern)
     if fn is None:
-        raise ValueError(f"Unknown pattern '{pattern}'. "
-                         f"Choose from: {', '.join(list(PATTERNS) + ['text:...'])}")
+        raise ValueError(
+            f"Unknown pattern '{pattern}'. "
+            f"Choose from: {', '.join(list(PATTERNS) + ['text:...'])}"
+        )
+    if pattern == "random" and rng is not None:
+        return fn(w, h, rng=rng)
     return fn(w, h)
+
+
+# --------------------------------------------------------------------------- #
+# Alignment guide                                                             #
+# --------------------------------------------------------------------------- #
+
+def alignment_guide(width, eye_sep):
+    """Return a guide line with two markers separated by eye_sep characters.
+
+    When the two markers appear as one (fused), your eyes are converged at
+    the right distance and the stereogram should pop out.
+    """
+    if eye_sep >= width:
+        return " " * width
+    left_pos = (width - eye_sep) // 2
+    right_pos = left_pos + eye_sep
+    guide = [" "] * width
+    guide[left_pos] = "|"
+    guide[right_pos] = "|"
+    return "".join(guide)
 
 
 # --------------------------------------------------------------------------- #
@@ -336,41 +502,190 @@ BANNER = r"""
 """
 
 
-def main(argv):
-    pattern = argv[1] if len(argv) > 1 else "sphere"
-    width = int(argv[2]) if len(argv) > 2 else 72
-    height = int(argv[3]) if len(argv) > 3 else 24
+def build_parser():
+    """Construct and return the argparse.ArgumentParser for the CLI."""
+    p = argparse.ArgumentParser(
+        prog="stereogram.py",
+        description="Generate single-image random dot stereograms (SIRDS) "
+                    "in the terminal using ASCII characters.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "patterns:\n"
+            "  sphere   A floating sphere (easiest to see)\n"
+            "  torus    A 3D donut\n"
+            "  cone     A cone pointing toward you\n"
+            "  pyramid  A square pyramid\n"
+            "  diamond  A rotated square (diamond)\n"
+            "  wave     A rippling sine wave field\n"
+            "  steps    Concentric ziggurat steps\n"
+            "  heart    A 3D heart\n"
+            "  spiral   An Archimedean spiral ramp\n"
+            "  tunnel   A receding ringed vortex\n"
+            "  random   Random blurry blobs\n"
+            "  text:STR Render the word STR in 3D (e.g. text:HI)\n"
+            "\n"
+            "examples:\n"
+            "  python3 stereogram.py heart\n"
+            "  python3 stereogram.py text:HELLO 100 24\n"
+            "  python3 stereogram.py spiral --seed 42 --depth-strength 0.4\n"
+            "  python3 stereogram.py cone --invert --guide\n"
+            "  python3 stereogram.py --list-patterns\n"
+        ),
+    )
+    p.add_argument("pattern", nargs="?", default="sphere",
+                   help="depth pattern to render (default: sphere). "
+                        "Use 'text:STRING' to render text, or "
+                        "'random' for blobs.")
+    p.add_argument("width", nargs="?", type=int, default=72,
+                   help="character width of the stereogram (default: 72)")
+    p.add_argument("height", nargs="?", type=int, default=24,
+                   help="character height of the stereogram (default: 24)")
+    p.add_argument("--version", action="version",
+                   version=f"ASCII Stereogram Generator {__version__}")
+    p.add_argument("--seed", type=int, default=None,
+                   help="random seed for reproducible 'random' pattern "
+                        "and texture (default: none)")
+    p.add_argument("--depth-strength", type=float, default=0.33,
+                   help="multiplier for depth effect, 0.0-0.5 "
+                        "(default: 0.33). Higher = more dramatic 3D but "
+                        "harder to fuse.")
+    p.add_argument("--invert", action="store_true",
+                   help="invert depth so pop-out shapes sink in and vice "
+                        "versa (good for cross-eyed viewing)")
+    p.add_argument("--no-banner", action="store_true",
+                   help="suppress the banner and info header (useful for "
+                        "piping output to a file or another command)")
+    p.add_argument("--guide", action="store_true",
+                   help="print alignment guide markers above the stereogram; "
+                        "fuse the two markers into one to lock in the view")
+    p.add_argument("--show-depth", action="store_true",
+                   help="print the depth map as ASCII shading instead of "
+                        "the stereogram (for debugging / previewing the shape)")
+    p.add_argument("--save", metavar="FILE", default=None,
+                   help="also write the output to FILE")
+    p.add_argument("--list-patterns", action="store_true",
+                   help="list all available patterns and exit")
+    return p
+
+
+def _validate_args(args):
+    """Validate parsed args; return (ok, error_message)."""
+    if args.width < 10 or args.width > 1000:
+        return False, f"width must be between 10 and 1000, got {args.width}"
+    if args.height < 3 or args.height > 500:
+        return False, f"height must be between 3 and 500, got {args.height}"
+    if not (0.0 <= args.depth_strength <= 1.0):
+        return False, (
+            f"--depth-strength must be in [0.0, 1.0], got {args.depth_strength}"
+        )
+    return True, None
+
+
+def main(argv=None):
+    """CLI entry point. Returns a process exit code."""
+    if argv is None:
+        argv = sys.argv
+    parser = build_parser()
+
+    # Handle --list-patterns before normal flow (argparse still parses it,
+    # but we short-circuit so it works even with a missing pattern).
+    if "--list-patterns" in argv:
+        # Still parse so we respect --version etc., but then list & exit.
+        args = parser.parse_args(argv[1:])
+        print("Available patterns:")
+        for name, fn in PATTERNS.items():
+            doc = (fn.__doc__ or "").strip().splitlines()[0] if fn.__doc__ else ""
+            print(f"  {name:10s} {doc}")
+        print(f"  {'text:STR':10s} Render the word STR in 3D")
+        return 0
+
+    args = parser.parse_args(argv[1:])
+
+    ok, err = _validate_args(args)
+    if not ok:
+        print(f"Error: {err}", file=sys.stderr)
+        return 2
+
+    rng = random.Random(args.seed) if args.seed is not None else random
+
+    pattern = args.pattern
+    width = args.width
+    height = args.height
 
     # Scale eye separation with width for best viewing.
     eye_sep = max(8, min(20, width // 6))
 
     try:
-        depth = make_depth(pattern, width, height)
+        depth = make_depth(pattern, width, height, rng=rng)
     except ValueError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         print(f"Available patterns: {', '.join(PATTERNS)}, text:STRING",
               file=sys.stderr)
         return 1
 
-    print(BANNER)
-    print(f"  Pattern : {pattern}")
-    print(f"  Size    : {width} x {height}")
-    print(f"  Eye sep : {eye_sep} chars")
-    print()
-    print("─" * width)
-    print()
-    stereogram = render_stereogram(depth, width, height, eye_separation=eye_sep)
-    print(stereogram)
-    print()
-    print("─" * width)
-    print()
-    print("  ↑ Stare at the block above and let your eyes relax/cross.")
-    print("  The hidden 3D shape will emerge from the noise.")
-    print()
-    print("  Patterns: " + ", ".join(PATTERNS) + ", text:STRING")
-    print("  Try:  python3 stereogram.py heart")
-    print("        python3 stereogram.py text:HI")
-    print("        python3 stereogram.py random 80 28")
+    if args.invert:
+        depth = invert_depth(depth, width, height)
+
+    # Build the output body.
+    if args.show_depth:
+        body = render_depth_map(depth, width, height)
+        header_extra = "  Mode    : depth-map preview"
+    else:
+        body = render_stereogram(
+            depth, width, height,
+            eye_separation=eye_sep, depth_mul=args.depth_strength, rng=rng,
+        )
+        header_extra = "  Mode    : stereogram"
+
+    # Assemble output.
+    parts = []
+    if not args.no_banner:
+        parts.append(BANNER)
+        parts.append(f"  Pattern : {pattern}")
+        parts.append(f"  Size    : {width} x {height}")
+        parts.append(f"  Eye sep : {eye_sep} chars")
+        if args.seed is not None:
+            parts.append(f"  Seed    : {args.seed}")
+        if args.invert:
+            parts.append("  Invert  : on")
+        parts.append(f"  Strength: {args.depth_strength}")
+        parts.append(header_extra)
+        parts.append("")
+        parts.append("─" * width)
+        parts.append("")
+
+    if args.guide and not args.show_depth:
+        guide = alignment_guide(width, eye_sep)
+        parts.append(guide)
+        parts.append("")
+
+    parts.append(body)
+
+    if not args.no_banner:
+        parts.append("")
+        parts.append("─" * width)
+        parts.append("")
+        parts.append("  ↑ Stare at the block above and let your eyes relax/cross.")
+        parts.append("  The hidden 3D shape will emerge from the noise.")
+        parts.append("")
+        parts.append("  Patterns: " + ", ".join(PATTERNS) + ", text:STRING")
+        parts.append("  Try:  python3 stereogram.py heart")
+        parts.append("        python3 stereogram.py text:HI")
+        parts.append("        python3 stereogram.py spiral --seed 1")
+        parts.append("        python3 stereogram.py cone --invert")
+
+    output = "\n".join(parts)
+    print(output)
+
+    if args.save:
+        try:
+            with open(args.save, "w", encoding="utf-8") as fh:
+                fh.write(output + "\n")
+            print(f"\n  [saved to {args.save}]", file=sys.stderr)
+        except OSError as exc:
+            print(f"Error writing to {args.save}: {exc}", file=sys.stderr)
+            return 1
+
     return 0
 
 

@@ -10,19 +10,29 @@ This project recreates the classic "Magic Eye" effect using **ASCII characters**
 
 ## Features
 
-- **8 built-in depth patterns**: sphere, torus (donut), cone, pyramid, wave, steps (ziggurat), heart, and random blobs
+- **11 built-in depth patterns**: sphere, torus (donut), cone, pyramid, diamond, wave, steps (ziggurat), heart, spiral, tunnel, and random blobs
 - **Custom text mode**: render any short word as a 3D depth map using a built-in 5×5 bitmap font (`text:HI`, `text:HELLO`)
-- **Adjustable dimensions**: control width and height via CLI arguments
+- **Proper CLI** with `argparse`: `--help`, `--version`, named flags, and a usage epilog
+- **`--seed`** for fully reproducible stereograms (both pattern and texture)
+- **`--depth-strength`** to tune the 3D effect from subtle to dramatic
+- **`--invert`** to flip depth direction (great for cross-eyed viewers)
+- **`--show-depth`** to preview the depth map as ASCII shading — see the shape without fusing
+- **`--guide`** alignment markers that fuse into one dot when your eyes are correctly converged
+- **`--no-banner`** for clean output suitable for piping or scripting
+- **`--save FILE`** to write the rendered output to a file
+- **`--list-patterns`** to enumerate all available patterns with descriptions
+- **Adjustable dimensions**: control width and height via positional arguments
 - **Auto-tuned eye separation**: scales with output width for optimal viewing
+- **Input validation** with helpful error messages
 - **No dependencies**: pure Python 3 standard library
-- **Viewing instructions** printed inline so first-time users know how to see the effect
+- **Test suite**: 23 tests covering depth maps, the renderer, helpers, dispatcher, and CLI
 
 ## How to Install
 
 No installation needed — just a single Python file.
 
 ```bash
-# Clone or copy the file
+# Clone or copy the project
 git clone https://github.com/<your-username>/daily-ideas.git
 cd daily-ideas/2026-08-16-ascii-stereogram-generator
 ```
@@ -32,16 +42,43 @@ Requirements: **Python 3.7+** (uses only the standard library).
 ## How to Run
 
 ```bash
-python3 stereogram.py [pattern] [width] [height]
+python3 stereogram.py [pattern] [width] [height] [options]
 ```
 
-### Arguments
+### Arguments & Options
 
-| Argument  | Default  | Description |
-|-----------|----------|-------------|
-| `pattern` | `sphere` | One of: `sphere`, `torus`, `cone`, `pyramid`, `wave`, `steps`, `heart`, `random`, or `text:STRING` |
-| `width`   | `72`     | Character width of the stereogram |
-| `height`  | `24`     | Character height of the stereogram |
+| Argument / Option        | Default  | Description |
+|--------------------------|----------|-------------|
+| `pattern`                | `sphere` | Depth pattern to render. One of the patterns below, or `text:STRING`. |
+| `width`                  | `72`     | Character width of the stereogram (10–1000). |
+| `height`                 | `24`     | Character height of the stereogram (3–500). |
+| `--version`              | —        | Print version and exit. |
+| `--help`                 | —        | Show help and exit. |
+| `--seed SEED`            | none     | Random seed for reproducible `random` pattern and texture. |
+| `--depth-strength MULT`  | `0.33`   | Depth multiplier in [0.0, 1.0]. Higher = more dramatic, harder to fuse. |
+| `--invert`               | off      | Invert depth (pop-out ↔ sink-in). |
+| `--no-banner`            | off      | Suppress banner and info header. |
+| `--guide`                | off      | Print alignment guide markers above the stereogram. |
+| `--show-depth`           | off      | Print depth map as ASCII shading instead of a stereogram. |
+| `--save FILE`            | none     | Also write output to FILE. |
+| `--list-patterns`        | off      | List all available patterns and exit. |
+
+### Available Patterns
+
+| Pattern     | Description |
+|-------------|-------------|
+| `sphere`    | A floating sphere (front hemisphere). Easiest to see. |
+| `torus`     | A 3D donut. |
+| `cone`      | A cone pointing toward you. |
+| `pyramid`   | A square pyramid pointing toward you. |
+| `diamond`   | A rotated square (diamond) using Manhattan distance. |
+| `wave`      | A rippling sine wave field. |
+| `steps`     | Concentric ziggurat steps. |
+| `heart`     | A 3D heart via the implicit heart curve. |
+| `spiral`    | An Archimedean spiral ramp — depth rises as you follow the arm. |
+| `tunnel`    | A receding ringed vortex — concentric rings getting deeper toward center. |
+| `random`    | Random blurry blobs — great for practicing the effect. |
+| `text:STR`  | Render the word `STR` in 3D using a 5×5 bitmap font (A–Z, 0–9, space, `! ? . , - / :`). |
 
 ## Usage Examples
 
@@ -58,17 +95,44 @@ python3 stereogram.py heart
 # Render the word "HI" in 3D
 python3 stereogram.py text:HI
 
-# Render "HELLO" in 3D
-python3 stereogram.py text:HELLO
+# Render "HELLO" in 3D, bigger
+python3 stereogram.py text:HELLO 100 24
 
 # Random blobs — practice seeing the effect
 python3 stereogram.py random
+
+# Reproducible random pattern
+python3 stereogram.py random 80 28 --seed 42
 
 # Bigger output for more depth detail
 python3 stereogram.py sphere 100 30
 
 # Smaller output for narrow terminals
 python3 stereogram.py cone 50 16
+
+# More dramatic 3D (can be harder to fuse)
+python3 stereogram.py heart --depth-strength 0.45
+
+# Invert depth (cone sinks away instead of popping out)
+python3 stereogram.py cone --invert
+
+# Preview the shape without fusing — prints a shaded depth map
+python3 stereogram.py spiral --show-depth
+
+# Alignment guide markers help you lock in the right convergence
+python3 stereogram.py sphere --guide
+
+# Save output to a file
+python3 stereogram.py heart --save heart.txt
+
+# Clean output with no banner (good for piping)
+python3 stereogram.py diamond --no-banner
+
+# List all patterns
+python3 stereogram.py --list-patterns
+
+# Version
+python3 stereogram.py --version
 ```
 
 ## How to View the 3D Effect
@@ -78,12 +142,15 @@ python3 stereogram.py cone 50 16
 3. **Fuse the image**: You'll see the text rows double. Slowly let the doubled images overlap until the repeating patterns lock together.
 4. **See the shape**: Once the patterns fuse, a 3D shape will appear to float above or sink below the background.
 
-**Alternative (cross-eyed)**: Cross your eyes slightly until the doubled images merge. This is the opposite convergence direction from wall-eyed viewing — either one works, but wall-eyed is usually easier for most people.
+**Alternative (cross-eyed)**: Cross your eyes slightly until the doubled images merge. This is the opposite convergence direction from wall-eyed viewing — either one works, but wall-eyed is usually easier for most people. If cross-eyed viewing works better for you, try `--invert` so the depth reads correctly.
+
+**Using `--guide`**: The guide prints two `|` markers separated by the eye-separation distance. When you've converged correctly, the two markers will fuse into a single dot — at that point the stereogram below should pop out instantly.
 
 **Tips**:
 - Start with `sphere` or `cone` — they're the easiest shapes to see.
 - A wider terminal window gives more depth range.
 - It can take 10–30 seconds the first time. Once your eyes "click," subsequent viewing is instant.
+- If you can't see the effect, try `--show-depth` first to confirm what the shape looks like, then go back to the stereogram.
 
 ## How It Works
 
@@ -105,25 +172,43 @@ The depth maps are generated mathematically:
 - **Torus**: depth from the minor circle of a torus ring
 - **Cone**: linear falloff from center
 - **Pyramid**: Chebyshev distance from center
+- **Diamond**: Manhattan distance from center (rotated square)
 - **Wave**: sum of sine functions
 - **Steps**: quantized concentric squares
 - **Heart**: implicit heart curve `(x² + y² − 1)³ − x²y³ ≤ 0`
+- **Spiral**: Archimedean spiral — depth rises along the unwound arm
+- **Tunnel**: concentric rings with sawtooth depth that recedes toward center
 - **Text**: 5×5 bitmap font rendered as depth=1 pixels
+
+## Testing
+
+The project includes a self-contained test suite (no external test framework required):
+
+```bash
+python3 test_stereogram.py
+```
+
+This runs 23 tests covering depth-map generators (bounds, ranges, reproducibility, new patterns), the renderer (dimensions, flat maps, seeded reproducibility), helpers (`invert_depth`, `render_depth_map`, `alignment_guide`), the pattern dispatcher, and the CLI (default run, `--version`, `--help`, bad width, bad pattern, `--list-patterns`, `--show-depth`, `--invert`, `--seed`, `--save`).
 
 ## File Structure
 
 ```
 2026-08-16-ascii-stereogram-generator/
-├── stereogram.py   # The complete generator (single file)
-└── README.md       # This file
+├── stereogram.py        # The complete generator (single file)
+├── test_stereogram.py   # Test suite (23 tests, no dependencies)
+└── README.md            # This file
 ```
 
 ## Technical Notes
 
 - The character aspect ratio (chars are ~2× taller than wide) is accounted for in all depth map calculations by doubling the y-offset.
 - Eye separation auto-scales: `eye_sep = max(8, min(20, width // 6))` — wider images get more separation for stronger depth.
-- The `depth_mul` parameter (default 0.33) controls how strongly depth shifts the pattern. Higher values create more dramatic 3D but can be harder to fuse.
-- The 5×5 bitmap font supports A–Z, 0–9, space, and basic punctuation.
+- The `depth_mul` / `--depth-strength` parameter (default 0.33) controls how strongly depth shifts the pattern. Higher values create more dramatic 3D but can be harder to fuse. Range is [0.0, 1.0].
+- `--seed` makes both the `random` depth pattern and the stereogram texture fully reproducible by passing a `random.Random` instance through the pipeline.
+- `--invert` applies `1 − d` to the depth map, flipping which surfaces pop out vs. sink in.
+- The 5×5 bitmap font supports A–Z, 0–9, space, and the punctuation `! ? . , - / :`.
+- Input validation guards width (10–1000), height (3–500), and depth-strength (0.0–1.0) ranges, returning exit code 2 on bad input.
+- Exit codes: `0` = success, `1` = runtime error (bad pattern, write failure), `2` = invalid arguments.
 
 ## License
 
