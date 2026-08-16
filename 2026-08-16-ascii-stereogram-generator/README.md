@@ -25,7 +25,7 @@ This project recreates the classic "Magic Eye" effect using **ASCII characters**
 - **Auto-tuned eye separation**: scales with output width for optimal viewing
 - **Input validation** with helpful error messages
 - **No dependencies**: pure Python 3 standard library
-- **Test suite**: 23 tests covering depth maps, the renderer, helpers, dispatcher, and CLI
+- **Test suite**: 25 tests covering depth maps, the renderer, helpers, dispatcher, and CLI
 
 ## How to Install
 
@@ -188,14 +188,14 @@ The project includes a self-contained test suite (no external test framework req
 python3 test_stereogram.py
 ```
 
-This runs 23 tests covering depth-map generators (bounds, ranges, reproducibility, new patterns), the renderer (dimensions, flat maps, seeded reproducibility), helpers (`invert_depth`, `render_depth_map`, `alignment_guide`), the pattern dispatcher, and the CLI (default run, `--version`, `--help`, bad width, bad pattern, `--list-patterns`, `--show-depth`, `--invert`, `--seed`, `--save`).
+This runs 25 tests covering depth-map generators (bounds, ranges, reproducibility, new patterns), the renderer (dimensions, flat maps, seeded reproducibility), helpers (`invert_depth`, `render_depth_map`, `render_depth_map` negative-value clamping, `alignment_guide`), the pattern dispatcher, and the CLI (default run, `--version`, `--help`, bad width, bad pattern, `--list-patterns`, `--list` abbreviation, `--show-depth`, `--invert`, `--seed`, `--save`).
 
 ## File Structure
 
 ```
 2026-08-16-ascii-stereogram-generator/
 ├── stereogram.py        # The complete generator (single file)
-├── test_stereogram.py   # Test suite (23 tests, no dependencies)
+├── test_stereogram.py   # Test suite (25 tests, no dependencies)
 └── README.md            # This file
 ```
 
@@ -209,6 +209,27 @@ This runs 23 tests covering depth-map generators (bounds, ranges, reproducibilit
 - The 5×5 bitmap font supports A–Z, 0–9, space, and the punctuation `! ? . , - / :`.
 - Input validation guards width (10–1000), height (3–500), and depth-strength (0.0–1.0) ranges, returning exit code 2 on bad input.
 - Exit codes: `0` = success, `1` = runtime error (bad pattern, write failure), `2` = invalid arguments.
+
+## Changelog
+
+### v1.1.1 — Bug fixes
+
+- **Fixed `render_depth_map` negative-index bug**: negative depth values (e.g. from custom depth maps) produced wrong characters due to Python's negative list indexing wrapping around instead of clamping to `RAMP[0]` (space). Now both lower and upper bounds are clamped with `max(0, min(n, ...))`.
+- **Fixed `--list-patterns` abbreviation bug**: the raw `"--list-patterns" in argv` check failed to detect argparse prefix abbreviations (e.g. `--list`), causing the flag to be silently ignored and a default sphere to render instead of listing patterns. Now uses the parsed `args.list_patterns` flag after `parse_args()`.
+- **Fixed `--save ""` silent no-op bug**: `if args.save:` treated an empty string as falsy, silently skipping the save. Changed to `if args.save is not None:` so empty-string filenames produce an explicit error rather than silently doing nothing.
+- Added 2 new tests for the above fixes (`test_render_depth_map_negative_clamped`, `test_cli_list_patterns_abbreviation`). Test count: 23 → 25.
+
+### v1.1.0 — Enhancement
+
+- Added 3 new depth patterns (diamond, spiral, tunnel). Pattern count: 8 → 11.
+- Migrated to `argparse` with `--help`, `--version`, `--seed`, `--depth-strength`, `--invert`, `--guide`, `--show-depth`, `--save`, `--list-patterns`, `--no-banner`.
+- Added input validation with exit code 2 for bad arguments.
+- Added 23-test self-contained test suite.
+- Fully rewrote README.
+
+### v1.0.0 — Initial release
+
+- Single-file ASCII SIRDS generator with 8 depth patterns, `text:STRING` mode, and raw `sys.argv` CLI.
 
 ## License
 

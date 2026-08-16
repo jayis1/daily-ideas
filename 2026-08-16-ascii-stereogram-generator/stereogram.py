@@ -28,7 +28,7 @@ import math
 import random
 import sys
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 # Characters ordered from sparse -> dense to give subtle texture variety.
 # Using mostly similar-density characters so that the stereogram texture
@@ -402,11 +402,14 @@ def render_depth_map(depth, width, height):
     to fuse the stereogram.
     """
     lines = []
+    n = len(RAMP) - 1
     for y in range(height):
         row = []
         for x in range(width):
             d = depth[y][x]
-            idx = min(len(RAMP) - 1, int(d * (len(RAMP) - 1)))
+            # Clamp both bounds: negative depth must map to RAMP[0], not wrap
+            # around via Python's negative indexing.
+            idx = max(0, min(n, int(d * n)))
             row.append(RAMP[idx])
         lines.append("".join(row))
     return "\n".join(lines)
@@ -587,19 +590,17 @@ def main(argv=None):
         argv = sys.argv
     parser = build_parser()
 
-    # Handle --list-patterns before normal flow (argparse still parses it,
-    # but we short-circuit so it works even with a missing pattern).
-    if "--list-patterns" in argv:
-        # Still parse so we respect --version etc., but then list & exit.
-        args = parser.parse_args(argv[1:])
+    args = parser.parse_args(argv[1:])
+
+    # Handle --list-patterns via the parsed flag so that argparse prefix
+    # abbreviations (e.g. --list) are honoured consistently.
+    if args.list_patterns:
         print("Available patterns:")
         for name, fn in PATTERNS.items():
             doc = (fn.__doc__ or "").strip().splitlines()[0] if fn.__doc__ else ""
             print(f"  {name:10s} {doc}")
         print(f"  {'text:STR':10s} Render the word STR in 3D")
         return 0
-
-    args = parser.parse_args(argv[1:])
 
     ok, err = _validate_args(args)
     if not ok:
@@ -677,7 +678,7 @@ def main(argv=None):
     output = "\n".join(parts)
     print(output)
 
-    if args.save:
+    if args.save is not None:
         try:
             with open(args.save, "w", encoding="utf-8") as fh:
                 fh.write(output + "\n")

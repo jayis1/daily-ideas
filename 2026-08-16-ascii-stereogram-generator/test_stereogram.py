@@ -130,6 +130,14 @@ def test_render_depth_map_uses_ramp():
             assert ch in allowed, f"unexpected char {ch!r} in depth map"
 
 
+def test_render_depth_map_negative_clamped():
+    """Negative depth values must clamp to RAMP[0] (' '), not wrap around."""
+    depth = [[-0.5] * 10 for _ in range(3)]
+    out = stereogram.render_depth_map(depth, 10, 3)
+    for line in out.split("\n"):
+        assert line == " " * 10, f"negative depth should be all spaces, got {line!r}"
+
+
 def test_alignment_guide_markers():
     guide = stereogram.alignment_guide(50, 14)
     assert len(guide) == 50
@@ -207,6 +215,17 @@ def test_cli_bad_pattern():
 def test_cli_list_patterns():
     rc = stereogram.main(["stereogram.py", "--list-patterns"])
     assert rc == 0
+
+
+def test_cli_list_patterns_abbreviation():
+    """Argparse prefix abbreviation --list should also list patterns."""
+    import io
+    from contextlib import redirect_stdout
+    f = io.StringIO()
+    with redirect_stdout(f):
+        rc = stereogram.main(["stereogram.py", "--list"])
+    assert rc == 0
+    assert "Available patterns:" in f.getvalue()
 
 
 def test_cli_show_depth():
