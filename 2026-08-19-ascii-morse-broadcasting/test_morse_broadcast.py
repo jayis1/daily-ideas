@@ -145,7 +145,7 @@ class TestCLIUtilityModes(unittest.TestCase):
         """--version prints version and exits 0."""
         r = self._run(['--version'])
         self.assertEqual(r.returncode, 0)
-        self.assertIn('1.1.0', r.stdout)
+        self.assertIn('1.2.0', r.stdout)
 
     def test_encode_mode(self):
         """--encode 'SOS' outputs the expected Morse string."""
@@ -265,6 +265,98 @@ class TestPhoneticAlphabet(unittest.TestCase):
         for key, word in morse_app.PHONETIC_ALPHABET.items():
             self.assertIsInstance(word, str)
             self.assertGreater(len(word), 0)
+
+
+class TestBugFixes(unittest.TestCase):
+    """Tests for bugs found and fixed in the 1.2.0 bug-hunt pass."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'main.py')
+
+    def _run(self, args, timeout=10):
+        return subprocess.run(
+            [sys.executable, self.script] + args,
+            capture_output=True, text=True, timeout=timeout
+        )
+
+    def test_morse_engine_zero_wpm_raises(self):
+        """MorseEngine with wpm=0 should raise ValueError, not ZeroDivisionError."""
+        with self.assertRaises(ValueError):
+            morse_app.MorseEngine(wpm=0)
+
+    def test_morse_engine_negative_wpm_raises(self):
+        """MorseEngine with negative WPM should raise ValueError."""
+        with self.assertRaises(ValueError):
+            morse_app.MorseEngine(wpm=-5)
+
+    def test_decode_pipe_separator(self):
+        """morse_to_text should accept pipe (|) as word separator."""
+        engine = morse_app.MorseEngine()
+        result = engine.morse_to_text('... --- ... | ... --- ...')
+        self.assertEqual(result, 'SOS SOS')
+
+    def test_decode_consecutive_separators_no_double_space(self):
+        """Multiple consecutive word separators should not produce extra spaces."""
+        engine = morse_app.MorseEngine()
+        result = engine.morse_to_text('... --- ... / / ... --- ...')
+        self.assertEqual(result, 'SOS SOS')
+        self.assertNotIn('  ', result)
+
+    def test_decode_empty_string(self):
+        """Decoding an empty string returns empty string."""
+        engine = morse_app.MorseEngine()
+        self.assertEqual(engine.morse_to_text(''), '')
+
+    def test_decode_only_separators(self):
+        """Decoding only separators returns empty string."""
+        engine = morse_app.MorseEngine()
+        self.assertEqual(engine.morse_to_text(' / / / '), '')
+
+    def test_phonetic_alone_exits_without_broadcast(self):
+        """--phonetic with --callsign should print and exit, not start broadcasting."""
+        r = self._run(['--callsign', 'WBSQ', '--phonetic'], timeout=5)
+        self.assertEqual(r.returncode, 0)
+        self.assertIn('WBSQ', r.stdout)
+        self.assertIn('WHISKEY', r.stdout)
+        # Should NOT contain broadcast startup message
+        self.assertNotIn('Initializing broadcasting station', r.stdout)
+
+    def test_encode_empty_input_feedback(self):
+        """--encode '' gives user feedback about no encodable characters."""
+        r = self._run(['--encode', ''])
+        self.assertEqual(r.returncode, 0)
+        self.assertIn('no encodable', r.stdout)
+
+    def test_decode_empty_input_feedback(self):
+        """--decode '' gives user feedback about no decodable symbols."""
+        r = self._run(['--decode', ''])
+        self.assertEqual(r.returncode, 0)
+        self.assertIn('no decodable', r.stdout)
+
+    def test_wav_empty_text_valid(self):
+        """generate_morse_wav with empty text produces a valid (empty) WAV."""
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+            filename = f.name
+        try:
+            morse_app.generate_morse_wav('', filename=filename)
+            self.assertTrue(os.path.exists(filename))
+            with wave.open(filename, 'r') as wf:
+                # Empty text -> 0 frames, but file is still valid
+                self.assertEqual(wf.getnchannels(), 1)
+                self.assertEqual(wf.getsampwidth(), 2)
+        finally:
+            if os.path.exists(filename):
+                os.remove(filename)
+
+    def test_roundtrip_with_punctuation(self):
+        """Round-trip encoding/decoding works with punctuation."""
+        engine = morse_app.MorseEngine()
+        for text in ['HELLO WORLD', 'SOS', 'CQ DX DE WBSQ', '123 ABC']:
+            pairs = engine.text_to_morse(text)
+            morse = ' '.join(m for _, m in pairs)
+            decoded = engine.morse_to_text(morse)
+            self.assertEqual(decoded, text, f"Round-trip failed for {text!r}")
 
 
 if __name__ == '__main__':

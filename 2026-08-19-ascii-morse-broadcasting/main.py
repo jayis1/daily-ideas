@@ -30,16 +30,16 @@ import os
 import sys
 import time
 import random
-import threading
+import shlex
+import subprocess
 import argparse
 import math
 import wave
 import struct
-import textwrap
 from datetime import datetime
 
 # Version metadata (used by --version flag)
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 __author__ = "daily-ideas"
 
 # Morse code lookup table
@@ -207,7 +207,14 @@ class Color:
 # Terminal control helpers
 # ============================================================
 def clear_screen():
-    os.system('cls' if os.name == 'nt' else 'clear')
+    """Clear the terminal screen, gracefully handling environments without TERM."""
+    if sys.stdout.isatty():
+        os.system('cls' if os.name == 'nt' else 'clear')
+    else:
+        # No TTY — emit a clear-screen escape sequence instead of shelling out,
+        # which avoids the "TERM environment variable not set" warning.
+        sys.stdout.write('\033[2J\033[H')
+        sys.stdout.flush()
 
 
 def hide_cursor():
@@ -225,16 +232,6 @@ def move_to(row, col):
     sys.stdout.flush()
 
 
-def save_cursor():
-    sys.stdout.write('\033[s')
-    sys.stdout.flush()
-
-
-def restore_cursor():
-    sys.stdout.write('\033[u')
-    sys.stdout.flush()
-
-
 # ============================================================
 # Morse Code Engine
 # ============================================================
@@ -242,6 +239,8 @@ class MorseEngine:
     """Handles Morse code encoding/decoding and timing."""
 
     def __init__(self, wpm=20, freq=600):
+        if wpm <= 0:
+            raise ValueError(f"WPM must be positive (got {wpm})")
         self.wpm = wpm
         self.freq = freq
         # Dot duration in ms: 1200/WPM (PARIS standard)
@@ -263,16 +262,24 @@ class MorseEngine:
         return result
 
     def morse_to_text(self, morse_str):
-        """Convert Morse code back to text."""
-        words = morse_str.split(' / ')
+        """Convert Morse code back to text.
+
+        Accepts dots (.), dashes (-), spaces between symbols, and
+        forward slashes (/) or pipe characters (|) as word separators.
+        """
+        # Normalise pipe separators to slashes
+        morse_str = morse_str.replace('|', '/')
+        words = morse_str.split('/')
         result = []
         for word in words:
-            chars = word.strip().split(' ')
+            chars = word.strip().split()
+            decoded_word = []
             for c in chars:
                 if c in REVERSE_MORSE:
-                    result.append(REVERSE_MORSE[c])
-            result.append(' ')
-        return ''.join(result).strip()
+                    decoded_word.append(REVERSE_MORSE[c])
+            if decoded_word:
+                result.append(''.join(decoded_word))
+        return ' '.join(result)
 
 
 # ============================================================
@@ -350,23 +357,6 @@ class RadioDisplay:
         self.current_segment = "IDLE"
         self.signal_bar_width = 40
         self.last_update = time.time()
-
-    def _box(self, row, col, width, height, title=""):
-        """Draw a box border."""
-        top = '┌' + '─' * (width - 2) + '┐'
-        bot = '└' + '─' * (width - 2) + '┘'
-        move_to(row, col)
-        sys.stdout.write(top)
-        move_to(row + height - 1, col)
-        sys.stdout.write(bot)
-        for r in range(1, height - 1):
-            move_to(row + r, col)
-            sys.stdout.write('│')
-            move_to(row + r, col + width - 1)
-            sys.stdout.write('│')
-        if title:
-            move_to(row, col + 3)
-            sys.stdout.write(f' {title} ')
 
     def _rssi_bars(self):
         """Generate signal strength bars."""
@@ -649,11 +639,15 @@ class BroadcastManager:
         # Try to use system beep via ANSI escape
         if sys.platform == 'linux':
             try:
-                # Try ALSA or pulseaudio
-                os.system(
-                    f'play -nq -t alsa synth {duration:.3f} sine {freq} 2>/dev/null &'
+                # Use subprocess with argument list to prevent shell injection
+                subprocess.Popen(
+                    ['play', '-nq', '-t', 'alsa', 'synth',
+                     f'{duration:.3f}', 'sine', str(int(freq))],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
                 )
-            except Exception:
+            except (FileNotFoundError, OSError):
+                # play/SoX not installed — fall back to terminal bell
                 sys.stdout.write('\a')
                 sys.stdout.flush()
         else:
@@ -715,7 +709,7 @@ class BroadcastManager:
                     except Exception as e:
                         self.display.add_log(f"✗ WAV save failed: {e}")
 
-                self.cycle_count += 1
+                # cycle_count is incremented only when the queue is rebuilt (above)
 
         except KeyboardInterrupt:
             pass
@@ -773,6 +767,9 @@ def encode_to_morse(text):
     """Encode text to Morse code string with / for word separators and print it."""
     engine = MorseEngine()
     pairs = engine.text_to_morse(text)
+    if not pairs:
+        print(f"{Color.YELLOW}(no encodable characters in input){Color.RESET}")
+        return ''
     morse_str = ' '.join(m for _, m in pairs)
     print(morse_str)
     return morse_str
@@ -782,7 +779,10 @@ def decode_from_morse(morse_str):
     """Decode a Morse code string to plain text and print it."""
     engine = MorseEngine()
     text = engine.morse_to_text(morse_str)
-    print(text)
+    if text:
+        print(text)
+    else:
+        print(f"{Color.YELLOW}(no decodable Morse symbols in input){Color.RESET}")
     return text
 
 
@@ -849,8 +849,13 @@ def _transmit_inline(engine, display, text, segment_name, speed_mult, audio, fre
                 continue
             if audio:
                 try:
-                    os.system(f'play -nq -t alsa synth {duration:.3f} sine {freq} 2>/dev/null &')
-                except Exception:
+                    subprocess.Popen(
+                        ['play', '-nq', '-t', 'alsa', 'synth',
+                         f'{duration:.3f}', 'sine', str(int(freq))],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                except (FileNotFoundError, OSError):
                     pass
             else:
                 time.sleep(duration)
@@ -940,6 +945,11 @@ def main():
     if args.phonetic:
         phon = ' '.join(PHONETIC_ALPHABET.get(c, c) for c in call_sign)
         print(f"{Color.CYAN}Call sign: {call_sign} → {phon}{Color.RESET}")
+        # If --phonetic was the only action requested (no broadcast, no
+        # interactive mode), exit after printing so the user isn't surprised
+        # by an unexpected broadcast.
+        if not args.interactive:
+            return
 
     # --- Interactive mode ---
     if args.interactive:
