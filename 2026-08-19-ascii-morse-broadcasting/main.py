@@ -38,6 +38,10 @@ import struct
 import textwrap
 from datetime import datetime
 
+# Version metadata (used by --version flag)
+__version__ = "1.1.0"
+__author__ = "daily-ideas"
+
 # Morse code lookup table
 MORSE_CODE = {
     'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.',
@@ -534,16 +538,18 @@ class BroadcastManager:
 
     SEGMENT_TYPES = ["STATION_ID", "NEWS", "WEATHER", "STATIC", "EMERGENCY", "IDLE"]
 
-    def __init__(self, call_sign, wpm=20, speed_mult=1.0, audio=False, save_wav=False):
+    def __init__(self, call_sign, wpm=20, speed_mult=1.0, audio=False, save_wav=False, log_enabled=False):
         self.call_sign = call_sign
         self.wpm = wpm
         self.speed_mult = speed_mult
         self.audio_enabled = audio
         self.save_wav = save_wav
+        self.log_enabled = log_enabled
         self.engine = MorseEngine(wpm=wpm)
         self.display = RadioDisplay(call_sign)
         self.running = True
         self.cycle_count = 0
+        self._wav_saved = False
         self.current_segment_type = "IDLE"
         self.current_segment_text = ""
         self.segment_queue = self._build_segment_queue()
@@ -562,11 +568,13 @@ class BroadcastManager:
         return queue
 
     def _get_segment_content(self, segment_type):
-        """Get content for a broadcast segment."""
+        """Get content for a broadcast segment.
+
+        Returns a tuple of (text_to_transmit, human_readable_segment_name).
+        The phonetic alphabet expansion is computed only when needed by the
+        caller — it's not used inside the Morse payload itself.
+        """
         if segment_type == "STATION_ID":
-            phonetic = ' '.join(phonetic for c, phonetic in [
-                (c, PHONETIC_ALPHABET.get(c, c)) for c in self.call_sign
-            ])
             return f"CQ CQ CQ DE {self.call_sign} {self.call_sign} {self.call_sign} AR", "STATION IDENTIFICATION"
         elif segment_type == "NEWS":
             headline = random.choice(NEWS_TEMPLATES)
@@ -601,6 +609,12 @@ class BroadcastManager:
 
             # Show the morse symbol being transmitted
             self.display.update(segment_name, morse + ' ', char, signal)
+            if self.log_enabled and char:
+                # Mirror decoded chars to stdout (line-buffered by word)
+                sys.stdout.write(char)
+                if char == ' ':
+                    sys.stdout.write('\n')
+                sys.stdout.flush()
 
             # Transmit each dot/dash
             for symbol in morse:
@@ -688,14 +702,18 @@ class BroadcastManager:
                 self.display.add_log(f"✔ {segment_name} complete")
                 time.sleep(0.5 * self.speed_mult)
 
-                # Occasionally save WAV
-                if self.save_wav and self.cycle_count == 0 and segment_type == "STATION_ID":
-                    wav_file = generate_morse_wav(
-                        text, wpm=self.wpm,
-                        freq=self.engine.freq,
-                        filename=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'broadcast.wav')
-                    )
-                    self.display.add_log(f"💾 WAV saved: {wav_file}")
+                # Save WAV on first STATION_ID segment (only once)
+                if self.save_wav and not self._wav_saved and segment_type == "STATION_ID":
+                    try:
+                        wav_file = generate_morse_wav(
+                            text, wpm=self.wpm,
+                            freq=self.engine.freq,
+                            filename=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'broadcast.wav')
+                        )
+                        self._wav_saved = True
+                        self.display.add_log(f"💾 WAV saved: {wav_file}")
+                    except Exception as e:
+                        self.display.add_log(f"✗ WAV save failed: {e}")
 
                 self.cycle_count += 1
 
@@ -733,19 +751,120 @@ def print_help():
     print(f"    -a, --audio       Enable audio beeps (requires SoX/play)")
     print(f"    -v, --wav         Save broadcast as WAV file")
     print(f"    -l, --log         Print decoded messages to stdout log")
+    print(f"    -e, --encode      Encode TEXT to Morse and print, then exit")
+    print(f"    -d, --decode      Decode Morse TEXT (dots/dashes/slashes) to plain text")
+    print(f"    -i, --interactive Interactive mode: type messages to broadcast live")
+    print(f"    -p, --phonetic    Print NATO phonetic for call sign / text")
+    print(f"        --callsign-list  List available call signs and exit")
+    print(f"        --version     Show version and exit")
     print(f"    -h, --help        Show this help message")
     print()
     print(f"  {Color.YELLOW}Examples:{Color.RESET}")
     print(f"    python main.py --callsign WBSQ --wpm 25")
     print(f"    python main.py -c KXRT -w 15 -s 0.5  # Slow Morse, easy to follow")
     print(f"    python main.py --audio               # With sound")
+    print(f"    python main.py --encode 'SOS HELP'")
+    print(f"    python main.py --decode '... --- ... / .... . .-.. .--.'")
+    print(f"    python main.py --interactive --callsign WNYC")
     print()
+
+
+def encode_to_morse(text):
+    """Encode text to Morse code string with / for word separators and print it."""
+    engine = MorseEngine()
+    pairs = engine.text_to_morse(text)
+    morse_str = ' '.join(m for _, m in pairs)
+    print(morse_str)
+    return morse_str
+
+
+def decode_from_morse(morse_str):
+    """Decode a Morse code string to plain text and print it."""
+    engine = MorseEngine()
+    text = engine.morse_to_text(morse_str)
+    print(text)
+    return text
+
+
+def interactive_mode(call_sign, wpm, speed_mult, audio, save_wav, freq):
+    """Interactive mode: user types messages which are broadcast live."""
+    clear_screen()
+    print(f"\n  {Color.CYAN}{Color.BOLD}Interactive Morse Broadcast — {call_sign}{Color.RESET}")
+    print(f"  {Color.DIM}Type a message and press Enter to transmit it as Morse code.")
+    print(f"  Type 'quit' or 'exit' to sign off. Empty line skips.{Color.RESET}\n")
+    engine = MorseEngine(wpm=wpm)
+    engine.freq = freq
+    display = RadioDisplay(call_sign)
+    hide_cursor()
+    try:
+        display.render()
+        while True:
+            # Move cursor to input line and show it for typing
+            move_to(47, 2)
+            sys.stdout.write(f"  {Color.YELLOW}TX>{Color.RESET} {' ' * 70}")
+            move_to(47, 6)
+            show_cursor()
+            sys.stdout.flush()
+            try:
+                user_input = input()
+            except (EOFError, KeyboardInterrupt):
+                break
+            hide_cursor()
+            user_input = user_input.strip()
+            if user_input.lower() in ('quit', 'exit', 'q'):
+                break
+            if not user_input:
+                continue
+            text = f"DE {call_sign} {user_input.upper()} AR"
+            display.add_log(f"▶ TX: {user_input[:50]}")
+            display.render()
+            _transmit_inline(engine, display, text, "INTERACTIVE", speed_mult, audio, freq)
+            display.add_log("✔ TX complete")
+            display.render()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        show_cursor()
+        print()
+        print(f"  {Color.YELLOW}📡 {call_sign} signing off. 73!{Color.RESET}")
+        print()
+
+
+def _transmit_inline(engine, display, text, segment_name, speed_mult, audio, freq):
+    """Transmit a single message string via the display (helper for interactive mode)."""
+    morse_pairs = engine.text_to_morse(text)
+    signal = random.randint(75, 95)
+    for char, morse in morse_pairs:
+        if morse == '/':
+            gap = engine.inter_word_gap_ms / 1000.0 * speed_mult
+            time.sleep(gap)
+            continue
+        display.update(segment_name, morse + ' ', char, signal)
+        for symbol in morse:
+            if symbol == '.':
+                duration = engine.dot_ms / 1000.0 * speed_mult
+            elif symbol == '-':
+                duration = engine.dash_ms / 1000.0 * speed_mult
+            else:
+                continue
+            if audio:
+                try:
+                    os.system(f'play -nq -t alsa synth {duration:.3f} sine {freq} 2>/dev/null &')
+                except Exception:
+                    pass
+            else:
+                time.sleep(duration)
+            time.sleep(engine.intra_char_gap_ms / 1000.0 * speed_mult)
+        char_gap = (engine.inter_char_gap_ms - engine.intra_char_gap_ms) / 1000.0 * speed_mult
+        time.sleep(max(0.01, char_gap))
+        display.render()
 
 
 def main():
     parser = argparse.ArgumentParser(
         description="Shortwave Morse Broadcasting Station Simulator",
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        add_help=True
     )
     parser.add_argument('-c', '--callsign', type=str, default=None,
                         help='Custom call sign (default: random)')
@@ -761,8 +880,18 @@ def main():
                         help='Save first broadcast segment as WAV file')
     parser.add_argument('-l', '--log', action='store_true',
                         help='Print decoded messages to stdout')
+    parser.add_argument('-e', '--encode', type=str, default=None, metavar='TEXT',
+                        help='Encode TEXT to Morse code and exit')
+    parser.add_argument('-d', '--decode', type=str, default=None, metavar='MORSE',
+                        help='Decode Morse code string to text and exit')
+    parser.add_argument('-i', '--interactive', action='store_true',
+                        help='Interactive mode: type messages to broadcast live')
+    parser.add_argument('-p', '--phonetic', action='store_true',
+                        help='Print NATO phonetic alphabet expansion of the call sign / text')
     parser.add_argument('--callsign-list', action='store_true',
                         help='List available call signs and exit')
+    parser.add_argument('--version', action='version',
+                        version=f'ASCII Morse Broadcasting Station v{__version__}')
     args = parser.parse_args()
 
     if args.callsign_list:
@@ -772,15 +901,50 @@ def main():
             print(f"  {Color.GREEN}{cs}{Color.RESET} - {phonetic}")
         return
 
+    # --- Utility modes: encode / decode (no broadcast) ---
+    if args.encode is not None:
+        morse = encode_to_morse(args.encode)
+        if args.phonetic:
+            phon = ' '.join(PHONETIC_ALPHABET.get(c, c) for c in args.encode.upper() if c.isalnum() or c == ' ')
+            print(f"\n{Color.DIM}Phonetic: {phon}{Color.RESET}")
+        return
+
+    if args.decode is not None:
+        decode_from_morse(args.decode)
+        return
+
     call_sign = args.callsign.upper() if args.callsign else random.choice(CALL_SIGNS)
 
-    # Validate call sign
+    # Validate call sign: letters + digits only, 2-6 chars
     if not all(c.isalnum() for c in call_sign):
         print(f"{Color.RED}Error: Call sign must be alphanumeric{Color.RESET}")
         return
+    if not (2 <= len(call_sign) <= 6):
+        print(f"{Color.RED}Error: Call sign must be 2-6 characters (got {len(call_sign)}){Color.RESET}")
+        return
 
-    # Set frequency
+    # Validate WPM range
+    if not (5 <= args.wpm <= 60):
+        print(f"{Color.RED}Error: WPM must be between 5 and 60 (got {args.wpm}){Color.RESET}")
+        return
+
+    # Validate speed multiplier
+    if args.speed <= 0:
+        print(f"{Color.RED}Error: Speed multiplier must be positive (got {args.speed}){Color.RESET}")
+        return
+
+    # Set frequency (clamped)
     freq = max(200, min(2000, args.freq))
+
+    # Print phonetic for call sign if requested
+    if args.phonetic:
+        phon = ' '.join(PHONETIC_ALPHABET.get(c, c) for c in call_sign)
+        print(f"{Color.CYAN}Call sign: {call_sign} → {phon}{Color.RESET}")
+
+    # --- Interactive mode ---
+    if args.interactive:
+        interactive_mode(call_sign, args.wpm, args.speed, args.audio, args.wav, freq)
+        return
 
     # Print startup message
     clear_screen()
@@ -797,7 +961,8 @@ def main():
         wpm=args.wpm,
         speed_mult=args.speed,
         audio=args.audio,
-        save_wav=args.wav
+        save_wav=args.wav,
+        log_enabled=args.log
     )
     manager.engine.freq = freq
     manager.run()

@@ -1,9 +1,10 @@
 # 📻 ASCII Morse Broadcasting Station
 
-A terminal-based vintage shortwave radio station simulator that broadcasts Morse code in real time. Watch as it cycles through station identifications, news bulletins, weather reports, and occasional emergency alerts — all transmitted in properly-timed International Morse Code with a live radio receiver UI.
+A terminal-based vintage shortwave radio station simulator that broadcasts Morse code in real time — now doubled as a practical Morse code utility toolkit. Watch as it cycles through station identifications, news bulletins, weather reports, and occasional emergency alerts, all transmitted in properly-timed International Morse Code with a live radio receiver UI. Or use the built-in `--encode`/`--decode` modes as a quick Morse code translator.
 
 ## ✨ Features
 
+### Broadcast Simulator
 - **Real-time Morse code transmission** using PARIS-standard timing (1200/WPM milliseconds per dot)
 - **Full shortwave receiver UI** with VFO frequency display, S-meter, signal strength bars, and tuning indicator
 - **Live waveform visualization** — animated ASCII waveform that responds to signal strength
@@ -20,6 +21,21 @@ A terminal-based vintage shortwave radio station simulator that broadcasts Morse
 - **Adjustable WPM speed** (default 20 WPM) and broadcast speed multiplier
 - **Static/noise simulation** between segments with fluctuating signal levels
 - **Q-codes** (QSL, QTH, QRX, QRM, QSB, CQ, DE, AR, SK) used authentically
+
+### Morse Code Utility (New!)
+- **`--encode TEXT`** — Convert any text to Morse code and print it (great for quick lookups)
+- **`--decode MORSE`** — Convert a Morse code string back to plain text
+- **`--interactive` mode** — Type your own messages and broadcast them live as Morse code
+- **`--phonetic` flag** — Print the NATO phonetic alphabet expansion of any call sign or text
+- **`--version` flag** — Check the installed version
+
+### Code Quality Improvements
+- Input validation for call signs (2–6 alphanumeric chars), WPM (5–60), and speed multiplier (positive)
+- Fixed WAV save bug where the file was only written on the very first cycle and never again
+- Fixed `--log` flag that was parsed but never actually used — now mirrors decoded chars to stdout
+- Removed dead `phonetic` variable in station ID generation
+- Error handling around WAV file generation
+- 25-test suite covering the engine, WAV generation, CLI modes, and validation
 
 ## 📦 Installation
 
@@ -49,6 +65,8 @@ No `pip install` needed — the project uses only Python standard library module
 
 ## 🚀 How to Run
 
+### Broadcast Simulator
+
 ```bash
 # Default: random call sign, 20 WPM, no audio
 python3 main.py
@@ -65,14 +83,41 @@ python3 main.py --audio
 # Save broadcast as WAV file
 python3 main.py --wav
 
+# Print decoded messages to stdout while broadcasting
+python3 main.py --log
+
 # List available call signs
 python3 main.py --callsign-list
+
+# Show version
+python3 main.py --version
 
 # Show help
 python3 main.py --help
 ```
 
 **Press `Ctrl+C` to stop broadcasting.**
+
+### Morse Code Utility
+
+```bash
+# Encode text to Morse code
+python3 main.py --encode "SOS HELP"
+# Output: ... --- ... / .... . .-.. .--.
+
+# Decode Morse code to text
+python3 main.py --decode "... --- ... / .... . .-.. .--."
+# Output: SOS HELP
+
+# Encode with NATO phonetic alphabet
+python3 main.py --encode "HELLO WORLD" --phonetic
+
+# Show phonetic for a specific call sign
+python3 main.py --callsign WBSQ --phonetic
+
+# Interactive mode — type messages to broadcast live
+python3 main.py --interactive --callsign WNYC
+```
 
 ## 📖 Usage Examples
 
@@ -100,7 +145,29 @@ python3 main.py -c KQED -w 12 -s 0.3
 
 Broadcasts at 12 WPM with 0.3x speed — very slow, perfect for learning to copy Morse code by ear or eye.
 
+### Quick Morse translation
+
+```bash
+# Encode
+python3 main.py -e "CQ DX DE WBSQ"
+# Output: -.-. --.- / -.. -..- / -.. . / .-- -... ... --.-
+
+# Decode it back
+python3 main.py -d "-.-. --.- / -.. -..- / -.. . / .-- -... ... --.-"
+# Output: CQ DX DE WBSQ
+```
+
+### Interactive broadcast mode
+
+```bash
+python3 main.py --interactive --callsign WNYC --wpm 18
+```
+
+Opens the full radio receiver UI. Type a message and press Enter to transmit it as Morse code. Type `quit` or `exit` to sign off.
+
 ## 🎛️ What It Does
+
+### Broadcast Mode
 
 When you launch the station, it simulates a vintage shortwave radio broadcasting station going through its programming cycle:
 
@@ -120,6 +187,10 @@ The receiver UI displays:
 - **Broadcast Log** — Timestamped log of all segments
 - **Static Line** — Random noise characters simulating radio static
 
+### Utility Mode
+
+The `--encode` and `--decode` flags skip the broadcast entirely and act as a command-line Morse code translator. The `--interactive` flag opens a hybrid mode where you type messages and they're transmitted live through the same radio UI.
+
 ### Morse Code Timing
 
 The simulator follows the international PARIS standard:
@@ -131,12 +202,29 @@ The simulator follows the international PARIS standard:
 
 At 20 WPM, one dot = 60ms. The speed multiplier (`-s`) scales all timings.
 
+## 🧪 Running Tests
+
+```bash
+python3 -m pytest test_morse_broadcast.py -v
+# or:
+python3 test_morse_broadcast.py
+```
+
+The test suite covers:
+- MorseEngine: encoding, decoding, round-trip, timing
+- WAV generation: file format, audio content
+- CLI modes: `--encode`, `--decode`, `--version`, `--callsign-list`, `--phonetic`
+- Input validation: call signs, WPM, speed multiplier
+- Morse table completeness: letters, digits, punctuation, reverse mapping
+- Phonetic alphabet completeness
+
 ## 📁 Project Structure
 
 ```
 2026-08-19-ascii-morse-broadcasting/
-├── main.py          # Complete station simulator (single file, no dependencies)
-└── README.md        # This file
+├── main.py                    # Complete station simulator + Morse utility (single file)
+├── test_morse_broadcast.py    # 25-test suite (engine, WAV, CLI, validation, tables)
+└── README.md                   # This file
 ```
 
 ## 🔧 Technical Details
