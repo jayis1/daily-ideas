@@ -30,7 +30,7 @@ Observe ──telemetry──► Reason ──commands──► Act
                          └── Coordinate ◄───┘
 ```
 
-All currently registered hardware designs—and future additions—connect through the [unified TREE registry](https://github.com/jayis1/unified-TREE/blob/main/devices.json) and [shared device protocol](https://github.com/jayis1/unified-TREE/tree/main/protocol). Its [complete front-page unification guide](https://github.com/jayis1/unified-TREE) explains repository ownership, device roles, message contracts, deployment composition, and how every design participates. This monorepo retains a synchronized integration under [`systems/`](./systems/).
+All currently registered hardware designs—and future additions—connect through the [unified TREE registry](https://github.com/jayis1/unified-TREE/blob/main/devices.json) and [shared device protocol](https://github.com/jayis1/unified-TREE/tree/main/protocol). Open the [live installable PWA dashboard](https://jayis1.github.io/unified-TREE/) or its [Home Assistant integration](https://github.com/jayis1/unified-TREE/tree/main/custom_components/unified_tree). The [complete unification guide](https://github.com/jayis1/unified-TREE) explains repository ownership, roles, contracts, and deployment composition. This monorepo retains a synchronized integration under [`systems/`](./systems/).
 
 ## Requirements
 

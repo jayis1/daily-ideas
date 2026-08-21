@@ -4,15 +4,17 @@ A curated collection of novel System-on-Chip device designs — each invented fr
 
 ## These inventions now form one greater system
 
-> ### [Explore unified TREE →](https://github.com/jayis1/unified-TREE)
+> ### [Open the unified TREE dashboard →](https://jayis1.github.io/unified-TREE/)
 >
 > In **unified TREE, every design in this repository is a node**. The nodes interoperate through four functional roles—**Observe, Reason, Act, and Coordinate**—to become complete multi-device deployments.
 
 The unified project provides:
 
+- an [installable Android and desktop PWA dashboard](https://jayis1.github.io/unified-TREE/);
 - a [growing registry containing every current and future SoC node](https://github.com/jayis1/unified-TREE/blob/main/devices.json);
 - a [shared device protocol](https://github.com/jayis1/unified-TREE/tree/main/protocol) for telemetry, findings, commands, feedback, health, and policy;
 - a [unified node architecture and integration guide](https://github.com/jayis1/unified-TREE/blob/main/README.md); and
+- a [Home Assistant integration](https://github.com/jayis1/unified-TREE/tree/main/custom_components/unified_tree); and
 - validation tooling that detects missing devices, broken role assignments, and disconnected node links.
 
 This repository remains the canonical source for each device's schematics, firmware, BOM, scripts, and build documentation. The [unified TREE repository](https://github.com/jayis1/unified-TREE) is the composition layer that connects them into a larger working whole.
