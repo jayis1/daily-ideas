@@ -1,0 +1,2045 @@
+{
+  "schema_version": 1,
+  "apps": [
+    {
+      "id": "ascii-dungeon-generator",
+      "title": "Procedural ASCII Dungeon Map Generator",
+      "description": "Generate random dungeon maps with rooms, corridors, monsters, treasures, traps, NPCs, and stairs — all rendered in beautiful ASCII art.",
+      "date": "2026-06-12",
+      "path": "2026-06-12-ascii-dungeon-generator",
+      "entrypoint": "dungeon_generator.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "ascii",
+        "creative",
+        "dungeon",
+        "generator"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "rune-cipher",
+      "title": "Rune Cipher ᚱᚢᚾᛖ",
+      "description": "A terminal cryptography playground that encodes messages with historical ciphers, renders output in Elder Futhark runic Unicode, cracks ciphertext using frequency analysis and h...",
+      "date": "2026-06-12",
+      "path": "2026-06-12-rune-cipher",
+      "entrypoint": "rune_cipher.py",
+      "category": "utility",
+      "interface": "interactive",
+      "dependencies": [],
+      "tags": [
+        "cipher",
+        "rune",
+        "utility"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-roguelike",
+      "title": "Terminal Roguelike Engine",
+      "description": "A full-featured ASCII dungeon crawler built entirely in Python — no external dependencies required. Descend through 5 floors of procedurally generated dungeons, fight 10 enemy t...",
+      "date": "2026-06-12",
+      "path": "2026-06-12-terminal-roguelike",
+      "entrypoint": "roguelike.py",
+      "category": "game",
+      "interface": "interactive",
+      "dependencies": [],
+      "tags": [
+        "game",
+        "roguelike",
+        "terminal"
+      ],
+      "smoke_args": []
+    },
+    {
+      "id": "cellular-automata-lab",
+      "title": "CellLab  Interactive Cellular Automata Laboratory",
+      "description": "Explore the emergent beauty of cellular automata right in your terminal. CellLab supports both 1D elementary automata (Wolfram rules 0–255) and 2D Life-like automata (10 presets...",
+      "date": "2026-06-13",
+      "path": "2026-06-13-cellular-automata-lab",
+      "entrypoint": "cellab.py",
+      "category": "science",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "automata",
+        "cellular",
+        "lab",
+        "science"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "fractal-explorer",
+      "title": "ASCII Fractal Explorer",
+      "description": "Explore Mandelbrot, Julia, Burning Ship, and Tricorn sets directly in your terminal — with interactive zoom, pan, palette switching, smooth coloring, bookmarks, and mouse suppor...",
+      "date": "2026-06-13",
+      "path": "2026-06-13-fractal-explorer",
+      "entrypoint": "fractal_explorer.py",
+      "category": "creative",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "explorer",
+        "fractal"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "loom",
+      "title": "LOOM  Terminal Generative Art Weaver",
+      "description": "Version 1.1.1",
+      "date": "2026-06-13",
+      "path": "2026-06-13-loom",
+      "entrypoint": "loom.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "loom"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "procedural-planet-generator",
+      "title": "Procedural Planet Generator",
+      "description": "Generate infinite fictional worlds with detailed properties, habitability scores, hazard assessments, resource ratings, named moons, and ASCII art globe renderings. Each planet...",
+      "date": "2026-06-13",
+      "path": "2026-06-13-procedural-planet-generator",
+      "entrypoint": "planet_gen.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "generator",
+        "planet",
+        "procedural"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "tarot-reader",
+      "title": "CLI Tarot Reader",
+      "description": "A beautifully rendered terminal tarot card reader with ASCII art cards, multiple spreads, full interpretations, and dramatic reveal animations. Pull cards from a complete 78-car...",
+      "date": "2026-06-13",
+      "path": "2026-06-13-tarot-reader",
+      "entrypoint": "tarot_reader.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "reader",
+        "tarot"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-aquarium",
+      "title": "Terminal Aquarium",
+      "description": "A beautiful animated aquarium that lives in your terminal. Watch procedurally generated fish swim, plants sway, and bubbles rise — all rendered in glorious curses-based ASCII ar...",
+      "date": "2026-06-13",
+      "path": "2026-06-13-terminal-aquarium",
+      "entrypoint": "aquarium.py",
+      "category": "simulation",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "aquarium",
+        "simulation",
+        "terminal"
+      ],
+      "smoke_args": []
+    },
+    {
+      "id": "terminal-slides",
+      "title": "Terminal Slides",
+      "description": "A presentation tool that runs entirely in your terminal. Write your slides in Markdown, present them with beautiful ANSI colors and keyboard navigation — no GUI required.",
+      "date": "2026-06-13",
+      "path": "2026-06-13-terminal-slides",
+      "entrypoint": "slides.py",
+      "category": "utility",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "slides",
+        "terminal",
+        "utility"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "wave-synth",
+      "title": "Wave Synth  Terminal Audio Waveform Synthesizer",
+      "description": "Version 1.2.2 — A command-line tool for generating, visualizing, mixing, and exporting audio waveforms entirely from your terminal.",
+      "date": "2026-06-13",
+      "path": "2026-06-13-wave-synth",
+      "entrypoint": "wave_synth.py",
+      "category": "audio",
+      "interface": "interactive",
+      "dependencies": [],
+      "tags": [
+        "audio",
+        "synth",
+        "wave"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "ascii-kaleidoscope",
+      "title": "ASCII Kaleidoscope",
+      "description": "A mesmerizing terminal-based kaleidoscope that generates real-time, animated, symmetric patterns using Unicode block characters and ANSI 256-color mode. The engine computes patt...",
+      "date": "2026-06-14",
+      "path": "2026-06-14-ascii-kaleidoscope",
+      "entrypoint": "kaleidoscope.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "ascii",
+        "creative",
+        "kaleidoscope"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "befunge93-interpreter",
+      "title": "Befunge-93 Esoteric Language Interpreter",
+      "description": "v1.1.0 — A complete, fully-featured interpreter for Befunge-93, one of the most fascinating esoteric programming languages ever created. In Befunge-93, code lives on a 2D grid a...",
+      "date": "2026-06-14",
+      "path": "2026-06-14-befunge93-interpreter",
+      "entrypoint": "befunge93.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "befunge93",
+        "creative",
+        "interpreter"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "cli-escape-room",
+      "title": "CLI Escape Room",
+      "description": "v2.0.0 — A fully interactive text-based escape room game for your terminal. Wake up in a locked cell with no memory. Explore rooms, collect items, solve interconnected puzzles,...",
+      "date": "2026-06-14",
+      "path": "2026-06-14-cli-escape-room",
+      "entrypoint": "escape_room.py",
+      "category": "game",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "cli",
+        "escape",
+        "game",
+        "room"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "cli-tamagotchi",
+      "title": "CLI Tamagotchi v2.2",
+      "description": "A fully-featured virtual pet that lives in your terminal! Choose from 5 species (cat, dog, dragon, slime, robot), each with unique ASCII art, personality traits, and response te...",
+      "date": "2026-06-14",
+      "path": "2026-06-14-cli-tamagotchi",
+      "entrypoint": "tamagotchi.py",
+      "category": "game",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "cli",
+        "game",
+        "tamagotchi"
+      ],
+      "smoke_args": []
+    },
+    {
+      "id": "collatz-explorer",
+      "title": "Collatz Explorer",
+      "description": "v1.2.0 — A terminal-based visualization tool for exploring the Collatz Conjecture — one of mathematics' most famous unsolved problems.",
+      "date": "2026-06-14",
+      "path": "2026-06-14-collatz-explorer",
+      "entrypoint": "collatz_explorer.py",
+      "category": "science",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "collatz",
+        "explorer",
+        "science"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "constellation-map",
+      "title": "Constellation Map  Procedural Star Atlas Generator",
+      "description": "A command-line tool that generates rich, navigable ASCII star maps with procedurally created constellations, mythical names, deep sky objects, nebulae, meteor showers, and lore....",
+      "date": "2026-06-14",
+      "path": "2026-06-14-constellation-map",
+      "entrypoint": "constellation_map.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "constellation",
+        "creative",
+        "map"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "markov-haiku-generator",
+      "title": "Markov Chain Haiku Generator",
+      "description": "A CLI tool that builds Markov chains from text input and generates 5-7-5 syllable haikus (or 5-7-5-7-7 tanka poems) with automatic season detection, syllable stats, colored term...",
+      "date": "2026-06-14",
+      "path": "2026-06-14-markov-haiku-generator",
+      "entrypoint": "markov_haiku.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "generator",
+        "haiku",
+        "markov"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "regex-crossword",
+      "title": "Regex Crossword Generator & Solver",
+      "description": "v1.3.0 — A CLI tool for generating and solving regex crossword puzzles — a mind-bending puzzle type where each cell must satisfy both a row regex constraint and a column regex c...",
+      "date": "2026-06-14",
+      "path": "2026-06-14-regex-crossword",
+      "entrypoint": "regex_crossword.py",
+      "category": "puzzle",
+      "interface": "cli",
+      "dependencies": [],
+      "tags": [
+        "crossword",
+        "puzzle",
+        "regex"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "ascii-fireworks",
+      "title": "Terminal ASCII Fireworks Simulator",
+      "description": "A real-time fireworks display in your terminal with particle physics, multiple explosion patterns, and choreographed shows. Watch rockets launch, explode into dazzling patterns,...",
+      "date": "2026-06-15",
+      "path": "2026-06-15-ascii-fireworks",
+      "entrypoint": "fireworks.py",
+      "category": "creative",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "ascii",
+        "creative",
+        "fireworks"
+      ],
+      "smoke_args": []
+    },
+    {
+      "id": "boids-flocking",
+      "title": "Boids Flocking Simulator",
+      "description": "A real-time terminal simulation of Craig Reynolds' classic Boids algorithm — watch emergent flocking behavior arise from just three simple rules: separation, alignment, and cohe...",
+      "date": "2026-06-15",
+      "path": "2026-06-15-boids-flocking",
+      "entrypoint": "boids.py",
+      "category": "simulation",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "boids",
+        "flocking",
+        "simulation"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "ecosystem-simulator",
+      "title": "ASCII Ecosystem Simulator",
+      "description": "A terminal-based ecosystem simulation that models the dynamics of a living world — plants grow and spread, herbivores graze and flee, predators hunt and reproduce. Watch populat...",
+      "date": "2026-06-15",
+      "path": "2026-06-15-ecosystem-simulator",
+      "entrypoint": "ecosystem.py",
+      "category": "simulation",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "ecosystem",
+        "simulation",
+        "simulator"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "mondrian-generator",
+      "title": "Terminal Mondrian Art Generator v3.0.1",
+      "description": "Generate Piet Mondrian-style De Stijl compositions directly in your terminal using Unicode box-drawing characters and ANSI 24-bit true colors.",
+      "date": "2026-06-15",
+      "path": "2026-06-15-mondrian-generator",
+      "entrypoint": "mondrian.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "generator",
+        "mondrian"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "morse-wave-translator",
+      "title": "Morse Wave Translator",
+      "description": "Encode and decode text as visual Morse code waveforms — dots and dashes rendered as animated ASCII sine waves, compact block-element oscilloscope traces, and optional real audio...",
+      "date": "2026-06-15",
+      "path": "2026-06-15-morse-wave-translator",
+      "entrypoint": "morse_wave.py",
+      "category": "audio",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "audio",
+        "morse",
+        "translator",
+        "wave"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "pipes-puzzle",
+      "title": "Pipes Puzzle",
+      "description": "A terminal-based pipe rotation puzzle game built with Python and curses. Rotate pipe segments on a grid to connect water flow from the source (▶ left side) to the drain (▶ right...",
+      "date": "2026-06-15",
+      "path": "2026-06-15-pipes-puzzle",
+      "entrypoint": "pipes_puzzle.py",
+      "category": "puzzle",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "pipes",
+        "puzzle"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "sorting-algorithm-race",
+      "title": "Sorting Algorithm Race v2.1",
+      "description": "A real-time terminal visualization that pits multiple sorting algorithms against each other in a head-to-head race. Watch Bubble Sort struggle, Quick Sort fly, and Tim Sort hold...",
+      "date": "2026-06-15",
+      "path": "2026-06-15-sorting-algorithm-race",
+      "entrypoint": "sort_race.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "algorithm",
+        "creative",
+        "race",
+        "sorting"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "typing-racer",
+      "title": "Terminal Typing Racer",
+      "description": "A fast-paced typing game that runs entirely in your terminal. Words fall from the top of the screen — type them before they hit the danger zone! Features progressive difficulty,...",
+      "date": "2026-06-15",
+      "path": "2026-06-15-typing-racer",
+      "entrypoint": "typing_racer.py",
+      "category": "creative",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "racer",
+        "typing"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "ascii-circuit-simulator",
+      "title": "ASCII Circuit Simulator",
+      "description": "A digital logic circuit simulator with ASCII art rendering, truth table generation, circuit validation, DSL export, and interactive mode. Define circuits using a simple text DSL...",
+      "date": "2026-06-16",
+      "path": "2026-06-16-ascii-circuit-simulator",
+      "entrypoint": "circuit_sim.py",
+      "category": "science",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "ascii",
+        "circuit",
+        "science",
+        "simulator"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "ascii-topography",
+      "title": "ASCII Topography Map Generator",
+      "description": "Generate beautiful, detailed topographic maps in your terminal using Perlin noise. Features contour lines, rivers, lakes, named peaks, terrain shading with ANSI colors, elevatio...",
+      "date": "2026-06-16",
+      "path": "2026-06-16-ascii-topography",
+      "entrypoint": "topography.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "ascii",
+        "creative",
+        "topography"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "barchart-race",
+      "title": "Barchart Race  Animated ASCII Bar Chart Race Visualizer",
+      "description": "Watch values compete and rankings shift over time with smooth ASCII animations. Supports multiple data sources, transformation modes, HTML export, and more.",
+      "date": "2026-06-16",
+      "path": "2026-06-16-barchart-race",
+      "entrypoint": "barchart_race.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "barchart",
+        "creative",
+        "race"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "decision-oracle",
+      "title": "Decision Oracle",
+      "description": "An interactive CLI tool for building, consulting, and visualizing binary decision trees. Grow your own knowledge trees by answering yes/no questions, then consult the Oracle whe...",
+      "date": "2026-06-16",
+      "path": "2026-06-16-decision-oracle",
+      "entrypoint": "decision_oracle.py",
+      "category": "creative",
+      "interface": "interactive",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "decision",
+        "oracle"
+      ],
+      "smoke_args": []
+    },
+    {
+      "id": "nbody-gravity-simulator",
+      "title": "N-Body Gravity Simulator",
+      "description": "A real-time terminal-based gravitational N-body simulation. Spawn celestial bodies, watch orbits form, witness collisions and mergers, and observe chaotic gravitational dynamics...",
+      "date": "2026-06-16",
+      "path": "2026-06-16-nbody-gravity-simulator",
+      "entrypoint": "nbody_sim.py",
+      "category": "science",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "gravity",
+        "nbody",
+        "science",
+        "simulator"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "procedural-music-box",
+      "title": "Procedural Music Box",
+      "description": "Algorithmic melody generator, visualizer, MIDI exporter, and WAV exporter.",
+      "date": "2026-06-16",
+      "path": "2026-06-16-procedural-music-box",
+      "entrypoint": "music_box.py",
+      "category": "audio",
+      "interface": "interactive",
+      "dependencies": [],
+      "tags": [
+        "audio",
+        "box",
+        "music",
+        "procedural"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-slot-machine",
+      "title": "Terminal Slot Machine",
+      "description": "A fully-featured animated casino slot machine right in your terminal! Spin the reels, place bets, and chase the jackpot — all with colorful ANSI graphics and smooth animations....",
+      "date": "2026-06-16",
+      "path": "2026-06-16-terminal-slot-machine",
+      "entrypoint": "slots.py",
+      "category": "game",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "game",
+        "machine",
+        "slot",
+        "terminal"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-spreadsheet",
+      "title": "Terminal Spreadsheet",
+      "description": "A fully interactive, curses-based mini spreadsheet that runs right in your terminal. Edit cells, write formulas, reference other cells, and use built-in functions — all with a k...",
+      "date": "2026-06-16",
+      "path": "2026-06-16-terminal-spreadsheet",
+      "entrypoint": "spreadsheet.py",
+      "category": "utility",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "spreadsheet",
+        "terminal",
+        "utility"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "ascii-sokoban",
+      "title": "ASCII Sokoban",
+      "description": "A feature-rich terminal-based implementation of the classic Sokoban box-pushing puzzle game, rendered with Unicode box-drawing characters and colored ANSI output.",
+      "date": "2026-06-17",
+      "path": "2026-06-17-ascii-sokoban",
+      "entrypoint": "sokoban.py",
+      "category": "game",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "ascii",
+        "game",
+        "sokoban"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "heraldry-generator",
+      "title": "Procedural Heraldry Generator",
+      "description": "A command-line tool that generates random medieval-style coats of arms following authentic heraldic rules, rendered as colorful ASCII art in the terminal. Each coat of arms incl...",
+      "date": "2026-06-17",
+      "path": "2026-06-17-heraldry-generator",
+      "entrypoint": "heraldry.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "generator",
+        "heraldry"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "inkblot-generator",
+      "title": "Procedural Inkblot Generator",
+      "description": "Version 2.0.0",
+      "date": "2026-06-17",
+      "path": "2026-06-17-inkblot-generator",
+      "entrypoint": "inkblot.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "generator",
+        "inkblot"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "maze-pathfinder-visualizer",
+      "title": "Maze Generator & Pathfinder Visualizer",
+      "description": "v1.3.1 — Generate mazes with five algorithms and watch five pathfinding solvers explore them in real-time ASCII animation, right in your terminal.",
+      "date": "2026-06-17",
+      "path": "2026-06-17-maze-pathfinder-visualizer",
+      "entrypoint": "maze_pathfinder.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "maze",
+        "pathfinder",
+        "visualizer"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "periodic-table-explorer",
+      "title": "Periodic Table Explorer",
+      "description": "An interactive terminal-based periodic table of the elements built with Python curses. Browse all 118 elements, navigate the full periodic table layout, search by name or symbol...",
+      "date": "2026-06-17",
+      "path": "2026-06-17-periodic-table-explorer",
+      "entrypoint": "periodic_table.py",
+      "category": "science",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "explorer",
+        "periodic",
+        "science",
+        "table"
+      ],
+      "smoke_args": []
+    },
+    {
+      "id": "terminal-alchemy",
+      "title": "Terminal Alchemy",
+      "description": "A Little Alchemy-inspired element-combining game that runs entirely in your terminal. Start with four base elements — water, fire, earth, and air — and combine them to discover...",
+      "date": "2026-06-17",
+      "path": "2026-06-17-terminal-alchemy",
+      "entrypoint": "alchemy.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "alchemy",
+        "creative",
+        "terminal"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-drum-machine",
+      "title": "Terminal Drum Machine",
+      "description": "A feature-rich, Python-based drum machine that runs entirely in your terminal. Synthesize 8 drum sounds, build patterns with a step sequencer, add accents and flams for expressi...",
+      "date": "2026-06-17",
+      "path": "2026-06-17-terminal-drum-machine",
+      "entrypoint": "drum_machine.py",
+      "category": "audio",
+      "interface": "animation",
+      "dependencies": [
+        "numpy"
+      ],
+      "tags": [
+        "audio",
+        "drum",
+        "machine",
+        "terminal"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "voronoi-generator",
+      "title": "Voronoi Generator v2.0.0",
+      "description": "A terminal-based Voronoi diagram generator that produces beautiful, colorful tessellations using Unicode block characters and ANSI 256-color mode. A Voronoi diagram partitions a...",
+      "date": "2026-06-17",
+      "path": "2026-06-17-voronoi-generator",
+      "entrypoint": "voronoi.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "generator",
+        "voronoi"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "crystal-growth-simulator",
+      "title": "Crystal Growth Simulator v2.1",
+      "description": "A real-time terminal visualization of Diffusion-Limited Aggregation (DLA) — watch particles randomly walk and stick together, forming beautiful branching, fractal-like crystalli...",
+      "date": "2026-06-18",
+      "path": "2026-06-18-crystal-growth-simulator",
+      "entrypoint": "crystal_growth.py",
+      "category": "simulation",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "crystal",
+        "growth",
+        "simulation",
+        "simulator"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "mechanical-calculator",
+      "title": "Curta Type II  Mechanical Calculator Simulator",
+      "description": "A faithful terminal simulation of the Curta Type II mechanical calculator, the remarkable hand-cranked calculating machine invented by Curt Herzstark in a Buchenwald concentrati...",
+      "date": "2026-06-18",
+      "path": "2026-06-18-mechanical-calculator",
+      "entrypoint": "mechanical_calculator.py",
+      "category": "utility",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "calculator",
+        "mechanical",
+        "utility"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "reaction-diffusion-lab",
+      "title": "ASCII Reaction-Diffusion Lab",
+      "description": "A terminal-based simulator for the Gray-Scott reaction-diffusion model — the mathematical system that produces stunning organic patterns like coral growth, cell mitosis, spots,...",
+      "date": "2026-06-18",
+      "path": "2026-06-18-reaction-diffusion-lab",
+      "entrypoint": "reaction_diffusion.py",
+      "category": "science",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "diffusion",
+        "lab",
+        "reaction",
+        "science"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-enigma-machine",
+      "title": "Terminal Enigma Machine",
+      "description": "A complete simulation of the WWII Enigma cipher machine with 8 historical rotors, 3 reflectors, configurable plugboard, visual encryption path tracing, random configuration gene...",
+      "date": "2026-06-18",
+      "path": "2026-06-18-terminal-enigma-machine",
+      "entrypoint": "enigma.py",
+      "category": "utility",
+      "interface": "interactive",
+      "dependencies": [],
+      "tags": [
+        "enigma",
+        "machine",
+        "terminal",
+        "utility"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-lava-lamp",
+      "title": "Terminal Lava Lamp v3.1.0",
+      "description": "A mesmerizing ASCII lava lamp simulation that runs in your terminal, featuring colored wax blobs that rise and fall inside a lamp-shaped container with real-time physics, rising...",
+      "date": "2026-06-18",
+      "path": "2026-06-18-terminal-lava-lamp",
+      "entrypoint": "lava_lamp.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "lamp",
+        "lava",
+        "terminal"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-rubiks-cube",
+      "title": "Terminal Rubik's Cube",
+      "description": "A fully interactive 3×3 Rubik's Cube simulator rendered entirely in the terminal with ANSI colors. Supports all 18 standard moves, scramble, undo, solve detection, and multiple...",
+      "date": "2026-06-18",
+      "path": "2026-06-18-terminal-rubiks-cube",
+      "entrypoint": "rubiks.py",
+      "category": "puzzle",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "cube",
+        "puzzle",
+        "rubiks",
+        "terminal"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "turing-machine-simulator",
+      "title": "Turing Machine Simulator",
+      "description": "A fully-featured Turing machine simulator with 12 built-in programs, visual (curses) and batch execution modes, state diagram export, and comprehensive testing.",
+      "date": "2026-06-18",
+      "path": "2026-06-18-turing-machine-simulator",
+      "entrypoint": "turing.py",
+      "category": "simulation",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "machine",
+        "simulation",
+        "simulator",
+        "turing"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "gene-splicer",
+      "title": "Gene Splicer v1.1  Terminal Genetic Algorithm Playground",
+      "description": "Breed, mutate, and evolve ASCII creatures through the power of genetic algorithms. Each creature has a unique genome that determines its appearance, body parts, colors, and trai...",
+      "date": "2026-06-19",
+      "path": "2026-06-19-gene-splicer",
+      "entrypoint": "gene_splicer.py",
+      "category": "science",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "gene",
+        "science",
+        "splicer"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "nonogram-picross",
+      "title": "Nonogram Picross",
+      "description": "A terminal-based Nonogram (Picross) puzzle game and solver written in Python.",
+      "date": "2026-06-19",
+      "path": "2026-06-19-nonogram-picross",
+      "entrypoint": "nonogram.py",
+      "category": "puzzle",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "nonogram",
+        "picross",
+        "puzzle"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "polygraph-simulator",
+      "title": "Terminal Polygraph Simulator v2.1.0",
+      "description": "An interactive lie detector simulation that analyzes your keystroke dynamics — typing speed, rhythm consistency, hesitations, and corrections — to estimate whether you're being...",
+      "date": "2026-06-19",
+      "path": "2026-06-19-polygraph-simulator",
+      "entrypoint": "polygraph.py",
+      "category": "simulation",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "polygraph",
+        "simulation",
+        "simulator"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "procedural-dinosaur-generator",
+      "title": "Procedural Dinosaur Generator",
+      "description": "Version 2.0.0",
+      "date": "2026-06-19",
+      "path": "2026-06-19-procedural-dinosaur-generator",
+      "entrypoint": "dinosaur_generator.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "dinosaur",
+        "generator",
+        "procedural"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "procedural-flag-generator",
+      "title": "Procedural Flag Generator",
+      "description": "A creative CLI tool that generates random fictional country flags with various geometric patterns and renders them as colorful Unicode block art directly in your terminal. Every...",
+      "date": "2026-06-19",
+      "path": "2026-06-19-procedural-flag-generator",
+      "entrypoint": "flag_generator.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "flag",
+        "generator",
+        "procedural"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "seismograph-simulator",
+      "title": "Terminal Seismograph Simulator",
+      "description": "A real-time terminal-based seismograph simulator that visualizes earthquake seismic waves propagating through a network of monitoring stations. Watch P-waves, S-waves, and surfa...",
+      "date": "2026-06-19",
+      "path": "2026-06-19-seismograph-simulator",
+      "entrypoint": "seismograph.py",
+      "category": "science",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "science",
+        "seismograph",
+        "simulator"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "solar-system-orrery",
+      "title": "Solar System Orrery v3.1",
+      "description": "An animated terminal-based orrery that displays all eight planets orbiting the Sun using real orbital mechanics — with opposition detection, transit alerts, find-next-conjunctio...",
+      "date": "2026-06-19",
+      "path": "2026-06-19-solar-system-orrery",
+      "entrypoint": "orrery.py",
+      "category": "science",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "orrery",
+        "science",
+        "solar",
+        "system"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-mandala-generator",
+      "title": "Terminal Mandala Generator",
+      "description": "A Python CLI tool that generates beautiful, radially symmetric mandala patterns in your terminal using Unicode block characters and ANSI 256-color palette.",
+      "date": "2026-06-19",
+      "path": "2026-06-19-terminal-mandala-generator",
+      "entrypoint": "mandala.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "generator",
+        "mandala",
+        "terminal"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "alien-language-generator",
+      "title": "Alien Language Generator v2.1.0",
+      "description": "A procedural conlang (constructed language) generator that creates fully-formed alien languages with unique phonology, grammar, vocabulary, and a custom glyph-based writing syst...",
+      "date": "2026-06-20",
+      "path": "2026-06-20-alien-language-generator",
+      "entrypoint": "alien_language.py",
+      "category": "creative",
+      "interface": "interactive",
+      "dependencies": [],
+      "tags": [
+        "alien",
+        "creative",
+        "generator",
+        "language"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "chess-puzzle-generator",
+      "title": "Chess Puzzle Generator",
+      "description": "A terminal-based chess puzzle generator that creates forced-mate puzzles and lets you solve them interactively. Uses a minimax search engine to verify that each puzzle has a gua...",
+      "date": "2026-06-20",
+      "path": "2026-06-20-chess-puzzle-generator",
+      "entrypoint": "chess_puzzle.py",
+      "category": "puzzle",
+      "interface": "interactive",
+      "dependencies": [],
+      "tags": [
+        "chess",
+        "generator",
+        "puzzle"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "procedural-cathedral-generator",
+      "title": "Procedural Cathedral Generator",
+      "description": "Generate unique ASCII art gothic cathedrals every time! Each run produces a different cathedral with randomized spires, rose windows, stained glass, flying buttresses, arched do...",
+      "date": "2026-06-20",
+      "path": "2026-06-20-procedural-cathedral-generator",
+      "entrypoint": "cathedral.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "cathedral",
+        "creative",
+        "generator",
+        "procedural"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-stock-exchange",
+      "title": "Terminal Stock Exchange",
+      "description": "A fully interactive terminal-based stock market simulator with procedurally generated companies, realistic price dynamics (Geometric Brownian Motion-inspired), portfolio managem...",
+      "date": "2026-06-20",
+      "path": "2026-06-20-terminal-stock-exchange",
+      "entrypoint": "exchange.py",
+      "category": "simulation",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "exchange",
+        "simulation",
+        "stock",
+        "terminal"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "volcano-eruption-simulator",
+      "title": "Volcano Eruption Simulator",
+      "description": "A terminal-based ASCII simulation of a volcanic eruption with procedurally generated terrain, lava fountains, flowing lava, pyroclastic flows, ash clouds, seismic tremors, a day...",
+      "date": "2026-06-20",
+      "path": "2026-06-20-volcano-eruption-simulator",
+      "entrypoint": "volcano.py",
+      "category": "science",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "eruption",
+        "science",
+        "simulator",
+        "volcano"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "water-ripple-simulator",
+      "title": "Water Ripple Simulator",
+      "description": "A real-time 2D wave equation simulator rendered in the terminal using Unicode block characters and 24-bit ANSI colors. Drop stones, place wave sources, build walls, save/load st...",
+      "date": "2026-06-20",
+      "path": "2026-06-20-water-ripple-simulator",
+      "entrypoint": "ripple.py",
+      "category": "simulation",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "ripple",
+        "simulation",
+        "simulator",
+        "water"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "cocktail-mixologist",
+      "title": "Terminal Cocktail Mixologist",
+      "description": "Procedural cocktail recipe generator — creates unique, plausible cocktail recipes with creative names, flavor balance scoring, ingredient substitutions, ASCII art glassware, pai...",
+      "date": "2026-06-22",
+      "path": "2026-06-22-cocktail-mixologist",
+      "entrypoint": "cocktail_mixologist.py",
+      "category": "creative",
+      "interface": "interactive",
+      "dependencies": [],
+      "tags": [
+        "cocktail",
+        "creative",
+        "mixologist"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "dice-notation-probability",
+      "title": "Dice Notation Roller & Probability Analyzer",
+      "description": "A command-line tool that parses standard and advanced dice notation, rolls dice, computes exact probability distributions, and renders beautiful ASCII histograms. Perfect for TT...",
+      "date": "2026-06-22",
+      "path": "2026-06-22-dice-notation-probability",
+      "entrypoint": "dice_prob.py",
+      "category": "creative",
+      "interface": "cli",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "dice",
+        "notation",
+        "probability"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "mythology-generator",
+      "title": "Procedural Mythology Generator",
+      "description": "Generate complete, original fictional mythologies — pantheons of gods with domains, relationships, creation myths, sacred narratives, cosmologies, and taboos. Every run produces...",
+      "date": "2026-06-22",
+      "path": "2026-06-22-mythology-generator",
+      "entrypoint": "mythology_generator.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "generator",
+        "mythology"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "spell-grimoire-generator",
+      "title": "Spell Grimoire Generator",
+      "description": "Procedural fantasy RPG spell generator — create unique, detailed spells with ASCII art sigils, incantations, casting recipes, power ratings, and more.",
+      "date": "2026-06-22",
+      "path": "2026-06-22-spell-grimoire-generator",
+      "entrypoint": "grimoire.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "generator",
+        "grimoire",
+        "spell"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-mastermind",
+      "title": "Terminal Mastermind",
+      "description": "A beautiful, fully-featured Mastermind code-breaking game for the terminal — with colored pegs, multiple difficulty levels, an AI auto-solver using Knuth's minimax algorithm, a...",
+      "date": "2026-06-22",
+      "path": "2026-06-22-terminal-mastermind",
+      "entrypoint": "mastermind.py",
+      "category": "game",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "game",
+        "mastermind",
+        "terminal"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-departure-board",
+      "title": "Terminal Departure Board",
+      "description": "A real-time animated flip-board style airport departure/arrival display (FIDS) running entirely in the terminal. Watch flights get procedurally generated, scheduled, delayed, ca...",
+      "date": "2026-06-23",
+      "path": "2026-06-23-terminal-departure-board",
+      "entrypoint": "departure_board.py",
+      "category": "utility",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "board",
+        "departure",
+        "terminal",
+        "utility"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-lunar-lander",
+      "title": "Terminal Lunar Lander",
+      "description": "A classic physics-based lunar landing game rendered entirely in ASCII art. Pilot your lunar module safely to the surface by managing thrust, fuel, and descent angle across proce...",
+      "date": "2026-06-23",
+      "path": "2026-06-23-terminal-lunar-lander",
+      "entrypoint": "lunar_lander.py",
+      "category": "game",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "game",
+        "lander",
+        "lunar",
+        "terminal"
+      ],
+      "smoke_args": []
+    },
+    {
+      "id": "micro-nation-generator",
+      "title": "Procedural Micro-Nation Generator",
+      "description": "A command-line tool that generates complete fictional micro-nations — each with a unique ASCII flag, leader, national anthem, government, economy, culture, and diplomatic relati...",
+      "date": "2026-06-24",
+      "path": "2026-06-24-micro-nation-generator",
+      "entrypoint": "micro_nation.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "generator",
+        "micro",
+        "nation"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "ant-colony-simulator",
+      "title": "Terminal Ant Colony Simulator",
+      "description": "A real-time emergent behavior simulation where ants forage for food, leave pheromone trails, and collectively discover optimal paths — all rendered as colorful ASCII art in your...",
+      "date": "2026-06-25",
+      "path": "2026-06-25-ant-colony-simulator",
+      "entrypoint": "ant_colony.py",
+      "category": "simulation",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "ant",
+        "colony",
+        "simulation",
+        "simulator"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "rube-goldberg-simulator",
+      "title": "Rube Goldberg Machine Simulator",
+      "description": "A terminal-based ASCII animation of absurdly complex chain-reaction machines. Watch as balls, dominoes, seesaws, buckets, pulleys, fans, springs, hammers, and more interact in h...",
+      "date": "2026-06-25",
+      "path": "2026-06-25-rube-goldberg-simulator",
+      "entrypoint": "rube_goldberg.py",
+      "category": "simulation",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "goldberg",
+        "rube",
+        "simulation",
+        "simulator"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "city-skyline-generator",
+      "title": "Procedural City Skyline Generator",
+      "description": "A CLI tool that generates detailed, atmospheric ASCII city skylines with buildings, weather effects, time-of-day lighting, varied architectural styles, neon signs, waterfront re...",
+      "date": "2026-06-26",
+      "path": "2026-06-26-city-skyline-generator",
+      "entrypoint": "skyline.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "city",
+        "creative",
+        "generator",
+        "skyline"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-spirograph",
+      "title": "Terminal Spirograph",
+      "description": "Generate beautiful hypotrochoid, epitrochoid, rose, and Lissajous curve patterns directly in your terminal using Unicode characters and ANSI colors.",
+      "date": "2026-06-26",
+      "path": "2026-06-26-terminal-spirograph",
+      "entrypoint": "spirograph.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "spirograph",
+        "terminal"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "cryptid-encyclopedia",
+      "title": "Cryptid Encyclopedia",
+      "description": "A procedurally-generated bestiary of creatures that may or may not exist. Each cryptid is deterministically generated from its name — the same name always produces the same crea...",
+      "date": "2026-06-27",
+      "path": "2026-06-27-cryptid-encyclopedia",
+      "entrypoint": "cryptid_encyclopedia.py",
+      "category": "creative",
+      "interface": "interactive",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "cryptid",
+        "encyclopedia"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-crossword",
+      "title": "Terminal Crossword Puzzle",
+      "description": "A feature-rich interactive crossword puzzle generator and game for your terminal. Creates random tech-themed crossword puzzles you can play right in the command line — with colo...",
+      "date": "2026-06-27",
+      "path": "2026-06-27-terminal-crossword",
+      "entrypoint": "crossword.py",
+      "category": "puzzle",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "crossword",
+        "puzzle",
+        "terminal"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "treasure-map-generator",
+      "title": "Procedural Treasure Map Generator",
+      "description": "Generate unique, elaborate ASCII treasure maps with coastlines, terrain features, dotted trails, compass roses, sea monsters, pirate riddles, and X-marks-the-spot. Every map is...",
+      "date": "2026-06-28",
+      "path": "2026-06-28-treasure-map-generator",
+      "entrypoint": "treasure_map.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "generator",
+        "map",
+        "treasure"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "spaceship-blueprint-generator",
+      "title": "Procedural Spaceship Blueprint Generator",
+      "description": "A command-line tool that generates unique, detailed ASCII spaceship blueprints every time you run it. Each ship has a randomized class, name, crew manifest, room layout, weapons...",
+      "date": "2026-06-29",
+      "path": "2026-06-29-spaceship-blueprint-generator",
+      "entrypoint": "spaceship_blueprint.py",
+      "category": "creative",
+      "interface": "cli",
+      "dependencies": [],
+      "tags": [
+        "blueprint",
+        "creative",
+        "generator",
+        "spaceship"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-hacker-simulator",
+      "title": "Terminal Hacker Simulator",
+      "description": "A cinematic hacking simulation game played entirely in the terminal. Break into procedurally generated corporate networks, crack access codes, analyze nodes for intel, deploy sp...",
+      "date": "2026-06-29",
+      "path": "2026-06-29-terminal-hacker-simulator",
+      "entrypoint": "hack_sim.py",
+      "category": "simulation",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "hacker",
+        "simulation",
+        "simulator",
+        "terminal"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "ascii-terrain-flyover",
+      "title": "ASCII Terrain Flyover",
+      "description": "A procedurally generated 3D-like terrain flyover rendered entirely in your terminal using ANSI 256-color codes and Unicode characters. Soar over mountains, oceans, forests, and...",
+      "date": "2026-06-30",
+      "path": "2026-06-30-ascii-terrain-flyover",
+      "entrypoint": "terrain_flyover.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "ascii",
+        "creative",
+        "flyover",
+        "terrain"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "perfume-alchemist",
+      "title": "Perfume Alchemist",
+      "description": "A procedural perfume generator that creates unique, evocative fragrance compositions with note pyramids, scent profile visualizations, harmony scores, side-by-side comparisons,...",
+      "date": "2026-06-30",
+      "path": "2026-06-30-perfume-alchemist",
+      "entrypoint": "perfume_alchemist.py",
+      "category": "creative",
+      "interface": "interactive",
+      "dependencies": [],
+      "tags": [
+        "alchemist",
+        "creative",
+        "perfume"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "procedural-fingerprint-generator",
+      "title": "Procedural Fingerprint Generator",
+      "description": "Version 1.1.1",
+      "date": "2026-07-01",
+      "path": "2026-07-01-procedural-fingerprint-generator",
+      "entrypoint": "fingerprint.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "fingerprint",
+        "generator",
+        "procedural"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "ascii-train-simulator",
+      "title": "ASCII Train Simulator",
+      "description": "A terminal-based side-scrolling steam locomotive simulator. Drive your train through procedurally generated terrain, managing speed, coal, water, and steam pressure while stoppi...",
+      "date": "2026-07-02",
+      "path": "2026-07-02-ascii-train-simulator",
+      "entrypoint": "train_simulator.py",
+      "category": "simulation",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "ascii",
+        "simulation",
+        "simulator",
+        "train"
+      ],
+      "smoke_args": []
+    },
+    {
+      "id": "terminal-tower-defense",
+      "title": "Terminal Tower Defense v2.3",
+      "description": "A fully playable tower defense game rendered entirely in the terminal using ASCII art and curses. Strategically place and upgrade towers, deploy power-ups, and defend against wa...",
+      "date": "2026-07-02",
+      "path": "2026-07-02-terminal-tower-defense",
+      "entrypoint": "tower_defense.py",
+      "category": "game",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "defense",
+        "game",
+        "terminal",
+        "tower"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "conspiracy-board-generator",
+      "title": "Conspiracy Board Generator v2.1",
+      "description": "A procedurally generated conspiracy theory board — complete with red-string connections, classified documents, suspicion scores, cycle detection, and timeline events. Generates...",
+      "date": "2026-07-03",
+      "path": "2026-07-03-conspiracy-board-generator",
+      "entrypoint": "conspiracy_board.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "board",
+        "conspiracy",
+        "creative",
+        "generator"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-sonar-simulator",
+      "title": "Terminal Sonar Simulator",
+      "description": "A submarine combat game played entirely in the terminal. Navigate a fog-of-war ocean using sonar pings to detect, classify, and destroy hidden enemy vessels — while trying not t...",
+      "date": "2026-07-03",
+      "path": "2026-07-03-terminal-sonar-simulator",
+      "entrypoint": "sonar.py",
+      "category": "simulation",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "simulation",
+        "simulator",
+        "sonar",
+        "terminal"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "procedural-snowflake-generator",
+      "title": "Procedural Snowflake Generator",
+      "description": "Version 2.1.0 — Generate unique, mathematically-derived snowflake crystal patterns using fractal branching algorithms. No two are alike — just like real snowflakes!",
+      "date": "2026-07-04",
+      "path": "2026-07-04-procedural-snowflake-generator",
+      "entrypoint": "snowflake.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "generator",
+        "procedural",
+        "snowflake"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-lock-picker",
+      "title": "Terminal Lock Picker",
+      "description": "An interactive terminal-based simulation of picking pin tumbler locks. Feel the tension, find the binding pins, lift them to the shear line, and experience the satisfying click...",
+      "date": "2026-07-05",
+      "path": "2026-07-05-terminal-lock-picker",
+      "entrypoint": "lock_picker.py",
+      "category": "game",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "game",
+        "lock",
+        "picker",
+        "terminal"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-lighthouse-keeper",
+      "title": "Terminal Lighthouse Keeper",
+      "description": "A meditative ASCII resource management game where you keep a lighthouse burning through the night. Manage your fuel, maintain the lens, cool the engine, rescue ships in distress...",
+      "date": "2026-07-08",
+      "path": "2026-07-08-terminal-lighthouse-keeper",
+      "entrypoint": "lighthouse.py",
+      "category": "creative",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "keeper",
+        "lighthouse",
+        "terminal"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-garden-simulator",
+      "title": "Terminal Garden Simulator",
+      "description": "A procedural ASCII garden simulator where you plant, grow, water, fertilize, and harvest procedural plants through changing seasons and weather. Manage your garden across Spring...",
+      "date": "2026-07-11",
+      "path": "2026-07-11-terminal-garden-simulator",
+      "entrypoint": "garden.py",
+      "category": "simulation",
+      "interface": "interactive",
+      "dependencies": [],
+      "tags": [
+        "garden",
+        "simulation",
+        "simulator",
+        "terminal"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-stained-glass",
+      "title": "Terminal Stained Glass Generator",
+      "description": "Procedurally generate beautiful stained glass window patterns directly in your terminal! Each window features colored Unicode characters arranged in authentic architectural styl...",
+      "date": "2026-07-14",
+      "path": "2026-07-14-terminal-stained-glass",
+      "entrypoint": "stained_glass.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "glass",
+        "stained",
+        "terminal"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-typewriter",
+      "title": "Terminal Typewriter Simulator",
+      "description": "v1.3.0",
+      "date": "2026-07-17",
+      "path": "2026-07-17-terminal-typewriter",
+      "entrypoint": "typewriter.py",
+      "category": "utility",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "terminal",
+        "typewriter",
+        "utility"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "galton-board-simulator",
+      "title": "Galton Board Simulator",
+      "description": "A live, interactive terminal simulation of a Galton board (also called a",
+      "date": "2026-07-20",
+      "path": "2026-07-20-galton-board-simulator",
+      "entrypoint": "galton_board.py",
+      "category": "simulation",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "board",
+        "galton",
+        "simulation",
+        "simulator"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-cuckoo-clock",
+      "title": "Terminal Cuckoo Clock Simulator",
+      "description": "A self-contained, zero-dependency ASCII-art cuckoo clock for your terminal. It",
+      "date": "2026-07-23",
+      "path": "2026-07-23-terminal-cuckoo-clock",
+      "entrypoint": "cuckoo_clock.py",
+      "category": "creative",
+      "interface": "curses",
+      "dependencies": [],
+      "tags": [
+        "clock",
+        "creative",
+        "cuckoo",
+        "terminal"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-aurora-simulator",
+      "title": "Terminal Aurora Borealis Simulator",
+      "description": "A self-contained Python program that paints a procedurally-animated aurora",
+      "date": "2026-07-26",
+      "path": "2026-07-26-terminal-aurora-simulator",
+      "entrypoint": "aurora.py",
+      "category": "simulation",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "aurora",
+        "simulation",
+        "simulator",
+        "terminal"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-seance",
+      "title": "Terminal Séance  Ouija Board Simulator",
+      "description": "🕯️ Conduct a séance right in your terminal. Place your fingers on the planchette, ask the spirits a question, and watch as the planchette glides across an ANSI-rendered Ouija bo...",
+      "date": "2026-07-29",
+      "path": "2026-07-29-terminal-seance",
+      "entrypoint": "ouija.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "seance",
+        "terminal"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "regex-engine-visualizer",
+      "title": "Regex Engine Visualizer",
+      "description": "A tiny backtracking regex engine that records every step of the matching",
+      "date": "2026-08-01",
+      "path": "2026-08-01-regex-engine-visualizer",
+      "entrypoint": "regex_viz.py",
+      "category": "utility",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "engine",
+        "regex",
+        "utility",
+        "visualizer"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "pendulum-wave-simulator",
+      "title": "Terminal Pendulum Wave Simulator",
+      "description": "A physics-based ASCII animation of the pendulum wave — one of the most",
+      "date": "2026-08-04",
+      "path": "2026-08-04-pendulum-wave-simulator",
+      "entrypoint": "pendulum_wave.py",
+      "category": "simulation",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "pendulum",
+        "simulation",
+        "simulator",
+        "wave"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-dna-helix",
+      "title": "Terminal DNA Double-Helix Animator",
+      "description": "A rotating, coloured ASCII DNA double-helix that lives in your terminal.",
+      "date": "2026-08-07",
+      "path": "2026-08-07-terminal-dna-helix",
+      "entrypoint": "dna_helix.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "dna",
+        "helix",
+        "terminal"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "domino-chain-simulator",
+      "title": "Domino Chain Simulator",
+      "description": "A terminal-based domino chain reaction simulator written in pure Python. Set up dominoes with varied heights and spacings, trigger any domino, and watch the cascade ripple acros...",
+      "date": "2026-08-10",
+      "path": "2026-08-10-domino-chain-simulator",
+      "entrypoint": "domino_chain.py",
+      "category": "simulation",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "chain",
+        "domino",
+        "simulation",
+        "simulator"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "terminal-semaphore-signaler",
+      "title": "Terminal Semaphore Flag Signaler",
+      "description": "A CLI tool that translates text into maritime flag semaphore positions and visualizes them as animated ASCII stick figures holding flags. Each letter of the alphabet is represen...",
+      "date": "2026-08-13",
+      "path": "2026-08-13-terminal-semaphore-signaler",
+      "entrypoint": "semaphore.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "semaphore",
+        "signaler",
+        "terminal"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "ascii-stereogram-generator",
+      "title": "ASCII Stereogram Generator SIRDS",
+      "description": "> Generate single-image random dot stereograms in the terminal using ASCII characters. Hidden 3D shapes pop out when you relax or cross your eyes.",
+      "date": "2026-08-16",
+      "path": "2026-08-16-ascii-stereogram-generator",
+      "entrypoint": "stereogram.py",
+      "category": "creative",
+      "interface": "cli",
+      "dependencies": [],
+      "tags": [
+        "ascii",
+        "creative",
+        "generator",
+        "stereogram"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "ascii-morse-broadcasting",
+      "title": "ASCII Morse Broadcasting Station",
+      "description": "A terminal-based vintage shortwave radio station simulator that broadcasts Morse code in real time — doubled as a practical Morse code utility toolkit. Watch as it cycles throug...",
+      "date": "2026-08-19",
+      "path": "2026-08-19-ascii-morse-broadcasting",
+      "entrypoint": "main.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "ascii",
+        "broadcasting",
+        "creative",
+        "morse"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    }
+  ]
+}
