@@ -1,0 +1,28 @@
+# Name,Reference,Value,Footprint,Quantity,UnitPrice,Category,Manufacturer,MPN,Datasheet
+STM32WL55JC,U1,STM32WL55JC,Package_DFN_QFN:QFN-48-1EP_7x7mm_P0.5mm_EP5.6x5.6mm,1,4.50,MCU,STMicroelectronics,STM32WL55JC,https://www.st.com/resource/en/datasheet/stm32wl55jc.pdf
+HX711,U2,HX711,Package_SO:SOIC-16_3.9x9.9mm_P1.27mm,1,0.60,ADC,Avia Semiconductor,HX711,https://cdn.sparkfun.com/datasheets/Sensors/Force/hx711_english.pdf
+50kg Load Cell,LC1,YZC-133 50kg Beam,Sensor:Beam_Load_Cell,1,3.20,Load Cell,Generic,YZC-133,https://cdn.sparkfun.com/datasheets/Sensors/Force/Loadcell.pdf
+DS18B20,U3-U5,DS18B20,Package_TO:S0-92_3.8x4.1mm_P2.54mm,3,0.70,Temp Sensor,Maxim Integrated,DS18B20,https://datasheets.maximintegrated.com/en/ds/DS18B20.pdf
+ICS-43434,U6,ICS-43434,Sensor:ICS-43434_LGA-6,1,1.80,MEMS Mic,TDK InvenSense,ICS-43434,https://invensense.tdk.com/wp-content/uploads/2021/01/DS-000069-ICS-43434-v1.2.pdf
+BME280,U7,BME280,Sensor:BME280_LGA-8,1,1.20,Env Sensor,Bosch,BME280,https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bme280-ds001.pdf
+SSD1306,OLED1,SSD1306 128x64,Display:SSD1306_0.91inch_I2C,1,0.90,OLED Display,Generic,SSD1306-0.91-I2C,https://cdn-shop.adafruit.com/datasheets/SSD1306.pdf
+TCRT1000,IR1-IR2,TCRT1000,Sensor:TCRT1000,2,0.30,IR Sensor,Vishay,TCRT1000,https://www.vishay.com/docs/83760/tcrt1000.pdf
+TP4056,U8,TP4056,Package_SO:SSOP-8_3.95x5.21mm_P1.27mm,1,0.20,Battery Charger,Nanjing TopPower,TP4056,https://dlnmh9ip6v2uc.cloudfront.net/datasheets/Prototyping/TP4056.pdf
+ME6211,U9,ME6211-3.3V,Package_SOT:SOT-23-5,1,0.15,LDO,Microne,ME6211,https://datasheet.lcsc.com/lcsc/1811151539_Microne-ME6211A33M3G-N_C85319.pdf
+CH340E,U10,CH340E,Package_SO:SSOP-20_5.3x6.2mm_P0.65mm,1,0.30,USB-UART,WCH,CH340E,https://www.wch-ic.com/downloads/CH340DS1_PDF.html
+SKY13330,U11,SKY13330-385LF,Package_DFN:DFN-6_1.5x1.5mm_P0.5mm,1,0.80,RF Switch,Skyworks,SKY13330-385LF,https://www.skyworksinc.com/-/media/SkyWorks/Documents/Products/301-400/SKY13330_385LF.pdf
+Crystal,Y1,32.000 MHz,Crystal:Crystal_SMD_3225-4Pin,1,0.30,Crystal,Abracon,ABM8A-32.000MHz,https://www.abracon.com/datasheets/ABM8A.pdf
+Crystal,Y2,32.768 kHz,Crystal:Crystal_SMD_3215-2Pin,1,0.15,Crystal,Epson,FC-135,https://www5.epsondevice.com/en/products/FC-135/
+USB-C,J1,USB-C 16pin,Connector_USB:USB_C_Receptacle_16pin_SMD,1,0.35,Connector,Generic,USB-C-16pin-SMD,
+18650 Holder,BAT1,18650 LiFePO4 holder,Battery:Battery_Holder_18650_SMD,1,0.50,Battery Holder,Keystone,2479,https://www.keyelco.com/userAssets/file/Mp65p65.pdf
+18650 LiFePO4,BAT2,3.2V 1500mAh 18650,Battery:18650_LiFePO4,1,3.00,Battery,EEMB,LR18650EC,https://eemb.com/wp-content/uploads/2022/09/LR18650EC.pdf
+Pullup 4k7,R1-R6,4.7k 0402,Resistor_SMD:R_0402,6,0.01,Resistor,Generic,RC0402FR-074K7L,
+Series R_IR,R7-R8,220R 0402,Resistor_SMD:R_0402,2,0.01,Resistor,Generic,RC0402FR-07220RL,
+Series R_LED,R9-R10,1k 0402,Resistor_SMD:R_0402,2,0.01,Resistor,Generic,RC0402FR-071K,
+Decoupling caps,C1-C12,100nF 0402,Capacitor_SMD:C_0402,12,0.01,Capacitor,Generic,GRM155R71C104KA88D,
+Bulk caps,C13-C14,10µF 0805,Capacitor_SMD:C_0805,2,0.02,Capacitor,Generic,GRM21BR71C106KE15L,
+RF inductor,L1,10nH 0402,Inductor_SMD:L_0402,1,0.02,Inductor,Johanson,0402CS-10NXJ,
+Load cell bracket,,Aluminum L-bracket,Custom,1,1.00,Bracket,Generic,,,
+PCB,,100x70mm 4-layer FR4,Custom,1,2.50,PCB,JLCPCB,,
+5W Solar Panel,SOLAR1,5W 6V poly panel,Custom,1,4.00,Solar Panel,Generic,PW05-6V,
+ABS Enclosure,ENC1,IP65 120x80x40mm,Custom,1,2.50,Enclosure,Generic,,

@@ -1,0 +1,21 @@
+{
+  "board": {
+    "design_rules": {
+      "min_track_width": 0.15,
+      "min_clearance": 0.15,
+      "min_via_drill": 0.25
+    },
+    "layers": 4,
+    "thickness": 1.6,
+    "copper_thickness": "1oz"
+  },
+  "meta": {
+    "filename": "plume_sniffer.kicad_pcb",
+    "version": "20230121"
+  },
+  "page": {
+    "size": "User",
+    "width": 142,
+    "height": 36
+  }
+}

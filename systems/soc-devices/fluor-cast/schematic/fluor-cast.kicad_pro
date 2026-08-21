@@ -1,0 +1,50 @@
+{
+    "board": {
+        "3dview": {
+            "layers": ["F.Cu", "B.Cu", "F.SilkS", "B.SilkS", "F.Mask", "B.Mask", "Edge.Cuts"],
+            "opacity": 1.0,
+            "thickness": 1.6
+        },
+        "design_rules": {
+            "min_track_width": 0.15,
+            "min_via_diameter": 0.3,
+            "min_via_drill": 0.2,
+            "min_clearance": 0.15,
+            "min_drill": 0.2
+        },
+        "dimensions": {
+            "width_mm": 95,
+            "height_mm": 55,
+            "thickness_mm": 1.6,
+            "layers": 4,
+            "copper_thickness": "1oz (35µm)"
+        },
+        "layer_stack": [
+            {"name": "F.Cu", "thickness_mm": 0.035, "material": "copper"},
+            {"name": "dielectric_1", "thickness_mm": 0.2, "material": "FR4"},
+            {"name": "In1.Cu", "thickness_mm": 0.035, "material": "copper (GND plane)"},
+            {"name": "dielectric_2", "thickness_mm": 0.7, "material": "FR4 core"},
+            {"name": "In2.Cu", "thickness_mm": 0.035, "material": "copper (3V3 plane)"},
+            {"name": "dielectric_3", "thickness_mm": 0.2, "material": "FR4"},
+            {"name": "B.Cu", "thickness_mm": 0.035, "material": "copper"}
+        ],
+        "notes": "4-layer PCB. Inner layer 1 = GND plane. Inner layer 2 = 3V3 plane. Analog signals routed on F.Cu with guard traces. CCD analog output (PA3) has dedicated ground guard. UV LED traces kept short with return path on adjacent layer."
+    },
+    "components": {
+        "U1": {"part": "STM32G474RET6", "location": "center", "rotation": 0},
+        "U2": {"part": "ESP32-C3-MINI-1", "location": "right", "rotation": 0},
+        "U3": {"part": "TSL1402R CCD", "location": "optical_bench", "rotation": 90},
+        "U4": {"part": "OPT101", "location": "optical_bench", "rotation": 0},
+        "U5": {"part": "ULN2003A", "location": "stepper_area", "rotation": 0},
+        "U6": {"part": "MCP4131", "location": "LED_driver", "rotation": 0},
+        "U7": {"part": "OPA548T", "location": "LED_driver", "rotation": 0},
+        "U8": {"part": "74HC138", "location": "LED_wheel", "rotation": 0},
+        "U9": {"part": "TPS63020", "location": "power", "rotation": 0},
+        "U10": {"part": "MCP73831", "location": "power", "rotation": 0},
+        "U11": {"part": "DS18B20", "location": "cuvette_holder", "rotation": 0},
+        "U12": {"part": "AH49E", "location": "LED_wheel", "rotation": 0},
+        "DS1": {"part": "SH1106 OLED", "location": "front_panel", "rotation": 0},
+        "J1": {"part": "USB-C", "location": "bottom_edge", "rotation": 0},
+        "J2": {"part": "MicroSD", "location": "bottom_edge", "rotation": 0}
+    }
+}

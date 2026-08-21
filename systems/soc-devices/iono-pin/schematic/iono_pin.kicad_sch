@@ -1,0 +1,232 @@
+(kicad_sch
+  (version 20231120)
+  (generator "hermes-inventor")
+  (paper "A3")
+  (title_block
+    (title "Iono Pin — Pocket Ion Mobility Spectrometer (IMS)")
+    (date "2026-08-12")
+    (company "SoC Device Inventions")
+    (comment 1 "STM32G474RET6 + ESP32-C3-MINI-1")
+    (comment 2 "ADA4530-1 electrometer + ADS122U04 24-bit ADC + EMCO F50CT 5kV")
+    (comment 3 "Ni-63 / corona ionizer, Bradbury-Nielsen shutter, Faraday plate")
+    (comment 4 "Drift-tube IMS — MIT License"))
+
+  ; ===== POWER SECTION =====
+  (symbol (lib_id "power:VBAT") (at 50 40) (fields_autoplaced)
+    (property "Value" "VBAT3V7") (at 50 34 0))
+  (symbol (lib_id "Device:C") (at 70 45 0)
+    (property "Value" "10uF") (at 70 45 0))
+  (symbol (lib_id "Regulator_Linear:AP2112K-3.3") (at 100 45 0)
+    (property "Reference" "U9") (at 100 45 0)
+    (property "Value" "AP2112K-3.3") (at 100 38 0))
+  (symbol (lib_id "Device:C") (at 130 45 0)
+    (property "Value" "10uF") (at 130 45 0))
+  (symbol (lib_id "power:+3V3") (at 140 40 0))
+  (symbol (lib_id "power:GND") (at 50 100 0))
+
+  ; ===== USB-C CHARGE + TP4056 =====
+  (symbol (lib_id "Connector:USB_C_Plug") (at 40 130 0)
+    (property "Reference" "J1") (at 40 130 0)
+    (property "Value" "USB-C 5V") (at 40 122 0))
+  (symbol (lib_id "Battery_Management:TP4056") (at 90 135 0)
+    (property "Reference" "U7") (at 90 135 0)
+    (property "Value" "TP4056") (at 90 128 0))
+  (symbol (lib_id "Device:Battery") (at 160 135 0)
+    (property "Reference" "BT1") (at 160 135 0)
+    (property "Value" "18650 3.7V") (at 160 128 0))
+
+  ; ===== MCP1640B BOOST 5V (pump + analog) =====
+  (symbol (lib_id "Regulator_Switching:MCP1640B") (at 230 135 0)
+    (property "Reference" "U8") (at 230 135 0)
+    (property "Value" "MCP1640B") (at 230 128 0))
+  (symbol (lib_id "power:+5V") (at 280 130 0))
+
+  ; ===== LP5907-3.3 ultra-low-noise analog LDO =====
+  (symbol (lib_id "Regulator_Linear:LP5907-3.3") (at 310 135 0)
+    (property "Reference" "U10") (at 310 135 0)
+    (property "Value" "LP5907-3.3") (at 310 128 0))
+  (symbol (lib_id "power:+3V3A") (at 360 130 0))
+
+  ; ===== STM32G474RET6 =====
+  (symbol (lib_id "MCU_ST_STM32G4:STM32G474RET6") (at 220 230 0)
+    (property "Reference" "U1") (at 220 230 0)
+    (property "Value" "STM32G474RET6") (at 220 160 0))
+
+  ; ===== ADS122U04 24-bit ADC (SPI) =====
+  (symbol (lib_id "Analog_ADC:ADS122U04") (at 110 310 0)
+    (property "Reference" "U4") (at 110 310 0)
+    (property "Value" "ADS122U04") (at 110 285 0))
+  (net (code 1) (name "ADC_CS")    (node "U4.CS"   "U1.PB12"))
+  (net (code 2) (name "ADC_DRDY")  (node "U4.DRDY" "U1.PB12"))
+  (net (code 3) (name "SPI2_SCK")  (node "U4.SCLK" "U1.PB13"))
+  (net (code 4) (name "SPI2_MISO") (node "U4.DOUT" "U1.PB14"))
+  (net (code 5) (name "SPI2_MOSI") (node "U4.DIN"  "U1.PB15"))
+
+  ; ===== ADA4530-1 ELECTROMETER TIA (Faraday plate) =====
+  (symbol (lib_id "Amplifier_Operational:ADA4530-1") (at 300 310 0)
+    (property "Reference" "U3") (at 300 310 0)
+    (property "Value" "ADA4530-1") (at 300 295 0))
+  (symbol (lib_id "Device:R") (at 270 300 0)
+    (property "Value" "1G") (at 270 300 0)
+    (property "Reference" "R11"))
+  (symbol (lib_id "Device:C") (at 270 320 0)
+    (property "Value" "10n C0G") (at 270 320 0)
+    (property "Reference" "C11"))
+  (symbol (lib_id "Sensor:Faraday_Plate") (at 230 330 0)
+    (property "Reference" "FARADAY1") (at 230 330 0)
+    (property "Value" "Faraday plate") (at 230 320 0))
+  (net (code 6) (name "FARADAY_IN") (node "FARADAY1.OUT" "U3.IN-"))
+  (net (code 7) (name "TIA_FB_R")  (node "R11.1" "U3.IN-"))
+  (net (code 8) (name "TIA_FB_R2") (node "R11.2" "U3.OUT"))
+  (net (code 9) (name "TIA_OUT")   (node "U3.OUT" "U1.PA0") (node "U3.OUT" "U4.AIN0"))
+
+  ; ===== EMCO F50CT 5kV HV SUPPLY =====
+  (symbol (lib_id "Converter_DCDC:EMCO_F50CT") (at 430 310 0)
+    (property "Reference" "U6") (at 430 310 0)
+    (property "Value" "EMCO F50CT 5kV") (at 430 290 0))
+  (net (code 10) (name "HV_SHDN")  (node "U6.SHDN" "U1.PC5"))
+  (net (code 11) (name "HV_MON")   (node "U6.MON"  "U1.PA1"))
+  (net (code 12) (name "HV_5KV")   (node "U6.HVOUT" "DRIFT.HV"))
+
+  ; ===== HV RESISTOR RING CHAIN (drift tube) 8x 10M =====
+  (symbol (lib_id "Device:R") (at 480 370 0) (property "Reference" "R1") (property "Value" "10M 1kV") (at 480 370 0))
+  (symbol (lib_id "Device:R") (at 480 390 0) (property "Reference" "R2") (property "Value" "10M 1kV") (at 480 390 0))
+  (symbol (lib_id "Device:R") (at 480 410 0) (property "Reference" "R3") (property "Value" "10M 1kV") (at 480 410 0))
+  (symbol (lib_id "Device:R") (at 480 430 0) (property "Reference" "R4") (property "Value" "10M 1kV") (at 480 430 0))
+  (symbol (lib_id "Device:R") (at 480 450 0) (property "Reference" "R5") (property "Value" "10M 1kV") (at 480 450 0))
+  (symbol (lib_id "Device:R") (at 480 470 0) (property "Reference" "R6") (property "Value" "10M 1kV") (at 480 470 0))
+  (symbol (lib_id "Device:R") (at 480 490 0) (property "Reference" "R7") (property "Value" "10M 1kV") (at 480 490 0))
+  (symbol (lib_id "Device:R") (at 480 510 0) (property "Reference" "R8") (property "Value" "10M 1kV") (at 480 510 0))
+  (net (code 13) (name "DRIFT_HV") (node "U6.HVOUT" "R1.1"))
+  (net (code 14) (name "DRIFT_R1") (node "R1.2" "R2.1"))
+  (net (code 15) (name "DRIFT_R2") (node "R2.2" "R3.1"))
+  (net (code 16) (name "DRIFT_R3") (node "R3.2" "R4.1"))
+  (net (code 17) (name "DRIFT_R4") (node "R4.2" "R5.1"))
+  (net (code 18) (name "DRIFT_R5") (node "R5.2" "R6.1"))
+  (net (code 19) (name "DRIFT_R6") (node "R6.2" "R7.1"))
+  (net (code 20) (name "DRIFT_R7") (node "R7.2" "R8.1"))
+  (net (code 21) (name "DRIFT_GND") (node "R8.2" "GND"))
+
+  ; ===== BRADBURY-NIELSEN SHUTTER GRID =====
+  (symbol (lib_id "Sensor:Bradbury_Nielsen_Grid") (at 350 380 0)
+    (property "Reference" "SHUTTER1") (at 350 380 0)
+    (property "Value" "Shutter 200us") (at 350 370 0))
+  (net (code 22) (name "SHUTTER_P") (node "SHUTTER1.P" "U1.PA3"))
+  (net (code 23) (name "SHUTTER_N") (node "SHUTTER1.N" "U1.PA4"))
+  (net (code 24) (name "SHUTTER_BIAS") (node "SHUTTER1.BIAS" "U1.PA6"))
+
+  ; ===== IONIZER (Ni-63 / corona) =====
+  (symbol (lib_id "Sensor:Ni63_Source") (at 230 440 0)
+    (property "Reference" "SRC1") (at 230 440 0)
+    (property "Value" "Ni-63 37kBq OR corona") (at 230 430 0))
+  (net (code 25) (name "IONIZER_EN") (node "SRC1.EN" "U1.PA2"))
+
+  ; ===== DRIFT-GAS PUMP + VALVE =====
+  (symbol (lib_id "Device:Motor_DC") (at 560 310 0)
+    (property "Reference" "PUMP1") (at 560 310 0)
+    (property "Value" "6V diaphragm pump") (at 560 300 0))
+  (net (code 26) (name "PUMP_PWM") (node "PUMP1.-" "U1.PA5"))
+  (symbol (lib_id "Valve:Solenoid_2way") (at 560 350 0)
+    (property "Reference" "VALVE1") (at 560 350 0)
+    (property "Value" "2-way valve") (at 560 340 0))
+
+  ; ===== ESP32-C3-MINI-1 BLE/WIFI BRIDGE =====
+  (symbol (lib_id "RF_Module:ESP32-C3-MINI-1") (at 560 200 0)
+    (property "Reference" "U2") (at 560 200 0)
+    (property "Value" "ESP32-C3-MINI-1") (at 560 150 0))
+  (net (code 27) (name "UART_TX_MCU") (node "U1.PB10" "U2.GPIO4"))
+  (net (code 28) (name "UART_RX_MCU") (node "U1.PB11" "U2.GPIO5"))
+  (net (code 29) (name "BRIDGE_LED") (node "U2.GPIO2" "D1.DIN"))
+
+  ; ===== SH1106 OLED (I2C) =====
+  (symbol (lib_id "Display:SH1106_128x64_I2C") (at 690 130 0)
+    (property "Reference" "U11") (at 690 130 0)
+    (property "Value" "SH1106 1.3in") (at 690 100 0))
+  (net (code 30) (name "OLED_SDA") (node "U11.SDA" "U1.PB4"))
+  (net (code 31) (name "OLED_SCL") (node "U11.SCL" "U1.PA15"))
+
+  ; ===== MICROSD (SPI3) =====
+  (symbol (lib_id "Connector:MicroSD") (at 690 230 0)
+    (property "Reference" "J2") (at 690 230 0)
+    (property "Value" "MicroSD") (at 690 200 0))
+  (net (code 32) (name "SD_CS")   (node "J2.CS"   "U1.PD2"))
+  (net (code 33) (name "SPI3_SCK")(node "J2.SCK"  "U1.PC10"))
+  (net (code 34) (name "SPI3_MISO")(node "J2.MISO" "U1.PC11"))
+  (net (code 35) (name "SPI3_MOSI")(node "J2.MOSI" "U1.PC12"))
+
+  ; ===== W25Q128 FLASH (raw waveform buffer) =====
+  (symbol (lib_id "Memory_Flash:W25Q128JVSIQ") (at 690 310 0)
+    (property "Reference" "U14") (at 690 310 0)
+    (property "Value" "W25Q128") (at 690 285 0))
+  (net (code 36) (name "FLASH_CS") (node "U14.CS" "U1.PB12"))
+
+  ; ===== BME280 (I2C) =====
+  (symbol (lib_id "Sensor:BME280") (at 690 380 0)
+    (property "Reference" "U12") (at 690 380 0)
+    (property "Value" "BME280") (at 690 365 0))
+  (net (code 37) (name "I2C_SCL") (node "U12.SCL" "U1.PA15"))
+  (net (code 38) (name "I2C_SDA") (node "U12.SDA" "U1.PB4"))
+
+  ; ===== DS18B20 (drift tube temp, 1-Wire) =====
+  (symbol (lib_id "Sensor:DS18B20") (at 690 440 0)
+    (property "Reference" "U13") (at 690 440 0)
+    (property "Value" "DS18B20") (at 690 425 0))
+  (net (code 39) (name "ONEWIRE") (node "U13.DQ" "U1.PB6"))
+
+  ; ===== BUTTONS =====
+  (symbol (lib_id "Switch:SW_Push") (at 40 280 0)
+    (property "Reference" "SW2") (at 40 280 0)
+    (property "Value" "MODE") (at 40 270 0))
+  (net (code 40) (name "MODE_BTN") (node "SW2.2" "U1.PC0"))
+  (symbol (lib_id "Switch:SW_Push") (at 40 310 0)
+    (property "Reference" "SW3") (at 40 310 0)
+    (property "Value" "SCAN") (at 40 300 0))
+  (net (code 41) (name "SCAN_BTN") (node "SW3.2" "U1.PC1"))
+  (symbol (lib_id "Switch:SW_Push") (at 40 340 0)
+    (property "Reference" "SW4") (at 40 340 0)
+    (property "Value" "CAL") (at 40 330 0))
+  (net (code 42) (name "CAL_BTN") (node "SW4.2" "U1.PC2"))
+
+  ; ===== SAFETY: REED INTERLOCK + TLV3201 FAULT =====
+  (symbol (lib_id "Switch:Reed_Switch") (at 560 400 0)
+    (property "Reference" "REED1") (at 560 400 0)
+    (property "Value" "Lid interlock") (at 560 390 0))
+  (net (code 43) (name "INTERLOCK") (node "REED1.2" "U1.PC3"))
+  (symbol (lib_id "Comparator:TLV3201") (at 560 440 0)
+    (property "Reference" "U15") (at 560 440 0)
+    (property "Value" "TLV3201") (at 560 430 0))
+  (net (code 44) (name "FAULT_IN") (node "U15.OUT" "U1.PC4"))
+
+  ; ===== BUZZER + WS2812B =====
+  (symbol (lib_id "Device:Buzzer") (at 560 480 0)
+    (property "Reference" "BUZ1") (at 560 480 0)
+    (property "Value" "Piezo") (at 560 470 0))
+  (net (code 45) (name "BUZZER") (node "BUZ1.-" "U1.PB6"))
+  (symbol (lib_id "LED:WS2812B") (at 560 510 0)
+    (property "Reference" "D1") (at 560 510 0)
+    (property "Value" "WS2812B") (at 560 500 0))
+  (net (code 46) (name "LED_R") (node "D1.DIN" "U1.PB3"))
+
+  ; ===== HV MONITOR DIVIDER 2000:1 =====
+  (symbol (lib_id "Device:R") (at 430 380 0)
+    (property "Reference" "R9") (at 430 380 0)
+    (property "Value" "1000M 1% HV") (at 430 380 0))
+  (symbol (lib_id "Device:R") (at 430 410 0)
+    (property "Reference" "R10") (at 430 410 0)
+    (property "Value" "500k 1%") (at 430 410 0))
+  (net (code 47) (name "HV_DIV_TOP") (node "R9.1" "U6.HVOUT"))
+  (net (code 48) (name "HV_DIV_MID") (node "R9.2" "R10.1") (node "R9.2" "U1.PA1"))
+  (net (code 49) (name "HV_DIV_BOT") (node "R10.2" "GND"))
+
+  ; ===== HV BLEEDER (safety discharge) =====
+  (symbol (lib_id "Device:R") (at 430 450 0)
+    (property "Reference" "R14") (at 430 450 0)
+    (property "Value" "10M 2W") (at 430 450 0))
+  (net (code 50) (name "BLEEDER_TOP") (node "R14.1" "U6.HVOUT"))
+  (net (code 51) (name "BLEEDER_GND") (node "R14.2" "GND"))
+
+  ; ===== THERMAL FUSE (HV module overtemp) =====
+  (symbol (lib_id "Device:Fuse_Thermal") (at 430 130 0)
+    (property "Reference" "F1") (at 430 130 0)
+    (property "Value" "250C 1A") (at 430 120 0))
+)

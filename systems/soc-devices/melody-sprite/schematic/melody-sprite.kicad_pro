@@ -1,0 +1,14 @@
+(kicad_pro (version 20221018)
+
+  (general
+    (project "melody-sprite")
+  )
+
+  (sheets
+    (at (uuid e1a0b2c3-0001-4000-8000-000000000001))
+  )
+
+  (meta_data
+    (file_name "melody-sprite.kicad_pro")
+  )
+)

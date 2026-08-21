@@ -1,0 +1,28 @@
+{
+  "board": {
+    "design_rules": {
+      "min_clearance": 0.15,
+      "min_track_width": 0.2,
+      "min_via_diameter": 0.6,
+      "min_via_drill": 0.3
+    },
+    "layer_presets": [
+      {"name": "F.Cu", "type": "signal"},
+      {"name": "In1.Cu", "type": "power", "net": "GND"},
+      {"name": "In2.Cu", "type": "power", "net": "VDD_3.3"},
+      {"name": "B.Cu", "type": "signal"}
+    ],
+    "thickness": 1.6,
+    "copper_layers": 4
+  },
+  "project": {
+    "name": "refracto-bead",
+    "title": "Refracto Bead — Pocket Digital Abbe Refractometer",
+    "company": "SoC Device Inventions",
+    "date": "2026-07-17",
+    "rev": "1.0"
+  },
+  "sheets": [
+    {"name": "refracto_bead", "file": "refracto_bead.kicad_sch"}
+  ]
+}

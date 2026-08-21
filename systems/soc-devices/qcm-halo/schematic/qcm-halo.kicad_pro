@@ -1,0 +1,36 @@
+{
+  "board": {
+    "design_rule": "JLCPCB 4-layer 1oz ENIG",
+    "layer_count": 4,
+    "thickness_mm": 1.6,
+    "copper_weight": "1oz",
+    "finish": "ENIG",
+    "silkscreen": "white",
+    "solder_mask": "black",
+    "dimensions_mm": "90 x 60",
+    "min_trace_width_mm": 0.15,
+    "min_clearance_mm": 0.15,
+    "impedance_control": "50 ohm for RF traces (Si5351A to ADG918 to QCM)"
+  },
+  "stackup": [
+    {"layer": 0, "name": "F.Cu", "role": "components + signals + 50ohm RF"},
+    {"layer": 1, "name": "In1.Cu", "role": "GND solid plane"},
+    {"layer": 2, "name": "In2.Cu", "role": "+3V3 power plane (split: digital / analog)"},
+    {"layer": 3, "name": "B.Cu", "role": "ground + power routing"}
+  ],
+  "critical_routing": [
+    "Si5351A CLK0/CLK1 → ADG918: 50 ohm microstrip, length-matched, <20mm",
+    "ADG918 → QCM connector: 50 ohm, minimal via count",
+    "OPA656 sense path → ADC: short, shielded, analog plane only",
+    "ADS122U04 PT1000 ratiometric: Kelvin sensing, star ground",
+    "TEC PWM: wide trace (2mm), separate return path",
+    "Crystal 32.768 kHz: guard ring, far from switching signals"
+  ],
+  "notes": [
+    "Place Si5351A, ADG918, OPA656 in a dedicated analog island",
+    "Split In2.Cu power plane: digital +3V3 vs analog +3V3, connected at single point",
+    "Use ferrite bead on +3V3_ANA input from TPS7A4700",
+    "TEC driver carries high current — route on F.Cu + B.Cu paralleled",
+    "Keep USB-C ESD protection diodes near connector"
+  ]
+}

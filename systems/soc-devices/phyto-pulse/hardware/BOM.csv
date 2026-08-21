@@ -1,0 +1,33 @@
+Item,Designator,Part,Description,Package,Qty,UnitPrice,Source
+1,U1,STM32G474RET6,Main MCU Cortex-M4F 170MHz,LQFP-64,1,5.80,Mouser
+2,U2,ESP32-C3-MINI-1,BLE5.0+WiFi module,Molex 3-220,1,2.70,Mouser
+3,U3,ADS1256,24-bit delta-sigma ADC,SSOP-28,1,9.20,DigiKey
+4,U4,INA333,Chopper-stabilized instrumentation amplifier,MSOP-8,1,3.40,DigiKey
+5,U5,OPA2333,Zero-drift op-amp Vmid buffer,SOIC-8,1,1.10,DigiKey
+6,U6,74HC4051,8:1 analog mux gain select,SOIC-16,1,0.25,Mouser
+7,U7,SSD1306 OLED,0.96in 128x64 I2C OLED,module,1,1.20,AliExpress
+8,U8,BME280,Temp/humidity/pressure sensor,LGA-8,1,1.80,AliExpress
+9,U9,MCP73831,LiPo charge controller 500mA,SOT-23-5,1,0.35,DigiKey
+10,U10,AP2112-3.3,3.3V LDO 600mA,SOT-23-5,1,0.15,LCSC
+11,U11,TPS7A0233P,Ultra-low-noise 3.3V LDO analog,SOT-23-5,1,0.65,DigiKey
+12,Y1,8MHz crystal,HSE for STM32,HC-49S,1,0.20,LCSC
+13,J1,BNC PCB jack,Electrode input 1 BNC,PCB mount,1,0.40,AliExpress
+14,J2,BNC PCB jack,Electrode input 2 BNC,PCB mount,1,0.40,AliExpress
+15,E1,Ag/AgCl pellet,2mm Ag/AgCl surface electrode,2mm,1,1.20,A-M Systems 726775
+16,E2,Ag/AgCl pellet,2mm Ag/AgCl surface electrode,2mm,1,1.20,A-M Systems 726775
+17,J3,microSD socket,Push-push microSD SMD,SMD,1,0.25,LCSC
+18,U12,USBLC6-2SC6,ESD protection USB+electrodes,SOT-23-6,2,0.20,DigiKey
+19,D1,SMAJ3.3A,TVS diode electrode input 1,SMA,1,0.15,DigiKey
+20,D2,SMAJ3.3A,TVS diode electrode input 2,SMA,1,0.15,DigiKey
+21,U13,PC817,Optocoupler stimulus probe,DIP-4,1,0.15,LCSC
+22,LED1,WS2812B,RGB status LED,5050,1,0.10,AliExpress
+23,BAT1,1200mAh LiPo,3.7V LiPo battery 602030,602030,1,2.50,AliExpress
+24,J4,USB-C connector,USB 2.0 charging+data,SMD,1,0.20,LCSC
+25,SW1,Tactile switch,Record button 6x6mm,THT,1,0.05,LCSC
+26,SW2,Tactile switch,Mode button 6x6mm,THT,1,0.05,LCSC
+27,SW3,Tactile switch,Stimulus button 6x6mm,THT,1,0.05,LCSC
+28,R,R1-R30,Resistors 0805 SMD various values,0805,30,0.005,LCSC
+29,C,C1-C20,Capacitors 0805/1206 SMD various values,SMD,20,0.005,LCSC
+30,L1,4.7uH inductor,Power inductor for LDO filter,SMD,1,0.10,LCSC
+31,PCBA,4-layer PCB,80x50mm 4-layer PCB,4-layer,1,8.00,JLCPCB
+32,CASE,3D printed enclosure,PLA/PETG case,printed,1,1.50,self-print

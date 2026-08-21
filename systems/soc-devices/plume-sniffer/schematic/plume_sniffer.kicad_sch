@@ -1,0 +1,154 @@
+(kicad_sch (version 20230121) (generator eeschema)
+  (uuid 00000000-0000-0000-0000-000000000042)
+  (paper "A3")
+  (title_block
+    (title "Plume Sniffer — Pocket Gas Chromatograph")
+    (date "2026-07-03")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+    (comment 1 "ESP32-C3 + ADS122U04 + MEMS TCD")
+    (comment 2 "Pocket GC with Tenax preconcentrator, micro-packed column, MEMS TCD")
+  )
+
+  (lib_symbols
+    ; Symbol definitions — using standard KiCad libraries
+  )
+
+  ; ---- Sheet 1: Main MCU + Wireless ----
+  (symbol (lib_id "RF_Module:ESP32-C3-MINI-1") (at 80 50 0) (unit 1)
+    (property "Reference" "U1" (at 80 25 0))
+    (property "Value" "ESP32-C3-MINI-1" (at 80 30 0))
+  )
+
+  ; ---- Sheet 2: TCD Analog Front-End (ADS122U04) ----
+  (symbol (lib_id "Analog_ADC:ADS122U04") (at 150 50 0) (unit 1)
+    (property "Reference" "U2" (at 150 25 0))
+    (property "Value" "ADS122U04" (at 150 30 0))
+  )
+
+  ; ---- Sheet 3: MEMS TCD Bridge ----
+  (symbol (lib_id "Sensor:MEMS_TCD_Bridge") (at 220 50 0) (unit 1)
+    (property "Reference" "TCD1" (at 220 30 0))
+    (property "Value" "MEMS_TCD" (at 220 35 0))
+  )
+  ; Bridge: 4-wire Wheatstone — measure filament (AIN0-AIN1) vs reference filament
+  ; Excited by ADS122U04 IDAC 50µA through AIN0/AIN1
+
+  ; ---- Sheet 4: Environmental sensor ----
+  (symbol (lib_id "Sensor:BME280") (at 50 90 0) (unit 1)
+    (property "Reference" "U4" (at 50 80 0))
+    (property "Value" "BME280" (at 50 85 0))
+  )
+
+  ; ---- Sheet 5: OLED Display ----
+  (symbol (lib_id "Display:SSD1306") (at 50 120 0) (unit 1)
+    (property "Reference" "U5" (at 50 110 0))
+    (property "Value" "SSD1306_128x64" (at 50 115 0))
+  )
+
+  ; ---- Sheet 6: Power Supply ----
+  (symbol (lib_id "Battery_Management:TP4056") (at 220 130 0) (unit 1)
+    (property "Reference" "U6" (at 220 115 0))
+    (property "Value" "TP4056" (at 220 120 0))
+  )
+  (symbol (lib_id "Regulator_Switching:MCP1640B") (at 260 130 0) (unit 1)
+    (property "Reference" "U7" (at 260 115 0))
+    (property "Value" "MCP1640B" (at 260 120 0))
+  )
+  (symbol (lib_id "Regulator_Linear:AP2112-3.3") (at 300 130 0) (unit 1)
+    (property "Reference" "U8" (at 300 118 0))
+    (property "Value" "AP2112-3.3" (at 300 123 0))
+  )
+  (symbol (lib_id "Regulator_Linear:LP5907MFX-1.8") (at 340 130 0) (unit 1)
+    (property "Reference" "U9" (at 340 118 0))
+    (property "Value" "LP5907-1.8" (at 340 123 0))
+  )
+
+  ; ---- Sheet 7: Heater Drivers (MOSFETs) ----
+  (symbol (lib_id "Transistor_FET:IRLML2502") (at 200 60 0) (unit 1)
+    (property "Reference" "Q1" (at 200 55 0))
+    (property "Value" "IRLML2502" (at 200 58 0))
+  )
+  (symbol (lib_id "Transistor_FET:IRLML2502") (at 200 70 0) (unit 1)
+    (property "Reference" "Q2" (at 200 65 0))
+    (property "Value" "IRLML2502" (at 200 68 0))
+  )
+  (symbol (lib_id "Transistor_FET:IRLML2502") (at 200 80 0) (unit 1)
+    (property "Reference" "Q3" (at 200 75 0))
+    (property "Value" "IRLML2502" (at 200 78 0))
+  )
+  (symbol (lib_id "Transistor_FET:IRLML2502") (at 200 90 0) (unit 1)
+    (property "Reference" "Q4" (at 200 85 0))
+    (property "Value" "IRLML2502" (at 200 88 0))
+  )
+
+  ; Q1 = Column heater (GPIO4 → PWM)
+  ; Q2 = Preconcentrator heater (GPIO3 → PWM)
+  ; Q3 = Pump (GPIO2 → PWM)
+  ; Q4 = 3-way valve (GPIO15) / Fan (GPIO16)
+
+  ; ---- Sheet 8: NTC Thermistors ----
+  (symbol (lib_id "Device:Thermistor_NTC") (at 80 90 0) (unit 1)
+    (property "Reference" "TH1" (at 80 85 0))
+    (property "Value" "10k_B3950" (at 80 88 0))
+  )
+  (symbol (lib_id "Device:Thermistor_NTC") (at 80 100 0) (unit 1)
+    (property "Reference" "TH2" (at 80 95 0))
+    (property "Value" "10k_B3950" (at 80 98 0))
+  )
+  (symbol (lib_id "Device:Thermistor_NTC") (at 80 110 0) (unit 1)
+    (property "Reference" "TH3" (at 80 105 0))
+    (property "Value" "10k_B3950" (at 80 108 0))
+  )
+
+  ; TH1 = Column temperature (GPIO5 / ADC1_CH4)
+  ; TH2 = Preconcentrator temperature (GPIO6 / ADC1_CH6)
+  ; TH3 = TCD body temperature (GPIO7 / ADC1_CH7)
+
+  ; ---- Sheet 9: microSD ----
+  (symbol (lib_id "Connector:Micro_SD_Card") (at 150 100 0) (unit 1)
+    (property "Reference" "J2" (at 150 90 0))
+    (property "Value" "MicroSD" (at 150 95 0))
+  )
+
+  ; ---- Sheet 10: USB-C + Battery ----
+  (symbol (lib_id "Connector:USB_C") (at 30 130 0) (unit 1)
+    (property "Reference" "J1" (at 30 120 0))
+    (property "Value" "USB-C" (at 30 125 0))
+  )
+  (symbol (lib_id "Device:Battery_Cell") (at 260 90 0) (unit 1)
+    (property "Reference" "BT1" (at 260 85 0))
+    (property "Value" "18650_3.7V" (at 260 88 0))
+  )
+
+  ; ---- Net connections (summary) ----
+  ; ESP32-C3 SPI1 (GPIO8/9/10/18) → ADS122U04 CS/SCLK/MISO/MOSI
+  ; ESP32-C3 GPIO19 ← ADS122U04 DRDY (interrupt)
+  ; ESP32-C3 I2C (GPIO1/0) → SSD1306 OLED + BME280
+  ; ESP32-C3 SPI2 (GPIO20/21/11/12) → microSD
+  ; ESP32-C3 GPIO4 → Q1 gate (column heater PWM, LEDC Timer 0)
+  ; ESP32-C3 GPIO3 → Q2 gate (preconcentrator heater PWM, LEDC Timer 1)
+  ; ESP32-C3 GPIO2 → Q3 gate (pump PWM, LEDC Timer 2)
+  ; ESP32-C3 GPIO15 → Q4 gate (3-way valve)
+  ; ESP32-C3 GPIO16 → Fan (GPIO output, cooldown blower)
+  ; ESP32-C3 GPIO5  ← TH1 (ADC1_CH4, column temp)
+  ; ESP32-C3 GPIO6  ← TH2 (ADC1_CH6, preconc temp)
+  ; ESP32-C3 GPIO7  ← TH3 (ADC1_CH7, TCD body temp)
+  ; ESP32-C3 GPIO13 ← Battery divider (ADC1_CH3)
+  ; ESP32-C3 GPIO14 → WS2812B RGB LED (RMT)
+  ; ESP32-C3 GPIO0  ← RUN button (BOOT, pull-up, falling-edge IRQ)
+  ; ESP32-C3 GPIO17 ← MODE button (pull-up, falling-edge IRQ) / TP4056 CHRG
+
+  ; ---- Power nets ----
+  ; VBAT (3.7V) → MCP1640B → V5P0 (5V boost rail for pump + heaters)
+  ; VBAT → AP2112 → V3P3 (3.3V digital rail: ESP32-C3, OLED, SD, ADS digital)
+  ; VBAT → LP5907 → V1P8 (1.8V analog rail: ADS analog, TCD bridge ref)
+  ; USB-C 5V → TP4056 → VBAT (charging)
+
+  ; ---- Decoupling ----
+  ; 100nF on every IC VDD pin (15 total)
+  ; 10µF tantalum on each regulator output (5 total)
+  ; 1µF on ADS122U04 AVDD + DVDD
+  ; 10µH inductor on MCP1640B boost
+
+)

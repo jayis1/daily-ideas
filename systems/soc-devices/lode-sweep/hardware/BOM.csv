@@ -1,0 +1,28 @@
+Part,Manufacturer,MPN,Qty,Unit Price (USD),Source,Notes
+STM32G474RET6,STMicroelectronics,STM32G474RET6,1,6.40,DigiKey/Mouser,Cortex-M4F 170MHz, CORDIC, HRTIM, LQFP64
+ESP32-C3-WROOM-02,Espressif,ESP32-C3-WROOM-02,1,2.70,Mouser/DigiKey,RISC-V 160MHz, BLE 5.0 + Wi-Fi
+IRFH7440 MOSFET,Infineon,IRFH7440TRPBF,1,1.10,DigiKey,40V 100A N-MOS, TX coil driver
+MC34063 boost IC,TI/AZDelivery,MC34063SOIC,1,0.30,DigiKey,Boost to 12V for TX coil rail
+AD8226 inst amp,Analog Devices,AD8226ARZ,1,4.20,DigiKey,100x gain, 100kHz BW, rail-to-rail
+SMBJ18A TVS diode,Littelfuse,SMBJ18A,1,0.40,DigiKey,Flyback clamp for TX coil
+ICM-42688-P,TDK InvenSense,ICM-42688-P,1,4.10,DigiKey,6-axis IMU, coil tilt compensation
+NEO-M9N GPS,u-blox,NEO-M9N-0-01,1,11.00,Mouser,1.5m CEP GPS, 1Hz NMEA
+SSD1306 OLED 0.96",Solomon/Waveshare,SSD1306 128x64 I2C,1,2.20,AliExpress,Target ID + depth + signal display
+MicroSD socket,Molex,503182-1850,1,1.10,DigiKey,Push-push microSD, survey CSV log
+TP4056 charge IC,Nanjing Top Power,TP4056,1,0.40,LCSC,18650 Li-ion USB-C charger
+DW02 battery protection,Sinicheck,DW02,1,0.25,LCSC,Over-discharge / over-current protection
+AP2112-3.3 LDO,Diodes Inc,AP2112K-3.3,1,0.25,DigiKey,3.3V LDO regulator
+USB-C connector,Amphenol,10137028-000200LF,1,0.60,DigiKey,USB-C 2.0 (charging only)
+3.5mm headphone jack,CUI Devices,SJ-3523-SMT,1,0.80,DigiKey,TRS audio jack for target tones
+Search coil wire (0.5mm enameled),Elektrosolz,0.5mm AWG24 enameled Cu,1,3.00,Amazon,100 turns, 25cm diameter
+Coil former (3D printed),N/A,N/A,1,1.50,Self-print,PETG spool for 25cm coil
+PCB (2-layer 120x40mm),JLCPCB,JLCPCB 2-layer,1,2.50,JLCPCB,Custom rectangular PCB
+Enclosure (3D printed),N/A,N/A,1,1.50,Self-print,PETG control box IP54
+18650 holder,Eaton,WHC-18650-BP-H,1,1.50,DigiKey,Single 18650 battery holder
+18650 battery,Panasonic/Sanyo,NCR18650B 3500mAh,1,5.00,Amazon,3.7V Li-ion
+Rotary encoder,Bourns,PEC11R-4220F-S0024,1,1.20,DigiKey,Sensitivity control
+Aluminum shaft (telescoping),Amazon,N/A,1,3.00,Amazon,25mm telescoping pole
+Resistors/caps/inductors,Yageo/Murata,assortment,1,3.00,DigiKey,Passives (damping R, AC couple, LPF, decoupling)
+M2.5 standoffs/screws,McMaster-Carr,assortment,1,1.00,McMaster,Hardware
+CR2032 + holder,Linx,BC5001-1,1,0.70,DigiKey,RTC backup battery (VBAT)
+Total,,,1,63.60,,Approximate BOM cost

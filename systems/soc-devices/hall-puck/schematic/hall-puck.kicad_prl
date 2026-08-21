@@ -1,0 +1,4 @@
+(kicad_prl
+  (version "1.0")
+  (meta (filename "hall-puck.kicad_prl"))
+  (general (project_name "Hall Puck")))

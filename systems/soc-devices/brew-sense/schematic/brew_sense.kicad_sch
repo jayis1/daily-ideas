@@ -1,0 +1,169 @@
+(kicad_sch (version 20230121) (generator eeschema)
+
+  (uuid e4d1f8a0-1234-5678-9abc-def012345678)
+
+  ;; ============================================================
+  ;; BREW SENSE — Precision Fermentation Monitor
+  ;; STM32L476RG + ESP32-C3 + Vibrating Tube Densitometer
+  ;; Schematic Revision 1.0
+  ;; ============================================================
+
+  ;; ========== POWER SUPPLY ==========
+  
+  ;; Battery input: 2x AAA (3V nominal, 2.0-3.2V)
+  ;; OR USB-C: 5V via MCP73871 charger
+
+  ;; TPS62740 Buck Converter (3V → 3.3V, 95% efficient)
+  (symbol "TPS62740" (in_bom yes)
+    (pin_function VIN input)
+    (pin_function VOUT output)
+    (pin_function EN input)
+    (pin_function PGND power_out)
+    (pin_function SGND power_out)
+    (pin_function FB input)
+    (pin_function SYNC input)
+    (pin_function NC no_connect)
+    (pin_function NC no_connect)
+    (pin_function PGND2 power_out)
+  )
+  
+  ;; MCP73871 USB-C Battery Charger
+  (symbol "MCP73871" (in_bom yes)
+    (pin_function VBUS input)
+    (pin_function VBAT output)
+    (pin_function PROG input)
+    (pin_function STAT output)
+    (pin_function TE input)
+    (pin_function CE input)
+    (pin_function GND power_out)
+  )
+
+  ;; ========== MAIN MCU ==========
+  
+  ;; STM32L476RG — Cortex-M4F @ 80MHz (low-power) / 120MHz
+  (symbol "STM32L476RG" (in_bom yes)
+    ;; Power pins
+    (pin_function VDD power_in)        ;; 3.3V
+    (pin_function VSS power_in)        ;; GND
+    (pin_function VDDA power_in)      ;; Analog 3.3V
+    (pin_function VBAT power_in)      ;; Backup battery
+    
+    ;; GPIO Port A
+    (pin_function PA0/ADC1_IN5 analog)   ;; pH probe analog backup
+    (pin_function PA2/USART2_TX output)   ;; Debug UART TX
+    (pin_function PA3/USART2_RX input)     ;; Debug UART RX
+    (pin_function PA4/DAC1_OUT1 analog)   ;; Piezo drive signal A
+    (pin_function PA5/SPI1_SCK output)     ;; Flash SPI clock
+    (pin_function PA6/SPI1_MISO input)     ;; Flash SPI MISO
+    (pin_function PA7/SPI1_MOSI output)    ;; Flash SPI MOSI
+    (pin_function PA8/MCO output)          ;; Clock monitor
+    (pin_function PA9/I2C1_SCL output)    ;; I2C bus SCL (BMP388, SSD1306, EZO-pH)
+    (pin_function PA10/I2C1_SDA bidir)    ;; I2C bus SDA
+    (pin_function PB0/ADC1_IN8 analog)    ;; Battery voltage sense
+    (pin_function PB3/GPIO input)         ;; DS18B20 1-Wire data (4.7k pull-up)
+    (pin_function PB4/TIM3_CH1 output)    ;; Piezo drive signal B (complementary)
+    (pin_function PB5/GPIO output)        ;; S8 power enable
+    (pin_function PB10/USART3_TX output)  ;; S8 UART TX
+    (pin_function PB11/USART3_RX input)   ;; S8 UART RX
+    (pin_function PB14/TIM15_CH1 output)  ;; Buzzer PWM
+    (pin_function PB15/GPIO output)       ;; RGB LED red (active low)
+    (pin_function PC0/ADC1_IN10 analog)  ;; Thermistor backup
+    (pin_function PC4/USART1_TX output)   ;; ESP32-C3 UART TX
+    (pin_function PC5/USART1_RX input)    ;; ESP32-C3 UART RX
+    (pin_function PC6/GPIO output)        ;; ESP32-C3 power enable
+    (pin_function PC7/GPIO output)        ;; RGB LED green (active low)
+    (pin_function PC8/GPIO output)       ;; RGB LED blue (active low)
+    (pin_function PC9/GPIO input)        ;; USB VBUS detect
+    (pin_function PC10/GPIO output)      ;; Heater enable
+    (pin_function PC11/GPIO input)       ;; BOOT button
+    (pin_function PC12/GPIO output)     ;; DS18B20 parasite power
+    (pin_function PD2/GPIO output)      ;; STATUS LED
+    (pin_function NRST input)           ;; Reset button
+    (pin_function BOOT0 input)          ;; Boot configuration
+  )
+
+  ;; ========== SENSORS ==========
+  
+  ;; DS18B20 Waterproof Temperature Probe
+  ;; Connected via 1-Wire on PB3
+  ;; VDD: 3.3V (parasite power mode on PC12)
+  ;; GND: GND
+  ;; DATA: PB3 with 4.7kΩ pull-up to 3.3V
+
+  ;; BMP388 Barometric Pressure Sensor
+  ;; I2C address: 0x77
+  ;; SDA: PA10 (I2C1_SDA) with 4.7kΩ pull-up
+  ;; SCL: PA9 (I2C1_SCL) with 4.7kΩ pull-up
+  ;; VDD: 3.3V, GND: GND
+
+  ;; Senseair S8 NDIR CO2 Sensor
+  ;; UART3 on PB10/PB11 at 9600 baud
+  ;; Power controlled by PB5 (enable)
+  ;; Gas port connected via silicone tubing to fermenter headspace
+
+  ;; EZO-pH pH Probe Interface (Atlas Scientific)
+  ;; I2C address: 0x63
+  ;; SDA: PA10 (I2C1_SDA)
+  ;; SCL: PA9 (I2C1_SCL)
+  ;; VDD: 3.3V, GND: GND
+  ;; pH probe: BNC connector to probe in fermenter
+
+  ;; Piezo Densitometer (2x Murata MA40S4S)
+  ;; Driver: PA4 (DAC1_OUT1) + PB4 (TIM3_CH1) complementary PWM
+  ;; Receiver: PA0 (ADC1_IN5)
+  ;; Both piezo elements bonded to 316L stainless vibrating tube
+
+  ;; ========== DISPLAY ==========
+  
+  ;; SSD1306 128x32 OLED (I2C address: 0x3C)
+  ;; SDA: PA10, SCL: PA9 (shared I2C bus)
+  ;; VDD: 3.3V, GND: GND
+
+  ;; ========== CONNECTIVITY ==========
+  
+  ;; ESP32-C3-MINI-1 (Wi-Fi/BLE co-processor)
+  ;; UART1 on PC4/PC5 at 115200 baud
+  ;; AT-command mode for Wi-Fi + MQTT
+  ;; Power controlled by PC6
+  ;; VDD: 3.3V, GND: GND
+
+  ;; ========== POWER NOTES ==========
+  
+  ;; Decoupling: 100nF on each VDD pin (6 total)
+  ;;             10µF bulk on VDD
+  ;;             100nF + 10µF on VDDA
+  ;;             100nF on VBAT
+  
+  ;; I2C pull-ups: 4.7kΩ on SDA and SCL to 3.3V
+  ;; 1-Wire pull-up: 4.7kΩ on PB3 to 3.3V
+  
+  ;; Battery sense: PB0 with 100k/100k voltage divider
+  ;;               VBAT ──[100k]── PB0 ──[100k]── GND
+  ;;               ADC reads VBAT/2
+
+  ;; ========== NET LABELS ==========
+  
+  (label "I2C1_SDA" (at 140 80))
+  (label "I2C1_SCL" (at 140 85))
+  (label "ONEWIRE_DATA" (at 140 90))
+  (label "S8_TX" (at 140 95))
+  (label "S8_RX" (at 140 100))
+  (label "ESP_TX" (at 140 105))
+  (label "ESP_RX" (at 140 110))
+  (label "PIEZO_A" (at 140 115))
+  (label "PIEZO_B" (at 140 120))
+  (label "PIEZO_SENSE" (at 140 125))
+  (label "BUZZER" (at 140 130))
+  (label "LED_R" (at 140 135))
+  (label "LED_G" (at 140 140))
+  (label "LED_B" (at 140 145))
+  (label "VBAT_SENSE" (at 140 150))
+  (label "S8_ENABLE" (at 140 155))
+  (label "ESP_ENABLE" (at 140 160))
+  (label "VBUS_DETECT" (at 140 165))
+  (label "DS18B20_PWR" (at 140 170))
+  (label "HEATER_EN" (at 140 175))
+  (label "BOOT_BTN" (at 140 180))
+  (label "STATUS_LED" (at 140 185))
+
+)

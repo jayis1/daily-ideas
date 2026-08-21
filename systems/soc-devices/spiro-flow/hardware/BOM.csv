@@ -1,0 +1,30 @@
+Ref,Qty,Part,Manufacturer,MPN,Package,Unit_USD,Source,Notes
+U1,1,CH32V203RBT6,WCH,CH32V203RBT6,LQFP-64,2.20,Mouser,RISC-V RV32IMAC 144MHz 128KB flash 64KB SRAM
+U2,1,ESP32-C3-MINI-1,Espressif,ESP32-C3-MINI-1,module,2.80,Mouser,BLE5 WiFi4 bridge MCU
+U3,1,SDP810-500Pa,Sensirion,SDP810-500Pa,DFN-8,18.00,Digi-Key,Differential pressure sensor ±500Pa for pneumotach
+U4,1,BME280,Bosch,BME280,LGA-8,5.50,Digi-Key,Ambient temp/pressure/humidity for BTPS correction
+U5,1,SH1106 OLED 1.3",Generic,SH1106-1.3-128x64,PCB,3.50,AliExpress,128x64 monochrome OLED I2C display
+U6,1,W25Q128JVIQ,Winbond,W25Q128JVIQ,SOIC-8,1.20,Digi-Key,16MB SPI flash for session logging
+U7,1,MCP73831T-2ACI/MC,Microchip,MCP73831,DFN-8,0.60,Digi-Key,USB-C LiPo charger 4.2V 500mA
+U8,1,TPS63020DSJR,Texas Instruments,TPS63020,SON-14,3.90,Digi-Key,3.3V buck-boost 2A
+U9,1,TLV70033DDCR,Texas Instruments,TLV70033,SOT-23-5,0.50,Digi-Key,3.3V LDO for SDP810 low-noise
+U10,1,DW01A,Sileic,DW01A,SOT-23-6,0.10,Digi-Key,Battery protection IC
+U11,1,FS8205A,Fairchild,FS8205A,SOT-23-6,0.20,Digi-Key,Dual MOSFET for DW01A
+Q1,1,2N3904,Generic,2N3904,SOT-23,0.10,Digi-Key,NPN transistor for buzzer driver
+BZ1,1,Piezo buzzer 5V,CUI,PS1240P02CT3,12mm,1.20,Digi-Key,Piezo buzzer for coaching tones
+LED1,1,WS2812B,Worldsemi,WS2812B,5050,0.20,AliExpress,RGB LED status indicator
+LED2,1,Green LED 0603,Generic,LTST-C193KGKT,0603,0.10,Digi-Key,Status LED
+J1,1,USB-C 2.0 receptacle,Amphenol,12401610E4#2A,USB-C,0.50,Digi-Key,USB-C 16-pin charging + USB-CDC
+J2,1,JST-PH 2-pin,JST,S2B-PH-K,2mm,0.20,Digi-Key,Battery connector
+J3,1,Silicone tubing connector,Generic,SIL-CONN-2,2mm,0.30,Mcmaster,Silicone tubing to pneumotach ports
+SW1,1,Tactile 6x6mm,Generic,TS-6x6,6x6mm,0.15,AliExpress,MEASURE button
+SW2,1,Tactile 6x6mm,Generic,TS-6x6,6x6mm,0.15,AliExpress,MODE button
+PNEU,1,Fleisch pneumotach screen,Generic,Fleisch-screen,custom,8.00,custom,Stainless mesh + 3D printed housing + disposable mouthpiece
+MOUTH,10,Disposable mouthpiece,Generic,SPIRO-MP-30mm,30mm,0.50,AliExpress,Disposable cardboard mouthpieces (pack of 10)
+BAT1,1,LiPo 1800mAh 602535,Generic,LP602535,60x25x5mm,4.50,BatteryJunction,3.7V 1800mAh
+L1,1,2.2µH inductor 3A,Coilcraft,XAL4040-222MEB,4x4mm,0.80,Digi-Key,Inductor for TPS63020 buck-boost
+Y1,1,8MHz crystal,Abracon,ABM3-8.000MHZ,3.2x2.5mm,0.30,Digi-Key,Optional external crystal for CH32V203 (has internal RC)
+MISC,1,Passives kit,Various,,mixed,3.00,Digi-Key,R/C/L 0402/0603 (pull-ups decoupling)
+PCB,1,4-layer PCB,PCBWay,custom,80x40mm,5.00,PCBWay,4-layer ENIG main PCB
+CASE,1,3D-printed case,custom,PLA-case,custom,2.00,custom,PLA 3D printed handheld enclosure
+TOTAL,,,,,,~62.00,,Approximate BOM cost (excl. pneumotach: ~$54)

@@ -1,0 +1,13 @@
+{
+  "version": 20231120,
+  "generator": "glyph_press",
+  "meta": {
+    "filename": "glyph_press.kicad_pro",
+    "title": "Glyph Press — Portable Braille Embosser",
+    "company": "SoC Device Inventions",
+    "rev": "1.0",
+    "date": "2026-06-29"
+  },
+  "boards": ["glyph_press.kicad_pcb"],
+  "schematics": ["glyph_press.kicad_sch"]
+}

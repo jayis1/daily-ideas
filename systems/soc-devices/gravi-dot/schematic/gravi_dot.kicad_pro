@@ -1,0 +1,14 @@
+{
+  "boards": ["gravi_dot.kicad_pcb"],
+  "sch": "gravi_dot.kicad_sch",
+  "meta": {
+    "filename": "gravi_dot.kicad_pro",
+    "version": 1
+  },
+  "schematic": {
+    "drawing": {
+      "default_line_thickness": 6.0,
+      "default_text_size": 1.5
+    }
+  }
+}

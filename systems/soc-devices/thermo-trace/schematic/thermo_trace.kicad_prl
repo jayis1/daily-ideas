@@ -1,0 +1,27 @@
+{
+  "boards": [],
+  "meta": {
+    "filename": "thermo_trace.kicad_prl",
+    "version": 1
+  },
+  "project": {
+    "drc_exclusions": [],
+    "meta": {
+      "version": 2
+    },
+    "rule_severities": {
+      "copper_edge_clearance": "error",
+      "solder_mask_bridge": "error",
+      "unconnected_items": "error"
+    }
+  },
+  "schematic": {
+    "selection_filter": {
+      "units": [],
+      "nets": [],
+      "lib_symbols": [],
+      "footprints": [],
+      "components": []
+    }
+  }
+}

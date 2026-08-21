@@ -1,0 +1,28 @@
+Part Number,Description,Package,Quantity,Unit Price,Manufacturer,Note
+STM32L476RGT6,MCU ARM Cortex-M4F 1MB Flash 128KB RAM,LQFP-64,1,$4.50,STMicroelectronics,Main MCU
+ESP32-C3-MINI-1,WiFi/BLE Module AT-command co-processor,Module,1,$1.80,Espressif,WiFi uplink
+DS18B20,Waterproof Digital Temperature Probe,TO-92,1,$1.50,Maxim/Analog Devices,±0.1°C
+BMP388,Precision Barometric Pressure Sensor,LGA-10 2x2,1,$1.20,Bosch,Sensortec,0.01 hPa
+Senseair S8,Miniature NDIR CO2 Sensor 0-10000ppm,Module 33x19mm,1,$12.00,Senseair,NDIR
+EZO-pH,Atlas Scientific pH Probe Interface I2C,Module 18x22mm,1,$8.00,Atlas Scientific,pH interface
+Murata MA40S4S,Piezo Ceramic Transducer,SMD,2,$0.50,Murata,Densitometer driver/receiver
+SSD1306,OLED Display 128x32 I2C,Module,1,$1.50,Solomon Systech,Display
+TPS62740,Ultra-low-power Buck Converter 95% eff,VSON-10,1,$1.20,Texas Instruments,3V→3.3V
+MCP73871,USB-C Battery Charge Controller,QFN-20 4x4,1,$1.00,Microchip,USB-C charging
+LIR2450,Rechargeable Coin Cell 3.7V 110mAh,CR2450,1,$2.00,Various,Optional battery
+USB-C Receptacle,16-pin SMD USB-C Connector,SMD,1,$0.35,Various,Power+charge
+AAA Battery Holder,2x AAA Side-by-Side Through-hole,TH,1,$0.50,Keystone,Primary power
+Piezo Buzzer,SMD 5mm Magnetic Buzzer,SMD,1,$0.25,TDK,Alarm beeper
+RGB LED,0805 Common Anode RGB LED,0805,1,$0.10,Various,Status indicator
+316L Stainless Tube,Vibrating Tube 4mm OD 50mm,Custom,1,$0.80,Various,Densitometer element
+Silicone Tubing,4mm ID 200mm length,Silicone,1,$0.40,Various,CO2 port
+4.7kΩ Resistor,Pull-up Resistor 0402,0402,8,$0.02,Yageo,I2C + 1-Wire pullups
+100nF Capacitor,Decoupling Capacitor 0402 25V,0402,12,$0.01,Yageo,Decoupling
+10µF Capacitor,Bulk Capacitor 0603 10V,0603,4,$0.02,Yageo,Bulk decoupling
+22µF Capacitor,Output Capacitor 0805 10V,0805,2,$0.03,Yageo,LDO output
+1µF Capacitor,LDO Input Capacitor 0402 10V,0402,2,$0.01,Yageo,LDO input
+10kΩ Resistor,Voltage Divider 0402,0402,2,$0.01,Yageo,Battery sense
+100kΩ Resistor,DS18B80 Parasite Power 0402,0402,1,$0.01,Yageo,Pull-up
+1MΩ Resistor,pH Probe Input 0402,0402,1,$0.01,Yageo,Input protection
+O-ring,18mm ID Silicone O-ring,18mm ID,1,$0.10,Various,Enclosure seal
+PCB 4-layer 72x38mm,Custom PCB Rectangular,72x38mm,1,$1.50,JLCPCB,Main board

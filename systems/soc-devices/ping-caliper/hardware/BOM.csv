@@ -1,0 +1,60 @@
+Ref,Qty,Part,Manufacturer,MPN,Package,Description,UnitUSD,TotalUSD
+U1,1,STM32G474RET6,STMicroelectronics,STM32G474RET6,LQFP-64 10x10mm 0.5mm,"Cortex-M4F 170MHz MCU, 512KB Flash, 128KB SRAM, HRTIM, 2x ADC, 2x DAC, FMAC, CORDIC",11.20,11.20
+U2,1,ESP32-C3-MINI-1,Espressif,ESP32-C3-MINI-1,PCB module,"RISC-V Wi-Fi + BLE 5 SoC module",3.20,3.20
+U3,1,AD8331,Analog Devices,AD8331ARZ,SOIC-16,"Ultrasonic VGA with LNA, 0-55 dB gain, 100MHz",9.80,9.80
+U4,1,LMG1210,Texas Instruments,LMG1210RVRT,WQFN-12,"200 ps propagation GaN half-bridge driver, 2A peak",4.50,4.50
+U5,1,LM5022,Texas Instruments,LM5022MM,SOIC-8,"HV boost controller (100V), for negative HV rail",2.80,2.80
+U6,1,MD0100,Microchip,MD0100,SOIC-8,"HV T/R switch ±100V, 0.5Ω on, 50MHz",6.20,6.20
+U7,1,MAX17048,Maxim/Analog,MAX17048G+T10,SOT-23-8,"I2C Li-ion fuel gauge, ModelGauge",2.10,2.10
+U8,1,TP4056,NanJing Top Power,TP4056,SOP-8,"1A linear Li-ion charger, USB-C",0.40,0.40
+U9,1,TPS63020,Texas Instruments,TPS63020DSJR,VQFN-14,"2A buck-boost 1.8-5.5V to 3.3V",4.20,4.20
+U10,1,SSD1306 OLED,Solomon SSD1306,SSD1306-128x64-SPI,PCB module,"128x64 monochrome OLED, SPI interface",5.50,5.50
+J1,1,LEMO BNC probe connector,LEMO,FAK-RA-BNC,Panel mount,"BNC or LEMO connector for ultrasonic probe",3.50,3.50
+J2,1,USB-C connector,Amphenol,12401548E4022,SMD USB-C 16-pin,"USB-C 2.0 connector for charging + flash",1.20,1.20
+J3,1,MicroSD slot,Molex,502774-0891,SMD push-push,"MicroSD card slot, SPI mode",1.40,1.40
+J4,1,SWD header,PIN-4,Pin header 2x2 1.27mm,2.54mm,"SWD debug header (SWDIO, SWCLK, GND, 3V3)",0.30,0.30
+Q1,1,SCT2H12NZ,GaN Systems,SCT2H12NZ,PDFN-8,"650V 12A GaN HEMT (HV pulser FET) — or IRF830 for ≤150V",3.80,3.80
+D1,1,BAT54S,Nexperia,BAT54S,SOT-23,"Dual Schottky limiter (receiver protection)",0.15,0.15
+D2,1,SMAJ15A,Q,SMAJ15A,SMA Diode,"TVS diode for probe ESD protection",0.25,0.25
+D3,1,HSMS-2852,Broadcom/Avago,HSMS-2852,SOT-23,"Schottky diode pair for envelope detector",0.60,0.60
+Y1,1,8 MHz XTAL,Abracon,ABM8-8.000MHZ,3225 SMD,"8 MHz crystal for STM32 HSI calibration",0.40,0.40
+Y2,1,32.768 kHz,Abracon,ABS07-32.768kHz,3215 SMD,"32.768 kHz RTC crystal",0.35,0.35
+BAT1,1,18650 Li-ion,Sanyo/Panasonic,NCR18650B,18650 cell,"18650 Li-ion 3400mAh protected cell",5.50,5.50
+BAT2,1,Battery holder,Keystone,1042,PCB holder,"18650 PCB mount battery holder",0.80,0.80
+SW1,1,Trigger button,ALPS,SKQGAFE010,Tactile 6x6mm,"Trigger button (measure)",0.30,0.30
+SW2,1,Menu button,ALPS,SKQGAFE010,Tactile 6x6mm,"Menu button",0.30,0.30
+SW3,1,Mode button,ALPS,SKQGAFE010,Tactile 6x6mm,"Mode button",0.30,0.30
+ENC1,1,Rotary encoder,Bourns,PEC11R-4220F-S0024,Panel mount,"Rotary encoder with push-button, detent",2.20,2.20
+LED1,1,White LED,Kingbright,APT2012SRCPRV,0805,"Status LED white (ready)",0.12,0.12
+LED2,1,Red LED,Kingbright,APT2012SRCPRV,0805,"Status LED red (flaw/battery low)",0.12,0.12
+LED3,1,Green LED,Kingbright,APT2012SRCPRV,0805,"Status LED green (BLE link)",0.12,0.12
+LED4,1,Charge LED,Kingbright,APT2012SRCPRV,0805,"Charge status LED (amber)",0.12,0.12
+SPK1,1,Piezo buzzer,Murata,PKM13EPYH4000,SMD piezo,"Piezo buzzer (key-click, alarm)",0.60,0.60
+L1,1,10uH power inductor,Coilcraft,XAL4040-103MEC,4040 SMD,"10uH 4A inductor for HV boost",0.80,0.80
+L2,1,2.2uH power inductor,Coilcraft,XAL4040-2R2MEC,4040 SMD,"2.2uH 4A inductor for TPS63020",0.70,0.70
+T1,1,Pulse transformer,Coilcraft,WA8474-ALB,SMD,"Pulse transformer for probe coupling (optional)",1.80,1.80
+R1,1,50Ω 0.1%,Vishay,RN73R1JTTD50R0B10,0805,"50Ω 0.1% resistor for receiver input",0.10,0.10
+R2,2,4.7k,Yageo,RC0805FR-074K7L,0805,"I2C pull-up 4.7k (SDA, SCL)",0.02,0.04
+R3,2,100k,Yageo,RC0805FR-07100KL,0805,"Battery voltage divider (1:3)",0.02,0.04
+R4,1,1M,Yageo,RC0805FR-071ML,0805,"HV monitor divider (1:100) - 1M",0.02,0.02
+R5,1,10k,Yageo,RC0805FR-0710KL,0805,"HV monitor divider (1:100) - 10k",0.02,0.02
+R6,5,10k,Yageo,RC0805FR-0710KL,0805,"Pull-ups for buttons, encoder, probe-ID",0.02,0.10
+C1,5,100nF,Murata,GRM188R71H104KA93,0603,"0.1uF bypass caps (VDD decoupling)",0.02,0.10
+C2,2,10uF,Murata,GRM188R60J106ME47,0603,"10uF bulk decoupling for VDD and VDDA",0.08,0.16
+C3,1,47nF 250V,Vishay,VJ0805Y473JXAAT,0805 C0G,"47nF HV reservoir cap (250V rated)",0.30,0.30
+C4,1,1uF,Murata,GRM188R71C105KA93,0603,"DAC reference cap",0.05,0.05
+C5,1,22pF,Murata,GRM1885C1H220JA01,0603 C0G,"Crystal load cap (8MHz)",0.02,0.02
+C6,1,22pF,Murata,GRM1885C1H220JA01,0603 C0G,"Crystal load cap (8MHz)",0.02,0.02
+C7,1,12pF,Murata,GRM1885C1H120JA01,0603 C0G,"RTC crystal load cap",0.02,0.02
+C8,1,12pF,Murata,GRM1885C1H120JA01,0603 C0G,"RTC crystal load cap",0.02,0.02
+C9,1,4.7uF,Murata,GRM188R60J475KA19,0603,"AD8331 VCC bypass",0.06,0.06
+C10,1,10uF,Murata,GRM188R60J106ME47,0603,"TPS63020 input bulk",0.08,0.08
+C11,2,22uF,Murata,GRM188R60J226ME06,0603,"TPS63020 output bulk (3.3V)",0.12,0.24
+C12,1,1uF 50V,Murata,GRM188R71H105KA12,0805 X7R,"HV boost input filter",0.06,0.06
+C13,1,10uF 25V,TDK,GRM21BR61E106KA73,0805,"HV boost output filter",0.12,0.12
+C14,1,1nF 250V,Murata,RDE5C1H102J0S2WP,1206 C0G,"Envelope detector capacitor",0.15,0.15
+C15,2,1nF,Murata,GRM1885C1H102JA01,0603 C0G,"Probe AC-coupling caps",0.02,0.04
+MISC,1,PCB fabrication,JLCPCB,4-layer 2oz ENIG PCB,"PCB","4-layer 2oz copper PCB, 2 oz for HV, ENIG finish",8.00,8.00
+MISC,1,Case/enclosure,Generic,ABS rugged case,Custom,"ABS plastic rugged enclosure, rubber overmold",4.00,4.00
+MISC,1,Probe couplant,Ultrasonic couplant,Gel packet 5g,Gel,"Ultrasonic coupling gel packet",0.20,0.20
+TOTAL,,,,,,,98.61

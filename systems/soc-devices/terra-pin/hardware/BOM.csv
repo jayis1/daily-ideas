@@ -1,0 +1,33 @@
+Ref,Qty,Part,Manufacturer,MPN,Package,Unit_USD,Source,Notes
+U1,1,ESP32-S3-WROOM-1,Espressif,ESP32-S3-WROOM-1,module,3.50,Mouser,Dual-core 240MHz WiFi4 BLE5 8MB flash
+U2,1,SCD41,Sensirion,SCD41,DFN-6,11.90,Digi-Key,NDIR CO2 sensor 400-5000ppm chamber
+U3,1,SCD41,Sensirion,SCD41,DFN-6,11.90,Digi-Key,NDIR CO2 sensor ambient
+U4,1,TCA9548A,Texas Instruments,TCA9548APWR,TSSOP-24,0.80,Digi-Key,I2C multiplexer for dual SCD41
+U5,1,EZO-ORP,Atlas Scientific,EZO-ORP,board,32.00,Atlas Scientific,ORP circuit + probe kit
+U6,1,EZO-EC,Atlas Scientific,EZO-EC,board,32.00,Atlas Scientific,EC circuit + K=1 probe kit
+U7,1,DS18B20,Maxim/Analog,DS18B20,TO-92,1.50,Digi-Key,Waterproof digital temp sensor
+U8,1,SH1106 OLED 1.3",Generic,SH1106-1.3-128x64,PCB,3.50,AliExpress,128x64 monochrome OLED I2C
+U9,1,MCP73831T-2ACI/MC,Microchip,MCP73831,DFN-8,0.60,Digi-Key,USB-C LiPo charger 4.2V 500mA
+U10,1,TPS63020DSJR,Texas Instruments,TPS63020,SON-14,3.90,Digi-Key,3.3V buck-boost 2A
+U11,1,TLV70033,TEXAS,TLV70033DDCR,SOT-23-5,0.50,Digi-Key,3.3V LDO for SCD41 sensors low-noise
+U12,1,DW01A,Sileic,DW01A,SOT-23-6,0.10,Digi-Key,Battery protection IC
+U13,1,FS8205A,Fairchild,FS8205A,SOT-23-6,0.20,Digi-Key,Dual MOSFET for DW01A
+LED1,1,WS2812B,Worldsemi,WS2812B,5050,0.20,AliExpress,RGB LED SHI color indicator
+LED2,1,Green LED 0603,Generic,LTST-C193KGKT,0603,0.10,Digi-Key,Status LED
+J1,1,USB-C 2.0 receptacle,Amphenol,12401610E4#2A,USB-C,0.50,Digi-Key,USB-C 16-pin
+J2,1,microSD socket,Hirose,DM3D-SF,socket,0.80,Digi-Key,microSD push-push SPI
+J3,1,JST-PH 2-pin,JST,S2B-PH-K,2mm,0.20,Digi-Key,Battery connector
+SW1,1,Tactile 6x6mm,Generic,TS-6x6,6x6mm,0.15,AliExpress,MEASURE button
+SW2,1,Tactile 6x6mm,Generic,TS-6x6,6x6mm,0.15,AliExpress,MODE button
+ENC1,1,EC11 rotary encoder,Generic,EC11-E24,10x10mm,0.80,AliExpress,Rotary encoder with push
+Y1,1,40MHz crystal,Abracon,ABM8-40.000MHZ,3.2x2.5mm,0.40,Digi-Key,ESP32-S3 XTAL (in module)
+MOIST,1,MCB-01-A capacitive probe,Generic,MCB-01-A,probe,3.50,AliExpress,Capacitive soil moisture VWC
+ORP_ELEC,1,ORP probe Pt+AgAgCl,Atlas Scientific,ORP-PROBE,probe,10.00,Atlas Scientific,Platinum ORP electrode
+EC_ELEC,1,EC probe K=1.0,Atlas Scientific,EC-PROBE-K1,probe,10.00,Atlas Scientific,2-electrode conductivity K=1
+PTFE,1,PTFE membrane disc,Generic,PTFE-18mm,18mm,1.50,Mcmaster,Gore-Tex-style gas membrane
+SHAFT,1,SS tube 18mm x 150mm,Generic,SS316-18x150,18mm OD,2.00,Mcmaster,316 stainless probe shaft
+HANDLE,1,3D-printed handle,custom,PLA-handle,custom,1.50,custom,PLA 3D printed handle enclosure
+BAT1,1,LiPo 1800mAh 602535,Generic,LP602535,60x25x5mm,4.50,BatteryJunction,3.7V 1800mAh
+MISC,1,Passives kit,Various,,mixed,3.00,Digi-Key,R/C/L 0402/0603
+PCB,1,4-layer PCB,PCBWay,custom,60x25mm,5.00,PCBWay,4-layer ENIG probe PCB
+TOTAL,,,,,,~120.00,,Approximate BOM cost

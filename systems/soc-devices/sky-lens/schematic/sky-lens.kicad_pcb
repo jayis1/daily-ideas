@@ -1,0 +1,67 @@
+(kicad_pcb
+  (version 20231127)
+  (generator "sky-lens-inventor")
+  (general (thickness 1.6) (layers 4))
+
+  (title_block
+    (title "Sky Lens — Pocket Cosmic-Ray Muon Telescope")
+    (date "2026-06-19")
+    (rev "1")
+    (company "SoC Device Inventions"))
+
+  (layers
+    (0 "F.Cu" signal)
+    (31 "B.Cu" signal)
+    (32 "B.Adhes" user)
+    (33 "F.Adhes" user)
+    (34 "B.Paste" user)
+    (35 "F.Paste" user)
+    (36 "B.SilkS" user)
+    (37 "F.SilkS" user)
+    (38 "B.Mask" user)
+    (39 "F.Mask" user)
+    (40 "Dwgs.User" user)
+    (41 "Cmts.User" user)
+    (42 "Eco1.User" user)
+    (43 "Eco2.User" user)
+    (44 "Edge.Cuts" user)
+    (45 "Margin" user)
+    (46 "B.CrtYd" user)
+    (47 "F.CrtYd" user)
+    (48 "B.Fab" user)
+    (49 "F.Fab" user)
+    (1 "In1.Cu" signal "GND")
+    (2 "In2.Cu" signal "+3V3"))
+
+  (setup
+    (pcbplotparams
+      (layerselection 0x00010fc_ffffffff)
+      (usegerberextensions false)
+      (psnegative false)
+      (psa4portrait false)
+      (pscolor true)
+      (plotted_gerber_pad_spacing 0)
+      (plotted_gerber_precision 6)))
+
+  ;; Board outline: 70 × 100 mm
+  (gr_line (start 0 0) (end 70 0) (layer "Edge.Cuts") (width 0.1))
+  (gr_line (start 70 0) (end 70 100) (layer "Edge.Cuts") (width 0.1))
+  (gr_line (start 70 100) (end 0 100) (layer "Edge.Cuts") (width 0.1))
+  (gr_line (start 0 100) (end 0 0) (layer "Edge.Cuts") (width 0.1))
+
+  ;; Component placement (conceptual — actual footprints would be placed in KiCad)
+  (footprint "RF_Module:ESP32-S3-WROOM-1"
+    (at 35 40) (layer "F.Cu")
+    (attr smd)
+    (property "Reference" "U1"))
+
+  (footprint "Package_SO:VSSOP-10"
+    (at 20 70) (layer "F.Cu")
+    (attr smd)
+    (property "Reference" "U2"))
+
+  (footprint "Package_SO:SOIC-8"
+    (at 50 70) (layer "F.Cu")
+    (attr smd)
+    (property "Reference" "U5"))
+)

@@ -1,0 +1,45 @@
+Ref,Designator,Value,Footprint,Qty,Unit USD,Total USD,Note,Source
+U1,STM32G474RET6,STM32G474RET6,LQFP-64_10x10mm_P0.5mm,1,6.40,6.40,SoC ARM Cortex-M4F 170MHz HRTIM CORDIC FMAC,Mouser
+U2,TP4056,TP4056,SOP-8,1,0.45,0.45,Li-ion charger,LCSC
+U3,MCP1640B,MCP1640B,SOT-23-5,1,1.10,1.10,3.7V→5V boost,LCSC
+U4,MAX668,MAX668EPA,SO-8,1,3.20,3.20,HV boost 5→200V for TX pulser,Mouser
+U5,AP2112-3.3,AP2112-3.3,SOT-23-5,1,0.30,0.30,3.3V digital LDO,LCSC
+U6,LP5907-3.3,LP5907-3.3,SOT-23-5,1,1.20,1.20,Ultra-low-noise 3.3V analog LDO,Mouser
+U7,REF3030,REF3030,SOT-23-3,1,1.80,1.80,3.0V 0.2% VREF,Mouser
+U8,AD8331,AD8331,LQFP-32,1,9.50,9.50,Ultra-low-noise VGA 0–48 dB TGC,Analog Devices
+U9,TX pulser TC6320,TC6320TG,SO-16,1,4.80,4.80,200V HV MOSFET pulser for 1MHz burst,Toshiba
+U10,BPF 0.5–2MHz,4th-order Bessel 0.5–2MHz,SOIC-8,1,1.50,1.50,Analog band-pass for RX,LCSC
+U11,SH1106 OLED,SH1106 1.3" 128x64 I2C,Module,1,2.80,2.80,OLED display,LCSC
+U12,ADS1115,ADS1115,MSOP-10,1,2.40,2.40,16-bit aux ADC,Adafruit
+U13,ESP32-C3-MINI-1,ESP32-C3-MINI-1,Module,1,2.70,2.70,BLE/WiFi bridge,LCSC
+U14,W25Q128JVSIQ,W25Q128,SOIC-8,1,1.10,1.10,16 MB SPI flash (waveform buffer),LCSC
+U15,DS18B20,DS18B20,TO-92,1,1.20,1.20,Phantom temp 1-Wire,Adafruit
+U16,BME280,BME280,LGA-8,1,2.50,2.50,Ambient temp/humidity/pressure (optional),LCSC
+QTX,TX transducer,1 MHz PZT 13mm,Custom,1,6.50,6.50,1 MHz longitudinal TX transducer,Olympus/Olympus-NDT
+QRX,RX transducer,1 MHz PZT 13mm,Custom,1,6.50,6.50,1 MHz longitudinal RX transducer (matched pair),Olympus/Olympus-NDT
+PH1,Acrylic phantom,25mm PMMA block,Custom,1,2.00,2.00,Calibration phantom (SOS=2700 m/s),Local
+BT1,18650 holder,18650 3.7V 2600mAh,Keystone 1042,1,2.50,2.50,Battery (not in BOM cost),Local
+J1,USB-C,USB-C 2.0 receptacle,USB-C 16-pin,1,0.60,0.60,Charge port,LCSC
+J2,MicroSD,MicroSD socket push-push,MMCX,1,1.10,1.10,SD card slot,LCSC
+SW1,EC11 encoder,EC11 rotary encoder,EC11,1,1.20,1.20,Rotary nav,LCSC
+SW2,Mode button,TS-1187A tactile,TACT-6x6,1,0.15,0.15,Mode,LCSC
+SW3,Scan button,TS-1187A tactile,TACT-6x6,1,0.15,0.15,Scan,LCSC
+SW4-SW7,Patient pad,TS-1187A tactile,TACT-6x6,4,0.15,0.60,4-button numeric pad (ID/AGE/SEX/ETH),LCSC
+D1,WS2812B,WS2812B,LED-5050,1,0.20,0.20,RGB status LED,LCSC
+RV1,Caliper pot,10k linear potentiometer,RV-9mm,1,1.50,1.50,Heel width caliper sense,LCSC
+R1,HV divider,100M 1%,R_0805,1,0.30,0.30,200V→2V divider (100:1),Mouser
+R2,HV divider,1M 1%,R_0603,1,0.05,0.05,Divider bottom leg,LCSC
+R3-R8,Gain resistors,10k 1%,R_0603,6,0.02,0.12,AD8331 gain select pull-ups,LCSC
+R9,Battery divider,100k 1%,R_0603,2,0.02,0.04,Vbat 2:1 divider,LCSC
+R10,HV bleeder,100k 2W,Resistor_THT,1,0.40,0.40,HV discharge bleeder (200V→0 in <10ms),LCSC
+C1-C6,Decoupling 100n,100n X7R,C_0603,6,0.02,0.12,Decoupling,LCSC
+C7-C8,Decoupling 10u,10u X5R,C_0805,2,0.05,0.10,Bulk decoupling,LCSC
+C9,VREF cap,1u X7R,C_0603,1,0.03,0.03,VREF decoupling,LCSC
+C10,HV cap,1u 250V,C_1206_250V,1,1.20,1.20,HV reservoir cap for pulser,LCSC
+C11,TX coupling,10n 250V,C_1206_250V,1,0.40,0.40,TX transducer AC coupling,LCSC
+C12,RX coupling,1n C0G,C_0603,1,0.05,0.05,RX transducer AC coupling,LCSC
+L1-L2,Ferrite beads,BLM18PG121,FB-0603,2,0.10,0.20,Analog/digital isolation,LCSC
+PCB,PCB,4-layer 90x70mm,JLCPCB,1,4.00,4.00,4-layer PCB fab,JLCPCB
+MISC,Heel fixture,3D-printed PLA + spring,Custom,1,4.00,4.00,Heel coupling fixture (optional),Local
+MISC,Enclosure,3D-printed PLA,Custom,1,1.50,1.50,Case (optional),Local
+,,Total,,,,~$78.00,,

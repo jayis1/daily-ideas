@@ -28,6 +28,30 @@ class CliTests(unittest.TestCase):
         self.assertEqual(2, code)
         self.assertIn("unknown app", output)
 
+    def test_system_list(self):
+        code, output = self.invoke("system", "list")
+        self.assertEqual(0, code)
+        self.assertIn("observe", output)
+        self.assertIn("coordinate", output)
+
+    def test_system_nodes_lists_soc_nodes(self):
+        code, output = self.invoke("system", "nodes", "--role", "coordinate")
+        self.assertEqual(0, code)
+        self.assertIn("canopy-listener", output)
+        self.assertIn("connected device nodes", output)
+
+    def test_system_doctor(self):
+        code, output = self.invoke("system", "doctor")
+        self.assertEqual(0, code)
+        self.assertIn("57 device nodes", output)
+        self.assertIn("4 roles", output)
+
+    def test_system_devices_can_filter_by_node(self):
+        code, output = self.invoke("system", "devices", "--node", "act")
+        self.assertEqual(0, code)
+        self.assertIn("therma-weave", output)
+        self.assertNotIn("canopy-listener", output)
+
     @mock.patch("daily_ideas.cli.run_app", return_value=17)
     def test_run_forwards_arguments(self, runner):
         code, _ = self.invoke("run", "ascii-dungeon-generator", "--", "--help")

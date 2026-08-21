@@ -1,0 +1,41 @@
+{
+  "board": {
+    "design_rules": {
+      "min_track_width": 0.15,
+      "min_via_diameter": 0.4,
+      "min_clearance": 0.15
+    },
+    "layer_count": 4,
+    "layers": [
+      {"name": "F.Cu",  "type": "signal"},
+      {"name": "In1.Cu","type": "power", "net": "GND"},
+      {"name": "In2.Cu","type": "power", "net": "3V3"},
+      {"name": "B.Cu",  "type": "signal"}
+    ],
+    "thickness": 1.6,
+    "copper_thickness": "1oz"
+  },
+  "components": [
+    {"ref": "U1",  "part": "STM32G474RET6",     "footprint": "LQFP-64_10x10mm_P0.5mm", "x": 80,  "y": 60, "side": "F"},
+    {"ref": "U2",  "part": "ESP32-C3-MINI-1",   "footprint": "ESP32-C3-MINI-1",         "x": 115, "y": 60, "side": "F"},
+    {"ref": "U3",  "part": "ADXL355BCCZ",       "footprint": "LCC-14",                  "x": 30,  "y": 40, "side": "F"},
+    {"ref": "U4",  "part": "SCL3300-D01",       "footprint": "SOIC-16",                 "x": 30,  "y": 55, "side": "F"},
+    {"ref": "U5",  "part": "MS5837-02BA",       "footprint": "metal-can",               "x": 30,  "y": 70, "side": "F"},
+    {"ref": "U6",  "part": "NEO-M9N",           "footprint": "module",                  "x": 140, "y": 40, "side": "F"},
+    {"ref": "U7",  "part": "SH1106 OLED",       "footprint": "PCB-module",              "x": 140, "y": 75, "side": "F"},
+    {"ref": "U8",  "part": "MCP73831",          "footprint": "DFN-8",                   "x": 30,  "y": 100,"side": "F"},
+    {"ref": "U9",  "part": "TPS63020",          "footprint": "SON-14",                  "x": 50,  "y": 100,"side": "F"},
+    {"ref": "U10", "part": "TPS63031",          "footprint": "SON-10",                  "x": 70,  "y": 100,"side": "F"},
+    {"ref": "U11", "part": "DRV8833",           "footprint": "HTSSOP-16",               "x": 90,  "y": 100,"side": "F"},
+    {"ref": "Q1",  "part": "DS18B20",           "footprint": "TO-92",                   "x": 110, "y": 40, "side": "F"},
+    {"ref": "J1",  "part": "USB-C",             "footprint": "USB-C-16pin",             "x": 30,  "y": 120,"side": "F"},
+    {"ref": "J2",  "part": "microSD",           "footprint": "DM3D-SF",                 "x": 140, "y": 90, "side": "F"}
+  ],
+  "notes": [
+    "4-layer PCB: signal / GND / 3V3 / signal",
+    "ADXL355 on separate daughterboard inside copper thermal mass",
+    "Keep SPI1 traces short and matched for ADXL355 (≤20mm)",
+    "Decouple each IC with 100nF + 10nF close to VDD pin",
+    "Peltier traces: 0.5mm minimum width, separate ground return"
+  ]
+}

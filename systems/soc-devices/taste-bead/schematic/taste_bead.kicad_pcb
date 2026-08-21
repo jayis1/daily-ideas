@@ -1,0 +1,14 @@
+(kicad_pcb (version 20230121) (generator pcbnew)
+  (uuid 00000000-0000-0000-0000-000000000002)
+  (title_block
+    (title "Taste Bead — Pocket Electronic Tongue")
+    (date "2026-07-01")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+  )
+  (general
+    (thickness 1.6)
+    (layers 4)
+  )
+  (comment "Layer stack: 1oz copper, 0.2mm dielectric core, 1oz copper")
+)

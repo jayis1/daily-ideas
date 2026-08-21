@@ -1,0 +1,12 @@
+{
+  "boards": ["halo_pin"],
+  "copyright": "Copyright 2026 jayis1",
+  "meta": {
+    "filename": "halo_pin.kicad_prl",
+    "version": 1
+  },
+  "properties": {
+    "last_sheet": "halo_pin.kicad_sch",
+    "last_pcb": "halo_pin.kicad_pcb"
+  }
+}

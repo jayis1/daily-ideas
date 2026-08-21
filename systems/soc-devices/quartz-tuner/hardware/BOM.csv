@@ -1,0 +1,30 @@
+Ref,Part,Qty,Price_USD,Role,Package,Notes
+U1,STM32G491RET6,1,5.20,Main MCU (Cortex-M4 @ 170 MHz 512KB flash 128KB SRAM CORDIC+FMAC),LQFP-64,STMicroelectronics
+U2,Si5351A-B-GT,1,2.80,I2C clock generator (stimulus LO),MSOP-10,Skyworks
+U3,AD5933YRSZ,1,8.50,Impedance analyzer (DFT receiver),TSSOP-16,Analog Devices
+U4,DS18B20,1,1.20,Crystal temperature sensor (+-0.1C 1-Wire),TO-92,Maxim
+U5,SSD1306 OLED 128x64,1,2.20,Display (I2C),Module,128x64 monochrome
+U6,MAX17048,1,2.30,Fuel gauge (I2C),TDFN-8,Maxim
+U7,TP4056,1,0.35,LiPo charger (USB-C),SOT-23-6,Nanjing Top Power
+U8,AMS1117-3.3,1,0.15,3.3V LDO 800mA,SOT-223,Advanced Monolithic Systems
+U9,SX1262 Ra-01SH,1,4.50,LoRaWAN uplink (optional),Module,Semtech
+Q1,Si2302DS,1,0.10,N-MOSFET 2A SOT-23 (heater switch),SOT-23,Vishay
+SW1,ZIF socket 14-pin,1,2.50,Crystal fixture (dual-footprint HC-49 + SMD),DIP-14,3M
+Y1,ECS-3275S 32.768kHz,1,0.30,RTC reference crystal,HC-49,ECS Inc.
+R1-R6,12.5 ohm 0.1% thin-film 0603,6,1.80,pi-network terminations (0.3 ea),0603,Vishay
+R7,50 ohm 0.1% thin-film 0603,1,0.30,Calibration load standard,0603,Vishay
+R8,10k ohm 1% 0603,2,0.10,RFB for AD5933 (0.05 ea),0603,Yageo
+R9,200 ohm 1% 0603,1,0.05,RSET for AD5933,0603,Yageo
+C1-C8,100nF 0603 ceramic,8,0.40,Decoupling (0.05 ea),0603,Murata
+C9-C10,22uF 0805 ceramic,2,0.20,LDO output bulk (0.1 ea),0805,Murata
+C11,25MHz crystal (Si5351 ref),1,0.50,Si5351A reference oscillator,HC-49,Abracon
+C12-C13,10pF 0603 (Si5351 XTAL load),2,0.10,Si5351 crystal load caps (0.05 ea),0603,Yageo
+L1,10uH ferrite bead (3.3VA filter),1,0.10,LC filter for analog rail,0603,Murata
+BAT,LiPo 1000mAh 3.7V,1,4.00,Battery, -,Off-the-shelf
+J1,USB-C 2.0 receptacle,1,0.30,Charging + console,USB-C,GCT
+J2,microSD socket (Molex 502570-0893),1,0.90,Data logging, -,Molex
+J3,Banana jack pair (red/black),1,1.50,Kelvin clip leads for through-hole crystals, -,Generic
+PCB,4-layer FR4 80x50 mm,1,5.50,Custom PCB, -,JLCPCB
+ENC,Aluminum enclosure 100x60x25 mm,1,6.00,Shielding + housing, -,Off-the-shelf
+MISC,Buttons (3x) LEDs (3x) headers connectors,1,3.00,User interface + misc, -, --
+,,Total,,~50.00,,

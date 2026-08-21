@@ -1,0 +1,90 @@
+(kicad_sch (version 20230121) (generator eeschema)
+  (uuid 00000000-0000-0000-0000-000000000001)
+  (paper "A3")
+  (title_block
+    (title "Aero Cast — Pocket 3-Axis Ultrasonic Anemometer")
+    (date "2026-06-30")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+    (comment 1 "RP2040 + ESP32-C3")
+    (comment 2 "40 kHz sonic TOF, 20 Hz, 3D wind + turbulence")
+  )
+
+  (lib_symbols
+    ; Symbol definitions would be here — using standard KiCad libraries
+  )
+
+  ; ---- Sheet 1: Power Supply ----
+  (symbol (lib_id "MCU_Module:Pico") (at 50 50 0) (unit 1)
+    (property "Reference" "U1" (at 50 30 0))
+    (property "Value" "RP2040_PICO" (at 50 35 0))
+  )
+
+  (symbol (lib_id "RF_Module:ESP32-C3-MINI-1") (at 120 50 0) (unit 1)
+    (property "Reference" "U2" (at 120 35 0))
+    (property "Value" "ESP32-C3-MINI-1" (at 120 40 0))
+  )
+
+  (symbol (lib_id "Sensor:BME280") (at 50 90 0) (unit 1)
+    (property "Reference" "U3" (at 50 80 0))
+    (property "Value" "BME280" (at 50 85 0))
+  )
+
+  (symbol (lib_id "Driver_Motor:TC4427") (at 150 90 0) (unit 1)
+    (property "Reference" "U4" (at 150 80 0))
+    (property "Value" "TC4427" (at 150 85 0))
+  )
+
+  (symbol (lib_id "Analog:MUX-CD4052B") (at 180 90 0) (unit 1)
+    (property "Reference" "U5" (at 180 80 0))
+    (property "Value" "CD4052B" (at 180 85 0))
+  )
+
+  (symbol (lib_id "Amplifier_Operational:OPA2350") (at 200 50 0) (unit 1)
+    (property "Reference" "U6" (at 200 40 0))
+    (property "Value" "OPA2350" (at 200 45 0))
+  )
+
+  (symbol (lib_id "Comparator:TLV3201") (at 200 70 0) (unit 1)
+    (property "Reference" "U7" (at 200 60 0))
+    (property "Value" "TLV3201" (at 200 65 0))
+  )
+
+  ; ---- Power supply section ----
+  (symbol (lib_id "power:+3V3") (at 30 30 0) (unit 1))
+  (symbol (lib_id "power:GND") (at 30 100 0) (unit 1))
+  (symbol (lib_id "power:VBUS") (at 20 30 0) (unit 1))
+
+  ; ---- Net labels ----
+  (global_label "I2C_SDA" (shape input) (at 40 45 0))
+  (global_label "I2C_SCL" (shape input) (at 40 47 0))
+  (global_label "UART_TX" (shape input) (at 60 45 0))
+  (global_label "UART_RX" (shape input) (at 60 47 0))
+  (global_label "PIO_TX" (shape input) (at 60 50 0))
+  (global_label "PIO_RX" (shape input) (at 60 52 0))
+  (global_label "HV_EN" (shape input) (at 60 55 0))
+  (global_label "MUX_A" (shape input) (at 60 58 0))
+  (global_label "MUX_B" (shape input) (at 60 60 0))
+  (global_label "SD_CS" (shape input) (at 60 63 0))
+  (global_label "DAC_CS" (shape input) (at 60 65 0))
+
+  ; ---- Wires (simplified representation) ----
+  (wire (pts (xy 40 45) (xy 50 45)))
+  (wire (pts (xy 40 47) (xy 50 47)))
+  (wire (pts (xy 60 45) (xy 120 45)))
+  (wire (pts (xy 60 47) (xy 120 47)))
+
+  ; ---- Sheet instances ----
+  (sheet_instances
+    (path "/" (page "1"))
+  )
+
+  (symbol_instances
+    (path "/00000000-0000-0000-0000-000000000001"
+      (reference "U1") (unit 1) (value "RP2040") (footprint ""))
+    (path "/00000000-0000-0000-0000-000000000002"
+      (reference "U2") (unit 1) (value "ESP32-C3-MINI-1") (footprint ""))
+    (path "/00000000-0000-0000-0000-000000000003"
+      (reference "U3") (unit 1) (value "BME280") (footprint ""))
+  )
+)

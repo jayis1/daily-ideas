@@ -1,0 +1,260 @@
+(kicad_sch
+  (page "A3")
+  (title_block
+    (title "Gravi Dot — Portable Relative Gravimeter")
+    (company "SoC Device Inventions")
+    (rev "1")
+    (comment 1 "STM32G474RET6 + ESP32-C3 + ADXL355")
+  )
+
+  (net_class "Power" ""
+    (via_dia 0.6) (via_drill 0.3)
+    (uvia_dia 0.3) (uvia_drill 0.1)
+    (trace_width 0.4))
+
+  (net_class "Signal" ""
+    (via_dia 0.4) (via_drill 0.2)
+    (uvia_dia 0.3) (uvia_drill 0.1)
+    (trace_width 0.2))
+
+  (net_class "SPI" ""
+    (via_dia 0.4) (via_drill 0.2)
+    (trace_width 0.2))
+
+  (net_class "RF" ""
+    (via_dia 0.5) (via_drill 0.25)
+    (trace_width 0.3))
+
+  ;; Component placeholders — KiCad symbols referenced by lib:footprint
+
+  ;; ── U1: STM32G474RET6 (LQFP64) ──────────────────────────────────
+  (symbol (lib_id "MCU_ST_STM32G4:STM32G474RET6") (at 127 76.2 0)
+    (property "Reference" "U1" (at 127 50.8 0))
+    (property "Value" "STM32G474RET6" (at 127 53.34 0))
+    (property "Footprint" "Package_QFP:LQFP-64_10x10mm_P0.5mm" (at 127 101.6 0))
+    (pin "PA0"  (net "NTC_ADC"))      ; NTC thermistor
+    (pin "PA2"  (net "UART2_TX"))     ; → ESP32-C3
+    (pin "PA3"  (net "UART2_RX"))     ; ← ESP32-C3
+    (pin "PA4"  (net "SPI1_NSS_ADXL")) ; ADXL355 CS
+    (pin "PA5"  (net "SPI1_SCK"))     ; shared SPI1 SCK
+    (pin "PA6"  (net "SPI1_MISO"))    ; shared SPI1 MISO
+    (pin "PA7"  (net "SPI1_MOSI"))    ; shared SPI1 MOSI
+    (pin "PA8"  (net "ADXL_DRDY"))    ; ADXL355 DRDY
+    (pin "PA9"  (net "SD_CS"))        ; microSD CS
+    (pin "PA10" (net "SPI2_SCK"))     ; SD SCK
+    (pin "PA11" (net "SPI2_MISO"))    ; SD MISO
+    (pin "PA12" (net "SPI2_MOSI"))    ; SD MOSI
+    (pin "PB0"  (net "SCL3300_CS"))   ; SCL3300 CS
+    (pin "PB4"  (net "SCL3300_DRDY")) ; SCL3300 DRDY
+    (pin "PB5"  (net "HRTIM_CHA"))    ; Peltier PWM
+    (pin "PB6"  (net "HRTIM_CHB"))    ; Peltier dir
+    (pin "PB7"  (net "LED_GREEN"))
+    (pin "PB8"  (net "BTN_STATION"))
+    (pin "PB9"  (net "BTN_BASE"))
+    (pin "PB10" (net "I2C2_SCL"))     ; OLED
+    (pin "PB11" (net "I2C2_SDA"))
+    (pin "PB12" (net "BTN_MENU"))
+    (pin "PB13" (net "I2C1_SCL"))     ; MS5837
+    (pin "PB14" (net "I2C1_SDA"))
+    (pin "PB15" (net "GPS_PPS"))
+    (pin "PC0"  (net "ONEWIRE"))      ; DS18B20 ×4
+    (pin "PC1"  (net "SD_PWR"))
+    (pin "PC4"  (net "BAT_VDIV"))
+    (pin "PC6"  (net "DRV8833_nSLEEP"))
+    (pin "PC13" (net "LED_RED"))
+    (pin "PC14" (net "ENC_A"))
+    (pin "PC15" (net "ENC_B"))
+    (pin "PF0"  (net "VBUS_DETECT"))
+    (pin "PF1"  (net "CHARGE_EN"))
+    (pin "OSC_IN"  (net "HSE_IN"))
+    (pin "OSC_OUT" (net "HSE_OUT"))
+    (pin "PC14_OSC32_IN"  (net "LSE_IN"))
+    (pin "PC15_OSC32_OUT" (net "LSE_OUT"))
+    (pin "NRST" (net "NRST"))
+    (pin "BOOT0" (net "BOOT0"))
+    (pin "VDD"  (net "3V3"))
+    (pin "VSS"  (net "GND")))
+
+  ;; ── U2: ESP32-C3-MINI-1 ─────────────────────────────────────────
+  (symbol (lib_id "RF_Module:ESP32-C3-MINI-1") (at 180.34 76.2 0)
+    (property "Reference" "U2")
+    (property "Value" "ESP32-C3-MINI-1")
+    (property "Footprint" "RF_Module:ESP32-C3-MINI-1")
+    (pin "GPIO0" (net "GPS_TX"))
+    (pin "GPIO1" (net "GPS_RX"))
+    (pin "GPIO2" (net "GPS_PPS"))
+    (pin "GPIO3" (net "UART2_TX"))  ; → STM32 RX
+    (pin "GPIO4" (net "UART2_RX"))  ; ← STM32 TX
+    (pin "GPIO5" (net "GPS_EXTINT"))
+    (pin "GPIO6" (net "LED_BLUE"))
+    (pin "3V3"   (net "3V3"))
+    (pin "GND"   (net "GND")))
+
+  ;; ── U3: ADXL355 (LCC-14) ────────────────────────────────────────
+  (symbol (lib_id "Sensor:ADXL355") (at 50.8 50.8 0)
+    (property "Reference" "U3")
+    (property "Value" "ADXL355BCCZ")
+    (property "Footprint" "Package_LCC:LCC-14")
+    (pin "CS"    (net "SPI1_NSS_ADXL"))
+    (pin "SCK"   (net "SPI1_SCK"))
+    (pin "SDO"   (net "SPI1_MISO"))
+    (pin "SDI"   (net "SPI1_MOSI"))
+    (pin "DRDY"  (net "ADXL_DRDY"))
+    (pin "VDD"   (net "3V3"))
+    (pin "GND"   (net "GND")))
+
+  ;; ── U4: SCL3300-D01 ─────────────────────────────────────────────
+  (symbol (lib_id "Sensor:SCL3300-D01") (at 50.8 71.12 0)
+    (property "Reference" "U4")
+    (property "Value" "SCL3300-D01")
+    (pin "CS"   (net "SCL3300_CS"))
+    (pin "SCK"  (net "SPI1_SCK"))
+    (pin "SDO"  (net "SPI1_MISO"))
+    (pin "SDI"  (net "SPI1_MOSI"))
+    (pin "DRDY" (net "SCL3300_DRDY"))
+    (pin "VDD"  (net "3V3"))
+    (pin "GND"  (net "GND")))
+
+  ;; ── U5: MS5837-02BA ─────────────────────────────────────────────
+  (symbol (lib_id "Sensor_Pressure:MS5837-02BA") (at 50.8 88.9 0)
+    (property "Reference" "U5")
+    (property "Value" "MS5837-02BA")
+    (pin "SCL" (net "I2C1_SCL"))
+    (pin "SDA" (net "I2C1_SDA"))
+    (pin "VDD" (net "3V3"))
+    (pin "GND" (net "GND")))
+
+  ;; ── U6: NEO-M9N ─────────────────────────────────────────────────
+  (symbol (lib_id "RF_Module:NEO-M9N") (at 215.9 50.8 0)
+    (property "Reference" "U6")
+    (property "Value" "NEO-M9N")
+    (pin "TXD1" (net "GPS_TX"))
+    (pin "RXD1" (net "GPS_RX"))
+    (pin "PPS"  (net "GPS_PPS"))
+    (pin "EXTINT" (net "GPS_EXTINT"))
+    (pin "VDD"  (net "3V3"))
+    (pin "GND"  (net "GND")))
+
+  ;; ── U7: SH1106 OLED ─────────────────────────────────────────────
+  (symbol (lib_id "Display:SH1106_128x64") (at 50.8 109.22 0)
+    (property "Reference" "U7")
+    (property "Value" "SH1106 1.3in")
+    (pin "SCL" (net "I2C2_SCL"))
+    (pin "SDA" (net "I2C2_SDA"))
+    (pin "VDD" (net "3V3"))
+    (pin "GND" (net "GND")))
+
+  ;; ── Power: MCP73831, TPS63020, TPS63031, DRV8833, DW01A ────────
+  (symbol (lib_id "Power_Management:MCP73831") (at 50.8 129.54 0)
+    (property "Reference" "U8")
+    (property "Value" "MCP73831T-2ACI")
+    (pin "VDD" (net "VBUS"))
+    (pin "BAT" (net "VBAT"))
+    (pin "PROG" (net "CHARGE_EN")))
+
+  (symbol (lib_id "Regulator_Switching:TPS63020") (at 78.74 129.54 0)
+    (property "Reference" "U9")
+    (property "Value" "TPS63020DSJR")
+    (pin "VIN" (net "VBAT"))
+    (pin "VOUT" (net "3V3")))
+
+  (symbol (lib_id "Regulator_Switching:TPS63031") (at 106.68 129.54 0)
+    (property "Reference" "U10")
+    (property "Value" "TPS63031DSKR")
+    (pin "VIN" (net "VBAT"))
+    (pin "VOUT" (net "5V0")))
+
+  (symbol (lib_id "Driver_Motor:DRV8833") (at 134.62 129.54 0)
+    (property "Reference" "U11")
+    (property "Value" "DRV8833PWP")
+    (pin "IN1" (net "HRTIM_CHA"))
+    (pin "IN2" (net "HRTIM_CHB"))
+    (pin "nSLEEP" (net "DRV8833_nSLEEP"))
+    (pin "OUT1" (net "PELTIER_A"))
+    (pin "OUT2" (net "PELTIER_B"))
+    (pin "VDD" (net "5V0")))
+
+  ;; ── DS18B20 ×4 ──────────────────────────────────────────────────
+  (symbol (lib_id "Sensor_Temperature:DS18B20") (at 165.1 50.8 0)
+    (property "Reference" "Q1")
+    (property "Value" "DS18B20")
+    (pin "DQ" (net "ONEWIRE"))
+    (pin "VDD" (net "3V3"))
+    (pin "GND" (net "GND")))
+
+  ;; ── Peltier element ─────────────────────────────────────────────
+  (symbol (lib_id "Device:Thermoelectric_Peltier") (at 165.1 129.54 0)
+    (property "Reference" "M1")
+    (property "Value" "TEC1-03004")
+    (pin "A" (net "PELTIER_A"))
+    (pin "B" (net "PELTIER_B")))
+
+  ;; ── Connectors: USB-C, microSD ──────────────────────────────────
+  (symbol (lib_id "Connector:USB_C_2.0") (at 193.04 129.54 0)
+    (property "Reference" "J1")
+    (property "Value" "USB-C"))
+
+  (symbol (lib_id "Connector:MicroSD") (at 215.9 109.22 0)
+    (property "Reference" "J2")
+    (property "Value" "microSD")
+    (pin "CS"   (net "SD_CS"))
+    (pin "SCK"  (net "SPI2_SCK"))
+    (pin "MISO" (net "SPI2_MISO"))
+    (pin "MOSI" (net "SPI2_MOSI"))
+    (pin "VDD"  (net "3V3"))
+    (pin "GND"  (net "GND")))
+
+  ;; ── Crystals ────────────────────────────────────────────────────
+  (symbol (lib_id "Device:Crystal") (at 50.8 152.4 0)
+    (property "Reference" "Y1")
+    (property "Value" "8MHz")
+    (pin "1" (net "HSE_IN"))
+    (pin "2" (net "HSE_OUT")))
+
+  (symbol (lib_id "Device:Crystal") (at 78.74 152.4 0)
+    (property "Reference" "Y2")
+    (property "Value" "32.768kHz")
+    (pin "1" (net "LSE_IN"))
+    (pin "2" (net "LSE_OUT")))
+
+  ;; ── LEDs ────────────────────────────────────────────────────────
+  (symbol (lib_id "Device:LED") (at 106.68 152.4 0)
+    (property "Reference" "LED1")
+    (property "Value" "GREEN")
+    (pin "A" (net "LED_GREEN")))
+
+  (symbol (lib_id "Device:LED") (at 119.38 152.4 0)
+    (property "Reference" "LED2")
+    (property "Value" "RED")
+    (pin "A" (net "LED_RED")))
+
+  (symbol (lib_id "Device:LED") (at 132.08 152.4 0)
+    (property "Reference" "LED3")
+    (property "Value" "BLUE")
+    (pin "A" (net "LED_BLUE")))
+
+  ;; ── Buttons + encoder ───────────────────────────────────────────
+  (symbol (lib_id "Switch:SW_Push") (at 50.8 170.18 0)
+    (property "Reference" "SW1") (property "Value" "STATION")
+    (pin "1" (net "BTN_STATION")))
+
+  (symbol (lib_id "Switch:SW_Push") (at 66.04 170.18 0)
+    (property "Reference" "SW2") (property "Value" "BASE")
+    (pin "1" (net "BTN_BASE")))
+
+  (symbol (lib_id "Switch:SW_Push") (at 81.28 170.18 0)
+    (property "Reference" "SW3") (property "Value" "MENU")
+    (pin "1" (net "BTN_MENU")))
+
+  (symbol (lib_id "Device:RotaryEncoder") (at 106.68 170.18 0)
+    (property "Reference" "ENC1") (property "Value" "EC11")
+    (pin "A" (net "ENC_A"))
+    (pin "B" (net "ENC_B")))
+
+  ;; ── Power nets ──────────────────────────────────────────────────
+  (net "3V3"  (type "power"))
+  (net "5V0"  (type "power"))
+  (net "VBAT" (type "power"))
+  (net "VBUS" (type "power"))
+  (net "GND"  (type "power"))
+)

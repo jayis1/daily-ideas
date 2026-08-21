@@ -1,0 +1,180 @@
+(kicad_sch
+  (version 20240108)
+  (generator "Levia Forge Schematic")
+  (uuid 00000000-0000-0000-0000-leviaforge001)
+  (paper "A3")
+
+  (title_block
+    (title "Levia Forge — Pocket Acoustic Levitation Manipulator")
+    (date "2026-07-15")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+    (comment 1 "Device #42")
+    (comment 2 "RP2040 + ESP32-C3 + 72× MA40S4S Phased Array")
+    (comment 3 "MIT License"))
+
+  (lib_symbols
+    ; RP2040
+    (symbol "RP2040"
+      (in_bom yes) (on_board yes)
+      (property "Reference" "U" (at 0 0 0))
+      (property "Value" "RP2040" (at 0 -5 0))
+      (property "Footprint" "Package_DFN_QFN:QFN-56" (at 0 -10 0))
+      (property "Datasheet" "https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf" (at 0 -15 0)))
+
+    ; W25Q128
+    (symbol "W25Q128JVSIQ"
+      (in_bom yes) (on_board yes)
+      (property "Reference" "U" (at 0 0 0))
+      (property "Value" "W25Q128JVSIQ" (at 0 -5 0))
+      (property "Footprint" "Package_SO:SOIC-8_3.9x4.9mm" (at 0 -10 0)))
+
+    ; ESP32-C3-WROOM
+    (symbol "ESP32-C3-WROOM-02"
+      (in_bom yes) (on_board yes)
+      (property "Reference" "U" (at 0 0 0))
+      (property "Value" "ESP32-C3-WROOM-02" (at 0 -5 0))
+      (property "Footprint" "RF_Module:ESP32-WROOM-32" (at 0 -10 0)))
+
+    ; 74HC595
+    (symbol "74HC595"
+      (in_bom yes) (on_board yes)
+      (property "Reference" "U" (at 0 0 0))
+      (property "Value" "74HC595" (at 0 -5 0))
+      (property "Footprint" "Package_SO:SOIC-16_3.9x9.9mm" (at 0 -10 0)))
+
+    ; MA40S4S transducer
+    (symbol "MA40S4S"
+      (in_bom yes) (on_board yes)
+      (property "Reference" "TD" (at 0 0 0))
+      (property "Value" "MA40S4S" (at 0 -5 0))
+      (property "Footprint" "Crystal:Crystal_HC49-U_Vertical" (at 0 -10 0)))
+
+    ; TC4427 (unused — using discrete BJT)
+    (symbol "MMBT3904"
+      (in_bom yes) (on_board yes)
+      (property "Reference" "Q" (at 0 0 0))
+      (property "Value" "MMBT3904" (at 0 -5 0))
+      (property "Footprint" "Package_TO_SOT_SMD:SOT-23" (at 0 -10 0)))
+
+    (symbol "MMBT3906"
+      (in_bom yes) (on_board yes)
+      (property "Reference" "Q" (at 0 0 0))
+      (property "Value" "MMBT3906" (at 0 -5 0))
+      (property "Footprint" "Package_TO_SOT_SMD:SOT-23" (at 0 -10 0)))
+
+    ; TPS61023 Boost
+    (symbol "TPS61023"
+      (in_bom yes) (on_board yes)
+      (property "Reference" "U" (at 0 0 0))
+      (property "Value" "TPS61023" (at 0 -5 0))
+      (property "Footprint" "Package_TO_SOT_SMD:SOT-563" (at 0 -10 0)))
+
+    ; MCP1603T Buck
+    (symbol "MCP1603T-3.3"
+      (in_bom yes) (on_board yes)
+      (property "Reference" "U" (at 0 0 0))
+      (property "Value" "MCP1603T-3.3" (at 0 -5 0))
+      (property "Footprint" "Package_TO_SOT_SMD:SOT-23-5" (at 0 -10 0)))
+
+    ; VL53L0X
+    (symbol "VL53L0X"
+      (in_bom yes) (on_board yes)
+      (property "Reference" "U" (at 0 0 0))
+      (property "Value" "VL53L0X" (at 0 -5 0))
+      (property "Footprint" "OptoDevice:VL53L0X" (at 0 -10 0)))
+
+    ; SSD1306 OLED
+    (symbol "SSD1306_OLED_128x64"
+      (in_bom yes) (on_board yes)
+      (property "Reference" "DISP" (at 0 0 0))
+      (property "Value" "SSD1306" (at 0 -5 0))
+      (property "Footprint" "Display:OLED_128x64_I2C" (at 0 -10 0))))
+
+  ; ---- Component instances (simplified) ----
+  ; Main MCU
+  (symbol (lib_id "RP2040") (at 100 100 0)
+    (property "Reference" "U1") (property "Value" "RP2040"))
+
+  ; Flash
+  (symbol (lib_id "W25Q128JVSIQ") (at 140 80 0)
+    (property "Reference" "U2") (property "Value" "W25Q128"))
+
+  ; ESP32-C3
+  (symbol (lib_id "ESP32-C3-WROOM-02") (at 180 120 0)
+    (property "Reference" "U3") (property "Value" "ESP32-C3"))
+
+  ; 74HC595 chain (9 units)
+  (symbol (lib_id "74HC595") (at 50 150 0)
+    (property "Reference" "U4") (property "Value" "74HC595"))
+  (symbol (lib_id "74HC595") (at 80 150 0)
+    (property "Reference" "U5") (property "Value" "74HC595"))
+  (symbol (lib_id "74HC595") (at 110 150 0)
+    (property "Reference" "U6") (property "Value" "74HC595"))
+  (symbol (lib_id "74HC595") (at 140 150 0)
+    (property "Reference" "U7") (property "Value" "74HC595"))
+  (symbol (lib_id "74HC595") (at 170 150 0)
+    (property "Reference" "U8") (property "Value" "74HC595"))
+  (symbol (lib_id "74HC595") (at 200 150 0)
+    (property "Reference" "U9") (property "Value" "74HC595"))
+  (symbol (lib_id "74HC595") (at 230 150 0)
+    (property "Reference" "U10") (property "Value" "74HC595"))
+  (symbol (lib_id "74HC595") (at 260 150 0)
+    (property "Reference" "U11") (property "Value" "74HC595"))
+  (symbol (lib_id "74HC595") (at 290 150 0)
+    (property "Reference" "U12") (property "Value" "74HC595"))
+
+  ; Boost converter (10V for transducers)
+  (symbol (lib_id "TPS61023") (at 50 50 0)
+    (property "Reference" "U13") (property "Value" "TPS61023"))
+
+  ; Buck converter (3.3V for logic)
+  (symbol (lib_id "MCP1603T-3.3") (at 90 50 0)
+    (property "Reference" "U14") (property "Value" "MCP1603T-3.3"))
+
+  ; VL53L0X ToF sensor
+  (symbol (lib_id "VL53L0X") (at 220 60 0)
+    (property "Reference" "U15") (property "Value" "VL53L0X"))
+
+  ; OLED display
+  (symbol (lib_id "SSD1306_OLED_128x64") (at 220 90 0)
+    (property "Reference" "DISP1") (property "Value" "SSD1306"))
+
+  ; Transducer drivers — 72 BJT pairs (schematic shown as hierarchical)
+  ; In production, use hierarchical sheet for repeated driver circuit
+  ; Each: MMBT3904 + MMBT3906 + 1kΩ base resistor
+
+  ; ---- Nets ----
+  ; VCC_3V3, VCC_5V, VCC_10V, GND
+  ; PIO_DATA, PIO_CLOCK, PIO_LATCH, PIO_BLANK
+  ; UART_TX, UART_RX
+  ; I2C0_SDA, I2C0_SCL (VL53L0X)
+  ; I2C1_SDA, I2C1_SCL (OLED)
+  ; SPI0_SCK, SPI0_MOSI, SPI0_MISO, SPI0_CS
+  ; ADC_JOY_X, ADC_JOY_Y, ADC_VBAT
+  ; ENC_A, ENC_B, ENC_BTN, BTN_MODE, BTN_RELEASE
+  ; SAFETY_REED, TILT_IRQ
+  ; TD[0..71] — transducer outputs
+
+  ; ---- Hierarchical sheets ----
+  (sheet (at 50 170) (size 250 30)
+    (property "Sheetfile" "transducer_drivers.kicad_sch")
+    (property "Sheetname" "72× BJT Driver Array"))
+
+  (sheet (at 50 210) (size 100 30)
+    (property "Sheetfile" "power.kicad_sch")
+    (property "Sheetname" "Power Supply"))
+
+  (sheet (at 160 210) (size 100 30)
+    (property "Sheetfile" "peripherals.kicad_sch")
+    (property "Sheetname" "Peripherals"))
+
+  ; ---- Net labels ----
+  (global_label "VCC_3V3" (shape input) (at 100 80 0))
+  (global_label "GND" (shape input) (at 100 120 0))
+  (global_label "VCC_10V" (shape input) (at 60 40 0))
+  (global_label "PIO_DATA" (shape output) (at 100 95 0))
+  (global_label "PIO_CLOCK" (shape output) (at 100 98 0))
+  (global_label "PIO_LATCH" (shape output) (at 100 101 0))
+  (global_label "PIO_BLANK" (shape output) (at 100 104 0))
+)

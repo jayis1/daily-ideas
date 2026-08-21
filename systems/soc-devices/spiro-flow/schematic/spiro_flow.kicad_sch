@@ -1,0 +1,310 @@
+(kicad_sch
+  (page "A3")
+  (title_block
+    (title "Spiro Flow — Portable Electronic Spirometer")
+    (company "SoC Device Inventions")
+    (rev "1")
+    (comment 1 "CH32V203RBT6 (RISC-V) + ESP32-C3 + SDP810 + BME280 + SH1106")
+  )
+
+  (net_class "Power" ""
+    (via_dia 0.6) (via_drill 0.3)
+    (uvia_dia 0.3) (uvia_drill 0.1)
+    (trace_width 0.4))
+
+  (net_class "Signal" ""
+    (via_dia 0.4) (via_drill 0.2)
+    (uvia_dia 0.3) (uvia_drill 0.1)
+    (trace_width 0.2))
+
+  (net_class "I2C" ""
+    (via_dia 0.4) (via_drill 0.2)
+    (trace_width 0.2))
+
+  (net_class "SPI" ""
+    (via_dia 0.4) (via_drill 0.2)
+    (trace_width 0.2))
+
+  (net_class "UART" ""
+    (via_dia 0.4) (via_drill 0.2)
+    (trace_width 0.2))
+
+  ;; ── U1: CH32V203RBT6 (RISC-V SoC, LQFP64) ──────────────────────────
+  (symbol (lib_id "MCU_WCH:CH32V203RBT6") (at 127 76.2 0)
+    (property "Reference" "U1" (at 127 45.72 0))
+    (property "Value" "CH32V203RBT6" (at 127 48.26 0))
+    (property "Footprint" "Package_QFP:LQFP-64_10x10mm_P0.5mm" (at 127 101.6 0))
+
+    ;; I2C1 bus (PB6/PB7) — SDP810, BME280, SH1106
+    (pin "PB6"  (net "I2C1_SCL"))        ; I2C1 SCL → all I2C devices
+    (pin "PB7"  (net "I2C1_SDA"))        ; I2C1 SDA → all I2C devices
+
+    ;; USART1 (PA9/PA10) — ESP32-C3 bridge
+    (pin "PA9"  (net "USART1_TX"))       ; USART1 TX → ESP32-C3 RX (GPIO5)
+    (pin "PA10" (net "USART1_RX"))       ; USART1 RX ← ESP32-C3 TX (GPIO4)
+
+    ;; USART2 (PA2/PA3) — debug
+    (pin "PA2"  (net "USART2_TX"))       ; debug TX
+    (pin "PA3"  (net "USART2_RX"))       ; debug RX
+
+    ;; SPI2 (PB13/PB14/PB15) — W25Q128 flash
+    (pin "PB13" (net "SPI2_SCK"))        ; SPI2 SCK → W25Q128 SCK
+    (pin "PB14" (net "SPI2_MISO"))       ; SPI2 MISO ← W25Q128 DO
+    (pin "PB15" (net "SPI2_MOSI"))       ; SPI2 MOSI → W25Q128 DI
+    (pin "PB12" (net "FLASH_CS"))        ; GPIO → W25Q128 CS
+
+    ;; TIM3 CH1 (PA6) — buzzer PWM
+    (pin "PA6"  (net "BUZZER_PWM"))      ; TIM3 CH1 → 2N3904 base → buzzer
+
+    ;; GPIO — WS2812B, buttons, LED, ADC, ESP control
+    (pin "PA0"  (net "WS2812_DATA"))     ; WS2812B data
+    (pin "PA1"  (net "BATT_ADC"))        ; ADC1 CH1 — battery divider
+    (pin "PA4"  (net "BTN_MEASURE"))     ; MEASURE button
+    (pin "PA5"  (net "BTN_MODE"))        ; MODE button
+    (pin "PA8"  (net "LED_STATUS"))      ; status LED
+    (pin "PB0"  (net "CHG_STAT"))        ; MCP73831 STAT
+    (pin "PB3"  (net "ESP_EN"))          ; ESP32-C3 EN
+    (pin "PB4"  (net "ESP_BOOT"))        ; ESP32-C3 BOOT (pull-up)
+
+    ;; USB (PA11/PA12) — native USB-CDC
+    (pin "PA11" (net "USB_DM"))
+    (pin "PA12" (net "USB_DP"))
+
+    ;; Power
+    (pin "VDD"  (net "+3V3"))
+    (pin "GND"  (net "GND"))
+  )
+
+  ;; ── U2: ESP32-C3 module (BLE/WiFi bridge) ──────────────────────────
+  (symbol (lib_id "RF_Module:ESP32-C3-MINI-1") (at 200 50 0)
+    (property "Reference" "U2" (at 200 38 0))
+    (property "Value" "ESP32-C3-MINI-1" (at 200 40.5 0))
+    (property "Footprint" "RF_Module:ESP32-C3-MINI-1" (at 200 65 0))
+    (pin "GPIO4"  (net "ESP_UART_TX"))    ; → CH32V203 PA10 (RX)
+    (pin "GPIO5"  (net "ESP_UART_RX"))    ; ← CH32V203 PA9  (TX)
+    (pin "EN"     (net "ESP_EN"))
+    (pin "IO9"    (net "ESP_BOOT"))
+    (pin "3V3"    (net "+3V3"))
+    (pin "GND"    (net "GND"))
+  )
+
+  ;; ── U3: SDP810-500Pa differential pressure sensor ──────────────────
+  (symbol (lib_id "Sensor_Pressure:SDP810") (at 60 40 0)
+    (property "Reference" "U3" (at 60 33 0))
+    (property "Value" "SDP810-500Pa" (at 60 35.5 0))
+    (property "Footprint" "Sensor_Pressure:SDP8xx" (at 60 52 0))
+    (pin "VDD"   (net "+3V3_SENS"))
+    (pin "GND"   (net "GND"))
+    (pin "SCL"   (net "I2C1_SCL"))
+    (pin "SDA"   (net "I2C1_SDA"))
+    (pin "P1+"   (net "PNEUMO_HI"))      ; pneumotach upstream port
+    (pin "P2-"   (net "PNEUMO_LO"))      ; pneumotach downstream port
+  )
+
+  ;; ── U4: BME280 ambient sensor ──────────────────────────────────────
+  (symbol (lib_id "Sensor:BME280") (at 60 70 0)
+    (property "Reference" "U4" (at 60 63 0))
+    (property "Value" "BME280" (at 60 65.5 0))
+    (property "Footprint" "Sensor:BME280" (at 60 80 0))
+    (pin "VDD"   (net "+3V3"))
+    (pin "GND"   (net "GND"))
+    (pin "SCL"   (net "I2C1_SCL"))
+    (pin "SDA"   (net "I2C1_SDA"))
+    (pin "CSB"   (net "+3V3"))            ; I2C mode (CSB=VDD → addr 0x76)
+    (pin "SDO"   (net "GND"))             ; SDO=GND → addr 0x76
+  )
+
+  ;; ── U5: SH1106 OLED display 1.3" 128x64 ────────────────────────────
+  (symbol (lib_id "Display:SH1106") (at 100 100 0)
+    (property "Reference" "U5" (at 100 92 0))
+    (property "Value" "SH1106_OLED_1.3in" (at 100 94.5 0))
+    (property "Footprint" "Display:OLED_128x64_1.3in" (at 100 110 0))
+    (pin "VCC"   (net "+3V3"))
+    (pin "GND"   (net "GND"))
+    (pin "SCL"   (net "I2C1_SCL"))
+    (pin "SDA"   (net "I2C1_SDA"))
+  )
+
+  ;; ── U6: W25Q128 16MB SPI flash ─────────────────────────────────────
+  (symbol (lib_id "Memory_Flash:W25Q128") (at 180 100 0)
+    (property "Reference" "U6" (at 180 93 0))
+    (property "Value" "W25Q128JVIQ" (at 180 95.5 0))
+    (property "Footprint" "Package_SO:SOIC-8_5.27x5.27mm" (at 180 110 0))
+    (pin "CS"    (net "FLASH_CS"))
+    (pin "DO"    (net "SPI2_MISO"))
+    (pin "WP"    (net "+3V3"))            ; write protect inactive
+    (pin "GND"   (net "GND"))
+    (pin "DI"    (net "SPI2_MOSI"))
+    (pin "CLK"   (net "SPI2_SCK"))
+    (pin "HOLD"  (net "+3V3"))            ; hold inactive
+    (pin "VCC"   (net "+3V3"))
+  )
+
+  ;; ── U7: MCP73831 LiPo charger ──────────────────────────────────────
+  (symbol (lib_id "Battery_Management:MCP73831T-2ACI") (at 40 130 0)
+    (property "Reference" "U7" (at 40 124 0))
+    (property "Value" "MCP73831" (at 40 126.5 0))
+    (property "Footprint" "Package_DFN_QFN:DFN-8" (at 40 138 0))
+    (pin "VDD"  (net "VBUS_5V"))
+    (pin "BAT"  (net "VBAT"))
+    (pin "STAT" (net "CHG_STAT"))
+    (pin "GND"  (net "GND"))
+    (pin "PROG" (net "PROG_R"))           ; 2kΩ → 500mA charge
+  )
+
+  ;; ── U8: TPS63020 buck-boost 3.3V ───────────────────────────────────
+  (symbol (lib_id "Regulator_Switching:TPS63020DSJ") (at 100 130 0)
+    (property "Reference" "U8" (at 100 123 0))
+    (property "Value" "TPS63020" (at 100 125.5 0))
+    (property "Footprint" "Package_SON:SON-14" (at 100 140 0))
+    (pin "VIN"  (net "VBAT"))
+    (pin "VOUT" (net "+3V3"))
+    (pin "GND"  (net "GND"))
+    (pin "EN"   (net "+3V3"))
+  )
+
+  ;; ── U9: TLV70033 LDO for sensors (low-noise) ───────────────────────
+  (symbol (lib_id "Regulator_Linear:TLV70033") (at 100 150 0)
+    (property "Reference" "U9" (at 100 145 0))
+    (property "Value" "TLV70033" (at 100 147.5 0))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-5" (at 100 157 0))
+    (pin "VIN"  (net "+3V3"))
+    (pin "VOUT" (net "+3V3_SENS"))
+    (pin "GND"  (net "GND"))
+    (pin "EN"   (net "+3V3"))
+  )
+
+  ;; ── U10: DW01A + U11: FS8205A battery protection ───────────────────
+  (symbol (lib_id "Battery_Protection:DW01A") (at 40 70 0)
+    (property "Reference" "U10" (at 40 64 0))
+    (property "Value" "DW01A" (at 40 66.5 0))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-6" (at 40 78 0))
+    (pin "VDD"  (net "VBAT_RAW"))
+    (pin "GND"  (net "GND"))
+    (pin "CS"   (net "PROT_CS"))
+  )
+
+  (symbol (lib_id "Transistor_FET:FS8205A") (at 40 85 0)
+    (property "Reference" "U11" (at 40 80 0))
+    (property "Value" "FS8205A" (at 40 82.5 0))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-6" (at 40 92 0))
+    (pin "S1"   (net "VBAT_RAW"))
+    (pin "D1"   (net "VBAT"))
+    (pin "S2"   (net "GND"))
+    (pin "G1"   (net "PROT_CS"))
+    (pin "G2"   (net "PROT_CS"))
+  )
+
+  ;; ── Q1: 2N3904 buzzer driver ───────────────────────────────────────
+  (symbol (lib_id "Transistor_BJT:2N3904") (at 155 45 0)
+    (property "Reference" "Q1" (at 155 40 0))
+    (property "Value" "2N3904" (at 155 42.5 0))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23" (at 155 52 0))
+    (pin "B"    (net "BUZZER_PWM"))
+    (pin "C"    (net "BUZZER_NEG"))
+    (pin "E"    (net "GND"))
+  )
+
+  ;; ── BZ1: Piezo buzzer ──────────────────────────────────────────────
+  (symbol (lib_id "Device:Buzzer") (at 180 45 0)
+    (property "Reference" "BZ1" (at 180 40 0))
+    (property "Value" "Piezo_5V" (at 180 42.5 0))
+    (pin "+"    (net "+3V3"))
+    (pin "-"    (net "BUZZER_NEG"))
+  )
+
+  ;; ── USB-C connector ────────────────────────────────────────────────
+  (symbol (lib_id "Connector:USB_C_2.0") (at 20 130 0)
+    (property "Reference" "J1" (at 20 120 0))
+    (property "Value" "USB-C" (at 20 122.5 0))
+    (pin "VBUS" (net "VBUS_5V"))
+    (pin "GND"  (net "GND"))
+    (pin "D+"   (net "USB_DP"))
+    (pin "D-"   (net "USB_DM"))
+  )
+
+  ;; ── J2: JST-PH battery connector ───────────────────────────────────
+  (symbol (lib_id "Connector:Conn_01x02") (at 20 70 0)
+    (property "Reference" "J2" (at 20 65 0))
+    (property "Value" "JST-PH-2" (at 20 67.5 0))
+    (pin "1"    (net "VBAT_RAW"))
+    (pin "2"    (net "GND"))
+  )
+
+  ;; ── J3: Pneumotach pressure port connector ─────────────────────────
+  (symbol (lib_id "Connector:Conn_01x02") (at 20 40 0)
+    (property "Reference" "J3" (at 20 35 0))
+    (property "Value" "Silicone_tubing" (at 20 37.5 0))
+    (pin "1"    (net "PNEUMO_HI"))
+    (pin "2"    (net "PNEUMO_LO"))
+  )
+
+  ;; ── Pneumotachograph assembly (mechanical) ─────────────────────────
+  (symbol (lib_id "Mechanical:Fleisch_Pneumotach") (at 20 20 0)
+    (property "Reference" "PNEU" (at 20 14 0))
+    (property "Value" "Fleisch_screen" (at 20 16.5 0))
+    (pin "UPSTREAM"   (net "PNEUMO_HI"))
+    (pin "DOWNSTREAM" (net "PNEUMO_LO"))
+    (pin "MOUTHPIECE" (net "MOUTHPIECE"))
+  )
+
+  ;; ── WS2812B RGB LED ────────────────────────────────────────────────
+  (symbol (lib_id "LED:WS2812B") (at 220 80 0)
+    (property "Reference" "LED1" (at 220 75 0))
+    (property "Value" "WS2812B" (at 220 77.5 0))
+    (property "Footprint" "LED_SMD:LED_WS2812B_5050" (at 220 88 0))
+    (pin "VDD" (net "+3V3"))
+    (pin "DIN" (net "WS2812_DATA"))
+    (pin "GND" (net "GND"))
+  )
+
+  ;; ── Buttons ────────────────────────────────────────────────────────
+  (symbol (lib_id "Switch:SW_Push") (at 220 120 0)
+    (property "Reference" "SW1" (at 220 115 0))
+    (property "Value" "MEASURE" (at 220 117.5 0))
+    (pin "1" (net "BTN_MEASURE"))
+    (pin "2" (net "GND"))
+  )
+  (symbol (lib_id "Switch:SW_Push") (at 220 135 0)
+    (property "Reference" "SW2" (at 220 130 0))
+    (property "Value" "MODE" (at 220 132.5 0))
+    (pin "1" (net "BTN_MODE"))
+    (pin "2" (net "GND"))
+  )
+
+  ;; ── Status LED ─────────────────────────────────────────────────────
+  (symbol (lib_id "Device:LED") (at 220 100 0)
+    (property "Reference" "LED2" (at 220 95 0))
+    (property "Value" "Green" (at 220 97.5 0))
+    (pin "A" (net "LED_STATUS"))
+    (pin "K" (net "GND"))
+  )
+
+  ;; ── Battery voltage divider ────────────────────────────────────────
+  (symbol (lib_id "Device:R") (at 60 120 0)
+    (property "Reference" "R_DIV1" (at 60 117 0))
+    (property "Value" "100kΩ" (at 60 122.5 0))
+    (pin "1" (net "VBAT"))
+    (pin "2" (net "BATT_ADC"))
+  )
+  (symbol (lib_id "Device:R") (at 60 130 0)
+    (property "Reference" "R_DIV2" (at 60 127 0))
+    (property "Value" "100kΩ" (at 60 132.5 0))
+    (pin "1" (net "BATT_ADC"))
+    (pin "2" (net "GND"))
+  )
+
+  ;; ── Pull-ups and decoupling (summary) ──────────────────────────────
+  ;; I2C: 4.7kΩ pull-ups on SCL/SDA to +3V3
+  ;; BOOT: 10kΩ pull-up on PB4 (ESP_BOOT) to +3V3
+  ;; Buttons: 10kΩ pull-ups to +3V3 (internal also available)
+  ;; Decoupling: 100nF on each IC VDD pin, 10µF on power rails
+  ;; SDP810: 100nF + 10µF on VDD (per datasheet)
+  ;; BME280: 100nF on VDD, 100nF on VDDIO
+  ;; W25Q128: 100nF on VCC
+  ;; CH32V203: 100nF on each VDD pin (×4), 10µF on VDD, 10µF on VDDA
+  ;; MCP73831: 4.7µF on VBUS, 4.7µF on BAT
+  ;; TPS63020: 22µF on VIN, 22µF on VOUT, 2.2µH inductor
+  ;; Crystal: CH32V203 has internal 8MHz RC, optional external 8MHz on PD0/PD1
+
+)

@@ -1,0 +1,25 @@
+(kicad_pcb (version 20230121) (generator pcbnew)
+
+  (general
+    (thickness 1.6)
+    (drawings 0)
+    (tracks 0)
+    (zones 0)
+  )
+
+  (title_block
+    (title "Quartz Tuner - Crystal Oscillator Parameter Analyzer")
+    (date "2026-06-26")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+  )
+
+  ;; PCB placeholder - 4-layer, 80x50mm
+  ;; See README.md for layout guidelines:
+  ;; - Separate analog and digital ground planes
+  ;; - Star grounding at ADC
+  ;; - Pi-network fixture close to Si5351A output and AD5933 input
+  ;; - LC filter between 3V3 and 3V3A analog rail
+  ;; - ZIF socket centered with short traces to pi-network
+
+)

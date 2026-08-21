@@ -1,0 +1,41 @@
+{
+  "board": {
+    "design_rules": {
+      "min_track_width": 0.2,
+      "min_via_diameter": 0.4,
+      "min_clearance": 0.2
+    },
+    "layers": ["F.Cu", "B.Cu", "F.Paste", "B.Paste", "F.SilkS", "B.SilkS", "F.Mask", "B.Mask", "Edge.Cuts"],
+    "thickness": 1.6,
+    "copper_layers": 2,
+    "dimensions_mm": [50, 180]
+  },
+  "project": {
+    "name": "aero-reed",
+    "version": "1.0",
+    "date": "2026-06-19",
+    "author": "SoC Device Inventions",
+    "description": "Breath-Controlled Electronic Wind Instrument",
+    "license": "MIT"
+  },
+  "net_classes": [
+    {"name": "Default", "track_width": 0.25, "via_diameter": 0.6},
+    {"name": "Power", "track_width": 0.5, "via_diameter": 0.8},
+    {"name": "Audio", "track_width": 0.3, "via_diameter": 0.6}
+  ],
+  "components": [
+    {"ref": "U1", "part": "ESP32-S3-WROOM-1-N8", "x": 25, "y": 90, "rotation": 0},
+    {"ref": "U2", "part": "MP3V5004G", "x": 25, "y": 25, "rotation": 0},
+    {"ref": "U3", "part": "ICM-42688-P", "x": 25, "y": 50, "rotation": 0},
+    {"ref": "U4", "part": "PCM5102A", "x": 35, "y": 120, "rotation": 0},
+    {"ref": "U5", "part": "MAX98357A", "x": 40, "y": 140, "rotation": 0},
+    {"ref": "U6", "part": "SSD1306 OLED", "x": 15, "y": 120, "rotation": 0},
+    {"ref": "U7", "part": "MAX17048", "x": 10, "y": 140, "rotation": 0},
+    {"ref": "U8", "part": "TP4056", "x": 10, "y": 25, "rotation": 0},
+    {"ref": "U9", "part": "ME6211 LDO", "x": 10, "y": 50, "rotation": 0},
+    {"ref": "FSR", "part": "FSR-402", "x": 25, "y": 15, "rotation": 0},
+    {"ref": "J1", "part": "3.5mm Headphone Jack", "x": 45, "y": 160, "rotation": 180},
+    {"ref": "J2", "part": "USB-C Receptacle", "x": 5, "y": 90, "rotation": 90},
+    {"ref": "SW1", "part": "BOOT Button", "x": 30, "y": 90, "rotation": 0}
+  ]
+}

@@ -1,0 +1,45 @@
+(kicad_pro
+  (version "1.0")
+  (meta (filename "hall-puck.kicad_pro"))
+  (general
+    (project_name "Hall Puck")
+    (project_version "1.0"))
+  (board
+    (layer_setup
+      (layers
+        (0 "F.Cu" signal)
+        (1 "In1.Cu" signal)
+        (2 "In2.Cu" signal)
+        (3 "B.Cu" signal)
+        (4 "F.SilkS" user)
+        (5 "B.SilkS" user)
+        (6 "F.Mask" user)
+        (7 "B.Mask" user)
+        (8 "Edge.Cuts" user)))
+    (setup
+      (trace_min_width 0.15)
+      (via_min_size 0.3)
+      (via_min_drill 0.2)))
+  (schematic
+    (default_line_width 0.15)
+    (default_text_size 1.27))
+  (erc
+    (rule "no_unconnected"))
+  (drc
+    (rule "min_clearance" 0.15))
+  (libraries
+    (lib (name "Analog_ADC") (type "kicad_sym"))
+    (lib (name "Amplifier_Operational") (type "kicad_sym"))
+    (lib (name "Analog_Switch") (type "kicad_sym"))
+    (lib (name "MCU_ST_STM32G4") (type "kicad_sym"))
+    (lib (name "RF_Module") (type "kicad_sym"))
+    (lib (name "Display") (type "kicad_sym"))
+    (lib (name "Connector") (type "kicad_sym"))
+    (lib (name "Device") (type "kicad_sym"))
+    (lib (name "Sensor") (type "kicad_sym"))
+    (lib (name "Motor") (type "kicad_sym"))
+    (lib (name "Driver_Relay") (type "kicad_sym"))
+    (lib (name "Regulator_Linear") (type "kicad_sym"))
+    (lib (name "Battery_Management") (type "kicad_sym"))
+    (lib (name "Switch") (type "kicad_sym")))
+  (copyright "MIT License"))

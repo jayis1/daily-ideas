@@ -1,0 +1,9 @@
+(kicad_prl
+  (version "1.0")
+  (general
+    (board "(no board)")
+  )
+  (meta
+    (filename "cor-sono.kicad_sch")
+  )
+)

@@ -1,0 +1,337 @@
+(kicad_sch
+  (version "20220920")
+  (generator "hermes-inventor")
+
+  ; ====== Sonar Cast — Pocket CHIRP Fish Finder & Bathymetry Logger ======
+  ; DSP SoC: STM32G474RET6  |  Radio/GPS SoC: ESP32-C3-WROOM-02
+  ; CHIRP 150-250 kHz, pulse-compression matched filter, bottom + fish detect
+
+  (lib_symbols)
+
+  ; ====== DSP Core: STM32G474RET6 ======
+  (symbol (id 0) (at 120 80) (name "STM32G474RET6")
+    (in_bom yes)
+    (uuid "stm32-main")
+    (property "Reference" "U1")
+    (property "Value" "STM32G474RET6")
+    (pins
+      (pin (name "VDD")     (type power_in))
+      (pin (name "VDDA")    (type power_in))
+      (pin (name "GND")     (type power_in))
+      (pin (name "VBAT")    (type power_in))
+      (pin (name "PA0/DAC1")     (type output))   ; TGC ramp -> AD8331 GAIN
+      (pin (name "PA1/ADC1")     (type input))    ; HV monitor /11 (safety)
+      (pin (name "PA2/USART2_TX")(type output))   ; -> ESP32-C3 RX
+      (pin (name "PA3/USART2_RX")(type input))    ; <- ESP32-C3 TX
+      (pin (name "PA4/HRTIM_CHA1")(type output))  ; HV HS-A
+      (pin (name "PA5/HRTIM_CHA2")(type output))  ; HV LS-A
+      (pin (name "PA6/HRTIM_CHB1")(type output))  ; HV HS-B
+      (pin (name "PA7/HRTIM_CHB2")(type output))  ; HV LS-B
+      (pin (name "PA8/TR_SW")    (type output))   ; T/R switch control
+      (pin (name "PA9/SPI1_SCK") (type output))   ; ADS7945 SCK
+      (pin (name "PA10/SPI1_MISO")(type input))   ; ADS7945 DOUT
+      (pin (name "PA11/SPI1_NSS")(type output))   ; ADS7945 CS
+      (pin (name "PA12/WATER")   (type input))    ; water-detect probes
+      (pin (name "PA13/BTN")     (type input))    ; mode button
+      (pin (name "PA15/TIM2_CH1")(type output))   ; WS2812 LED data
+      (pin (name "PB0/I2C1_SCL") (type output))   ; IMU/OLED/MS5837 SCL
+      (pin (name "PB1/I2C1_SDA") (type bidirectional)) ; IMU/OLED/MS5837 SDA
+      (pin (name "PB2/SPI2_SCK") (type output))   ; microSD SCK
+      (pin (name "PB3/SPI2_MISO")(type input))    ; microSD MISO
+      (pin (name "PB4/SPI2_MOSI")(type output))   ; microSD MOSI
+      (pin (name "PB5/SPI2_NSS") (type output))   ; microSD CS
+      (pin (name "PB6/1WIRE")    (type bidirectional)) ; DS18B20 DQ
+      (pin (name "PB7/CHG_STAT") (type input))    ; TP4056 CHG
+      (pin (name "PC13/BOOT")    (type input))    ; boot button
+      (pin (name "PC14/SD_DET")  (type input))    ; microSD detect
+      (pin (name "NRST")         (type input))
+      (pin (name "BOOT0")        (type input))
+      (pin (name "SWDIO")        (type bidirectional))
+      (pin (name "SWCLK")        (type input))
+    )
+  )
+
+  ; ====== Radio/GPS Core: ESP32-C3-WROOM-02 ======
+  (symbol (id 1) (at 220 80) (name "ESP32-C3-WROOM-02")
+    (in_bom yes)
+    (uuid "esp32c3-radio")
+    (property "Reference" "U2")
+    (property "Value" "ESP32-C3-WROOM-02")
+    (pins
+      (pin (name "3V3")   (type power_in))
+      (pin (name "GND")   (type power_in))
+      (pin (name "EN")    (type input))
+      (pin (name "GPIO2/RX0")(type input))   ; <- STM32 USART2_TX
+      (pin (name "GPIO3/TX0")(type output))  ; -> STM32 USART2_RX
+      (pin (name "GPIO4/RX1")(type input))   ; <- NEO-M9N TX (NMEA)
+      (pin (name "GPIO5/TX1")(type output))  ; -> NEO-M9N RX (cfg)
+      (pin (name "GPIO6/PPS")(type input))   ; NEO-M9N PPS
+      (pin (name "GPIO7/LED")(type output))  ; radio status LED
+      (pin (name "GPIO8/WAKE")(type output)) ; STM32 wake
+      (pin (name "GPIO9/BOOT")(type input))  ; boot strap
+      (pin (name "GPIO10/SCL")(type output)) ; I2C expansion
+      (pin (name "GPIO11/SDA")(type bidirectional)) ; I2C expansion
+    )
+  )
+
+  ; ====== Power: 18650 + TP4056 + DW02 + AP2112 ======
+  (symbol (id 2) (at 30 40) (name "18650_BATTERY")
+    (uuid "bat1")
+    (property "Reference" "BAT1")
+    (property "Value" "18650 3.7V 3500mAh")
+    (pins (pin (name "+") (type power_out)) (pin (name "-") (type power_in)))
+  )
+
+  (symbol (id 3) (at 55 40) (name "TP4056")
+    (uuid "chg1")
+    (property "Reference" "U3")
+    (property "Value" "TP4056 charger")
+    (pins
+      (pin (name "VIN") (type power_in))
+      (pin (name "BAT") (type power_out))
+      (pin (name "CHG") (type output))
+      (pin (name "GND") (type power_in))
+    )
+  )
+
+  (symbol (id 4) (at 80 40) (name "DW02")
+    (uuid "prot1")
+    (property "Reference" "U4")
+    (property "Value" "DW02 protection")
+    (pins (pin (name "BAT+") (type power_in)) (pin (name "OUT+") (type power_out))
+          (pin (name "GND") (type power_in)))
+  )
+
+  (symbol (id 5) (at 105 40) (name "AP2112_LDO")
+    (uuid "ldo1")
+    (property "Reference" "U5")
+    (property "Value" "AP2112-3.3")
+    (pins (pin (name "VIN") (type power_in)) (pin (name "VOUT") (type power_out))
+          (pin (name "GND") (type power_in)))
+  )
+
+  ; ====== HV transmit: MC34063 boost + H-bridge (4x IRFH7440) ======
+  (symbol (id 6) (at 30 130) (name "MC34063")
+    (uuid "boost1")
+    (property "Reference" "U6")
+    (property "Value" "MC34063 boost 12V")
+    (pins (pin (name "VIN") (type power_in)) (pin (name "VOUT") (type power_out))
+          (pin (name "GND") (type power_in)) (pin (name "SW") (type output)))
+  )
+
+  (symbol (id 7) (at 75 130) (name "H_BRIDGE_IRFH7440")
+    (uuid "hbr1")
+    (property "Reference" "U7")
+    (property "Value" "IRFH7440 x4 H-bridge")
+    (pins
+      (pin (name "VHV") (type power_in))    ; 12V rail
+      (pin (name "HSA") (type input))       ; HRTIM CHA1
+      (pin (name "LSA") (type input))       ; HRTIM CHA2
+      (pin (name "HSB") (type input))       ; HRTIM CHB1
+      (pin (name "LSB") (type input))       ; HRTIM CHB2
+      (pin (name "OUTA")(type output))      ; piezo +
+      (pin (name "OUTB")(type output))      ; piezo -
+      (pin (name "GND") (type power_in))
+    )
+  )
+
+  (symbol (id 8) (at 120 130) (name "PIEZO_200K")
+    (uuid "xz1")
+    (property "Reference" "XZ1")
+    (property "Value" "200kHz piezo transducer")
+    (pins (pin (name "+") (type input)) (pin (name "-") (type input)))
+  )
+
+  ; ====== T/R switch (diode clamp + series R) ======
+  (symbol (id 9) (at 120 155) (name "TR_SWITCH")
+    (uuid "tr1")
+    (property "Reference" "D1")
+    (property "Value" "T/R switch BAT54S x2")
+    (pins (pin (name "TX") (type bidirectional)) (pin (name "RX") (type bidirectional))
+          (pin (name "CTL")(type input)))
+  )
+
+  ; ====== Receive: AD8331 VGA + ADS7945 ADC ======
+  (symbol (id 10) (at 160 130) (name "AD8331")
+    (uuid "vga1")
+    (property "Reference" "U8")
+    (property "Value" "AD8331 VGA 0-48dB")
+    (pins
+      (pin (name "IN+") (type input))   ; <- T/R RX
+      (pin (name "IN-") (type input))
+      (pin (name "GAIN")(type input))   ; <- STM32 DAC1 (TGC ramp)
+      (pin (name "OUT+") (type output))
+      (pin (name "OUT-") (type output))
+      (pin (name "VDD") (type power_in))
+      (pin (name "GND") (type power_in))
+    )
+  )
+
+  (symbol (id 11) (at 200 130) (name "ADS7945")
+    (uuid "adc1")
+    (property "Reference" "U9")
+    (property "Value" "ADS7945 12b 1Msps")
+    (pins
+      (pin (name "IN+") (type input))   ; <- AD8331 OUT+
+      (pin (name "IN-") (type input))   ; <- AD8331 OUT-
+      (pin (name "SCK") (type input))   ; STM32 SPI1_SCK
+      (pin (name "DOUT")(type output))  ; STM32 SPI1_MISO
+      (pin (name "CS")  (type input))   ; STM32 SPI1_NSS
+      (pin (name "VDD") (type power_in))
+      (pin (name "GND") (type power_in))
+    )
+  )
+
+  ; ====== I2C sensors: ICM-42688-P + MS5837 + SSD1306 ======
+  (symbol (id 12) (at 220 40) (name "ICM-42688-P")
+    (uuid "imu1")
+    (property "Reference" "U10")
+    (property "Value" "ICM-42688-P")
+    (pins (pin (name "VDD") (type power_in)) (pin (name "GND") (type power_in))
+          (pin (name "SCL") (type input)) (pin (name "SDA") (type bidirectional))
+          (pin (name "INT") (type output)))
+  )
+
+  (symbol (id 13) (at 220 70) (name "MS5837-30BA")
+    (uuid "pres1")
+    (property "Reference" "U11")
+    (property "Value" "MS5837-30BA")
+    (pins (pin (name "VDD") (type power_in)) (pin (name "GND") (type power_in))
+          (pin (name "SCL") (type input)) (pin (name "SDA") (type bidirectional)))
+  )
+
+  (symbol (id 14) (at 220 100) (name "SSD1306_OLED")
+    (uuid "oled1")
+    (property "Reference" "U12")
+    (property "Value" "SSD1306 0.96in 128x64 I2C")
+    (pins (pin (name "VCC") (type power_in)) (pin (name "GND") (type power_in))
+          (pin (name "SCL") (type input)) (pin (name "SDA") (type bidirectional)))
+  )
+
+  ; ====== GPS: NEO-M9N ======
+  (symbol (id 15) (at 300 80) (name "NEO-M9N")
+    (uuid "gps1")
+    (property "Reference" "U13")
+    (property "Value" "NEO-M9N GPS")
+    (pins (pin (name "VDD") (type power_in)) (pin (name "GND") (type power_in))
+          (pin (name "TX") (type output))  ; -> ESP32 GPIO4
+          (pin (name "RX") (type input))   ; <- ESP32 GPIO5
+          (pin (name "PPS")(type output))  ; -> ESP32 GPIO6
+          (pin (name "ANT")(type input)))
+  )
+
+  ; ====== DS18B20 water temp ======
+  (symbol (id 16) (at 160 70) (name "DS18B20")
+    (uuid "ds1")
+    (property "Reference" "U14")
+    (property "Value" "DS18B20 water temp")
+    (pins (pin (name "VDD") (type power_in)) (pin (name "DQ") (type bidirectional))
+          (pin (name "GND") (type power_in)))
+  )
+
+  ; ====== microSD ======
+  (symbol (id 17) (at 160 40) (name "MicroSD_socket")
+    (uuid "sd1")
+    (property "Reference" "U15")
+    (property "Value" "MicroSD FAT32")
+    (pins (pin (name "VCC") (type power_in)) (pin (name "GND") (type power_in))
+          (pin (name "CS") (type input)) (pin (name "CLK") (type input))
+          (pin (name "MISO")(type output)) (pin (name "MOSI")(type input))
+          (pin (name "DET") (type output)))
+  )
+
+  ; ====== USB-C charging ======
+  (symbol (id 18) (at 30 70) (name "USB-C")
+    (uuid "usb1")
+    (property "Reference" "J1")
+    (property "Value" "USB-C 2.0")
+    (pins (pin (name "VBUS") (type power_out)) (pin (name "D+") (type bidirectional))
+          (pin (name "D-") (type bidirectional)) (pin (name "GND") (type power_in)))
+  )
+
+  ; ====== WS2812 status LED ======
+  (symbol (id 19) (at 250 130) (name "WS2812")
+    (uuid "led1")
+    (property "Reference" "LED1")
+    (property "Value" "WS2812 RGB")
+    (pins (pin (name "DIN") (type input)) (pin (name "VDD") (type power_in))
+          (pin (name "GND") (type power_in)))
+  )
+
+  ; ====== Nets ======
+  (net (code 1) (name "V_BAT")  (node "bat1.+") (node "chg1.BAT") (node "prot1.BAT+"))
+  (net (code 2) (name "V_5V")   (node "usb1.VBUS") (node "chg1.VIN"))
+  (net (code 3) (name "V_3V3")  (node "ldo1.VOUT") (node "stm32-main.VDD")
+                            (node "esp32c3-radio.3V3") (node "imu1.VDD")
+                            (node "pres1.VDD") (node "oled1.VCC")
+                            (node "ds1.VDD") (node "sd1.VCC")
+                            (node "adc1.VDD") (node "vga1.VDD")
+                            (node "gps1.VDD") (node "led1.VDD"))
+  (net (code 4) (name "V_3V3A") (node "stm32-main.VDDA") (node "vga1.VDD"))
+  (net (code 5) (name "V_12V")  (node "boost1.VOUT") (node "hbr1.VHV"))
+  (net (code 6) (name "GND")    (node "bat1.-") (node "chg1.GND") (node "prot1.GND")
+                            (node "ldo1.GND") (node "stm32-main.GND")
+                            (node "esp32c3-radio.GND") (node "imu1.GND")
+                            (node "pres1.GND") (node "oled1.GND")
+                            (node "ds1.GND") (node "sd1.GND")
+                            (node "adc1.GND") (node "vga1.GND")
+                            (node "hbr1.GND") (node "boost1.GND")
+                            (node "usb1.GND") (node "led1.GND") (node "gps1.GND"))
+
+  ; H-bridge drive
+  (net (code 7)  (name "HRTIM_CHA1") (node "stm32-main.PA4/HRTIM_CHA1") (node "hbr1.HSA"))
+  (net (code 8)  (name "HRTIM_CHA2") (node "stm32-main.PA5/HRTIM_CHA2") (node "hbr1.LSA"))
+  (net (code 9)  (name "HRTIM_CHB1") (node "stm32-main.PA6/HRTIM_CHB1") (node "hbr1.HSB"))
+  (net (code 10) (name "HRTIM_CHB2") (node "stm32-main.PA7/HRTIM_CHB2") (node "hbr1.LSB"))
+  (net (code 11) (name "PIEZO_P")    (node "hbr1.OUTA") (node "xz1.+"))
+  (net (code 12) (name "PIEZO_N")    (node "hbr1.OUTB") (node "xz1.-"))
+  (net (code 13) (name "TR_CTRL")    (node "stm32-main.PA8/TR_SW") (node "tr1.CTL"))
+  (net (code 14) (name "PIEZO_RX")   (node "xz1.+") (node "tr1.TX"))
+  (net (code 15) (name "VGA_IN")     (node "tr1.RX") (node "vga1.IN+"))
+
+  ; TGC + ADC
+  (net (code 16) (name "TGC_RAMP")   (node "stm32-main.PA0/DAC1") (node "vga1.GAIN"))
+  (net (code 17) (name "VGA_OUT_P")  (node "vga1.OUT+") (node "adc1.IN+"))
+  (net (code 18) (name "VGA_OUT_N")  (node "vga1.OUT-") (node "adc1.IN-"))
+  (net (code 19) (name "ADC_SCK")    (node "stm32-main.PA9/SPI1_SCK") (node "adc1.SCK"))
+  (net (code 20) (name "ADC_DOUT")   (node "stm32-main.PA10/SPI1_MISO") (node "adc1.DOUT"))
+  (net (code 21) (name "ADC_CS")     (node "stm32-main.PA11/SPI1_NSS") (node "adc1.CS"))
+
+  ; HV monitor (safety)
+  (net (code 22) (name "HV_MON")     (node "stm32-main.PA1/ADC1"))
+
+  ; UART to ESP32-C3
+  (net (code 23) (name "STM_TX")     (node "stm32-main.PA2/USART2_TX") (node "esp32c3-radio.GPIO2/RX0"))
+  (net (code 24) (name "STM_RX")     (node "stm32-main.PA3/USART2_RX") (node "esp32c3-radio.GPIO3/TX0"))
+
+  ; GPS NMEA
+  (net (code 25) (name "GPS_TX")     (node "gps1.TX") (node "esp32c3-radio.GPIO4/RX1"))
+  (net (code 26) (name "GPS_RX")     (node "gps1.RX") (node "esp32c3-radio.GPIO5/TX1"))
+  (net (code 27) (name "GPS_PPS")    (node "gps1.PPS") (node "esp32c3-radio.GPIO6/PPS"))
+
+  ; I2C bus
+  (net (code 28) (name "I2C_SCL")    (node "stm32-main.PB0/I2C1_SCL") (node "imu1.SCL")
+                                (node "pres1.SCL") (node "oled1.SCL"))
+  (net (code 29) (name "I2C_SDA")    (node "stm32-main.PB1/I2C1_SDA") (node "imu1.SDA")
+                                (node "pres1.SDA") (node "oled1.SDA"))
+
+  ; SPI2 microSD
+  (net (code 30) (name "SD_SCK")     (node "stm32-main.PB2/SPI2_SCK") (node "sd1.CLK"))
+  (net (code 31) (name "SD_MISO")    (node "stm32-main.PB3/SPI2_MISO") (node "sd1.MISO"))
+  (net (code 32) (name "SD_MOSI")    (node "stm32-main.PB4/SPI2_MOSI") (node "sd1.MOSI"))
+  (net (code 33) (name "SD_CS")      (node "stm32-main.PB5/SPI2_NSS") (node "sd1.CS"))
+  (net (code 34) (name "SD_DET")     (node "stm32-main.PC14/SD_DET") (node "sd1.DET"))
+
+  ; 1-Wire DS18B20
+  (net (code 35) (name "ONEWIRE")    (node "stm32-main.PB6/1WIRE") (node "ds1.DQ"))
+
+  ; Misc GPIO
+  (net (code 36) (name "WATER_DET")  (node "stm32-main.PA12/WATER"))
+  (net (code 37) (name "BTN_MODE")   (node "stm32-main.PA13/BTN"))
+  (net (code 38) (name "WS2812_DIN") (node "stm32-main.PA15/TIM2_CH1") (node "led1.DIN"))
+  (net (code 39) (name "CHG_STAT")   (node "stm32-main.PB7/CHG_STAT") (node "chg1.CHG"))
+  (net (code 40) (name "ESP_WAKE")   (node "esp32c3-radio.GPIO8/WAKE"))
+  (net (code 41) (name "ESP_LED")    (node "esp32c3-radio.GPIO7/LED"))
+
+  (sheet_instances)
+)

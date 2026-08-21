@@ -1,0 +1,175 @@
+(kicad_sch
+  (version 20231120)
+  (generator "hermes-inventor")
+  (paper "A3")
+  (title_block
+    (title "Pyro Balance — Pocket Thermogravimetric Analyzer")
+    (date "2026-07-22")
+    (company "SoC Device Inventions")
+    (comment 1 "STM32G474RET6 + ESP32-C3-MINI-1")
+    (comment 2 "5g load cell + HX711 + ADS122U04 PT1000")
+    (comment 3 "Nichrome furnace, PID, BLE/Wi-Fi, OLED, SD")
+    (comment 4 "MIT License"))
+
+  ; ===== POWER SECTION =====
+  (symbol (lib_id "power:VBAT") (at 50 40) (fields_autoplaced)
+    (property "Value" "VBAT7V4") (at 50 34 0))
+  (symbol (lib_id "Device:C") (at 80 45 0)
+    (property "Value" "10uF") (at 80 45 0))
+  (symbol (lib_id "Regulator_Linear:MP1584") (at 110 45 0)
+    (property "Reference" "U8") (at 110 45 0)
+    (property "Value" "MP1584 5V/1.5A") (at 110 38 0))
+  (symbol (lib_id "Device:C") (at 140 45 0)
+    (property "Value" "22uF") (at 140 45 0))
+  (symbol (lib_id "power:+5V") (at 150 40 0))
+  (symbol (lib_id "Regulator_Switching:MT3608") (at 110 75 0)
+    (property "Reference" "U9") (at 110 75 0)
+    (property "Value" "MT3608 12V/1.2A") (at 110 68 0))
+  (symbol (lib_id "power:+12V") (at 150 70 0))
+  (symbol (lib_id "Device:Thermal_Fuse") (at 160 80 0)
+    (property "Reference" "F1") (at 160 80 0)
+    (property "Value" "250C/15A") (at 160 74 0))
+  (symbol (lib_id "Device:L") (at 50 60 0)
+    (property "Value" "10uH") (at 50 60 0))
+  (symbol (lib_id "power:GND") (at 50 100 0))
+
+  ; ===== USB-C CHARGE =====
+  (symbol (lib_id "Connector:USB_C_Plug") (at 40 130 0)
+    (property "Reference" "J2") (at 40 130 0)
+    (property "Value" "USB-C 5V") (at 40 122 0))
+  (symbol (lib_id "Battery_Management:TP4056") (at 90 135 0)
+    (property "Reference" "U7") (at 90 135 0)
+    (property "Value" "TP4056") (at 90 128 0))
+
+  ; ===== STM32G474 =====
+  (symbol (lib_id "MCU_ST_STM32G4:STM32G474RET6") (at 220 130 0)
+    (property "Reference" "U1") (at 220 130 0)
+    (property "Value" "STM32G474RET6") (at 220 80 0))
+  (symbol (lib_id "Device:Crystal_GND24") (at 160 200 0)
+    (property "Value" "8MHz") (at 160 200 0))
+  (symbol (lib_id "Device:C") (at 140 190 0)
+    (property "Value" "12pF") (at 140 190 0))
+  (symbol (lib_id "Device:C") (at 140 210 0)
+    (property "Value" "12pF") (at 140 210 0))
+
+  ; ===== ESP32-C3 =====
+  (symbol (lib_id "RF_Module:ESP32-C3-MINI-1") (at 420 140 0)
+    (property "Reference" "U2") (at 420 140 0)
+    (property "Value" "ESP32-C3-MINI-1") (at 420 80 0))
+  (symbol (lib_id "Device:Antenna") (at 480 90 0)
+    (property "Value" "PCB_trace") (at 480 90 0))
+
+  ; ===== HX711 BALANCE =====
+  (symbol (lib_id "Sensor:HX711") (at 110 250 0)
+    (property "Reference" "U3") (at 110 250 0)
+    (property "Value" "HX711") (at 110 230 0))
+  (symbol (lib_id "Sensor:LoadCell_5g") (at 40 270 0)
+    (property "Reference" "LOAD1") (at 40 270 0)
+    (property "Value" "5g/0.1mg") (at 40 260 0))
+  (net (code 1) (name "HX_SCK") (node "U3.4" "U1.PA1"))
+  (net (code 2) (name "HX_DOUT") (node "U3.3" "U1.PA2"))
+  (net (code 3) (name "HX_RATE") (node "U3.5" "U1.PA3"))
+
+  ; ===== ADS122U04 PT1000 =====
+  (symbol (lib_id "Analog_ADC:ADS122U04") (at 320 270 0)
+    (property "Reference" "U4") (at 320 270 0)
+    (property "Value" "ADS122U04") (at 320 240 0))
+  (symbol (lib_id "Sensor_Temperature:PT1000") (at 260 280 0)
+    (property "Reference" "RTD1") (at 260 280 0)
+    (property "Value" "PT1000 Class A") (at 260 270 0))
+  (symbol (lib_id "Device:R") (at 260 250 0)
+    (property "Value" "1k 0.1%") (at 260 250 0))
+  (net (code 4) (name "I2C2_SCL") (node "U4.6" "U1.PB10"))
+  (net (code 5) (name "I2C2_SDA") (node "U4.7" "U1.PB11"))
+
+  ; ===== FURNACE DRIVE =====
+  (symbol (lib_id "Device:R") (at 160 300 0)
+    (property "Value" "1k") (at 160 300 0))
+  (symbol (lib_id "Transistor_FET:IRLZ44N") (at 170 310 0)
+    (property "Reference" "Q1") (at 170 310 0)
+    (property "Value" "IRLZ44N") (at 170 300 0))
+  (symbol (lib_id "Device:L_Nichrome") (at 140 310 0)
+    (property "Reference" "FURN") (at 140 310 0)
+    (property "Value" "Nichrome ~6ohm") (at 140 300 0))
+  (net (code 6) (name "FURN_PWM") (node "Q1.G" "U1.PA5"))
+  (net (code 7) (name "HEATER_EN") (node "U1.PA8" "RELAY1"))
+
+  ; ===== OLED (SPI) =====
+  (symbol (lib_id "Display:SSD1306_128x64_SPI") (at 320 50 0)
+    (property "Reference" "OLED1") (at 320 50 0)
+    (property "Value" "SSD1306 1.3in") (at 320 40 0))
+  (net (code 8) (name "SPI1_SCK") (node "OLED1.SCK" "U1.PB3"))
+  (net (code 9) (name "SPI1_MOSI") (node "OLED1.MOSI" "U1.PB5"))
+  (net (code 10) (name "OLED_CS") (node "OLED1.CS" "U1.PB7"))
+  (net (code 11) (name "OLED_DC") (node "OLED1.DC" "U1.PB1"))
+
+  ; ===== MICROSD =====
+  (symbol (lib_id "Connector:MicroSD") (at 320 150 0)
+    (property "Reference" "J1") (at 320 150 0)
+    (property "Value" "MicroSD push-push") (at 320 140 0))
+  (net (code 12) (name "SD_CS") (node "J1.CS" "U1.PB6"))
+
+  ; ===== BME280 =====
+  (symbol (lib_id "Sensor:BME280") (at 420 250 0)
+    (property "Reference" "U5") (at 420 250 0)
+    (property "Value" "BME280") (at 420 240 0))
+  (net (code 13) (name "I2C1_SCL") (node "U5.SCL" "U1.PB8"))
+  (net (code 14) (name "I2C1_SDA") (node "U5.SDA" "U1.PB9"))
+
+  ; ===== PURGE FLOW (SFM3300) =====
+  (symbol (lib_id "Sensor:SFM3300") (at 480 250 0)
+    (property "Reference" "U6") (at 480 250 0)
+    (property "Value" "SFM3300 0-200L/h") (at 480 240 0))
+  (symbol (lib_id "Device:Pump_Diaphragm") (at 540 270 0)
+    (property "Reference" "PUMP1") (at 540 270 0)
+    (property "Value" "12V micro") (at 540 260 0))
+  (net (code 15) (name "PUMP_PWM") (node "PUMP1.+" "U1.PA6"))
+  (net (code 16) (name "N2_VALVE") (node "V1.+" "U1.PC14"))
+
+  ; ===== SAFETY =====
+  (symbol (lib_id "Comparator:TLV3201") (at 280 350 0)
+    (property "Reference" "U10") (at 280 350 0)
+    (property "Value" "TLV3201") (at 280 340 0))
+  (net (code 17) (name "OVERTEMP") (node "U10.OUT" "U1.PA11"))
+  (symbol (lib_id "Switch:Reed") (at 100 350 0)
+    (property "Reference" "S1") (at 100 350 0)
+    (property "Value" "Reed interlock") (at 100 340 0))
+  (net (code 18) (name "INTERLOCK") (node "S1" "U1.PC13"))
+
+  ; ===== UART to ESP32 =====
+  (net (code 19) (name "USART1_TX") (node "U1.PA9" "U2.RX"))
+  (net (code 20) (name "USART1_RX") (node "U1.PA10" "U2.TX"))
+
+  ; ===== BUTTONS / IO =====
+  (symbol (lib_id "Switch:SW_Push") (at 60 380 0)
+    (property "Reference" "S2") (at 60 380 0)
+    (property "Value" "START") (at 60 370 0))
+  (symbol (lib_id "Switch:SW_Push") (at 90 380 0)
+    (property "Reference" "S3") (at 90 380 0)
+    (property "Value" "STOP") (at 90 370 0))
+  (symbol (lib_id "Switch:SW_Push") (at 120 380 0)
+    (property "Reference" "S4") (at 120 380 0)
+    (property "Value" "MENU") (at 120 370 0))
+  (net (code 21) (name "BTN_START") (node "S2" "U1.PB13"))
+  (net (code 22) (name "BTN_STOP") (node "S3" "U1.PB14"))
+  (net (code 23) (name "BTN_MENU") (node "S4" "U1.PB15"))
+
+  ; ===== BUZZER / LED =====
+  (symbol (lib_id "Device:Buzzer") (at 200 380 0)
+    (property "Reference" "BUZ1") (at 200 380 0)
+    (property "Value" "5V active") (at 200 370 0))
+  (net (code 24) (name "BUZZER") (node "BUZ1" "U1.PA12"))
+  (symbol (lib_id "Device:LED") (at 230 380 0)
+    (property "Reference" "LED1") (at 230 380 0)
+    (property "Value" "White") (at 230 370 0))
+  (net (code 25) (name "LED_W") (node "LED1" "U1.PA7"))
+
+  ; ===== BATTERY SENSE =====
+  (symbol (lib_id "Device:R") (at 60 420 0) (property "Value" "30k"))
+  (symbol (lib_id "Device:R") (at 60 440 0) (property "Value" "10k"))
+  (net (code 26) (name "VBAT_DIV") (node "R.div" "U1.PB0"))
+
+  ; ===== THERMAL FUSE SENSE =====
+  (net (code 27) (name "FUSE_SENSE") (node "F1.sense" "U1.PA15"))
+  (net (code 28) (name "FAN_CTRL") (node "FAN" "U1.PC15"))
+)

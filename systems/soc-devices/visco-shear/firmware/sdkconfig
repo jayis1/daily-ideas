@@ -1,0 +1,21 @@
+# visco-shear / firmware / sdkconfig
+# Pico SDK build defaults for Visco Shear
+
+# Target
+PICO_PLATFORM=rp2040
+PICO_BOARD=pico
+
+# Clock: run at 133 MHz for dual-core DSP
+PICO_DEFAULT_CLK_SYS_KHZ=133000
+
+# Flash: 2 MB W25Q16JV
+PICO_FLASH_SIZE_BYTES=2097152
+
+# USB CDC for stdio
+PICO_STDIO_USB_DEFAULT_CRLF=1
+
+# Enable multicore
+PICO_CORE1_STACK_SIZE=0x1000
+
+# Bootloader: double-reset for UF2
+PICO_BOOTSEL_VIA_DOUBLE_RESET=1

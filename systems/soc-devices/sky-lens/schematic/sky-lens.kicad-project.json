@@ -1,0 +1,14 @@
+{
+  "board": {
+    "layers": 4,
+    "design_rules": {
+      "min_track_width_mm": 0.15,
+      "min_via_drill_mm": 0.3,
+      "min_clearance_mm": 0.15
+    },
+    "dimensions_mm": [70, 100]
+  },
+  "version": "1.0",
+  "name": "Sky Lens",
+  "description": "Pocket cosmic-ray muon telescope — ESP32-S3 + SiPM coincidence detector"
+}

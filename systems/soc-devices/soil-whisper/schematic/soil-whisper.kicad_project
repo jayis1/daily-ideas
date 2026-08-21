@@ -1,0 +1,67 @@
+{
+  "board": {
+    "design_settings": {
+      "defaults": {
+        "board_outline_line_width": 0.1,
+        "silk_line_width": 0.12,
+        "silk_text_italic": false,
+        "silk_text_size_h": 1.0,
+        "silk_text_size_v": 1.0,
+        "silk_text_thickness": 0.15
+      }
+    }
+  },
+  "net_classes": [
+    {
+      "name": "Default",
+      "clearance": 0.15,
+      "trace_width": 0.2,
+      "via_diameter": 0.6,
+      "via_drill": 0.3
+    },
+    {
+      "name": "Power",
+      "clearance": 0.2,
+      "trace_width": 0.5,
+      "via_diameter": 0.8,
+      "via_drill": 0.4
+    },
+    {
+      "name": "RF_SubGHz",
+      "clearance": 0.3,
+      "trace_width": 0.4,
+      "via_diameter": 0.6,
+      "via_drill": 0.3
+    }
+  ],
+  "nets": [
+    "VDD_3V3",
+    "VSUPERCAP",
+    "GND",
+    "VSOLAR",
+    "I2C_SCL",
+    "I2C_SDA",
+    "ONEWIRE_DATA",
+    "MUX_S0",
+    "MUX_S1",
+    "MUX_S2",
+    "MUX_S3",
+    "MUX_EN",
+    "MUX_COM",
+    "ADS_ALERT",
+    "MOIST_OUT_1",
+    "MOIST_OUT_2",
+    "MOIST_OUT_3",
+    "NPK_PWR_EN",
+    "PH_PWR_EN",
+    "DS18B20_PWR",
+    "VBAT_SENSE",
+    "LED_GREEN",
+    "LED_RED",
+    "UART_TX",
+    "UART_RX",
+    "RF_TX",
+    "SWDIO",
+    "SWCLK"
+  ]
+}

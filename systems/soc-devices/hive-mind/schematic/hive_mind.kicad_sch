@@ -1,0 +1,216 @@
+(kicad_sch (version 20240108) (generator "eeschema")
+  (uuid "f1e2d3a4-b5c6-7890-abcd-ef0123456789")
+
+  ;; ============================================================
+  ;; Hive Mind — Top-Level Schematic
+  ;; STM32WL55JC solar-powered beehive health monitor
+  ;; ============================================================
+
+  (paper "A3")
+  (title_block
+    (title "Hive Mind")
+    (date "2026-06-15")
+    (rev "1.0")
+    (company "jayis1")
+    (comment 1 "SoC Device Inventions")
+  )
+
+  (lib_symbols)
+
+  ;; ---- STM32WL55JC UFQFPN48 ----
+  (symbol "MCU_ST:STM32WL55JC" (in_bom yes) (on_board yes)
+    (property "Reference" "U1" (at 0 0 0))
+    (property "Value" "STM32WL55JC" (at 0 2 0))
+    (property "Footprint" "Package_DFN_QFN:QFN-48-1EP_7x7mm_P0.5mm_EP5.6x5.6mm" (at 0 0 0))
+    (pin "PA0/ADC5" bidirectional (at -20 5 0))
+    (pin "PA1/HX711_DOUT" bidirectional (at -20 7 0))
+    (pin "PA2/HX711_SCK" bidirectional (at -20 9 0))
+    (pin "PA3/LPUART1_TX" bidirectional (at -20 11 0))
+    (pin "PA4/LPUART1_RX" bidirectional (at -20 13 0))
+    (pin "PA9/I2C1_SCL" bidirectional (at -20 15 0))
+    (pin "PA10/I2C1_SDA" bidirectional (at -20 17 0))
+    (pin "PB3/ONEWIRE" bidirectional (at -20 19 0))
+    (pin "PB4/I2S_CK" bidirectional (at 20 5 0))
+    (pin "PB5/I2S_WS" bidirectional (at 20 7 0))
+    (pin "PB6/I2S_SD" bidirectional (at 20 9 0))
+    (pin "PB7/HX711_PWR" bidirectional (at 20 11 0))
+    (pin "PB8/IR_LED_OUT" bidirectional (at 20 13 0))
+    (pin "PB9/IR_PHOTO_OUT" bidirectional (at 20 15 0))
+    (pin "PB10/IR_LED_IN" bidirectional (at 20 17 0))
+    (pin "PB11/IR_PHOTO_IN" bidirectional (at 20 19 0))
+    (pin "PC0/RF_CTRL1" bidirectional (at 0 -25 90))
+    (pin "PC1/RF_CTRL2" bidirectional (at 2 -25 90))
+    (pin "PC6/LED_GREEN" bidirectional (at 0 25 90))
+    (pin "PC7/LED_RED" bidirectional (at 2 25 90))
+    (pin "PC13/USER_BTN" bidirectional (at 4 25 90))
+    (pin "VDD" power_in (at -5 -25 90))
+    (pin "VSS" power_in (at -5 25 90))
+    (pin "PH3/BOOT0" bidirectional (at 4 -25 90))
+  )
+
+  ;; ---- HX711 24-bit ADC ----
+  (symbol "ADC:HX711" (in_bom yes) (on_board yes)
+    (property "Reference" "U2" (at 0 0 0))
+    (property "Value" "HX711" (at 0 2 0))
+    (property "Footprint" "Package_SO:SOIC-16_3.9x9.9mm_P1.27mm" (at 0 0 0))
+    (pin "VSUP" power_in (at -8 3 0))
+    (pin "A+" input (at -8 5 0))
+    (pin "A-" input (at -8 7 0))
+    (pin "E+" output (at 8 3 0))
+    (pin "E-" output (at 8 5 0))
+    (pin "DOUT" output (at 8 7 0))
+    (pin "PD_SCK" input (at 8 9 0))
+    (pin "GND" power_in (at -8 9 0))
+  )
+
+  ;; ---- DS18B20 Temperature Sensor x3 ----
+  (symbol "Sensor_Temperature:DS18B20" (in_bom yes) (on_board yes)
+    (property "Reference" "U3-U5" (at 0 0 0))
+    (property "Value" "DS18B20" (at 0 2 0))
+    (property "Footprint" "Package_TO:S0-92_3.8x4.1mm_P2.54mm" (at 0 0 0))
+    (pin "VDD" power_in (at -5 3 0))
+    (pin "DQ" bidirectional (at 0 -5 90))
+    (pin "GND" power_in (at 5 3 0))
+  )
+
+  ;; ---- ICS-43434 MEMS Microphone ----
+  (symbol "Sensor_Audio:ICS-43434" (in_bom yes) (on_board yes)
+    (property "Reference" "U6" (at 0 0 0))
+    (property "Value" "ICS-43434" (at 0 2 0))
+    (property "Footprint" "Sensor:ICS-43434_LGA-6" (at 0 0 0))
+    (pin "VDD" power_in (at -5 3 0))
+    (pin "GND" power_in (at 5 3 0))
+    (pin "SCK" input (at -5 5 0))
+    (pin "WS" input (at -5 7 0))
+    (pin "SD" output (at 5 5 0))
+    (pin "L/R" input (at 5 7 0))
+  )
+
+  ;; ---- BME280 Ambient Sensor ----
+  (symbol "Sensor:BME280" (in_bom yes) (on_board yes)
+    (property "Reference" "U7" (at 0 0 0))
+    (property "Value" "BME280" (at 0 2 0))
+    (property "Footprint" "Sensor:BME280_LGA-8" (at 0 0 0))
+    (pin "VDD" power_in (at 0 -8 0))
+    (pin "GND" power_in (at 0 8 0))
+    (pin "SDI" bidirectional (at -8 0 0))
+    (pin "SCK" input (at 8 0 0))
+  )
+
+  ;; ---- SSD1306 OLED Display ----
+  (symbol "Display:SSD1306" (in_bom yes) (on_board yes)
+    (property "Reference" "OLED1" (at 0 0 0))
+    (property "Value" "SSD1306_128x64" (at 0 2 0))
+    (property "Footprint" "Display:SSD1306_0.91inch_I2C" (at 0 0 0))
+    (pin "VDD" power_in (at -8 3 0))
+    (pin "GND" power_in (at -8 5 0))
+    (pin "SCL" input (at 8 3 0))
+    (pin "SDA" bidirectional (at 8 5 0))
+  )
+
+  ;; ---- TP4056 Battery Charger ----
+  (symbol "Battery_Charger:TP4056" (in_bom yes) (on_board yes)
+    (property "Reference" "U8" (at 0 0 0))
+    (property "Value" "TP4056" (at 0 2 0))
+    (property "Footprint" "Package_SO:SSOP-8_3.95x5.21mm_P0.65mm" (at 0 0 0))
+    (pin "VCC" power_in (at -8 3 0))
+    (pin "BAT" power_out (at 8 3 0))
+    (pin "GND" power_in (at 0 -8 0))
+    (pin "PROG" input (at -8 5 0))
+    (pin "CHRG" output (at 8 5 0))
+  )
+
+  ;; ---- ME6211 LDO ----
+  (symbol "Regulator:ME6211" (in_bom yes) (on_board yes)
+    (property "Reference" "U9" (at 0 0 0))
+    (property "Value" "ME6211-3.3V" (at 0 2 0))
+    (property "Footprint" "Package_SOT:SOT-23-5" (at 0 0 0))
+    (pin "VIN" power_in (at -8 3 0))
+    (pin "VOUT" power_out (at 8 3 0))
+    (pin "GND" power_in (at 0 -8 0))
+    (pin "EN" input (at -8 5 0))
+  )
+
+  ;; ---- SKY13330 RF Switch ----
+  (symbol "RF:SKY13330" (in_bom yes) (on_board yes)
+    (property "Reference" "U11" (at 0 0 0))
+    (property "Value" "SKY13330-385LF" (at 0 2 0))
+    (property "Footprint" "Package_DFN:DFN-6_1.5x1.5mm_P0.5mm" (at 0 0 0))
+    (pin "RFC" bidirectional (at 0 -8 0))
+    (pin "RF1" bidirectional (at -8 0 0))
+    (pin "RF2" bidirectional (at 8 0 0))
+    (pin "VDD" power_in (at 0 8 0))
+    (pin "GND" power_in (at -8 8 0))
+    (pin "CTRL1" input (at -5 8 0))
+    (pin "CTRL2" input (at 5 8 0))
+  )
+
+  ;; ---- CH340E USB-UART Bridge ----
+  (symbol "Interface_USB:CH340E" (in_bom yes) (on_board yes)
+    (property "Reference" "U10" (at 0 0 0))
+    (property "Value" "CH340E" (at 0 2 0))
+    (property "Footprint" "Package_SO:SSOP-20_5.3x6.2mm_P0.65mm" (at 0 0 0))
+    (pin "UD+" bidirectional (at -10 3 0))
+    (pin "UD-" bidirectional (at -10 5 0))
+    (pin "TXD" output (at 10 3 0))
+    (pin "RXD" input (at 10 5 0))
+    (pin "VCC" power_in (at 0 -10 0))
+    (pin "GND" power_in (at 0 10 0))
+  )
+
+  ;; ---- IR Break-Beam Sensors (TCRT1000) x2 ----
+  (symbol "Sensor_Optical:TCRT1000" (in_bom yes) (on_board yes)
+    (property "Reference" "IR1-IR2" (at 0 0 0))
+    (property "Value" "TCRT1000" (at 0 2 0))
+    (property "Footprint" "Sensor:TCRT1000" (at 0 0 0))
+    (pin "A_LED+" input (at -8 3 0))
+    (pin "K_LED-" power_in (at -8 5 0))
+    (pin "C_photo" output (at 8 3 0))
+    (pin "E_photo" power_in (at 8 5 0))
+  )
+
+  ;; ---- Connections ----
+
+  ;; I2C Bus (BME280 + SSD1306)
+  (wire (pts (xy 20 15) (xy 30 15)))   ;; PA9/I2C1_SCL → BME280 SCK + SSD1306 SCL
+  (wire (pts (xy 20 17) (xy 30 17)))   ;; PA10/I2C1_SDA → BME280 SDI + SSD1306 SDA
+
+  ;; I2S Bus (ICS-43434)
+  (wire (pts (xy 20 5) (xy 30 5)))     ;; PB4/I2S_CK → ICS-43434 SCK
+  (wire (pts (xy 20 7) (xy 30 7)))     ;; PB5/I2S_WS → ICS-43434 WS
+  (wire (pts (xy 20 9) (xy 30 9)))     ;; PB6/I2S_SD → ICS-43434 SD
+
+  ;; 1-Wire Bus (DS18B20 x3)
+  (wire (pts (xy 20 19) (xy 30 19)))   ;; PB3 → DS18B20 DQ (all 3 probes)
+
+  ;; HX711 Load Cell
+  (wire (pts (xy 20 7) (xy -30 7)))    ;; PA1 → HX711 DOUT
+  (wire (pts (xy 20 9) (xy -30 9)))    ;; PA2 → HX711 PD_SCK
+  (wire (pts (xy 20 11) (xy -30 11)))   ;; PB7 → HX711 power enable
+
+  ;; IR Break-Beam
+  (wire (pts (xy 20 13) (xy 30 13)))   ;; PB8 → IR LED out
+  (wire (pts (xy 20 15) (xy 30 15)))   ;; PB9 → IR photo out
+  (wire (pts (xy 20 17) (xy 30 17)))   ;; PB10 → IR LED in
+  (wire (pts (xy 20 19) (xy 30 19)))   ;; PB11 → IR photo in
+
+  ;; Power
+  (wire (pts (xy 0 -25) (xy 0 -30)))   ;; VDD → 3.3V rail
+  (wire (pts (xy 0 25) (xy 0 30)))     ;; VSS → GND
+
+  ;; Decoupling capacitors
+  (symbol "Device:C" (in_bom yes) (on_board yes)
+    (property "Reference" "C1-C12" (at 0 0 0))
+    (property "Value" "100nF" (at 0 -2 0))
+    (pin "1" passive (at -2 0 0))
+    (pin "2" passive (at 2 0 0))
+  )
+
+  ;; Pull-up resistors (I2C + 1-Wire)
+  (symbol "Device:R" (in_bom yes) (on_board yes)
+    (property "Reference" "R1-R6" (at 0 0 0))
+    (property "Value" "4.7k" (at 0 -2 0))
+    (pin "1" passive (at -2 0 0))
+    (pin "2" passive (at 2 0 0))
+  )
+)

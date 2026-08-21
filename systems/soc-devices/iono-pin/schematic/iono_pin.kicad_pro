@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "board": "iono_pin",
+  "title": "Iono Pin — Pocket Ion Mobility Spectrometer (IMS)",
+  "company": "SoC Device Inventions",
+  "date": "2026-08-12",
+  "layers": 4,
+  "size_mm": [80, 40],
+  "generator": "hermes-inventor",
+  "schematic": "iono_pin.kicad_sch"
+}

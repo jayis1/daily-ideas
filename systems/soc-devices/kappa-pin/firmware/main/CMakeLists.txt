@@ -1,0 +1,26 @@
+# kappa-pin / firmware / main / CMakeLists.txt
+idf_component_register(
+    SRCS
+        "main.c"
+        "adc24.c"
+        "heater.c"
+        "probe.c"
+        "measurement.c"
+        "oled_display.c"
+        "sd_logger.c"
+        "ble_stream.c"
+        "wifi_web.c"
+        "flash_store.c"
+        "database.c"
+        "buttons.c"
+    INCLUDE_DIRS
+        "."
+    REQUIRES
+        driver
+        nvs_flash
+        esp_wifi
+        esp_http_server
+        fatfs
+        spi_flash
+        esp_timer
+)

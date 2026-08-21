@@ -1,0 +1,16 @@
+{
+  "board": {
+    "layers": 4,
+    "copper_layers": 4,
+    "thickness": 1.6,
+    "finish": "ENIG"
+  },
+  "design_rules": {
+    "min_track_width": 0.15,
+    "min_clearance": 0.15,
+    "min_via_diameter": 0.3,
+    "min_via_drill": 0.2
+  },
+  "page": "A3",
+  "title": "Spiro Flow — Portable Electronic Spirometer"
+}

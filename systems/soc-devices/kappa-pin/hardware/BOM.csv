@@ -1,0 +1,35 @@
+# Kappa Pin — Bill of Materials
+# Prices in USD, indicative (Oct 2025, LCSC/DigiKey/Adafruit/Amazon)
+# Total: ~$61
+
+Part,Qty,Unit,Sub,Ref,Notes
+ESP32-S3-WROOM-1,1,3.50,3.50,U1,Dual-core 240MHz, 512KB SRAM, 8MB flash, WiFi+BLE
+ADS122U04 24-bit delta-sigma ADC,1,4.20,4.20,U2,TSSOP-16, SPI, 4-wire RTD, 1mA IDAC
+MCP4131-103E/P 10kΩ digital pot,1,0.95,0.95,U3,SPI, 8-bit, 10kΩ, heater current control
+OPA548 power op-amp,1,2.80,2.80,U4,SOIC-8, 3A output, heater current driver
+IRFZ44N N-channel MOSFET,1,0.40,0.40,Q1,heater enable switch, TO-220
+PT1000 4-wire RTD (probe),1,3.50,3.50,RTD1,class A, 0°C=1000Ω, 4-wire
+Nichrome heater wire 36AWG,1,0.30,0.30,H1,80mm active length, ~1.0Ω, per probe
+18G stainless hypodermic needle 100mm,1,0.20,0.20,NEEDLE1,Ø1.2mm, per needle probe
+Thermally conductive epoxy,1,1.50,1.50,EPOX1,MG Chemicals 8329TC, probe fill
+5-pin locking connector (probe),1,1.20,1.20,J1,JST-XH 5-pin, probe interface
+SSD1306 OLED 1.3in 128x64 (SPI),1,2.50,2.50,OLED1,SPI variant
+MicroSD socket (push-push),1,0.70,0.70,J2,SPI
+TP4056 USB-C charger module,1,0.90,0.90,U5,18650 charge
+AP2112K-3.3 LDO,1,0.30,0.30,U6,3.3V/600mA SOT-23-5
+18650 holder,1,0.40,0.40,H2,single cell
+18650 3500mAh (Samsung 30Q),1,4.50,4.50,BAT1,optional if not supplied
+USB-C connector 16-pin,1,0.60,0.60,J3,surface mount
+Tactile buttons 6x6mm,3,0.10,0.30,S1-S3,MEASURE/MODE/MENU
+Active buzzer 5V,1,0.50,0.50,BUZ1,PWM
+White LED + 1k resistor,1,0.10,0.10,LED1,status indicator
+0.1uF ceramic caps,15,0.02,0.30,C*,decoupling
+10uF tantalum caps,4,0.10,0.40,C*,rail decoupling
+Resistors 0603 (assorted),40,0.01,0.40,R*,pullups/dividers/protection
+PCB (2-layer JLCPCJ),1,4.00,4.00,PCB1,28x80mm
+3D-printed enclosure (PETG),1,2.50,2.50,CASE1,pen-sized Ø28×160mm
+M3 standoffs + screws,,1.00,1.00,MECH,assembly
+Probe ID resistor (0/10k/22k),3,0.01,0.03,RID,per probe type
+Platinum-tungsten wire 25um (hot-wire probe),1,1.50,1.50,HW1,60mm, ~30Ω, for HW-60 probe
+Kapton flexible heater 40x6mm (surface probe),1,1.20,1.20,SP1,for SP-40 surface probe
+,,TOTAL,~61.00,,

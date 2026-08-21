@@ -1,0 +1,27 @@
+Ref,Part,Qty,PriceUSD,Role,Notes
+U1,ESP32-S3-WROOM-1 N16R8,1,3.40,Compute + connectivity SoC,16 MB flash / 8 MB PSRAM octal
+U2,ADS131M04IPW,1,5.20,4-ch 24-bit simultaneous ΔΣ ADC,TSSOP-20; 8 ksps; PGA x8
+U3,ADA4530-1,1,4.80,1 fA chopper electrometer,slow E-field front end
+U4,LT1991-3,2,6.40,Low-noise difference amp (loop preamp),40 dB; per loop
+U5,NEO-M9N GPS module,1,9.50,PPS + station location,UART + PPS GPIO
+U6,SSD1306 OLED 128x64 I2C,1,2.20,Polar radar display,0.96" monochrome
+U7,SX1262 (Ra-01SH),1,4.50,Optional LoRaWAN uplink,868/915 MHz
+U8,TP4056,1,0.35,18650 USB-C charger,500 mA
+U9,MCP73871,1,1.80,Solar charge manager (5 W),MPPT
+U10,MAX17048,1,2.30,18650 fuel gauge,I2C
+U11,AMS1117-3.3,1,0.15,3.3 V LDO,500 mA
+U12,TPS60403,1,0.60,Charge pump ±2.5 V for preamps,inverting from 3.3 V
+ANT-A,Loop A 10cm dia 40t AWG24 shielded,1,3.00,N-S VLF magnetic antenna,hand-wound
+ANT-B,Loop B 10cm dia 40t AWG24 shielded,1,3.00,E-W VLF magnetic antenna,hand-wound
+ANT-E,30cm telescopic whip + BNC base,1,2.50,Slow E-field antenna,with spark-gap
+SG,Bourns 2049 90V spark-gap,2,0.60,E-whip strike protection,2 per whip
+TVS,ESD9B3.3 TVS diode,4,0.40,Front-end protection,3.3 V clamp
+SOL,5W 6V solar panel 100x80mm,1,4.50,Power,mono-Si
+BAT,18650 3400 mAh Li-ion,1,5.50,Storage,NCR18650B equiv
+µSD,Molex 502570-0893 microSD socket,1,0.90,Logging,SPI
+J1,USB-C 2.0 receptacle,1,0.30,Charging + console,
+ENC,Die-cast Al enclosure 100x60x25mm,1,6.00,Shielding + housing,powder-coated
+TRP,1/4"-20 tripod insert,1,0.50,Field deployment,stainless
+PCB,4-layer FR4 90x65mm,1,7.00,,ENIG finish
+Misc,Passives/inductors/LEDs/buttons/connectors,1,9.00,Various,
+,,Total,~$83,,

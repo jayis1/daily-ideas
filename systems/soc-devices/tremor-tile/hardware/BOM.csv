@@ -1,0 +1,27 @@
+# Tremor Tile — Bill of Materials
+# All prices are estimated for quantity 1 (prototype)
+
+#,Part,Package,Qty,Unit Price (USD),Note,Supplier,Datasheet
+1,RP2040,QFN-56 7x7,1,$0.90,Dual ARM Cortex-M0+ 133MHz,Raspberry Pi,https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf
+2,W25Q128JVSIQ,SOIC-8,1,$0.65,16MB QSPI flash,Winbond,https://www.winbond.com/hq/product-code-detail/5f5e4f5a2195b
+3,ADXL355,LGA-14 6x6,1,$9.50,Ultra-low-noise 3-axis 7µg/√Hz,Analog Devices,https://www.analog.com/en/products/adxl355.html
+4,SX1262IMLTRT,QFN-24 4x4,1,$3.20,LoRa transceiver 868/915MHz,Semtech,https://www.semtech.com/products/wireless-rf/lora-transceivers/sx1262
+5,BME280,LGA-8 2.5x2.5,1,$2.80,T/H/Pressure sensor,Bosch,https://www.bosch-sensortec.com/products/environmental-sensors/humidity-sensors/bme280/
+6,DS3231SN#,SOIC-16,1,$2.10,RTC + TCXO ±2ppm,Maxim Integrated,https://www.maximintegrated.com/en/products/analog/real-time-clocks/DS3231.html
+7,SPV1040TR,TSSOP-8,1,$1.80,Solar MPPT boost charger,STMicroelectronics,https://www.st.com/en/power-management/spv1040.html
+8,TP4056,SOP-8,1,$0.30,LiFePO4 charger,Nanjing Top Power,https://dlnmh9ip6v2uc.cloudfront.net/datasheets/Prototyping/TP4056.pdf
+9,RT9013-33GB,SOT-223,1,$0.25,3.3V LDO 500mA,Richtek,https://www.richtek.com/assets/product_file/RT9013/DS9013-11.pdf
+10,CR1220 holder,SMD,1,$0.20,DS3231 backup battery,Keystone,https://www.keyelco.com/
+11,PowerFilm MPT3.6-75,Custom,1,$4.50,Indoor amorphous solar 3.6V 75mA,PowerFilm,https://powerfilmsolar.com/
+12,LiFePO4 1000mAh,602030 pouch,1,$5.50,3.2V nominal,JJB/JHDK,https://www.jhdk-battery.com/
+13,SK6812MINI,3535,1,$0.10,RGB status LED,Worldsemi,https://worldsemi.com/
+14,CMB-6542-100-SMT,SMD buzzer,1,$0.40,4kHz piezo buzzer,CUI Devices,https://www.cuidevices.com/
+15,Reed switch SMD,SMD,1,$0.15,Tamper detection,Meder/Kellogg,https://www.meder.com/
+16,USB-C receptacle,16-pin SMD,1,$0.35,Power + data,Jingtuojin,https://www.jingtuojin.com/
+17,PCB trace antenna,On PCB,1,$0.00,868/915MHz meandered F-antenna,N/A,N/A
+18,N35 neodymium magnets,6x3mm disc,2,$0.10,Steel surface mounting,Various,N/A
+19,Passives (R/C/L/inductor),0402,~45,$0.75,Decoupling pullups filters,Various,N/A
+20,PCB 4-layer 85x54mm,Rect,1,$2.00,JLCPCB,N/A,N/A
+
+# Total estimated BOM: ~$36.45 (quantity 1)
+# Assembly: ~$10-15 for hand-assembly, ~$3-5 for SMT stencil + reflow

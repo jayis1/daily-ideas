@@ -1,0 +1,28 @@
+# Bolt Compass — main component CMakeLists (ESP-IDF)
+idf_component_register(
+    SRCS
+        "main.c"
+        "adc.c"
+        "detect.c"
+        "classify.c"
+        "classify_data.c"
+        "bearing.c"
+        "range.c"
+        "storm.c"
+        "gps.c"
+        "display.c"
+        "sdlog.c"
+        "ble.c"
+        "wifi.c"
+        "power.c"
+        "fft.c"
+    INCLUDE_DIRS
+        "."
+    REQUIRES
+        driver
+        esp_wifi
+        esp_timer
+        nvs_flash
+        fatfs
+        bt
+)

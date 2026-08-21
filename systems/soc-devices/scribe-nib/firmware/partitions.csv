@@ -1,0 +1,8 @@
+# Scribe Nib Custom Partition Table
+# 8MB flash with language model partition
+
+# Name,   Type, SubType, Offset,  Size, Flags
+nvs,      data, nvs,     ,        0x6000,
+phy_init, data, phy,     ,        0x1000,
+langmodel,data, 0x40,   ,        0x200000,  # 2MB for n-gram model
+factory,  app,  factory, 0x10000, 0x500000, # 5MB app firmware

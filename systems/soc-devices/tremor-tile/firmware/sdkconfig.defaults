@@ -1,0 +1,18 @@
+# Tremor Tile — sdkconfig.defaults
+# Pico SDK configuration defaults
+
+# This file is used by the Pico SDK build system.
+# Since RP2040 uses Pico SDK (not ESP-IDF), most configuration
+# is done in CMakeLists.txt rather than sdkconfig.
+
+# Pico SDK defaults for this project:
+# - USB CDC for console output (field service)
+# - UART0 disabled (pins used for other peripherals)
+# - CPU frequency: 133 MHz (default, sufficient for FFT)
+# - Flash size: 16MB (W25Q128)
+
+# Override CPU frequency if needed for FFT performance:
+# set(PICO_DEFAULT_CLOCK_FREQ_KHZ 266000)  # 266 MHz overclock
+
+# Note: Pico SDK uses CMake configuration, not Kconfig like ESP-IDF.
+# See CMakeLists.txt for all build configuration.

@@ -1,0 +1,29 @@
+# Quartz Tuner — main component CMakeLists (STM32G491RET6 HAL)
+idf_component_register(
+    SRCS
+        "main.c"
+        "si5351.c"
+        "ad5933.c"
+        "sweep.c"
+        "motional.c"
+        "admittance.c"
+        "allan.c"
+        "turnover.c"
+        "classify.c"
+        "display.c"
+        "sdlog.c"
+        "ble.c"
+        "heater.c"
+        "freqcount.c"
+        "calibrate.c"
+        "power.c"
+        "cordic_math.c"
+    INCLUDE_DIRS
+        "."
+    REQUIRES
+        driver
+        stm32g4xx_hal
+        nvs_flash
+        fatfs
+        bt
+)

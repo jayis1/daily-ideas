@@ -1,0 +1,16 @@
+(kicad_pro (version 20231120)
+  (general
+    (project "phase-scope")
+    (author "SoC Device Inventions")
+    (comment "3-Phase Power Quality Analyzer")
+  )
+  (sheets
+    (sheet (name "Top") (file "phase-scope.kicad_sch"))
+  )
+  (net_settings
+    (net_class "Default" "")
+    (net_class "Power" "3V3,VDD,GND,VBAT,VREF_3V0,USB_5V")
+    (net_class "Analog" "V1_ADC,V2_ADC,V3_ADC,I1_ADC,I2_ADC,I3_ADC")
+    (net_class "SPI" "SPI1_SCK,SPI1_MOSI,SPI1_MISO")
+  )
+)

@@ -1,0 +1,71 @@
+(kicad_sch (version 20230614)
+  (generator "eeschema")
+  (uuid "00000000-0000-0000-0000-000000000001")
+  (paper "A3")
+  (title_block
+    (title "Spectra Charm — Pocket UV-Vis Spectrophotometer")
+    (date "2026-06-17")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+    (comment 1 "STM32G491RET6 + ESP32-C3 + AS7343")
+    (comment 2 "4-Layer PCB 85x54mm")
+  )
+
+  (lib_symbols)
+
+  ;; =========================================================
+  ;; Sheet: Spectrometer MCU (STM32G491RET6)
+  ;; =========================================================
+  (sheet (at 50.8 38.1) (size 38.1 25.4)
+    (fields_autoplaced)
+    (uuid "00000000-0000-0000-0000-000000000010")
+    (property "Sheetname" "Spectrometer_MCU" (at 50.8 37.084 0))
+    (property "Sheetfile" "spectrometer_mcu.kicad_sch" (at 50.8 64.033 0))
+  )
+
+  ;; =========================================================
+  ;; Sheet: Wireless MCU (ESP32-C3-MINI-1)
+  ;; =========================================================
+  (sheet (at 101.6 38.1) (size 25.4 25.4)
+    (fields_autoplaced)
+    (uuid "00000000-0000-0000-0000-000000000020")
+    (property "Sheetname" "Wireless_MCU" (at 101.6 37.084 0))
+    (property "Sheetfile" "wireless_mcu.kicad_sch" (at 101.6 64.033 0))
+  )
+
+  ;; =========================================================
+  ;; Sheet: Optical Path (AS7343 + LEDs)
+  ;; =========================================================
+  (sheet (at 25.4 76.2) (size 38.1 20.32)
+    (fields_autoplaced)
+    (uuid "00000000-0000-0000-0000-000000000030")
+    (property "Sheetname" "Optical_Path" (at 25.4 75.184 0))
+    (property "Sheetfile" "optical_path.kicad_sch" (at 25.4 97.028 0))
+  )
+
+  ;; =========================================================
+  ;; Sheet: Power Supply (TPS63020 + TP4056 + LDO)
+  ;; =========================================================
+  (sheet (at 76.2 76.2) (size 38.1 20.32)
+    (fields_autoplaced)
+    (uuid "00000000-0000-0000-0000-000000000040")
+    (property "Sheetname" "Power_Supply" (at 76.2 75.184 0))
+    (property "Sheetfile" "power_supply.kicad_sch" (at 76.2 97.028 0))
+  )
+
+  ;; =========================================================
+  ;; Sheet: UI (OLED + Buttons + LED)
+  ;; =========================================================
+  (sheet (at 127.0 76.2) (size 25.4 20.32)
+    (fields_autoplaced)
+    (uuid "00000000-0000-0000-0000-000000000050")
+    (property "Sheetname" "User_Interface" (at 127.0 75.184 0))
+    (property "Sheetfile" "user_interface.kicad_sch" (at 127.0 97.028 0))
+  )
+
+  ;; Net labels for inter-sheet connections
+  (text "Spectra Charm Top-Level Schematic\n\nInter-sheet connections:\n  UART: STM32G491 PA9/PA10 ↔ ESP32-C3 GPIO0/GPIO1\n  I2C1: STM32G491 PB5/PB6 → EEPROM(24AA02), BQ27441\n  SPI1: STM32G491 PA4-PA7 → AS7343\n  SPI2: STM32G491 PB1-PB4 → W25Q128\n  DAC1: STM32G491 PA4/PA5 → AL8805 ADJ, UV LED driver\n  GPIO: LED enables, ESP control, buttons, hall sensor"
+    (at 50.8 101.6 0)
+    (uuid "00000000-0000-0000-0000-000000000099")
+  )
+)

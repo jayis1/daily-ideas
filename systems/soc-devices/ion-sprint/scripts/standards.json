@@ -1,0 +1,48 @@
+[
+    {
+        "ion": "Ba2+",
+        "concentrations_mM": [0.1, 0.5, 1.0, 5.0],
+        "areas": [],
+        "note": "Internal standard — all others are relative to this"
+    },
+    {
+        "ion": "K+",
+        "concentrations_mM": [0.1, 0.5, 1.0, 5.0],
+        "areas": []
+    },
+    {
+        "ion": "Na+",
+        "concentrations_mM": [0.1, 0.5, 1.0, 5.0],
+        "areas": []
+    },
+    {
+        "ion": "Ca2+",
+        "concentrations_mM": [0.1, 0.5, 1.0, 5.0],
+        "areas": []
+    },
+    {
+        "ion": "Mg2+",
+        "concentrations_mM": [0.1, 0.5, 1.0, 5.0],
+        "areas": []
+    },
+    {
+        "ion": "Cl-",
+        "concentrations_mM": [0.1, 0.5, 1.0, 5.0],
+        "areas": []
+    },
+    {
+        "ion": "NO3-",
+        "concentrations_mM": [0.1, 0.5, 1.0, 5.0],
+        "areas": []
+    },
+    {
+        "ion": "SO4--",
+        "concentrations_mM": [0.1, 0.5, 1.0, 5.0],
+        "areas": []
+    },
+    {
+        "ion": "F-",
+        "concentrations_mM": [0.1, 0.5, 1.0, 5.0],
+        "areas": []
+    }
+]

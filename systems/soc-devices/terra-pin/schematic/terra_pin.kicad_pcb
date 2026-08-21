@@ -1,0 +1,36 @@
+{
+  "board": {
+    "active_layer": "F.Cu",
+    "active_layer_preset": "All Layers",
+    "auto_track_width": false,
+    "hidden_netclasses": [],
+    "high_contrast_mode": 0,
+    "net_color_mode": 1,
+    "routing": {
+      "trace_width": 0.2,
+      "via_dia": 0.4,
+      "via_drill": 0.2
+    },
+    "rules": {
+      "min_clearance": 0.15,
+      "min_track_width": 0.15,
+      "min_via_diameter": 0.3,
+      "min_via_drill": 0.15
+    },
+    "pcb_dimensions": {
+      "width_mm": 60,
+      "height_mm": 25,
+      "layers": 4
+    }
+  },
+  "meta": {
+    "filename": "terra_pin.kicad_pcb",
+    "version": 1
+  },
+  "title_block": {
+    "title": "Terra Pin — Soil Microbiome Activity Probe",
+    "company": "SoC Device Inventions",
+    "rev": "1",
+    "comment": "ESP32-S3-WROOM-1 + SCD41 + EZO-ORP + EZO-EC + DS18B20"
+  }
+}

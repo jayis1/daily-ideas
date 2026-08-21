@@ -1,0 +1,52 @@
+(kicad_pcb (version 20230121) (generator pcbnew)
+  (general
+    (thickness 1.6)
+    (drawings 0)
+    (tracks 0)
+    (zones 0)
+    (modules 0)
+    (nets 0)
+  )
+  (title_block
+    (title "Echo Mote — Room Acoustic Analyzer")
+    (date "2026-06-15")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+  )
+  (layers
+    (0 F.Cu signal)
+    (1 In1.Cu signal)
+    (2 In2.Cu signal)
+    (31 B.Cu signal)
+    (32 B.Adhes user)
+    (33 F.Adhes user)
+    (34 B.Paste user)
+    (35 F.Paste user)
+    (36 B.SilkS user)
+    (37 F.SilkS user)
+    (38 B.Mask user)
+    (39 F.Mask user)
+    (40 Dwgs.User user)
+    (41 Cmts.User user)
+    (42 Eco1.User user)
+    (43 Eco2.User user)
+    (44 Edge.Cuts user)
+  )
+  (net_class "Default" ""
+    (clearance 0.2)
+    (trace_width 0.25)
+    (via_dia 0.8)
+    (via_drill 0.4)
+  )
+  (net_class "Power" ""
+    (clearance 0.3)
+    (trace_width 0.5)
+    (via_dia 1.0)
+    (via_drill 0.6)
+  )
+  ;; PCB outline: 85 x 54 mm (credit-card form factor)
+  ;; Speaker cutout: 28mm round in center
+  ;; Mic positions: 40mm apart, centered on top edge
+  ;; 4-layer stackup: Signal / Ground / Power / Signal
+  ;; See README.md for full layout details
+)

@@ -1,0 +1,33 @@
+# Therma Weave Bill of Materials
+# Format: Part,Package,Qty,Unit_Price,Note,Supplier
+
+Part,Package,Qty,Unit_Price,Note,Supplier
+ESP32-C3-MINI-1,Module,1,2.10,WiFi/BLE5 SoC,Espressif
+BME280,LGA-8 2.5x2.5,1,2.50,Ambient T/H/P,Bosch
+LSM6DS3TR-C,LGA-14 2.5x3,1,2.20,6-axis IMU,STMicro
+INA199A2DBVR,SOT-23-5,1,0.65,Current sense amp 100V/V,Texas Instruments
+74HC4051PW,TSSOP-16,1,0.30,8:1 analog mux,Texas Instruments
+TC4427COA,SOIC-8,2,0.80,Dual MOSFET driver (2 ch per IC),Microchip
+IRF3205SPbF,D2PAK-3,4,0.70,N-ch MOSFET 55V 110A 8mOhm,Infineon
+SSD1306,Module 128x64,1,1.20,I2C OLED display,Generic
+LM2596-5.0,TO-263-5,1,0.90,Buck 12V->5V 3A,Texas Instruments
+AP2112-3.3,SOT-223,1,0.30,LDO 5V->3.3V 600mA,Diodes Inc
+NTC 10kOhm 3950,0805,8,0.05,Thermistor NTC 1%,Generic
+0.01Ohm 1% shunt,2512,1,0.20,Current sense resistor,Ohmite
+74HC32,SOIC-14,1,0.20,Quad OR gate (safety),Texas Instruments
+LM393,SOIC-8,1,0.25,Dual comparator (HW overtemp),Texas Instruments
+100kOhm 0805,0805,2,0.01,Voltage divider for VBAT,Generic
+10kOhm 0805,0805,10,0.01,Pull-ups and dividers,Generic
+4.7kOhm 0805,0805,4,0.01,I2C pull-ups,Generic
+0.1uF 0805,0805,12,0.01,Decoupling caps,Generic
+10uF 0805,0805,4,0.02,Bulk decoupling,Generic
+22uF 0805,0805,2,0.03,LC filter caps,Generic
+68uH inductor,SMD,1,0.40,LM2596 inductor,Wurth
+Schottky diode,SOD-123,1,0.10,Reverse polarity protection,Generic
+XT30 connector,Panel mount,1,0.40,12V power input,Amass
+JST-PH 4-pin,SMD,4,0.10,Heater zone connectors,JST
+JST-PH 3-pin,SMD,1,0.10,Battery connector,JST
+USB-C receptacle,16-pin SMD,1,0.35,USB power + data,Generic
+1N4148 diode,SOD-323,4,0.01,Flyback diodes for MOSFETs,Generic
+100uF electrolytic,6.3mm,1,0.10,LM2596 output cap,Generic
+PCB 2-layer 50x70mm,Rect,1,1.50,JLCPCB 2-layer,JLCPCB

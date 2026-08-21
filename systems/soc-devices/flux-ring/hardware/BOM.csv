@@ -1,0 +1,22 @@
+#,Part,Package,Qty,Unit_USD,Note,MPN,Manufacturer
+1,nRF52840-QIAA,QFN-48 6x6,1,3.80,BLE 5.0 ARM M4F SoC,nRF52840-QIAA,Nordic Semi
+2,MMC5983MA,LGA-16 3x3,1,2.50,3-axis AMR magnetometer ±8Gauss,MMC5983MA,Memsic
+3,LIS2DH12,LGA-12 2x2,1,0.70,3-axis accelerometer,LIS2DH12TR,STMicroelectronics
+4,MS5837-02BA,QFN-8 3.3x3.3,1,3.20,Barometric pressure sensor,MS5837-02BA01,TE Connectivity
+5,SSD1306 OLED,Custom 32x64 flex,1,1.80,Monochrome OLED display,SSD1306,Various
+6,WS2812B-2020,2x2,1,0.15,RGB LED,WS2812B-2020,Worldsemi
+7,DRV2603L,WSON-8 2x2,1,0.90,Haptic motor driver,DRV2603L,TI
+8,W25Q16JVSIQ,SOIC-8,1,0.45,16Mbit SPI flash,W25Q16JVSIQ,Winbond
+9,MCP73831,SOT-23-5,1,0.40,LiPo charger 500mA,MCP73831T-2ACI,Microchip
+10,TLV73333PDRL,SOT-23-5,1,0.30,3.3V LDO 300mA,TLV73333PDRL,TI
+11,Lipo 200mAh,302020 pouch,1,2.80,3.7V lithium polymer,LP302020,Various
+12,USB-C 16-pin SMD,16-pin SMD,1,0.35,USB 2.0 Type-C receptacle,USB-C16P,Various
+13,ERM vibration motor,6x2.7mm coin,1,0.60,Eccentric rotating mass,CM0627,Various
+14,4.7kΩ resistor 0402,0402,6,0.01,I2C pull-ups x3 pairs,RC0402FR-074K7L,Yageo
+15,100nF capacitor 0402,0402,8,0.01,Decoupling caps,CC0402KRX7R7BB104,Yageo
+16,10µF capacitor 0603,0603,3,0.02,Bulk decoupling,CC0603KRX5R7BB106,Yageo
+17,1µF capacitor 0402,0402,2,0.01,MCP73831 timing,CC0402KRX5R7BB105,Yageo
+18,100kΩ resistor 0402,0402,2,0.01,Battery voltage divider,RC0402FR-07100KL,Yageo
+19,22Ω resistor 0402,0402,1,0.01,USB series termination,RC0402FR-0722RL,Yageo
+20,1kΩ resistor 0402,0402,1,0.01,WS2812B series resistor,RC0402FR-071KL,Yageo
+21,PCB 4-layer 22x18mm,Rect FR4 ENIG,1,1.20,Custom PCB,JLCPCB,JLCPCB

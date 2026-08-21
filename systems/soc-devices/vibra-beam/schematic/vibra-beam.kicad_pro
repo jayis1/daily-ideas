@@ -1,0 +1,13 @@
+{
+  "board": {
+    "name": "vibra-beam",
+    "layer": 4,
+    "thickness": 1.6,
+    "copper_thickness": 1
+  },
+  "design_rules": {
+    "min_track_width": 0.15,
+    "min_via_drill": 0.25,
+    "min_clearance": 0.15
+  }
+}

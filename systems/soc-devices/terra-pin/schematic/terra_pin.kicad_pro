@@ -1,0 +1,92 @@
+{
+  "boards": [],
+  "cvpcb": {
+    "equivalence_files": []
+  },
+  "libraries": {
+    "pinned_footprint_libs": [],
+    "pinned_symbol_libs": []
+  },
+  "meta": {
+    "filename": "terra_pin.kicad_pro",
+    "version": 1
+  },
+  "net_settings": {
+    "classes": [
+      {
+        "name": "Power",
+        "pcb_color": "",
+        "schematic_color": "",
+        "track_width": 0.4,
+        "via_dia": 0.6,
+        "via_drill": 0.3
+      },
+      {
+        "name": "Signal",
+        "pcb_color": "",
+        "schematic_color": "",
+        "track_width": 0.2,
+        "via_dia": 0.4,
+        "via_drill": 0.2
+      },
+      {
+        "name": "I2C",
+        "pcb_color": "",
+        "schematic_color": "",
+        "track_width": 0.2,
+        "via_dia": 0.4,
+        "via_drill": 0.2
+      },
+      {
+        "name": "SPI",
+        "pcb_color": "",
+        "schematic_color": "",
+        "track_width": 0.2,
+        "via_dia": 0.4,
+        "via_drill": 0.2
+      },
+      {
+        "name": "UART",
+        "pcb_color": "",
+        "schematic_color": "",
+        "track_width": 0.2,
+        "via_dia": 0.4,
+        "via_drill": 0.2
+      }
+    ],
+    "meta": {
+      "version": 1
+    }
+  },
+  "pcbnew": {
+    "last_paths": {
+      "gencad": "",
+      "gerberos": "",
+      "idfcsv": "",
+      "plot": "",
+      "pos_files": ""
+    }
+  },
+  "schematic": {
+    "drawing": {
+      "default_line_thickness": 6.0,
+      "default_text_size": 50.0,
+      "field_names": [],
+      "intersheets_ref_own_page": false,
+      "intersheets_ref_prefix": "",
+      "intersheets_ref_short": false,
+      "intersheets_ref_show": false,
+      "intersheets_ref_suffix": "",
+      "junction_size_choice": 3,
+      "label_size_ratio": 0.375,
+      "pin_symbol_size": 25.0,
+      "text_offset_ratio": 0.15
+    },
+    "legacy_lib_dir": "",
+    "legacy_lib_list": []
+  },
+  "sheets": [
+    ["", "Root"]
+  ],
+  "text_variables": []
+}

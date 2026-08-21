@@ -1,0 +1,8 @@
+(kicad_pro (version 20230121)
+  (general
+    (project "Brew Sense - Precision Fermentation Monitor")
+  )
+  (pcbnew
+    (page "A4")
+  )
+)

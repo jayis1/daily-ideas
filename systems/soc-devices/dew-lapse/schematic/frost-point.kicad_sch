@@ -1,0 +1,26 @@
+(kicad_sch
+  (version 20230101)
+  (generator "hermes-inventor")
+  (paper "A3")
+  (title_block
+    (title "Frost Point — Chilled-Mirror Dew Point Hygrometer")
+    (company "SoC Device Inventions")
+    (rev "1")
+    (date "2026-06-27")
+  )
+  (lib_symbols
+    ; symbol definitions elided — open in KiCad to populate from libraries
+  )
+  (sheet_instances
+    (sheet "soc.sch")
+    (sheet "power.sch")
+    (sheet "tec-drive.sch")
+    (sheet "mirror.sch")
+    (sheet "optics.sch")
+    (sheet "sensors.sch")
+    (sheet "flash.sch")
+    (sheet "ble.sch")
+    (sheet "ui.sch")
+    (sheet "fan.sch")
+  )
+)

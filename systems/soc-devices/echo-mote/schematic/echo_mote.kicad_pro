@@ -1,0 +1,8 @@
+(kicad_project (version 20230121)
+  (general
+    (project_name "echo_mote")
+  )
+  (meta
+    (filename "echo_mote.kicad_pro")
+  )
+)

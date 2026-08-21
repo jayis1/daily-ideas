@@ -1,0 +1,95 @@
+(kicad_pcb (version 20230121) (generator pcbnew)
+
+  (general
+    (thickness 1.6)
+  )
+
+  (paper "A4")
+
+  (title_block
+    (title "Therma Weave — Multi-Zone Heated Textile Controller")
+    (date "2026-06-16")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+  )
+
+  (layers
+    (0 "F.Cu" signal)
+    (31 "B.Cu" signal)
+    (32 "B.Adhes" user)
+    (33 "F.Adhes" user)
+    (34 "B.Paste" user)
+    (35 "F.Paste" user)
+    (36 "B.SilkS" user)
+    (37 "F.SilkS" user)
+    (38 "B.Mask" user)
+    (39 "F.Mask" user)
+    (40 "Dwgs.User" user)
+    (41 "Cmts.User" user)
+    (44 "Edge.Cuts" user)
+    (45 "Margin" user)
+    (46 "B.CrtYd" user)
+    (47 "F.CrtYd" user)
+  )
+
+  (net_class "Default" ""
+    (clearance 0.2)
+    (trace_width 0.25)
+    (via_dia 0.8)
+    (via_drill 0.4)
+    (uvia_dia 0.3)
+    (uvia_drill 0.1)
+  )
+
+  (net_class "Power" ""
+    (clearance 0.3)
+    (trace_width 2.0)
+    (via_dia 1.0)
+    (via_drill 0.6)
+  )
+
+  (net_class "Heater" ""
+    (clearance 0.5)
+    (trace_width 3.0)
+    (via_dia 1.2)
+    (via_drill 0.8)
+  )
+
+  (net 0 "")
+  (net 1 "VCC_12V")
+  (net 2 "VCC_5V")
+  (net 3 "VCC_3V3")
+  (net 4 "GND")
+  (net 5 "I2C_SDA")
+  (net 6 "I2C_SCL")
+  (net 7 "ZONE0_PWM")
+  (net 8 "ZONE1_PWM")
+  (net 9 "ZONE2_PWM")
+  (net 10 "ZONE3_PWM")
+  (net 11 "MUX_A")
+  (net 12 "MUX_B")
+  (net 13 "MUX_C")
+  (net 14 "MUX_EN")
+  (net 15 "THERM_ADC")
+  (net 16 "CURRENT_ALERT")
+  (net 17 "SAFETY_SHUTDOWN")
+  (net 18 "VBAT_ADC")
+
+  (gr_text "Therma Weave v1.0" (at 25 25) (layer "F.SilkS"))
+  (gr_text "ZONE 0" (at 200 80) (layer "F.SilkS"))
+  (gr_text "ZONE 1" (at 200 90) (layer "F.SilkS"))
+  (gr_text "ZONE 2" (at 200 100) (layer "F.SilkS"))
+  (gr_text "ZONE 3" (at 200 110) (layer "F.SilkS"))
+
+  (dimension (type orthogonal) (layer "Dwgs.User")
+    (start 0 0) (end 50 0)
+    (text "50mm")
+  )
+  (dimension (type orthogonal) (layer "Dwgs.User")
+    (start 0 0) (end 0 70)
+    (text "70mm")
+  )
+
+  (gr_rect (start 0 0) (end 50 70) (layer "Edge.Cuts") (width 0.15))
+
+)

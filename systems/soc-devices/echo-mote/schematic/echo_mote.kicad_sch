@@ -1,0 +1,458 @@
+(kicad_sch (version 20230121) (generator eeschema)
+
+  (uuid e0000000-0000-0000-0000-000000000001)
+  (paper "A4")
+
+  (title_block
+    (title "Echo Mote — Room Acoustic Analyzer")
+    (date "2026-06-15")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+  )
+
+  (lib_symbols)
+
+  ;; ==========================================
+  ;; ESP32-S3-WROOM-1-N8R8 Module (U1)
+  ;; ==========================================
+  (symbol (lib_id "RF:ESP32-S3-WROOM-1-N8R8") (at 127 76.2) (unit 1)
+    (uuid a0000001-0000-0000-0000-000000000001)
+    (property "Reference" "U1" (at 127 50.8 0))
+    (property "Value" "ESP32-S3-WROOM-1-N8R8" (at 127 53.34 0))
+    (property "Footprint" "RF_Module:ESP32-S3-WROOM-1" (at 127 101.6 0))
+    (pin "1"  (uuid a0000001-0000-0000-0000-000000000002))  ;; GPIO0 / STRAP
+    (pin "2"  (uuid a0000001-0000-0000-0000-000000000003))  ;; GPIO1 / I2S_MCLK
+    (pin "3"  (uuid a0000001-0000-0000-0000-000000000004))  ;; GPIO2 / I2S0_BCLK
+    (pin "4"  (uuid a0000001-0000-0000-0000-000000000005))  ;; GPIO3 / I2S0_WS
+    (pin "5"  (uuid a0000001-0000-0000-0000-000000000006))  ;; GPIO4 / I2S0_DATA_IN
+    (pin "6"  (uuid a0000001-0000-0000-0000-000000000007))  ;; GPIO5 / I2S0_DATA_OUT
+    (pin "7"  (uuid a0000001-0000-0000-0000-000000000008))  ;; GPIO6 / I2S1_BCLK
+    (pin "8"  (uuid a0000001-0000-0000-0000-000000000009))  ;; GPIO7 / I2S1_WS
+    (pin "9"  (uuid a0000001-0000-0000-0000-000000000010))  ;; GPIO8 / I2S1_DATA_IN
+    (pin "10" (uuid a0000001-0000-0000-0000-000000000011))  ;; GPIO9 / SPI_CLK (LCD)
+    (pin "11" (uuid a0000001-0000-0000-0000-000000000012))  ;; GPIO10 / SPI_MOSI (LCD)
+    (pin "12" (uuid a0000001-0000-0000-0000-000000000013))  ;; GPIO11 / SPI_DC (LCD)
+    (pin "13" (uuid a0000001-0000-0000-0000-000000000014))  ;; GPIO12 / SPI_CS (LCD)
+    (pin "14" (uuid a0000001-0000-0000-0000-000000000015))  ;; GPIO13 / LCD_RST
+    (pin "15" (uuid a0000001-0000-0000-0000-000000000016))  ;; GPIO14 / LCD_BL
+    (pin "16" (uuid a0000001-0000-0000-0000-000000000017))  ;; GPIO15 / I2C_SDA
+    (pin "17" (uuid a0000001-0000-0000-0000-000000000018))  ;; GPIO16 / I2C_SCL
+    (pin "18" (uuid a0000001-0000-0000-0000-000000000019))  ;; GPIO17 / BTN_MEASURE
+    (pin "19" (uuid a0000001-0000-0000-0000-000000000020))  ;; GPIO18 / BTN_MODE
+    (pin "20" (uuid a0000001-0000-0000-0000-000000000021))  ;; GPIO19 / BTN_POWER
+    (pin "21" (uuid a0000001-0000-0000-0000-000000000022))  ;; GPIO20 / AMP_SD
+    (pin "22" (uuid a0000001-0000-0000-0000-000000000023))  ;; GPIO21 / LED_DATA
+    (pin "23" (uuid a0000001-0000-0000-0000-000000000024))  ;; GPIO38 / CHARGE_STAT
+    (pin "24" (uuid a0000001-0000-0000-0000-000000000025))  ;; GPIO39 / VBAT_SENSE
+    (pin "25" (uuid a0000001-0000-0000-0000-000000000026))  ;; GPIO40 / BAT_TEMP
+    (pin "26" (uuid a0000001-0000-0000-0000-000000000027))  ;; GPIO41 / USB_D+
+    (pin "27" (uuid a0000001-0000-0000-0000-000000000028))  ;; GPIO42 / USB_D-
+    (pin "28" (uuid a0000001-0000-0000-0000-000000000029))  ;; GPIO43 / UART_TX
+    (pin "29" (uuid a0000001-0000-0000-0000-000000000030))  ;; GPIO44 / UART_RX
+    (pin "30" (uuid a0000001-0000-0000-0000-000000000031))  ;; GPIO46 / MIC_L_EN
+    (pin "31" (uuid a0000001-0000-0000-0000-000000000032))  ;; GPIO47 / MIC_R_EN
+    (pin "32" (uuid a0000001-0000-0000-0000-000000000033))  ;; 3V3
+    (pin "33" (uuid a0000001-0000-0000-0000-000000000034))  ;; GND
+  )
+
+  ;; ==========================================
+  ;; ICS-43434 MEMS Microphone Left (U2)
+  ;; ==========================================
+  (symbol (lib_id "Sensor_Audio:ICS-43434") (at 50.8 50.8) (unit 1)
+    (uuid b0000001-0000-0000-0000-000000000001)
+    (property "Reference" "U2" (at 50.8 45.72 0))
+    (property "Value" "ICS-43434" (at 50.8 48.26 0))
+    (property "Footprint" "Sensor_Audio:LGA-6_3.5x2.5mm" (at 50.8 55.88 0))
+    (pin "1" (uuid b0000001-0000-0000-0000-000000000002))  ;; SCK  → GPIO2 (I2S0_BCLK)
+    (pin "2" (uuid b0000001-0000-0000-0000-000000000003))  ;; WS   → GPIO3 (I2S0_WS)
+    (pin "3" (uuid b0000001-0000-0000-0000-000000000004))  ;; SD   → GPIO4 (I2S0_DATA_IN)
+    (pin "4" (uuid b0000001-0000-0000-0000-000000000005))  ;; L/R  → GPIO46 (MIC_L_EN, HIGH=left)
+    (pin "5" (uuid b0000001-0000-0000-0000-000000000006))  ;; VDD  → 3.3V
+    (pin "6" (uuid b0000001-0000-0000-0000-000000000007))  ;; GND
+  )
+
+  ;; ==========================================
+  ;; ICS-43434 MEMS Microphone Right (U3)
+  ;; ==========================================
+  (symbol (lib_id "Sensor_Audio:ICS-43434") (at 203.2 50.8) (unit 1)
+    (uuid b0000002-0000-0000-0000-000000000001)
+    (property "Reference" "U3" (at 203.2 45.72 0))
+    (property "Value" "ICS-43434" (at 203.2 48.26 0))
+    (property "Footprint" "Sensor_Audio:LGA-6_3.5x2.5mm" (at 203.2 55.88 0))
+    (pin "1" (uuid b0000002-0000-0000-0000-000000000002))  ;; SCK  → GPIO6 (I2S1_BCLK)
+    (pin "2" (uuid b0000002-0000-0000-0000-000000000003))  ;; WS   → GPIO7 (I2S1_WS)
+    (pin "3" (uuid b0000002-0000-0000-0000-000000000004))  ;; SD   → GPIO8 (I2S1_DATA_IN)
+    (pin "4" (uuid b0000002-0000-0000-0000-000000000005))  ;; L/R  → GPIO47 (MIC_R_EN, LOW=right)
+    (pin "5" (uuid b0000002-0000-0000-0000-000000000006))  ;; VDD  → 3.3V
+    (pin "6" (uuid b0000002-0000-0000-0000-000000000007))  ;; GND
+  )
+
+  ;; ==========================================
+  ;; MAX98357A I2S DAC + Class-D Amp (U4)
+  ;; ==========================================
+  (symbol (lib_id "Amplifier_Audio:MAX98357A") (at 50.8 127) (unit 1)
+    (uuid c0000001-0000-0000-0000-000000000001)
+    (property "Reference" "U4" (at 50.8 119.38 0))
+    (property "Value" "MAX98357A" (at 50.8 121.92 0))
+    (property "Footprint" "Package_DFN_QFN:QFN-16-1EP_3x3mm_P0.5mm" (at 50.8 132.08 0))
+    (pin "1"  (uuid c0000001-0000-0000-0000-000000000002))  ;; DIN  → GPIO5 (I2S0_DATA_OUT)
+    (pin "2"  (uuid c0000001-0000-0000-0000-000000000003))  ;; BCLK → GPIO2 (I2S0_BCLK)
+    (pin "3"  (uuid c0000001-0000-0000-0000-000000000004))  ;; LRCLK→ GPIO3 (I2S0_WS)
+    (pin "4"  (uuid c0000001-0000-0000-0000-000000000005))  ;; SD_MODE→ GPIO20 (AMP_SD)
+    (pin "5"  (uuid c0000001-0000-0000-0000-000000000006))  ;; GAIN  → GND (9 dB gain)
+    (pin "6"  (uuid c0000001-0000-0000-0000-000000000007))  ;; SCK  → GPIO1 (I2S_MCLK)
+    (pin "7"  (uuid c0000001-0000-0000-0000-000000000008))  ;; VDD  → 3.3V
+    (pin "8"  (uuid c0000001-0000-0000-0000-000000000009))  ;; GND
+    (pin "9"  (uuid c0000001-0000-0000-0000-000000000010))  ;; OUT+ → Speaker+
+    (pin "10" (uuid c0000001-0000-0000-0000-000000000011))  ;; OUT- → Speaker-
+  )
+
+  ;; ==========================================
+  ;; 28mm Micro Speaker (LS1)
+  ;; ==========================================
+  (symbol (lib_id "Device:Speaker") (at 25.4 127) (unit 1)
+    (uuid d0000001-0000-0000-0000-000000000001)
+    (property "Reference" "LS1" (at 25.4 121.92 0))
+    (property "Value" "28mm_8R_0.5W" (at 25.4 124.46 0))
+    (property "Footprint" "Custom:Speaker_28mm_Round" (at 25.4 129.54 0))
+  )
+
+  ;; ==========================================
+  ;; ST7789V 1.3" IPS LCD Module (U5)
+  ;; ==========================================
+  (symbol (lib_id "Display_LCD:ST7789V") (at 203.2 127) (unit 1)
+    (uuid e0000001-0000-0000-0000-000000000001)
+    (property "Reference" "U5" (at 203.2 111.76 0))
+    (property "Value" "ST7789V_1.3in_240x240_IPS" (at 203.2 114.3 0))
+    (property "Footprint" "Display_LCD:LCD_1.3in_240x240_IPS" (at 203.2 132.08 0))
+    (pin "1" (uuid e0000001-0000-0000-0000-000000000002))  ;; SCL  → GPIO9 (SPI_CLK)
+    (pin "2" (uuid e0000001-0000-0000-0000-000000000003))  ;; SDA  → GPIO10 (SPI_MOSI)
+    (pin "3" (uuid e0000001-0000-0000-0000-000000000004))  ;; DC   → GPIO11 (SPI_DC)
+    (pin "4" (uuid e0000001-0000-0000-0000-000000000005))  ;; CS   → GPIO12 (SPI_CS)
+    (pin "5" (uuid e0000001-0000-0000-0000-000000000006))  ;; RES  → GPIO13 (LCD_RST)
+    (pin "6" (uuid e0000001-0000-0000-0000-000000000007))  ;; BL   → GPIO14 (LCD_BL)
+    (pin "7" (uuid e0000001-0000-0000-0000-000000000008))  ;; VCC  → 3.3V
+    (pin "8" (uuid e0000001-0000-0000-0000-000000000009))  ;; GND
+  )
+
+  ;; ==========================================
+  ;; BME280 T/H/P Sensor (U6)
+  ;; ==========================================
+  (symbol (lib_id "Sensor:BME280") (at 127 127) (unit 1)
+    (uuid f0000001-0000-0000-0000-000000000001)
+    (property "Reference" "U6" (at 127 119.38 0))
+    (property "Value" "BME280" (at 127 121.92 0))
+    (property "Footprint" "Sensor:Bosch_LGA-8_3x3mm" (at 127 132.08 0))
+    (pin "1" (uuid f0000001-0000-0000-0000-000000000002))  ;; SDA → GPIO15 (I2C_SDA)
+    (pin "2" (uuid f0000001-0000-0000-0000-000000000003))  ;; SCL → GPIO16 (I2C_SCL)
+    (pin "3" (uuid f0000001-0000-0000-0000-000000000004))  ;; VDD → 3.3V
+    (pin "4" (uuid f0000001-0000-0000-0000-000000000005))  ;; GND
+    (pin "5" (uuid f0000001-0000-0000-0000-000000000006))  ;; CSB → VDD (I2C mode)
+    (pin "6" (uuid f0000001-0000-0000-0000-000000000007))  ;; SDO → GND (addr 0x76)
+  )
+
+  ;; ==========================================
+  ;; MCP73831 LiPo Charger (U7)
+  ;; ==========================================
+  (symbol (lib_id "Battery_Charger:MCP73831") (at 25.4 76.2) (unit 1)
+    (uuid g0000001-0000-0000-0000-000000000001)
+    (property "Reference" "U7" (at 25.4 68.58 0))
+    (property "Value" "MCP73831-2-OT" (at 25.4 71.12 0))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-5" (at 25.4 81.28 0))
+    (pin "1" (uuid g0000001-0000-0000-0000-000000000002))  ;; STAT → GPIO38 (CHARGE_STAT)
+    (pin "2" (uuid g0000001-0000-0000-0000-000000000003))  ;; VSS → GND
+    (pin "3" (uuid g0000001-0000-0000-0000-000000000004))  ;; VBAT → Battery+
+    (pin "4" (uuid g0000001-0000-0000-0000-000000000005))  ;; VDD → USB 5V (VBUS)
+    (pin "5" (uuid g0000001-0000-0000-0000-000000000006))  ;; PROG → 2kΩ to GND (500mA)
+  )
+
+  ;; ==========================================
+  ;; AP2112-3.3 LDO (U8)
+  ;; ==========================================
+  (symbol (lib_id "Regulator_Linear:AP2112-3.3") (at 50.8 76.2) (unit 1)
+    (uuid h0000001-0000-0000-0000-000000000001)
+    (property "Reference" "U8" (at 50.8 68.58 0))
+    (property "Value" "AP2112-3.3" (at 50.8 71.12 0))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-223-3_TabPin2" (at 50.8 81.28 0))
+    (pin "1" (uuid h0000001-0000-0000-0000-000000000002))  ;; IN  → Battery VBAT
+    (pin "2" (uuid h0000001-0000-0000-0000-000000000003))  ;; GND
+    (pin "3" (uuid h0000001-0000-0000-0000-000000000004))  ;; OUT → 3.3V rail
+  )
+
+  ;; ==========================================
+  ;; USB-C Connector (J1)
+  ;; ==========================================
+  (symbol (lib_id "Connector:USB_C_Receptacle") (at 25.4 30.48) (unit 1)
+    (uuid i0000001-0000-0000-0000-000000000001)
+    (property "Reference" "J1" (at 25.4 22.86 0))
+    (property "Value" "USB-C_16pin" (at 25.4 25.4 0))
+    (property "Footprint" "Connector_USB:USB_C_Receptacle_GCT_USB4105" (at 25.4 35.56 0))
+    (pin "1"  (uuid i0000001-0000-0000-0000-000000000002))  ;; VBUS → MCP73831 VDD
+    (pin "2"  (uuid i0000001-0000-0000-0000-000000000003))  ;; GND
+    (pin "3"  (uuid i0000001-0000-0000-0000-000000000004))  ;; D+  → GPIO41
+    (pin "4"  (uuid i0000001-0000-0000-0000-000000000005))  ;; D-  → GPIO42
+    (pin "5"  (uuid i0000001-0000-0000-0000-000000000006))  ;; CC1 → 5.1kΩ to GND
+    (pin "6"  (uuid i0000001-0000-0000-0000-000000000007))  ;; CC2 → 5.1kΩ to GND
+  )
+
+  ;; ==========================================
+  ;; WS2812B RGB LED (D1)
+  ;; ==========================================
+  (symbol (lib_id "LED:WS2812B-2020") (at 203.2 30.48) (unit 1)
+    (uuid j0000001-0000-0000-0000-000000000001)
+    (property "Reference" "D1" (at 203.2 25.4 0))
+    (property "Value" "WS2812B-2020" (at 203.2 27.94 0))
+    (property "Footprint" "LED_SMD:LED_WS2812B-2020" (at 203.2 33.02 0))
+    (pin "1" (uuid j0000001-0000-0000-0000-000000000002))  ;; DIN → GPIO21 (LED_DATA)
+    (pin "2" (uuid j0000001-0000-0000-0000-000000000003))  ;; VDD → 3.3V
+    (pin "3" (uuid j0000001-0000-0000-0000-000000000004))  ;; GND
+    (pin "4" (uuid j0000001-0000-0000-0000-000000000005))  ;; DOUT → NC
+  )
+
+  ;; ==========================================
+  ;; Buttons (SW1-SW3)
+  ;; ==========================================
+  (symbol (lib_id "Switch:SW_Push") (at 76.2 30.48) (unit 1)
+    (uuid k0000001-0000-0000-0000-000000000001)
+    (property "Reference" "SW1" (at 76.2 25.4 0))
+    (property "Value" "MEASURE" (at 76.2 27.94 0))
+    (property "Footprint" "Button_Switch_SMD:SW_Push_6x6mm" (at 76.2 33.02 0))
+    (pin "1" (uuid k0000001-0000-0000-0000-000000000002))  ;; → GPIO17
+    (pin "2" (uuid k0000001-0000-0000-0000-000000000003))  ;; → GND
+  )
+
+  (symbol (lib_id "Switch:SW_Push") (at 76.2 40.64) (unit 1)
+    (uuid k0000002-0000-0000-0000-000000000001)
+    (property "Reference" "SW2" (at 76.2 38.1 0))
+    (property "Value" "MODE" (at 76.2 40.64 0))
+    (property "Footprint" "Button_Switch_SMD:SW_Push_6x6mm" (at 76.2 43.18 0))
+    (pin "1" (uuid k0000002-0000-0000-0000-000000000002))  ;; → GPIO18
+    (pin "2" (uuid k0000002-0000-0000-0000-000000000003))  ;; → GND
+  )
+
+  (symbol (lib_id "Switch:SW_Push") (at 76.2 50.8) (unit 1)
+    (uuid k0000003-0000-0000-0000-000000000001)
+    (property "Reference" "SW3" (at 76.2 48.26 0))
+    (property "Value" "POWER" (at 76.2 50.8 0))
+    (property "Footprint" "Button_Switch_SMD:SW_Push_6x6mm" (at 76.2 53.34 0))
+    (pin "1" (uuid k0000003-0000-0000-0000-000000000002))  ;; → GPIO19
+    (pin "2" (uuid k0000003-0000-0000-0000-000000000003))  ;; → GND
+  )
+
+  ;; ==========================================
+  ;; Power Nets
+  ;; ==========================================
+  (net (code 1) (name "VDD_3.3")
+    (node (ref "U1") (pin "32") (pinfunction "3V3"))
+    (node (ref "U2") (pin "5") (pinfunction "VDD"))
+    (node (ref "U3") (pin "5") (pinfunction "VDD"))
+    (node (ref "U4") (pin "7") (pinfunction "VDD"))
+    (node (ref "U5") (pin "7") (pinfunction "VCC"))
+    (node (ref "U6") (pin "3") (pinfunction "VDD"))
+    (node (ref "U8") (pin "3") (pinfunction "OUT"))
+    (node (ref "D1") (pin "2") (pinfunction "VDD"))
+  )
+
+  (net (code 2) (name "VBUS_5V")
+    (node (ref "J1") (pin "1") (pinfunction "VBUS"))
+    (node (ref "U7") (pin "4") (pinfunction "VDD"))
+  )
+
+  (net (code 3) (name "VBAT")
+    (node (ref "U7") (pin "3") (pinfunction "VBAT"))
+    (node (ref "U8") (pin "1") (pinfunction "IN"))
+  )
+
+  (net (code 4) (name "GND")
+    (node (ref "J1") (pin "2") (pinfunction "GND"))
+    (node (ref "U1") (pin "33") (pinfunction "GND"))
+    (node (ref "U2") (pin "6") (pinfunction "GND"))
+    (node (ref "U3") (pin "6") (pinfunction "GND"))
+    (node (ref "U4") (pin "8") (pinfunction "GND"))
+    (node (ref "U5") (pin "8") (pinfunction "GND"))
+    (node (ref "U6") (pin "4") (pinfunction "GND"))
+    (node (ref "U7") (pin "2") (pinfunction "VSS"))
+    (node (ref "U8") (pin "2") (pinfunction "GND"))
+    (node (ref "D1") (pin "3") (pinfunction "GND"))
+    (node (ref "SW1") (pin "2"))
+    (node (ref "SW2") (pin "2"))
+    (node (ref "SW3") (pin "2"))
+  )
+
+  ;; ==========================================
+  ;; I2S Bus 0 (Speaker + Mic L)
+  ;; ==========================================
+  (net (code 10) (name "I2S_MCLK")
+    (node (ref "U1") (pin "2"))
+    (node (ref "U2") (pin "1") (pinfunction "SCK"))
+    (node (ref "U4") (pin "6") (pinfunction "SCK"))
+  )
+
+  (net (code 11) (name "I2S0_BCLK")
+    (node (ref "U1") (pin "3"))
+    (node (ref "U2") (pin "1") (pinfunction "SCK"))
+    (node (ref "U4") (pin "2") (pinfunction "BCLK"))
+  )
+
+  (net (code 12) (name "I2S0_WS")
+    (node (ref "U1") (pin "4"))
+    (node (ref "U2") (pin "2") (pinfunction "WS"))
+    (node (ref "U4") (pin "3") (pinfunction "LRCLK"))
+  )
+
+  (net (code 13) (name "I2S0_DIN")
+    (node (ref "U1") (pin "5"))
+    (node (ref "U2") (pin "3") (pinfunction "SD"))
+  )
+
+  (net (code 14) (name "I2S0_DOUT")
+    (node (ref "U1") (pin "6"))
+    (node (ref "U4") (pin "1") (pinfunction "DIN"))
+  )
+
+  ;; ==========================================
+  ;; I2S Bus 1 (Mic R)
+  ;; ==========================================
+  (net (code 15) (name "I2S1_BCLK")
+    (node (ref "U1") (pin "7"))
+    (node (ref "U3") (pin "1") (pinfunction "SCK"))
+  )
+
+  (net (code 16) (name "I2S1_WS")
+    (node (ref "U1") (pin "8"))
+    (node (ref "U3") (pin "2") (pinfunction "WS"))
+  )
+
+  (net (code 17) (name "I2S1_DIN")
+    (node (ref "U1") (pin "9"))
+    (node (ref "U3") (pin "3") (pinfunction "SD"))
+  )
+
+  ;; ==========================================
+  ;; SPI LCD Bus
+  ;; ==========================================
+  (net (code 20) (name "SPI_CLK")
+    (node (ref "U1") (pin "10"))
+    (node (ref "U5") (pin "1") (pinfunction "SCL"))
+  )
+
+  (net (code 21) (name "SPI_MOSI")
+    (node (ref "U1") (pin "11"))
+    (node (ref "U5") (pin "2") (pinfunction "SDA"))
+  )
+
+  (net (code 22) (name "SPI_DC")
+    (node (ref "U1") (pin "12"))
+    (node (ref "U5") (pin "3") (pinfunction "DC"))
+  )
+
+  (net (code 23) (name "SPI_CS")
+    (node (ref "U1") (pin "13"))
+    (node (ref "U5") (pin "4") (pinfunction "CS"))
+  )
+
+  ;; ==========================================
+  ;; I2C Bus (BME280)
+  ;; ==========================================
+  (net (code 30) (name "I2C_SDA")
+    (node (ref "U1") (pin "16"))
+    (node (ref "U6") (pin "1") (pinfunction "SDA"))
+  )
+
+  (net (code 31) (name "I2C_SCL")
+    (node (ref "U1") (pin "17"))
+    (node (ref "U6") (pin "2") (pinfunction "SCL"))
+  )
+
+  ;; ==========================================
+  ;; Speaker Output
+  ;; ==========================================
+  (net (code 40) (name "SPK+")
+    (node (ref "U4") (pin "9") (pinfunction "OUT+"))
+    (node (ref "LS1") (pin "1"))
+  )
+
+  (net (code 41) (name "SPK-")
+    (node (ref "U4") (pin "10") (pinfunction "OUT-"))
+    (node (ref "LS1") (pin "2"))
+  )
+
+  ;; ==========================================
+  ;; User Interface
+  ;; ==========================================
+  (net (code 50) (name "BTN_MEASURE")
+    (node (ref "U1") (pin "18"))
+    (node (ref "SW1") (pin "1"))
+  )
+
+  (net (code 51) (name "BTN_MODE")
+    (node (ref "U1") (pin "19"))
+    (node (ref "SW2") (pin "1"))
+  )
+
+  (net (code 52) (name "BTN_POWER")
+    (node (ref "U1") (pin "20"))
+    (node (ref "SW3") (pin "1"))
+  )
+
+  (net (code 53) (name "AMP_SD")
+    (node (ref "U1") (pin "21"))
+    (node (ref "U4") (pin "4") (pinfunction "SD_MODE"))
+  )
+
+  (net (code 54) (name "LED_DATA")
+    (node (ref "U1") (pin "22"))
+    (node (ref "D1") (pin "1") (pinfunction "DIN"))
+  )
+
+  ;; ==========================================
+  ;; Power Sense
+  ;; ==========================================
+  (net (code 60) (name "CHARGE_STAT")
+    (node (ref "U1") (pin "23"))
+    (node (ref "U7") (pin "1") (pinfunction "STAT"))
+  )
+
+  (net (code 61) (name "VBAT_SENSE")
+    (node (ref "U1") (pin "24"))
+    ;; R1=100kΩ to VBAT, R2=100kΩ to GND (1:2 divider)
+  )
+
+  ;; ==========================================
+  ;; USB
+  ;; ==========================================
+  (net (code 70) (name "USB_D+")
+    (node (ref "U1") (pin "26"))
+    (node (ref "J1") (pin "3") (pinfunction "D+"))
+  )
+
+  (net (code 71) (name "USB_D-")
+    (node (ref "U1") (pin "27"))
+    (node (ref "J1") (pin "4") (pinfunction "D-"))
+  )
+
+  ;; ==========================================
+  ;; UART
+  ;; ==========================================
+  (net (code 80) (name "UART_TX")
+    (node (ref "U1") (pin "28"))
+  )
+
+  (net (code 81) (name "UART_RX")
+    (node (ref "U1") (pin "29"))
+  )
+
+  ;; ==========================================
+  ;; Mic Select
+  ;; ==========================================
+  (net (code 90) (name "MIC_L_EN")
+    (node (ref "U1") (pin "30"))
+    (node (ref "U2") (pin "4") (pinfunction "L/R"))
+  )
+
+  (net (code 91) (name "MIC_R_EN")
+    (node (ref "U1") (pin "31"))
+    (node (ref "U3") (pin "4") (pinfunction "L/R"))
+  )
+
+)

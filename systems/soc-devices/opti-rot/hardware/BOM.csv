@@ -1,0 +1,48 @@
+Ref,Qty,Part,Manufacturer,Package,UnitPrice,TotalPrice,Notes
+U1,1,STM32G491RET6,STMicroelectronics,LQFP-64 10×10mm,4.50,4.50,Main MCU: Cortex-M4F @170MHz + CORDIC + FMAC
+U2,1,ESP32-C3-MINI-1,Espressif,Module,2.20,2.20,BLE 5.0 + Wi-Fi companion MCU
+U3,1,TP4056,Nanjing Yaohua,SOP-8,0.30,0.30,Li-ion USB-C charge controller
+U4,1,AP2112-3.3,Diodes Inc,SOT-23-5,0.20,0.20,600mA 3.3V LDO (digital rail)
+U5,1,LP5907MFX-3.3,TI,SOT-23-5,0.80,0.80,250mA ultra-low-noise 3.3V LDO (analog)
+U6,1,ADP7118ARDZ-5.0,ADI,SOIC-8,1.50,1.50,200mA low-noise 5.0V LDO (stepper+LEDs)
+U7,1,TSL257,AMS/TAOS,SOIC-8,3.50,3.50,Light-to-voltage photodiode converter
+U8,1,DS18B20,MaximIntegrated,SOT-23,1.50,1.50,1-Wire digital temperature sensor
+U9,1,SSD1306 OLED 128×64,Generic,I2C module,2.00,2.00,128×64 monochrome OLED display
+U10,1,ULN2003A,TI,SOIC-16,0.50,0.50,Darlington array for stepper motor
+M1,1,28BYJ-48 5V stepper,Generic,27mm round,3.00,3.00,5V unipolar stepper 64:1 gearbox 4096 steps/rev
+D1,1,589nm LED,Epistar / Generic,5mm THT,1.50,1.50,Sodium D-line wavelength LED (narrowband)
+D2,1,520nm LED,Epistar / Generic,5mm THT,0.50,0.50,Green LED for ORD analysis
+D3,1,405nm LED,Lucky Light / Generic,5mm THT,0.50,0.50,Violet LED for ORD analysis
+D4,1,RGB LED (common cathode),Generic,5050 SMD,0.25,0.25,Status indicator
+SW1,1,Tactile switch 6×6,Generic,6×6mm THT,0.10,0.10,MEAS button
+SW2,1,Tactile switch 6×6,Generic,6×6mm THT,0.10,0.10,MODE button
+SW3,1,Tactile switch 6×6,Generic,6×6mm THT,0.10,0.10,CAL button
+J1,1,USB-C 2.0 connector,Generic,USB-C 16-pin,0.40,0.40,USB-C for charging + debug UART
+J2,1,microSD card socket,Generic,microSD push-push,0.30,0.30,microSD card for logging + library
+BT1,1,18650 battery holder,Keystone 1042,Wire lead,1.00,1.00,18650 Li-ion cell holder
+C1,1,100nF X7R,Generic,0603,0.02,0.02,STM32 VDD decoupling
+C2,1,10uF X5R,Generic,0805,0.05,0.05,Bulk capacitor 3V3
+C3,1,1uF X7R,Generic,0603,0.03,0.03,LP5907 output cap (analog noise filter)
+C4,1,2.2uF X7R,Generic,0603,0.03,0.03,ADP7118 output cap
+C5,1,100nF X7R,Generic,0603,0.02,0.02,TSL257 VDD decoupling
+C6,1,4.7uF X5R,Generic,0805,0.05,0.05,TP4056 BAT pin filter
+C7,1,1uF X7R,Generic,0603,0.03,0.03,ESP32-C3 3V3 decoupling
+C8,1,10uF X5R,Generic,0805,0.05,0.05,5V rail bulk cap
+C9,1,100nF X7R,Generic,0603,0.02,0.02,DS18B20 VDD decoupling
+R1,1,4.7kΩ,Generic,0603,0.02,0.02,DS18B20 1-Wire pullup
+R2,1,4.7kΩ,Generic,0603,0.02,0.02,I2C SDA pullup
+R3,1,4.7kΩ,Generic,0603,0.02,0.02,I2C SCL pullup
+R4,1,100kΩ,Generic,0603,0.02,0.02,Battery divider upper
+R5,1,47kΩ,Generic,0603,0.02,0.02,Battery divider lower (~1:3)
+R6,1,150Ω,Generic,0603,0.02,0.02,589nm LED current limit (20mA)
+R7,1,150Ω,Generic,0603,0.02,0.02,520nm LED current limit
+R8,1,100Ω,Generic,0603,0.02,0.02,405nm LED current limit (higher Vf)
+R9,1,10kΩ,Generic,0603,0.02,0.02,ESP32-C3 EN pullup
+R10,3,10kΩ,Generic,0603,0.06,0.06,Button pullups (3×)
+OPT1,2,Linear polarizing film sheet,Edmund Optics,25mm disc,3.00,6.00,Polarizer + analyzer ( dichroic polarizer )
+OPT2,1,Aspheric collimator lens,Edmund Optics,25mm dia f=20mm,3.00,3.00,Collimates LED light into parallel beam
+OPT3,1,Borosilicate sample tube,Custom/Generic,100mm × 10mm OD,2.00,2.00,100mm path length polarimetry tube
+OPT4,1,3D-printed optical bench,3D-printed PLA,Custom,2.00,2.00,Optical path enclosure (black PLA)
+PCB1,1,PCB (4-layer),JLCPCB,160×65mm,2.00,2.00,4-layer FR-4 PCB
+ENC1,1,3D-printed enclosure,3D-printed PLA,160×65×35mm,1.00,1.00,Main device enclosure
+,,Total,,,,57.87,~$58 estimated BOM

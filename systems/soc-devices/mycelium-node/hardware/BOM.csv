@@ -1,0 +1,39 @@
+Item,Reference,Value,Quantity,Package,Footprint,Manufacturer,MPN,Description,Unit_Cost_USD,Notes
+1,U10,ESP32-C6-MINI-1,1,Module,RF_Module:ESP32-C6-MINI-1,Espressif,ESP32-C6-MINI-1,ESP32-C6 WiFi6/BLE5 module with PCB antenna,4.50,Main MCU+radio
+2,U20,SHT40-AD1B-B,1,DFN-4,Sensor_Humidity:Sensirion_DFN-4-1EP_2.5x2.5mm_P0.8mm,Sensirion,SHT40-AD1B-B,Chamber temp/humidity sensor I2C 0x44,2.80,High-accuracy RH
+3,U21,SHT40-AD1B-B,1,DFN-4,Sensor_Humidity:Sensirion_DFN-4-1EP_2.5x2.5mm_P0.8mm,Sensirion,SHT40-AD1B-B,Substrate temp/humidity sensor I2C 0x45,2.80,Alternate I2C addr
+4,U22,SCD41,1,DFN-6,Sensor_Gas:Sensirion_SCD4x_4.9x2.85mm_P1.27mm,Sensirion,SCD41-D-R5,Photoacoustic CO2 sensor I2C 0x62,12.00,NDIR photoacoustic
+5,U23,TSL2591,1,DFN-6,Package_DFN_QFN:DFN-6-1EP_2x2mm_P0.65mm_EP0.8x1.2mm,AMS,TSL2591FN,Light sensor I2C 0x29,3.50,600M:1 dynamic range
+6,U24,SSD1306_128x64,1,OLED_Module,Display_OLED:OLED_128x64_0.96in_I2C,Various,SSD1306-128x64,0.96 inch OLED display I2C 0x3C,1.80,I2C display
+7,U30,DS18B20,1,TO-92,Package_TO_SOT_THT:TO-92_3_Neutral3_Horizontal,Maxim,DS18B20+,1-Wire digital temp probe (deep 1),1.20,Waterproof probe
+8,U31,DS18B20,1,TO-92,Package_TO_SOT_THT:TO-92_3_Neutral3_Horizontal,Maxim,DS18B20+,1-Wire digital temp probe (deep 2),1.20,Waterproof probe
+9,U2,TP4056,1,SOP-8,Package_SO:SOP-8_3.9x4.9mm_P1.27mm,NanJing TopPower,TP4056,LiPo constant-current/constant-voltage charger,0.50,CC/CV 1A charge
+10,U3,MT3608,1,SOT-23-6,Package_TO_SOT_SMD:SOT-23-6,Aerospace,MT3608,DC-DC boost converter LiPo to 5V,0.30,1.5A output
+11,U4,ME6211-3.3,1,SOT-89-3,Package_TO_SOT_SMD:SOT-89-3,Microne,ME6211A33M3G,LDO 3.3V 500mA ultra-low Iq,0.40,Iq=5uA
+12,Q1,IRLML6344,1,SOT-23,Package_TO_SOT_SMD:SOT-23,Infineon,IRLML6344TRPBF,N-ch MOSFET logic-level humidifier driver,0.25,Vgs_th=1V
+13,Q2,IRLML6344,1,SOT-23,Package_TO_SOT_SMD:SOT-23,Infineon,IRLML6344TRPBF,N-ch MOSFET logic-level heater driver,0.25,Vgs_th=1V
+14,Q3,IRLML6344,1,SOT-23,Package_TO_SOT_SMD:SOT-23,Infineon,IRLML6344TRPBF,N-ch MOSFET logic-level fan driver,0.25,Vgs_th=1V
+15,Q4,IRLML6344,1,SOT-23,Package_TO_SOT_SMD:SOT-23,Infineon,IRLML6344TRPBF,N-ch MOSFET logic-level grow light driver,0.25,Vgs_th=1V
+16,Q5,IRLML6344,1,SOT-23,Package_TO_SOT_SMD:SOT-23,Infineon,IRLML6344TRPBF,N-ch MOSFET DS18B20 power gate,0.25,Power gating
+17,Q6,IRLML6344,1,SOT-23,Package_TO_SOT_SMD:SOT-23,Infineon,IRLML6344TRPBF,N-ch MOSFET buzzer power gate,0.25,Power gating
+18,K1,G5LE-1,1,SPDT,Relay_THT:Relay_SPDT_Omron_G5LE-1,Omron,G5LE-1-DC5,Safety relay SPDT 5V coil,1.50,Thermal cutoff
+19,SW1,PEC11R-4220F,1,Rotary,Rotary_Encoder:RotaryEncoder_Alps_EC11,Alps,PEC11R-4220F-S0012,Rotary encoder with pushbutton,1.80,UI input
+20,BZ1,PKMCS0-6A,1,SMD,Buzzer_Beeper:Buzzer_Murata_PKMCS0,Murata,PKMCS0-6A-3V,Piezo buzzer 3V SMD,0.60,Alert buzzer
+21,D1,WS2812B,1,PLCC4,LED_SMD:LED_WS2812B_PLCC4_5.0x5.0mm_P3.2mm,Worldsemi,WS2812B,RGB addressable LED,0.20,Status indicator
+22,J1,USB4105,1,USB-C,Connector_USB:USB_C_Receptacle_GCT_USB4105,GCT,USB4105,USB-C 5V/2A power input,0.50,Power only
+23,J2,JST-PH-2,1,2-pin,Connector_JST:JST_PH_S2B-PH-K_1x02_P2.00mm,JST,S2B-PH-K,LiPo battery connector,0.20,2000mAh 3.7V
+24,J3,Barrel-5.5x2.1,1,DC Jack,Connector_BarrelJack:BarrelJack_Wuerth_6941xx301002,Wuerth,6941xx301002,12V/2A barrel jack,0.40,Actuator power
+25,J4,3.5mm-Jack-x2,2,3.5mm,Connector_Audio:Jack_3.5mm_CUI_SJ1,Various,DS18B20-probe,DS18B20 waterproof probe jack,0.30,Temp probes
+26,C1-C3,100nF+10uF,3,0402/0805,Capacitor_SMD:C_0402_1005Metric/C_0805_2012Metric,Various,Various,Bypass capacitors for ESP32-C6,0.05,2x100nF+1x10uF
+27,C4-C6,100nF,3,0402,Capacitor_SMD:C_0402_1005Metric,Various,Various,I2C sensor bypass caps,0.03,Per sensor
+28,C7,4.7uF,1,0805,Capacitor_SMD:C_0805_2012Metric,Various,Various,SCD41 bypass,0.05,100mA avg
+29,C8,22uF,1,0805,Capacitor_SMD:C_0805_2012Metric,Various,Various,MT3608 output,0.08,Boost output
+30,R1-R2,4.7K,2,0402,Resistor_SMD:R_0402_1005Metric,Various,Various,I2C pull-ups,0.01,SCL/SDA
+31,R3,4.7K,1,0402,Resistor_SMD:R_0402_1005Metric,Various,Various,1-Wire pull-up,0.01,DS18B20 bus
+32,R4-R5,100K,2,0402,Resistor_SMD:R_0402_1005Metric,Various,Various,LiPo voltage divider (1/2),0.01,ADC input
+33,R6-R7,300K+100K,2,0402,Resistor_SMD:R_0402_1005Metric,Various,Various,12V voltage divider (1/4),0.01,ADC input
+34,R8,10K,1,0402,Resistor_SMD:R_0402_1005Metric,Various,Various,BOOT button pull-up,0.01,GPIO0
+35,R9,1K,4,0402,Resistor_SMD:R_0402_1005Metric,Various,Various,MOSFET gate resistors,0.01,Q1-Q4 gates
+36,L1,4.7uH,1,SMD,Inductor_SMD:L_Wurth_7440,Various,Various,MT3608 inductor,0.20,Boost converter
+37,D2,Schottky-5V,1,SOD-123,Diode_SMD:D_SOD-123,Various,Various,Flyback diode for relay coil,0.10,Protection
+38,Total PCB assembly,,,,,,37.20,Estimated BOM cost

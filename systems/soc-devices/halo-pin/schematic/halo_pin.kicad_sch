@@ -1,0 +1,221 @@
+(kicad_sch
+  (version 20250101)
+  (generator "hermes-agent")
+  (paper "A3")
+  (title_block
+    (title "Halo Pin — Pocket Optical Particle Counter")
+    (date "2026-07-06")
+    (company "SoC Device Inventions")
+    (comment 1 "STM32G474RET6 + ESP32-C3 BLE bridge")
+    (comment 2 "650nm laser scattering, 16-bin 0.3-40um, PM1/PM2.5/PM10")
+  )
+
+  ;; ============ POWER SECTION ============
+  (symbol (lib_id "power:VBUS") (at 25.4 25.4 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "#PWR01" (at 25.4 21.59 0))
+    (property "Value" "VBUS 5V" (at 25.4 22.86 0))
+  )
+  (symbol (lib_id "Device:C") (at 30.48 27.94 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "C1" (at 31.75 26.67 0))
+    (property "Value" "100n" (at 33.02 29.21 0))
+  )
+
+  ;; ============ USB-C CHARGE PORT ============
+  (symbol (lib_id "Connector:USB_C_16pin") (at 20.32 45.72 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "J1" (at 20.32 38.1 0))
+    (property "Value" "USB-C" (at 21.59 53.34 0))
+  )
+
+  ;; ============ TP4056 LI-ION CHARGER ============
+  (symbol (lib_id "Battery_Management:TP4056") (at 45.72 45.72 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "U2" (at 45.72 38.1 0))
+    (property "Value" "TP4056" (at 45.72 53.34 0))
+  )
+
+  ;; ============ 18650 BATTERY ============
+  (symbol (lib_id "Device:Battery") (at 66.04 45.72 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "BT1" (at 66.04 39.37 0))
+    (property "Value" "18650 3.7V" (at 66.04 52.07 0))
+  )
+
+  ;; ============ MCP1640B BOOST (3.7→5V for blower) ============
+  (symbol (lib_id "Regulator_Switching:MCP1640B") (at 91.44 45.72 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "U3" (at 91.44 38.1 0))
+    (property "Value" "MCP1640B" (at 91.44 53.34 0))
+  )
+
+  ;; ============ AP2112-3.3 DIGITAL LDO ============
+  (symbol (lib_id "Regulator_Linear:AP2112") (at 116.84 45.72 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "U4" (at 116.84 38.1 0))
+    (property "Value" "AP2112-3.3" (at 116.84 53.34 0))
+  )
+
+  ;; ============ LP5907-3.3 ANALOG LDO ============
+  (symbol (lib_id "Regulator_Linear:LP5907") (at 116.84 68.58 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "U5" (at 116.84 60.96 0))
+    (property "Value" "LP5907-3.3" (at 116.84 76.2 0))
+  )
+
+  ;; ============ REF3030 VOLTAGE REFERENCE ============
+  (symbol (lib_id "Reference_Voltage:REF3030") (at 142.24 68.58 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "U6" (at 142.24 60.96 0))
+    (property "Value" "REF3030" (at 142.24 76.2 0))
+  )
+
+  ;; ============ STM32G474RET6 SoC ============
+  (symbol (lib_id "MCU_ST_STM32G4:STM32G474RET6") (at 119.38 119.38 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "U1" (at 119.38 91.44 0))
+    (property "Value" "STM32G474RET6" (at 119.38 147.32 0))
+    (property "Footprint" "Package_QFP:LQFP-64_10x10mm_P0.5mm" (at 119.38 147.32 0))
+  )
+
+  ;; ============ OPT101 PHOTODIODE + TIA ============
+  (symbol (lib_id "Sensor_Optical:OPT101") (at 45.72 119.38 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "U7" (at 45.72 111.76 0))
+    (property "Value" "OPT101" (at 45.72 127 0))
+    (property "Footprint" "Package_SO:SO-8" (at 45.72 127 0))
+  )
+
+  ;; ============ 650nm LASER DIODE ============
+  (symbol (lib_id "Device:LaserDiode") (at 45.72 91.44 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "D1" (at 45.72 85.09 0))
+    (property "Value" "5mW 650nm" (at 45.72 97.79 0))
+  )
+
+  ;; ============ NCP500 LASER DRIVER ============
+  (symbol (lib_id "Driver_Laser:NCP500") (at 20.32 91.44 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "U13" (at 20.32 83.82 0))
+    (property "Value" "NCP500" (at 20.32 99.06 0))
+  )
+
+  ;; ============ MONITOR PHOTODIODE ============
+  (symbol (lib_id "Device:Photodiode") (at 20.32 119.38 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "D2" (at 20.32 113.03 0))
+    (property "Value" "BPW34" (at 20.32 125.73 0))
+  )
+
+  ;; ============ SDP810 DIFFERENTIAL PRESSURE ============
+  (symbol (lib_id "Sensor_Pressure:SDP810") (at 45.72 147.32 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "U8" (at 45.72 139.7 0))
+    (property "Value" "SDP810" (at 45.72 154.94 0))
+  )
+
+  ;; ============ SHT45 TEMPERATURE/HUMIDITY ============
+  (symbol (lib_id "Sensor_Humidity:SHT45") (at 91.44 147.32 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "U9" (at 91.44 140.97 0))
+    (property "Value" "SHT45-AD1B" (at 91.44 153.67 0))
+  )
+
+  ;; ============ BME280 PRESSURE ============
+  (symbol (lib_id "Sensor_Pressure:BME280") (at 91.44 170.18 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "U10" (at 91.44 163.83 0))
+    (property "Value" "BME280" (at 91.44 176.53 0))
+  )
+
+  ;; ============ ESP32-C3-MINI-1 BLE BRIDGE ============
+  (symbol (lib_id "RF_Module:ESP32-C3-MINI-1") (at 170.18 119.38 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "U11" (at 170.18 91.44 0))
+    (property "Value" "ESP32-C3-MINI-1" (at 170.18 147.32 0))
+  )
+
+  ;; ============ SH1106 OLED DISPLAY ============
+  (symbol (lib_id "Display_OLED:SH1106") (at 170.18 45.72 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "U12" (at 170.18 38.1 0))
+    (property "Value" "SH1106 128x64" (at 170.18 53.34 0))
+  )
+
+  ;; ============ MICRO SD CARD ============
+  (symbol (lib_id "Connector:MicroSD") (at 170.18 68.58 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "J2" (at 170.18 60.96 0))
+    (property "Value" "MicroSD" (at 170.18 76.2 0))
+  )
+
+  ;; ============ EC11 ROTARY ENCODER ============
+  (symbol (lib_id "Device:RotaryEncoder") (at 198.12 45.72 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "SW1" (at 198.12 38.1 0))
+    (property "Value" "EC11" (at 198.12 53.34 0))
+  )
+
+  ;; ============ TACTILE BUTTONS ============
+  (symbol (lib_id "Switch:SW_Push") (at 215.9 45.72 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "SW2" (at 215.9 39.37 0))
+    (property "Value" "SCAN" (at 215.9 52.07 0))
+  )
+  (symbol (lib_id "Switch:SW_Push") (at 215.9 68.58 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "SW3" (at 215.9 62.23 0))
+    (property "Value" "MODE" (at 215.9 74.93 0))
+  )
+
+  ;; ============ REED SWITCH (LASER INTERLOCK) ============
+  (symbol (lib_id "Switch:SW_Reed") (at 20.32 170.18 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "SW4" (at 20.32 163.83 0))
+    (property "Value" "Reed" (at 20.32 176.53 0))
+  )
+
+  ;; ============ WS2812B STATUS LED ============
+  (symbol (lib_id "LED:WS2812B") (at 215.9 91.44 0) (unit 1)
+    (in_bom yes) (on_board yes)
+    (property "Reference" "D3" (at 215.9 85.09 0))
+    (property "Value" "WS2812B" (at 215.9 97.79 0))
+  )
+
+  ;; ============ NET LABELS ============
+  (net "VBUS")
+  (net "VBAT")
+  (net "+5V")
+  (net "+3V3D")
+  (net "+3V3A")
+  (net "VREF_3V0")
+  (net "GND")
+  (net "AGND")
+  (net "PD_OUT")
+  (net "LASER_DRIVE")
+  (net "LASER_MON")
+  (net "I2C1_SCL")
+  (net "I2C1_SDA")
+  (net "I2C3_SCL")
+  (net "I2C3_SDA")
+  (net "SPI2_SCK")
+  (net "SPI2_MISO")
+  (net "SPI2_MOSI")
+  (net "SPI2_CS")
+  (net "USART1_TX")
+  (net "USART1_RX")
+  (net "BLOWER_PWM")
+  (net "ENC_A")
+  (net "ENC_B")
+  (net "ENC_PUSH")
+  (net "SCAN_BTN")
+  (net "MODE_BTN")
+  (net "REED_INTERLOCK")
+  (net "ADC_PD")
+  (net "ADC_VBAT")
+
+  (sheet_instances
+    (path "/" (page "1"))
+  )
+)

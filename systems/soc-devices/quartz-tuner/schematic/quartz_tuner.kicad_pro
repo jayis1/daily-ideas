@@ -1,0 +1,15 @@
+(kicad_pro (version 20230121)
+
+  (general
+    (project "quartz_tuner")
+  )
+
+  (pcb_new
+    (page "A3")
+  )
+
+  (schematic_new
+    (page "A3")
+  )
+
+)

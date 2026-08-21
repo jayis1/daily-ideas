@@ -1,0 +1,37 @@
+Ref,Value,Footprint,Quantity,Manufacturer,Part Number,Description,Unit Price (USD)
+U1,STM32G491RET6,LQFP-64,1,STMicroelectronics,STM32G491RET6,Main MCU Cortex-M4F 170MHz 512KB Flash
+U2,ESP32-C3-MINI-1,Module,1,Espressif,ESP32-C3-MINI-1,BLE+WiFi module
+U3,AD8606ARDZ,SOIC-8,1,Analog Devices,AD8606ARDZ,Dual precision op-amp (control+RE buffer)
+U4,OPA196ID,SOIC-8,1,Texas Instruments,OPA196ID,Precision TIA op-amp
+U5,ADS1115IDGSR,VSSOP-10,1,Texas Instruments,ADS1115IDGSR,16-bit ADC I2C
+U6,ADG1606BCPZ,LFCSP-24,1,Analog Devices,ADG1606BCPZ,7-channel analog switch for TIA ranging
+U7,REF3030AIDBZR,SOT-23-3,1,Texas Instruments,REF3030AIDBZR,2.048V voltage reference 0.1%
+U8,SSD1306,Module,1,Generic,SSD1306-128x64-OLED,128x64 I2C OLED display module
+U9,TPS63020,VQFN-12,1,Texas Instruments,TPS63020,Buck-boost 3.3V 2A
+U10,MCP73871,MSOP-10,1,Microchip,MCP73871-2CCI,LiPo charger USB-C
+U11,TPS61041,SOT-23-5,1,Texas Instruments,TPS61041DBVR,Boost 3.3V→5V 50mA
+U12,LM27761,SOT-23-6,1,Texas Instruments,LM27761,Negative charge pump -5V
+Y1,8 MHz,HC49-S,1,Abracon,ABM8-8.000MHZ,8 MHz crystal for STM32
+Y2,32.768 kHz,FC-135,1,Epson,FC-135R 32.768KHZ,32kHz RTC crystal
+C1-C4,100nF,0402,4,Generic,MLCC 0402 100nF 16V,Decoupling caps
+C5-C6,22pF,0402,2,Generic,MLCC 0402 22pF 50V,Crystal load caps
+C7-C8,10µF,0603,2,Generic,MLCC 0603 10µF 10V,Bulk decoupling
+C9,100µF,0805,1,Generic,MLCC 0805 100µF 6.3V,LC filter output
+C10,2.2pF,0402,1,Generic,MLCC 0402 2.2pF,TIA compensation cap (100MΩ range)
+C11,4.7pF,0402,1,Generic,MLCC 0402 4.7pF,TIA compensation cap (10MΩ range)
+C12,10pF,0402,1,Generic,MLCC 0402 10pF,TIA compensation cap (1MΩ range)
+C13,22pF,0402,1,Generic,MLCC 0402 22pF,TIA compensation cap (100kΩ range)
+C14,47pF,0402,1,Generic,MLCC 0402 47pF,TIA compensation cap (10kΩ range)
+C15,10µF,0603,1,Generic,MLCC 0603 10µF,EIS AC coupling cap
+L1,10µH,0805,1,Murata,LQH32MN100K23L,LC filter inductor
+R1,100Ω,0402,1,Generic,Res 0402 100Ω,CE current limiting resistor
+R2-R8,Feedback resistors,0402,7,Generic,Thin film 0.1%,TIA feedback resistors (100MΩ to 100Ω)
+R9,100kΩ,0402,1,Generic,Res 0402 100kΩ,Battery voltage divider high
+R10,100kΩ,0402,1,Generic,Res 0402 100kΩ,Battery voltage divider low
+J1,USB-C,USB-C-16P,1,Generic,USB-C receptacle,USB-C connector
+J2,TRS 3.5mm,3.5mm-TRS,1,CUI,SJ-3523-SMT,Electrode connector CE/RE/WE
+J3,MicroSD,MicroSD-slot,1,Molex,5040771891,MicroSD card slot
+SW1,Rotary encoder,PEC11,1,Bourns,PEC11R-4220F-S0024,Rotary encoder with push
+SW2,Tactile switch,6x6mm,1,Alps,SKQGAFE010,Tactile button mode
+SW3,Tactile switch,6x6mm,1,Alps,SKQGAFE010,Tactile button start/stop
+BT1,LiPo 1000mAh,503030,1,Generic,503030-1000mAh,LiPo battery 3.7V 1000mAh

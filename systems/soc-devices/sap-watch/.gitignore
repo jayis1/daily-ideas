@@ -1,0 +1,31 @@
+# Build artifacts
+build/
+*.o
+*.elf
+*.bin
+*.hex
+*.map
+*.list
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*~
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# KiCad backups
+*-backups/
+*.bak
+*.sch-bak
+*.kicad_pcb-bak

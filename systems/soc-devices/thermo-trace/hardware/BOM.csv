@@ -1,0 +1,39 @@
+RefDes,Qty,Value,Package,Footprint,Manufacturer,MPN,Unit_USD,Total_USD,Notes
+U1,1,STM32G491RET6,LQFP-64,LQFP-64_10x10mm_P0.5mm,ST,STM32G491RET6,5.28,5.28,170MHz Cortex-M4F MCU
+U2,1,ADS122U04,TSSOP-16,TSSOP-16_5x4.4mm_P0.65mm,Texas Instruments,ADS122U04IRHBT,6.80,6.80,24-bit delta-sigma ADC
+U3,1,ESP32-C3-MINI-1,Module,ESP32-C3-MINI-1,Espressif,ESP32-C3-MINI-1,2.95,2.95,BLE 5.0 + WiFi module
+U4,1,SH1106 OLED 128x64,Module,OLED_128x64_I2C,Generic,SH1106_0.96_OLED,2.50,2.50,I2C OLED display
+U5,1,TP4056,SOP-8,SOP-8_5x6.2mm_P1.27mm,Nanjing TopPower,TP4056,0.35,0.35,LiPo charge controller
+U6,1,BQ25883,DSBGA-6,DSBGA-6,Texas Instruments,BQ25883,2.10,2.10,Boost converter 5V
+U7,1,AP2112K-3.3,SOT-23-5,SOT-23-5,Diodes,AP2112K-3.3,0.25,0.25,3.3V LDO
+U8,1,TLV3201,SOT-23-6,SOT-23-6,Texas Instruments,TLV3201AIDCKR,1.05,1.05,High-speed comparator (safety)
+Q1,1,IRLZ44N,TO-220,TO-220,Infineon,IRLZ44N,1.20,1.20,N-channel MOSFET heater 1
+Q2,1,IRLZ44N,TO-220,TO-220,Infineon,IRLZ44N,1.20,1.20,N-channel MOSFET heater 2
+RTD1,1,PT1000 2mm,0805,0805,TE Connectivity,PT1000-2K-0805,3.20,3.20,Pt1000 class A RTD (sample)
+RTD2,1,PT1000 2mm,0805,0805,TE Connectivity,PT1000-2K-0805,3.20,3.20,Pt1000 class A RTD (reference)
+H1,1,Kapton heater 5x5mm 50Ω,Custom,Kapton_5x5mm,Minco,HK5357R5.0L12B,4.50,4.50,Thin-film heater (sample)
+H2,1,Kapton heater 5x5mm 50Ω,Custom,Kapton_5x5mm,Minco,HK5357R5.0L12B,4.50,4.50,Thin-film heater (reference)
+F1,1,Thermal fuse 250°C,Radial,Thermal_fuse_250,Cantherm,MF-RG250,0.45,0.45,One-shot thermal fuse
+F2,1,Polyfuse 500mA,1206,1206,Bel Fuse,0ZCG0005FF2C,0.30,0.30,Resettable polyfuse
+R1,1,0.5Ω 1% 1W,2512,2512,Vishay,WSLP0505R0500FEA,0.35,0.35,Heater current sense resistor
+R2,1,10kΩ 1% 0805,0805,0805,Yageo,RC0805FR-0710KL,0.03,0.03,Pull-up (DRDY)
+R3,1,4.7kΩ 1% 0805,0805,0805,Yageo,RC0805FR-074K7L,0.03,0.03,DS18B20 OneWire pull-up
+R4,2,100kΩ 1% 0805,0805,0805,Yageo,RC0805FR-07100KL,0.03,0.06,Battery voltage divider
+R5,1,1kΩ 1% 0805,0805,0805,Yageo,RC0805FR-071KL,0.03,0.03,LED current limit
+R6,2,4.7kΩ 1% 0805,0805,0805,Yageo,RC0805FR-074K7L,0.03,0.06,I2C pull-up
+C1,1,10µF 10V X5R 0805,0805,0805,Murata,GRM21BR61A106KE19L,0.08,0.08,3.3V decoupling
+C2,3,100nF X7R 0805,0805,0805,Murata,GRM21BR72A104KA03L,0.03,0.09,Decoupling (MCU/ADC)
+C3,1,22µF 10V X5R 0805,0805,0805,Murata,GRM21BR61A226ME44L,0.10,0.10,5V rail decoupling
+C4,1,4.7µF 10V X5R 0603,0603,0603,Murata,GRM188R61A475KE15D,0.06,0.06,TP4056 VCC decoupling
+D1,1,Red LED 0805,0805,0805,Kingbright,KPT-2015EC,0.08,0.08,Status LED red (heating)
+D2,1,Green LED 0805,0805,0805,Kingbright,KPT-2015SGC,0.08,0.08,Status LED green (ready)
+J1,1,USB-C 16-pin,USB-C,USB-C_16P_Amphenol,Amphenol,12401548E4#2A,0.65,0.65,USB-C connector (charging)
+J2,1,microSD socket,microSD,microSD_socket_Molex,Molex,502772-0493,0.45,0.45,microSD card socket
+BT1,1,18650 LiPo holder,18650_holder,Keystone_1042,Keystone,1042,1.20,1.20,18650 battery holder
+SW1,3,Tactile button 6x6mm,TACT_6x6,TACT_6x6_4.3mm,C&K,PTS645SH50SMTR92LFS,0.12,0.36,Tactile buttons A/B/C
+DS1,1,DS18B20,TO-92,TO-92_3,Maxim,DS18B20+,2.20,2.20,Ambient temperature sensor
+PAN,10,Al DSC pan 5mg,Al_pan,TA_900793.901,TA Instruments,900793.901,0.18,1.80,Aluminum DSC pans (pack of 10)
+MISC,1,Alumina spacer 1mm,Custom,Al2O3_1mm,Coorstek,AS-1MM,0.80,0.80,Ceramic thermal isolation spacer
+PCB,1,PCB FR4 2-layer 110x70mm,Custom,PCB_110x70,JLCPCB,PCB_2L_110x70,2.50,2.50,Custom PCB
+ENC,1,Al enclosure 110x70x30mm,Custom,ENC_AL_110x70,Generic,AL_BOX_110x70,3.20,3.20,Aluminum enclosure
+,,,Total:,,,,$75.78

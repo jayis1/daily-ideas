@@ -1,0 +1,112 @@
+(kicad_pcb (version 20230121) (generator pcbnew)
+
+  (general
+    (thickness 1.6)
+    (layers 4)
+    (copper_layers 4)
+  )
+
+  (board_setup
+    (title_block
+      (title "Phyto Pulse — Pocket Plant Electrophysiology Recorder")
+      (date "2026-07-20")
+      (rev "1.0")
+      (company "SoC Device Inventions")
+    )
+    (page_size "Custom" 80 50)
+  )
+
+  ;; ==========================================
+  ;; Layer Stack
+  ;; ==========================================
+  (layers
+    (layer "F.Cu"    "signal"  0.035)
+    (layer "In1.Cu"  "power"   0.035)  ;; GND plane
+    (layer "In2.Cu"  "power"   0.035)  ;; VDD plane
+    (layer "B.Cu"    "signal"  0.035)
+  )
+
+  ;; ==========================================
+  ;; Design Rules
+  ;; ==========================================
+  (design_rules
+    (min_clearance 0.15)
+    (min_track_width 0.2)
+    (min_via_diameter 0.6)
+    (min_via_drill 0.3)
+  )
+
+  ;; ==========================================
+  ;; Component Placement (approximate)
+  ;; ==========================================
+  ;; U1 STM32G474RET6 — center (40, 25)
+  ;; U2 ESP32-C3-MINI-1 — right side (60, 15)
+  ;; U3 ADS1256 — right (55, 35)
+  ;; U4 INA333 — left (12, 30)  [analog section]
+  ;; U5 OPA2333 — left (8, 20)
+  ;; U6 74HC4051 — left (18, 30)
+  ;; U7 SSD1306 OLED — top (30, 8)
+  ;; U8 BME280 — top right (70, 40)
+  ;; U9 MCP73831 — bottom left (5, 40)
+  ;; U10 AP2112 — bottom left (10, 40)
+  ;; U11 TPS7A02 — bottom left (15, 40)
+  ;; U13 PC817 — bottom right (70, 25)
+  ;; J1 BNC_E1 — left edge (2, 25)
+  ;; J2 BNC_E2 — left edge (2, 35)
+  ;; J3 microSD — bottom edge (30, 47)
+  ;; J4 USB-C — bottom edge (50, 47)
+  ;; BAT1 — under PCB (50, 25)
+  ;; SW1-3 buttons — top edge (20, 3)/(35, 3)/(50, 3)
+  ;; LED1 WS2812B — right edge (75, 30)
+
+  ;; ==========================================
+  ;; Layout notes:
+  ;; Analog section (left 20mm): INA333, OPA2333, 74HC4051, gain resistors, BNC jacks
+  ;; Digital section (right 60mm): STM32, ESP32, ADS1256, SD, OLED, USB
+  ;; Split ground planes: analog GND (left) and digital GND (right) tied at single point under ADS1256
+  ;; VDD_A (analog 3.3V from TPS7A02) powers only INA333, OPA2333, ADS1256 analog section
+  ;; VDD_D (digital 3.3V from AP2112) powers everything else
+  ;; Ferrite bead between VDD_D and VDD_A inputs
+  ;; Analog traces: 0.3mm width, guarded by GND pour on F.Cu
+  ;; Digital traces: 0.2mm width
+  ;; BNC jacks on left edge, USB-C on bottom, SD on bottom, OLED on top
+  ;; Battery under the PCB with foam pad, no components on B.Cu under battery area
+  ;; ==========================================
+
+  (net_classes
+    (net_class "Analog"
+      (clearance 0.3)
+      (track_width 0.3)
+      (via_diameter 0.6)
+      (via_drill 0.3)
+      (nets "E1_IN" "E2_IN" "INA_OUT" "VMID")
+    )
+    (net_class "Power"
+      (clearance 0.2)
+      (track_width 0.4)
+      (via_diameter 0.6)
+      (via_drill 0.3)
+      (nets "VDD_A" "VDD_D" "GND" "VBUS" "VBAT")
+    )
+    (net_class "Digital"
+      (clearance 0.15)
+      (track_width 0.2)
+      (via_diameter 0.6)
+      (via_drill 0.3)
+    )
+  )
+
+  ;; Edge cuts (board outline)
+  (gr_line (start 0 0) (end 80 0) (layer "Edge.Cuts"))
+  (gr_line (start 80 0) (end 80 50) (layer "Edge.Cuts"))
+  (gr_line (start 80 50) (end 0 50) (layer "Edge.Cuts"))
+  (gr_line (start 0 50) (end 0 0) (layer "Edge.Cuts"))
+
+  ;; Keepout: analog section (left 20mm) has no digital traces on F.Cu
+  (zone (net "GND") (layer "F.Cu") (outline (rect 0 0 20 50))
+    (name "Analog_GND_pour")
+  )
+  (zone (net "GND") (layer "In1.Cu") (outline (rect 0 0 80 50))
+    (name "Digital_GND_plane")
+  )
+)

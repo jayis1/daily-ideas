@@ -1,0 +1,72 @@
+(kicad_pcb
+  (version 20231120)
+  (generator "hermes-inventor")
+
+  (general
+    (thickness 1.6)
+    (copper_layers 4)
+  )
+
+  (paper "A4")
+
+  (title_block
+    (title "Mycelium Node - Mushroom Fruiting Chamber Controller")
+    (date "2026-06-16")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+  )
+
+  ;; Board outline: 105mm x 75mm (DIN-rail mountable)
+  (gr_rect (start 0 0) (end 105 75) (layer "Edge.Cuts") (width 0.15))
+
+  ;; Mounting holes for DIN-rail clip
+  (gr_circle (center 5 67.5) (end 7 67.5) (layer "Edge.Cuts") (width 0.15))
+  (gr_circle (center 100 67.5) (end 102 67.5) (layer "Edge.Cuts") (width 0.15))
+
+  ;; ESP32-C6-MINI-1 placement (center-left of board)
+  ;; Components area: sensors top-right, actuators bottom-right
+  ;; Power area: top-left
+  ;; UI area: bottom-left
+
+  (net_class "Default" (clearance 0.2) (trace_width 0.25))
+  (net_class "Power" (clearance 0.3) (trace_width 0.5))
+  (net_class "I2C" (clearance 0.2) (trace_width 0.25))
+  (net_class "PWM" (clearance 0.2) (trace_width 0.3))
+
+  ;; Power nets
+  (net "VCC_3V3" (class "Power"))
+  (net "VCC_5V" (class "Power"))
+  (net "VCC_12V" (class "Power"))
+  (net "GND" (class "Power"))
+  (net "VBAT" (class "Power"))
+
+  ;; I2C nets
+  (net "I2C_SDA" (class "I2C"))
+  (net "I2C_SCL" (class "I2C"))
+
+  ;; PWM nets
+  (net "PWM_HUM" (class "PWM"))
+  (net "PWM_HEAT" (class "PWM"))
+  (net "PWM_FAN" (class "PWM"))
+  (net "PWM_LIGHT" (class "PWM"))
+
+  ;; Sensor nets
+  (net "ONE_WIRE")
+  (net "ROT_A")
+  (net "ROT_B")
+  (net "ROT_SW")
+  (net "WS2812_DATA")
+  (net "RELAY_CTRL")
+  (net "BUZZER")
+  (net "SCD41_RESET")
+  (net "DS18B20_PWR")
+  (net "LDO_EN")
+  (net "ADC_LIPO")
+  (net "ADC_12V")
+
+  ;; Layer stackup (4-layer)
+  ;; Layer 1: Top copper (components, signals)
+  ;; Layer 2: Ground plane
+  ;; Layer 3: Power plane (3.3V, 5V)
+  ;; Layer 4: Bottom copper (routing, power)
+)

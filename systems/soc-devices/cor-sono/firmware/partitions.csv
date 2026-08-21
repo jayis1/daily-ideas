@@ -1,0 +1,7 @@
+# Cor Sono — ESP32-S3 custom partition table
+# Name,   Type, SubType,  Offset,   Size,    Flags
+nvs,      data, nvs,      0x110000, 0x4000,
+otadata,  data, ota,      0x114000, 0x2000,
+phy_init, data, phy,      0x116000, 0x1000,
+model,    data, nvs,      0x117000, 0x10000,  # 64 KB for CNN model weights
+factory,  app,  factory,  0x120000, 0x2E0000, # ~3 MB app firmware

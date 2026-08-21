@@ -1,0 +1,5 @@
+# Levia Forge — STL placeholder for bottom array mount
+# Mirror of the top array mount. See array_mount_top.stl for details.
+
+This is a placeholder file. Generate the actual STL using OpenSCAD or
+similar CAD software. See the assembly guide for dimensions.

@@ -1,0 +1,12 @@
+# Build artifacts
+firmware/build-sim/
+firmware/esp32/build/
+*.o
+*.elf
+*.bin
+*.map
+
+# KiCad backups
+*.bak
+*.bck
+*~

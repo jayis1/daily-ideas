@@ -1,0 +1,37 @@
+Component,Part,Quantity,Unit Price (USD),Total (USD),Source,Notes
+RP2040,Raspberry Pi RP2040,1,0.70,0.70,LCSC,Dual-core M0+ 125MHz with PIO
+ESP32-C3-MINI-1,Espressif ESP32-C3-MINI-1,1,1.50,1.50,LCSC,BLE 5.0 + WiFi bridge
+BME280,Bosch BME280,1,2.50,2.50,LCSC,Temp/pressure/humidity I2C
+SSD1306 OLED,0.96" 128x64 I2C OLED,1,2.00,2.00,LCSC,Monochrome display
+Ultrasonic Transducer,Manorshi MS-P4010 40kHz,6,0.40,2.40,LCSC,10mm dia weather-resistant
+TC4427,Microchip TC4427 MOSFET driver,2,0.60,1.20,LCSC,Dual 1.5A driver for HV transducer drive
+CD4052B,TI CD4052B analog mux,1,0.50,0.50,LCSC,4:1 mux for transducer selection
+OPA2350,TI OPA2350 dual op-amp,1,2.00,2.00,LCSC,Rail-to-rail 38MHz for TIA + envelope
+TLV3201,TI TLV3201 comparator,1,1.00,1.00,LCSC,40ns comparator for echo detection
+MCP4911,Microchip MCP4911 DAC,1,0.80,0.80,LCSC,10-bit SPI DAC for comparator threshold
+W25Q16,Winbond W25Q16JV 2MB QSPI flash,1,0.30,0.30,LCSC,RP2040 program flash
+TP4056,TP4056 Li-ion charger,1,0.30,0.30,LCSC,USB-C charging
+AP2112-3.3,AP2112 LDO 3.3V 600mA,1,0.20,0.20,LCSC,System voltage regulator
+24MHz Crystal,Abracon ABM8G-24.000MHz,1,0.30,0.30,LCSC,RP2040 system crystal
+microSD Socket,Molex 503398-1892,1,0.30,0.30,LCSC,microSD card slot SPI
+USB-C Connector,Amphenol 12401598E4#2A,1,0.50,0.50,LCSC,USB-C for charging + debug
+18650 Battery Holder,Kylin 18650 spring holder,1,0.50,0.50,LCSC,Single 18650 cell
+Tactile Buttons,6x6mm SMD tactile switch,3,0.10,0.30,LCSC,PWR/MODE/AVG buttons
+LED Blue,0805 blue LED,1,0.10,0.10,LCSC,Status LED
+LED Green,0805 green LED,1,0.10,0.10,LCSC,Data activity LED
+0.1uF Cap 0805,Multilayer ceramic X7R 100nF,20,0.01,0.20,LCSC,Decoupling caps
+10uF Cap 0805,Tantalum 10uF 16V,5,0.10,0.50,LCSC,Power supply bulk
+1uF Cap 0805,X7R 1uF 50V,5,0.05,0.25,LCSC,Analog decoupling
+10k Resistor 0805,1% 1/8W,10,0.01,0.10,LCSC,Pull-ups dividers
+100k Resistor 0805,1% 1/8W,3,0.01,0.03,LCSC,TIA feedback
+1M Resistor 0805,1% 1/8W,2,0.01,0.02,LCSC,Battery divider
+10pF Cap 0805,C0G 10pF 50V,2,0.05,0.10,LCSC,TIA feedback cap
+1nF Cap 0805,X7R 1nF 50V,4,0.05,0.20,LCSC,Envelope detector
+1N4148 Diode,SOD-123 switching diode,4,0.05,0.20,LCSC,Charge pump + envelope
+Inductor 10uH,SMD power inductor 10uH,1,0.20,0.20,LCSC,Charge pump inductor
+FFC Connector,10-pin 0.5mm FFC connector,2,0.40,0.80,LCSC,Sensor head connection
+PCB,4-layer 120x65mm + 60x60mm,1,5.00,5.00,JLCPCB,Custom PCB fabrication
+3D Printed Enclosure,PLA enclosure + sensor head,1,2.00,2.00,Local,3D printed case
+M3 Standoffs,M3x40mm nylon standoff,3,0.10,0.30,Local,Sensor head geometry
+M3 Screws,M3x6mm nylon screws,8,0.05,0.40,Local,Assembly
+,,Total:,,"$30.51"

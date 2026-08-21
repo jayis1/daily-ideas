@@ -1,0 +1,10 @@
+(kicad_pro
+  (version 20231120)
+  (generator "phase_lock")
+  (board (setup (last_layers 4)))
+  (meta (title "Phase Lock — Pocket Digital Lock-In Amplifier")
+        (company "SoC Device Inventions")
+        (rev "1.0")
+        (date "2026-07-04"))
+  (sheets (sheet "phase_lock.kicad_sch"))
+)

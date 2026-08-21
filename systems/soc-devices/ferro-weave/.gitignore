@@ -1,0 +1,20 @@
+# Build the simulation first (host, no hardware needed)
+build_sim/
+build-stm32/
+build/
+
+# ESP-IDF build artifacts
+firmware/esp32/build/
+firmware/esp32/sdkconfig
+firmware/esp32/managed_components/
+firmware/esp32/prefixer/
+
+# Sim-generated sweep dumps
+BH_*.csv
+BH_*.json
+bh_summary.csv
+*.png
+
+# Python
+__pycache__/
+*.pyc

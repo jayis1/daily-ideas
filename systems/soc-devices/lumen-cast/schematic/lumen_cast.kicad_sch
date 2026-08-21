@@ -1,0 +1,349 @@
+(kicad_sch
+  (page "A3")
+  (title_block
+    (title "Lumen Cast — Pocket Goniophotometer")
+    (company "SoC Device Inventions")
+    (rev "1")
+    (comment 1 "STM32G491RET6 + ESP32-C3 + OPT3001 + TCS34725 + TMC2209 + SG90")
+  )
+
+  (net_class "Power" ""
+    (via_dia 0.6) (via_drill 0.3)
+    (uvia_dia 0.3) (uvia_drill 0.1)
+    (trace_width 0.4))
+
+  (net_class "Signal" ""
+    (via_dia 0.4) (via_drill 0.2)
+    (uvia_dia 0.3) (uvia_drill 0.1)
+    (trace_width 0.2))
+
+  (net_class "I2C" ""
+    (via_dia 0.4) (via_drill 0.2)
+    (trace_width 0.2))
+
+  (net_class "SPI" ""
+    (via_dia 0.4) (via_drill 0.2)
+    (trace_width 0.2))
+
+  (net_class "UART" ""
+    (via_dia 0.4) (via_drill 0.2)
+    (trace_width 0.2))
+
+  (net_class "Motor" ""
+    (via_dia 0.5) (via_drill 0.25)
+    (trace_width 0.3))
+
+  ;; ── U1: STM32G491RET6 (Cortex-M4F, LQFP64) ─────────────────────────
+  (symbol (lib_id "MCU_ST_STM32G4:STM32G491RET6") (at 127 76.2 0)
+    (property "Reference" "U1" (at 127 45.72 0))
+    (property "Value" "STM32G491RET6" (at 127 48.26 0))
+    (property "Footprint" "Package_QFP:LQFP-64_10x10mm_P0.5mm" (at 127 101.6 0))
+
+    ;; TIM2_CH1 (PA0) — stepper STEP → TMC2209
+    (pin "PA0"  (net "STEPPER_STEP"))     ; TIM2_CH1 → TMC2209 STEP
+    (pin "PA1"  (net "STEPPER_DIR"))      ; GPIO → TMC2209 DIR
+    (pin "PA2"  (net "STEPPER_EN"))       ; GPIO → TMC2209 EN (active low)
+    (pin "PA3"  (net "BATT_ADC"))         ; ADC1_IN4 — battery divider
+
+    ;; TIM3_CH1 (PA6) — servo PWM → SG90
+    (pin "PA6"  (net "SERVO_PWM"))        ; TIM3_CH1 → SG90 signal
+
+    ;; Buttons
+    (pin "PA4"  (net "BTN_SCAN"))         ; SCAN button (active low)
+    (pin "PA5"  (net "BTN_MODE"))         ; MODE button (active low)
+
+    ;; USART1 (PA9/PA10) — ESP32-C3 bridge
+    (pin "PA9"  (net "USART1_TX"))        ; USART1 TX → ESP32-C3 RX (GPIO5)
+    (pin "PA10" (net "USART1_RX"))        ; USART1 RX ← ESP32-C3 TX (GPIO4)
+
+    ;; USB (PA11/PA12) — native USB-CDC
+    (pin "PA11" (net "USB_DM"))
+    (pin "PA12" (net "USB_DP"))
+
+    ;; GPIO — status LED, WS2812, charger status, ESP control
+    (pin "PA8"  (net "LED_STATUS"))       ; status LED
+    (pin "PB0"  (net "WS2812_DATA"))      ; WS2812B data
+    (pin "PB1"  (net "CHG_STAT"))         ; MCP73831 STAT
+    (pin "PB3"  (net "ESP_EN"))           ; ESP32-C3 EN
+    (pin "PB4"  (net "ESP_BOOT"))         ; ESP32-C3 BOOT (pull-up)
+
+    ;; I2C1 (PB6/PB7) — OPT3001, TCS34725, SH1106, DS3231
+    (pin "PB6"  (net "I2C1_SCL"))         ; I2C1 SCL → all I2C devices
+    (pin "PB7"  (net "I2C1_SDA"))         ; I2C1 SDA → all I2C devices
+
+    ;; SPI2 (PB13/PB14/PB15) — W25Q128 flash
+    (pin "PB13" (net "SPI2_SCK"))         ; SPI2 SCK → W25Q128 SCK
+    (pin "PB14" (net "SPI2_MISO"))        ; SPI2 MISO ← W25Q128 DO
+    (pin "PB15" (net "SPI2_MOSI"))        ; SPI2 MOSI → W25Q128 DI
+    (pin "PB12" (net "FLASH_CS"))         ; GPIO → W25Q128 CS
+
+    ;; Power
+    (pin "VDD"  (net "+3V3"))
+    (pin "VDDA" (net "+3V3"))
+    (pin "GND"  (net "GND"))
+  )
+
+  ;; ── U2: ESP32-C3 module (BLE/WiFi bridge) ──────────────────────────
+  (symbol (lib_id "RF_Module:ESP32-C3-MINI-1") (at 200 50 0)
+    (property "Reference" "U2" (at 200 38 0))
+    (property "Value" "ESP32-C3-MINI-1" (at 200 40.5 0))
+    (property "Footprint" "RF_Module:ESP32-C3-MINI-1" (at 200 65 0))
+    (pin "GPIO4"  (net "ESP_UART_TX"))    ; → STM32 PA10 (RX)
+    (pin "GPIO5"  (net "ESP_UART_RX"))    ; ← STM32 PA9  (TX)
+    (pin "EN"     (net "ESP_EN"))
+    (pin "IO9"    (net "ESP_BOOT"))
+    (pin "3V3"    (net "+3V3"))
+    (pin "GND"    (net "GND"))
+  )
+
+  ;; ── U3: OPT3001DNPT precision illuminance sensor ───────────────────
+  (symbol (lib_id "Sensor_Optical:OPT3001DNPT") (at 60 40 0)
+    (property "Reference" "U3" (at 60 33 0))
+    (property "Value" "OPT3001DNPT" (at 60 35.5 0))
+    (property "Footprint" "Package_DFN_QFN:USON-6" (at 60 50 0))
+    (pin "VDD"   (net "+3V3_SENS"))
+    (pin "GND"   (net "GND"))
+    (pin "SCL"   (net "I2C1_SCL"))
+    (pin "SDA"   (net "I2C1_SDA"))
+    (pin "INT"   (net "OPT_INT"))         ; optional interrupt
+    (pin "ADDR"  (net "GND"))             ; ADDR=GND → 0x44
+  )
+
+  ;; ── U4: TCS34725 RGB+C color sensor ────────────────────────────────
+  (symbol (lib_id "Sensor_Optical:TCS34725") (at 60 65 0)
+    (property "Reference" "U4" (at 60 58 0))
+    (property "Value" "TCS34725" (at 60 60.5 0))
+    (property "Footprint" "Sensor_Optical:TCS34725_FN6" (at 60 75 0))
+    (pin "VDD"   (net "+3V3_SENS"))
+    (pin "GND"   (net "GND"))
+    (pin "SCL"   (net "I2C1_SCL"))
+    (pin "SDA"   (net "I2C1_SDA"))
+    (pin "INT"   (net "TCS_INT"))         ; optional interrupt
+  )
+
+  ;; ── U5: SH1106 OLED display 1.3" 128x64 ────────────────────────────
+  (symbol (lib_id "Display:SH1106") (at 100 100 0)
+    (property "Reference" "U5" (at 100 92 0))
+    (property "Value" "SH1106_OLED_1.3in" (at 100 94.5 0))
+    (property "Footprint" "Display:OLED_128x64_1.3in" (at 100 110 0))
+    (pin "VCC"   (net "+3V3"))
+    (pin "GND"   (net "GND"))
+    (pin "SCL"   (net "I2C1_SCL"))
+    (pin "SDA"   (net "I2C1_SDA"))
+  )
+
+  ;; ── U6: W25Q128 16MB SPI flash ─────────────────────────────────────
+  (symbol (lib_id "Memory_Flash:W25Q128") (at 180 100 0)
+    (property "Reference" "U6" (at 180 93 0))
+    (property "Value" "W25Q128JVIQ" (at 180 95.5 0))
+    (property "Footprint" "Package_SO:SOIC-8_5.27x5.27mm" (at 180 110 0))
+    (pin "CS"    (net "FLASH_CS"))
+    (pin "DO"    (net "SPI2_MISO"))
+    (pin "WP"    (net "+3V3"))
+    (pin "GND"   (net "GND"))
+    (pin "DI"    (net "SPI2_MOSI"))
+    (pin "CLK"   (net "SPI2_SCK"))
+    (pin "HOLD"  (net "+3V3"))
+    (pin "VCC"   (net "+3V3"))
+  )
+
+  ;; ── U7: DS3231SN RTC ───────────────────────────────────────────────
+  (symbol (lib_id "Timer_RTC:DS3231") (at 220 40 0)
+    (property "Reference" "U7" (at 220 33 0))
+    (property "Value" "DS3231SN" (at 220 35.5 0))
+    (property "Footprint" "Package_SO:SOIC-16W_5.3x10.2mm" (at 220 52 0))
+    (pin "VCC"   (net "+3V3"))
+    (pin "GND"   (net "GND"))
+    (pin "SCL"   (net "I2C1_SCL"))
+    (pin "SDA"   (net "I2C1_SDA"))
+    (pin "32KHZ" (net "NC"))
+    (pin "INT"   (net "NC"))
+    (pin "RST"   (net "NC"))
+    (pin "VBAT"  (net "+3V3"))            ; no separate battery (powered by main)
+  )
+
+  ;; ── U8: TMC2209 stepper motor driver module ────────────────────────
+  (symbol (lib_id "Driver_Motor:TMC2209") (at 40 100 0)
+    (property "Reference" "U8" (at 40 90 0))
+    (property "Value" "TMC2209_v1.2" (at 40 92.5 0))
+    (property "Footprint" "Module:Pololu_A4988_style" (at 40 115 0))
+    (pin "STEP"   (net "STEPPER_STEP"))
+    (pin "DIR"    (net "STEPPER_DIR"))
+    (pin "EN"     (net "STEPPER_EN"))
+    (pin "VMOT"   (net "VBAT"))            ; motor power from battery
+    (pin "GND"    (net "GND"))
+    (pin "A1"     (net "MOT_A1"))
+    (pin "A2"     (net "MOT_A2"))
+    (pin "B1"     (net "MOT_B1"))
+    (pin "B2"     (net "MOT_B2"))
+    (pin "VDD"    (net "+3V3"))            ; logic supply
+    (pin "MS1"    (net "+3V3"))            ; 16 microstep (MS1=1, MS2=1)
+    (pin "MS2"    (net "+3V3"))
+  )
+
+  ;; ── SERVO1: SG90 servo ─────────────────────────────────────────────
+  (symbol (lib_id "Motor:Servo_SG90") (at 140 40 0)
+    (property "Reference" "SERVO1" (at 140 33 0))
+    (property "Value" "SG90" (at 140 35.5 0))
+    (pin "VCC"    (net "+3V3"))
+    (pin "GND"    (net "GND"))
+    (pin "SIG"    (net "SERVO_PWM"))
+  )
+
+  ;; ── U9: MCP73831 LiPo charger ──────────────────────────────────────
+  (symbol (lib_id "Battery_Management:MCP73831T-2ACI") (at 40 130 0)
+    (property "Reference" "U9" (at 40 124 0))
+    (property "Value" "MCP73831" (at 40 126.5 0))
+    (property "Footprint" "Package_DFN_QFN:DFN-8" (at 40 138 0))
+    (pin "VDD"  (net "VBUS_5V"))
+    (pin "BAT"  (net "VBAT"))
+    (pin "STAT" (net "CHG_STAT"))
+    (pin "GND"  (net "GND"))
+    (pin "PROG" (net "PROG_R"))           ; 2kΩ → 500mA charge
+  )
+
+  ;; ── U10: TPS63020 buck-boost 3.3V ──────────────────────────────────
+  (symbol (lib_id "Regulator_Switching:TPS63020DSJ") (at 100 130 0)
+    (property "Reference" "U10" (at 100 123 0))
+    (property "Value" "TPS63020" (at 100 125.5 0))
+    (property "Footprint" "Package_SON:SON-14" (at 100 140 0))
+    (pin "VIN"  (net "VBAT"))
+    (pin "VOUT" (net "+3V3"))
+    (pin "GND"  (net "GND"))
+    (pin "EN"   (net "+3V3"))
+  )
+
+  ;; ── U11: TLV70033 LDO for sensors (low-noise) ──────────────────────
+  (symbol (lib_id "Regulator_Linear:TLV70033") (at 100 150 0)
+    (property "Reference" "U11" (at 100 145 0))
+    (property "Value" "TLV70033" (at 100 147.5 0))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-5" (at 100 157 0))
+    (pin "VIN"  (net "+3V3"))
+    (pin "VOUT" (net "+3V3_SENS"))
+    (pin "GND"  (net "GND"))
+    (pin "EN"   (net "+3V3"))
+  )
+
+  ;; ── U12: DW01A + U13: FS8205A battery protection ───────────────────
+  (symbol (lib_id "Battery_Protection:DW01A") (at 40 70 0)
+    (property "Reference" "U12" (at 40 64 0))
+    (property "Value" "DW01A" (at 40 66.5 0))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-6" (at 40 78 0))
+    (pin "VDD"  (net "VBAT_RAW"))
+    (pin "GND"  (net "GND"))
+    (pin "CS"   (net "PROT_CS"))
+  )
+
+  (symbol (lib_id "Transistor_FET:FS8205A") (at 40 85 0)
+    (property "Reference" "U13" (at 40 80 0))
+    (property "Value" "FS8205A" (at 40 82.5 0))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-6" (at 40 92 0))
+    (pin "S1"   (net "VBAT_RAW"))
+    (pin "D1"   (net "VBAT"))
+    (pin "S2"   (net "GND"))
+    (pin "G1"   (net "PROT_CS"))
+    (pin "G2"   (net "PROT_CS"))
+  )
+
+  ;; ── USB-C connector ────────────────────────────────────────────────
+  (symbol (lib_id "Connector:USB_C_2.0") (at 20 130 0)
+    (property "Reference" "J1" (at 20 120 0))
+    (property "Value" "USB-C" (at 20 122.5 0))
+    (pin "VBUS" (net "VBUS_5V"))
+    (pin "GND"  (net "GND"))
+    (pin "D+"   (net "USB_DP"))
+    (pin "D-"   (net "USB_DM"))
+  )
+
+  ;; ── J2: JST-PH battery connector ───────────────────────────────────
+  (symbol (lib_id "Connector:Conn_01x02") (at 20 70 0)
+    (property "Reference" "J2" (at 20 65 0))
+    (property "Value" "JST-PH-2" (at 20 67.5 0))
+    (pin "1"    (net "VBAT_RAW"))
+    (pin "2"    (net "GND"))
+  )
+
+  ;; ── J3: NEMA8 stepper motor connector (4-pin) ──────────────────────
+  (symbol (lib_id "Connector:Conn_01x04") (at 20 100 0)
+    (property "Reference" "J3" (at 20 93 0))
+    (property "Value" "NEMA8" (at 20 95.5 0))
+    (pin "1"    (net "MOT_A1"))
+    (pin "2"    (net "MOT_A2"))
+    (pin "3"    (net "MOT_B1"))
+    (pin "4"    (net "MOT_B2"))
+  )
+
+  ;; ── J4: SWD programming header ─────────────────────────────────────
+  (symbol (lib_id "Connector:Conn_01x06") (at 220 120 0)
+    (property "Reference" "J4" (at 220 112 0))
+    (property "Value" "SWD" (at 220 114.5 0))
+    (pin "1"    (net "+3V3"))
+    (pin "2"    (net "SWDIO"))
+    (pin "3"    (net "GND"))
+    (pin "4"    (net "SWCLK"))
+    (pin "5"    (net "NRST"))
+    (pin "6"    (net "NC"))
+  )
+
+  ;; ── WS2812B RGB LED ────────────────────────────────────────────────
+  (symbol (lib_id "LED:WS2812B") (at 220 80 0)
+    (property "Reference" "LED1" (at 220 75 0))
+    (property "Value" "WS2812B" (at 220 77.5 0))
+    (property "Footprint" "LED_SMD:LED_WS2812B_5050" (at 220 88 0))
+    (pin "VDD" (net "+3V3"))
+    (pin "DIN" (net "WS2812_DATA"))
+    (pin "GND" (net "GND"))
+  )
+
+  ;; ── Buttons ────────────────────────────────────────────────────────
+  (symbol (lib_id "Switch:SW_Push") (at 220 135 0)
+    (property "Reference" "SW1" (at 220 130 0))
+    (property "Value" "SCAN" (at 220 132.5 0))
+    (pin "1" (net "BTN_SCAN"))
+    (pin "2" (net "GND"))
+  )
+  (symbol (lib_id "Switch:SW_Push") (at 220 150 0)
+    (property "Reference" "SW2" (at 220 145 0))
+    (property "Value" "MODE" (at 220 147.5 0))
+    (pin "1" (net "BTN_MODE"))
+    (pin "2" (net "GND"))
+  )
+
+  ;; ── Status LED ─────────────────────────────────────────────────────
+  (symbol (lib_id "Device:LED") (at 220 100 0)
+    (property "Reference" "LED2" (at 220 95 0))
+    (property "Value" "Green" (at 220 97.5 0))
+    (pin "A" (net "LED_STATUS"))
+    (pin "K" (net "GND"))
+  )
+
+  ;; ── Battery voltage divider ────────────────────────────────────────
+  (symbol (lib_id "Device:R") (at 60 120 0)
+    (property "Reference" "R_DIV1" (at 60 117 0))
+    (property "Value" "100kΩ" (at 60 122.5 0))
+    (pin "1" (net "VBAT"))
+    (pin "2" (net "BATT_ADC"))
+  )
+  (symbol (lib_id "Device:R") (at 60 130 0)
+    (property "Reference" "R_DIV2" (at 60 127 0))
+    (property "Value" "100kΩ" (at 60 132.5 0))
+    (pin "1" (net "BATT_ADC"))
+    (pin "2" (net "GND"))
+  )
+
+  ;; ── Pull-ups and decoupling (summary) ──────────────────────────────
+  ;; I2C: 4.7kΩ pull-ups on SCL/SDA to +3V3_SENS
+  ;; BOOT: 10kΩ pull-up on PB4 (ESP_BOOT) to +3V3
+  ;; Buttons: 10kΩ pull-ups to +3V3 (internal also available)
+  ;; Decoupling: 100nF on each IC VDD pin, 10µF on power rails
+  ;; OPT3001: 100nF on VDD (per datasheet)
+  ;; TCS34725: 100nF on VDD, 100nF on VDDIO
+  ;; W25Q128: 100nF on VCC
+  ;; STM32G491: 100nF on each VDD pin (×4), 10µF on VDD, 10µF on VDDA
+  ;; TMC2209: 100nF on VDD, 100µF on VMOT
+  ;; MCP73831: 4.7µF on VBUS, 4.7µF on BAT
+  ;; TPS63020: 22µF on VIN, 22µF on VOUT, 2.2µH inductor
+  ;; DS3231: 100nF on VCC
+  ;; Crystal: STM32G491 has internal RC, optional external 8MHz on PD0/PD1
+
+)

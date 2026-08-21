@@ -1,0 +1,23 @@
+# Aero Reed — main component CMakeLists
+idf_component_register(
+    SRCS
+        "main.c"
+        "touch.c"
+        "breath.c"
+        "lip.c"
+        "imu.c"
+        "synth.c"
+        "audio.c"
+        "midi.c"
+        "display.c"
+        "patch.c"
+        "power.c"
+        "tasks.c"
+    INCLUDE_DIRS
+        "."
+    REQUIRES
+        driver
+        nvs_flash
+        esp_adc
+        esp_timer
+)

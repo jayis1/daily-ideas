@@ -1,0 +1,26 @@
+(kicad_sch (version 20230614)
+  (generator "eeschema")
+  (uuid "00000000-0000-0000-0000-000000000020")
+  (paper "A3")
+  (title_block
+    (title "Wireless MCU — ESP32-C3-MINI-1")
+    (date "2026-06-17")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+  )
+
+  (lib_symbols)
+
+  ;; ESP32-C3-MINI-1 module (16.5 x 20.5 mm)
+  (symbol "ESP32-C3-MINI-1" (in_bom yes) (on_board yes)
+    (property "Reference" "U2" (at 0 1.27 0))
+    (property "Value" "ESP32-C3-MINI-1" (at 0 -1.27 0))
+    (property "Footprint" "RF_Module:ESP32-C3-MINI-1" (at 0 -3.81 0))
+    (symbol_name "ESP32-C3-MINI-1")
+  )
+
+  (text "ESP32-C3-MINI-1 Module Notes:\n\nDecoupling: C30/C31 = 100nF + 10uF near VDD\nAntenna keep-out: 15mm clear area above module\nGPIO0/1: UART0 to STM32 (cross-connected TX↔RX)\nGPIO2/3: I2C to SSD1306 OLED (4.7k pullups)\nGPIO8: WS2812 data (series 470R resistor)\nGPIO7: User button (internal pullup)\nUSB D-/D+: GPIO18/GPIO19 with USBLC6-2 ESD"
+    (at 38.1 50.8 0)
+    (uuid "00000000-0000-0000-0000-000000000021")
+  )
+)

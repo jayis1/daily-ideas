@@ -1,0 +1,19 @@
+{
+  "board": {
+    "active_layer": 0,
+    "active_layer_preset": "all",
+    "auto_track_width": false,
+    "hidden_netclasses": [],
+    "meta": {
+      "filename": "taste_bead.kicad_prl",
+      "version": 1
+    },
+    "net_colors": null,
+    "rules": {
+      "min_clearance": 0.15,
+      "min_track_width": 0.15,
+      "min_via_diameter": 0.3,
+      "min_via_drill": 0.2
+    }
+  }
+}

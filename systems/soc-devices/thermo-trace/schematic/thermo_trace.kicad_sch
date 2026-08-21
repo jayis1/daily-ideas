@@ -1,0 +1,88 @@
+(kicad_sch
+  (version 20231129)
+  (generator "thermo_trace")
+  (uuid "00000000-0000-0000-0000-000000000001")
+  (paper "A3")
+
+  (title_block
+    (title "Thermo Trace — Pocket DSC")
+    (date "2026-07-08")
+    (rev "1.0")
+    (company "jayis1")
+    (comment 1 "Pocket Differential Scanning Calorimeter")
+    (comment 2 "STM32G491 + ESP32-C3 + ADS122U04")
+    (comment 3 "MIT License")
+  )
+
+  (lib_symbols
+    (symbol "MCU_ST_STM32G4:STM32G491RET6"
+      (pin_numbers)
+      (pin_names (offset 0.254))
+      (in_bom yes)
+      (on_board yes)
+      (property "Reference" "U1" (at 0 1.27 0))
+      (property "Value" "STM32G491RET6" (at 0 -1.27 0))
+    )
+    (symbol "Sensor_MultiFunction:ADS122U04"
+      (pin_numbers)
+      (pin_names (offset 0.254))
+      (in_bom yes)
+      (on_board yes)
+      (property "Reference" "U2" (at 0 1.27 0))
+      (property "Value" "ADS122U04" (at 0 -1.27 0))
+    )
+    (symbol "RF_Module:ESP32-C3-MINI-1"
+      (pin_numbers)
+      (pin_names (offset 0.254))
+      (in_bom yes)
+      (on_board yes)
+      (property "Reference" "U3" (at 0 1.27 0))
+      (property "Value" "ESP32-C3-MINI-1" (at 0 -1.27 0))
+    )
+  )
+
+  /* Schematic description:
+   *
+   * STM32G491RET6 (U1):
+   *   PA5-PA7  → SPI1 → ADS122U04 (U2) SCLK/DOUT/DIN
+   *   PA10     → ADS122U04 CS
+   *   PA11     → ADS122U04 START
+   *   PA12     ← ADS122U04 DRDY
+   *   PA8      → TIM1_CH1 PWM → MOSFET1 gate (heater 1)
+   *   PA9      → TIM1_CH2 PWM → MOSFET2 gate (heater 2)
+   *   PB9      → Heater enable (active LOW = cutoff)
+   *   PB8      ← TLV3201 safety comparator output
+   *   PA2-PA3  → USART2 → ESP32-C3 TX/RX
+   *   PB6-PB7  → I2C1 → SH1106 OLED SCL/SDA
+   *   PB2-PB5  → SPI2 → microSD SCK/MISO/MOSI/CS
+   *   PB10-PB12 ← Buttons A/B/C
+   *   PB13-PB14 → LEDs (red/green)
+   *   PB15     → ESP32-C3 EN
+   *   PC0      ← Battery voltage (ADC2)
+   *   PC1      ← DS18B20 OneWire
+   *   PC14-PC15 ← TP4056 CHRG/STDBY
+   *
+   * ADS122U04 (U2):
+   *   AIN0/AIN1  ← Sample PT1000 RTD (differential, 4-wire)
+   *   AIN2/AIN3  ← Reference PT1000 RTD (differential, 4-wire)
+   *   AIN4      ← Heater current sense (via sense resistor + op-amp)
+   *   VDD/AVDD  → 3.3V
+   *   IDAC      → 250µA excitation for RTDs
+   *
+   * Heater circuit:
+   *   5V boost → MOSFET1 → Kapton heater 50Ω (sample cell)
+   *   5V boost → MOSFET2 → Kapton heater 50Ω (reference cell)
+   *   Each heater has PT1000 RTD bonded underneath
+   *   0.5Ω sense resistor in series for current measurement
+   *   TLV3201 comparator monitors pan temp, cuts at 320°C
+   *   250°C thermal fuse in series with 5V heater rail
+   *
+   * Power:
+   *   USB-C 5V → TP4056 → 18650 LiPo → BQ25883 boost → 5V heater rail
+   *                                    → AP2112 LDO → 3.3V logic
+   */
+
+  (sheet_instances
+    (path "/" (page "1"))
+  )
+)

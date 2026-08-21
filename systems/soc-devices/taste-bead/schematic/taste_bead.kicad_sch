@@ -1,0 +1,118 @@
+(kicad_sch (version 20230121) (generator eeschema)
+  (uuid 00000000-0000-0000-0000-000000000001)
+  (paper "A3")
+  (title_block
+    (title "Taste Bead — Pocket Electronic Tongue")
+    (date "2026-07-01")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+    (comment 1 "ESP32-S3 + AD5941 EIS AFE")
+    (comment 2 "5-electrode impedance spectroscopy liquid fingerprinter")
+  )
+
+  (lib_symbols
+    ; Symbol definitions — using standard KiCad libraries
+  )
+
+  ; ---- Sheet 1: Main MCU + Wireless ----
+  (symbol (lib_id "RF_Module:ESP32-S3-WROOM-1") (at 80 50 0) (unit 1)
+    (property "Reference" "U1" (at 80 25 0))
+    (property "Value" "ESP32-S3-WROOM-1" (at 80 30 0))
+  )
+
+  ; ---- Sheet 2: Analog Front-End (AD5941) ----
+  (symbol (lib_id "Analog_ADC:AD5941") (at 150 50 0) (unit 1)
+    (property "Reference" "U2" (at 150 25 0))
+    (property "Value" "AD5941" (at 150 30 0))
+  )
+
+  ; ---- Sheet 3: Electrode Multiplexer ----
+  (symbol (lib_id "Analog_Switch:ADG715") (at 200 90 0) (unit 1)
+    (property "Reference" "U3" (at 200 75 0))
+    (property "Value" "ADG715" (at 200 80 0))
+  )
+
+  ; ---- Sheet 4: Environmental sensor ----
+  (symbol (lib_id "Sensor:BME280") (at 50 90 0) (unit 1)
+    (property "Reference" "U4" (at 50 80 0))
+    (property "Value" "BME280" (at 50 85 0))
+  )
+
+  ; ---- Sheet 5: OLED Display ----
+  (symbol (lib_id "Display:SSD1306") (at 50 120 0) (unit 1)
+    (property "Reference" "U5" (at 50 110 0))
+    (property "Value" "SSD1306_128x64" (at 50 115 0))
+  )
+
+  ; ---- Sheet 6: Power Supply ----
+  (symbol (lib_id "Battery_Management:TP4056") (at 220 130 0) (unit 1)
+    (property "Reference" "U6" (at 220 115 0))
+    (property "Value" "TP4056" (at 220 120 0))
+  )
+  (symbol (lib_id "Regulator_Linear:AP2112-3.3") (at 260 130 0) (unit 1)
+    (property "Reference" "U7" (at 260 118 0))
+    (property "Value" "AP2112-3.3" (at 260 123 0))
+  )
+  (symbol (lib_id "Regulator_Linear:ADP7118ARDZ-3.3") (at 300 130 0) (unit 1)
+    (property "Reference" "U8" (at 300 115 0))
+    (property "Value" "ADP7118-3.3" (at 300 120 0))
+  )
+  (symbol (lib_id "Regulator_Linear:LP5907MFX-1.8") (at 340 130 0) (unit 1)
+    (property "Reference" "U9" (at 340 115 0))
+    (property "Value" "LP5907-1.8" (at 340 120 0))
+  )
+
+  ; ---- Power symbols ----
+  (symbol (lib_id "power:+3V3") (at 30 30 0) (unit 1))
+  (symbol (lib_id "power:+3.3V_ANA") (at 270 30 0) (unit 1))
+  (symbol (lib_id "power:+1V8") (at 330 30 0) (unit 1))
+  (symbol (lib_id "power:GND") (at 30 150 0) (unit 1))
+  (symbol (lib_id "power:VBAT") (at 20 30 0) (unit 1))
+  (symbol (lib_id "power:VBUS") (at 10 30 0) (unit 1))
+
+  ; ---- Net labels ----
+  (global_label "I2C_SDA" (shape input) (at 70 40 0))
+  (global_label "I2C_SCL" (shape input) (at 70 42 0))
+  (global_label "SPI_CS_AD5941" (shape input) (at 130 45 0))
+  (global_label "SPI_SCK" (shape input) (at 130 47 0))
+  (global_label "SPI_MISO" (shape input) (at 130 49 0))
+  (global_label "SPI_MOSI" (shape input) (at 130 51 0))
+  (global_label "AD5941_IRQ" (shape input) (at 130 55 0))
+  (global_label "AD5941_RST" (shape input) (at 130 57 0))
+  (global_label "MUX_EN" (shape input) (at 180 90 0))
+  (global_label "MUX_S0" (shape input) (at 180 92 0))
+  (global_label "MUX_S1" (shape input) (at 180 94 0))
+  (global_label "MUX_S2" (shape input) (at 180 96 0))
+  (global_label "SD_CS" (shape input) (at 70 60 0))
+  (global_label "SD_SCK" (shape input) (at 70 62 0))
+  (global_label "SD_MOSI" (shape input) (at 70 64 0))
+  (global_label "SD_MISO" (shape input) (at 70 66 0))
+  (global_label "BTN_ID" (shape input) (at 70 70 0))
+  (global_label "BTN_MODE" (shape input) (at 70 72 0))
+  (global_label "BTN_LIB" (shape input) (at 70 74 0))
+  (global_label "LED_R" (shape input) (at 70 78 0))
+  (global_label "LED_G" (shape input) (at 70 80 0))
+  (global_label "LED_B" (shape input) (at 70 82 0))
+  (global_label "ADC_BATT" (shape input) (at 70 86 0))
+  (global_label "CHRG_STAT" (shape input) (at 70 88 0))
+  (global_label "WE_AU" (shape input) (at 210 90 0))
+  (global_label "WE_PT" (shape input) (at 210 92 0))
+  (global_label "WE_AG" (shape input) (at 210 94 0))
+  (global_label "WE_GC" (shape input) (at 210 96 0))
+  (global_label "WE_CU" (shape input) (at 210 98 0))
+  (global_label "CE_PT" (shape input) (at 210 100 0))
+  (global_label "RE_AGCL" (shape input) (at 210 102 0))
+
+  ; ---- Connections ----
+  (wire (pts (xy 80 45) (xy 80 50)) (stroke (width 0.2)))
+  (wire (pts (xy 80 55) (xy 80 60)) (stroke (width 0.2)))
+  (wire (pts (xy 80 65) (xy 80 70)) (stroke (width 0.2)))
+
+  ; AD5941 to Mux connection
+  (wire (pts (xy 150 60) (xy 200 60)) (stroke (width 0.2)))
+
+  ; ---- Sheet instances ----
+  (sheet_instances
+    (path "/" (page "1"))
+  )
+)
