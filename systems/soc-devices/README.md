@@ -10,7 +10,7 @@ A curated collection of novel System-on-Chip device designs — each invented fr
 
 The unified project provides:
 
-- a [registry containing all 57 SoC nodes](https://github.com/jayis1/unified-TREE/blob/main/devices.json);
+- a [growing registry containing every current and future SoC node](https://github.com/jayis1/unified-TREE/blob/main/devices.json);
 - a [shared device protocol](https://github.com/jayis1/unified-TREE/tree/main/protocol) for telemetry, findings, commands, feedback, health, and policy;
 - a [unified node architecture and integration guide](https://github.com/jayis1/unified-TREE/blob/main/README.md); and
 - validation tooling that detects missing devices, broken role assignments, and disconnected node links.

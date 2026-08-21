@@ -2,7 +2,7 @@
 
 The canonical home of this system is [github.com/jayis1/unified-TREE](https://github.com/jayis1/unified-TREE). This directory is its integration inside Daily Ideas.
 
-**unified TREE** is the unifying system for the complete [SoC Device Inventions repository](https://github.com/jayis1/SoC-Device-Inventions). **Each of its 57 hardware designs is a node in the greater system.** Together they form one interoperable family of sensors, scientific instruments, controllers, interfaces, and network nodes.
+**unified TREE** is the unifying system for the complete and growing [SoC Device Inventions repository](https://github.com/jayis1/SoC-Device-Inventions). **Every current and future hardware design becomes a node in the greater system.** Together they form one interoperable family of sensors, scientific instruments, controllers, interfaces, and network nodes.
 
 The two repositories have distinct responsibilities:
 
@@ -13,7 +13,7 @@ The two repositories have distinct responsibilities:
 
 No device is replaced or hidden by this system. Each remains independently buildable in the source collection and also gains a defined place in the unified architecture.
 
-## The 57 nodes and four roles
+## A growing node tree and four roles
 
 The device inventions are the nodes. **Observe, Reason, Act, and Coordinate are roles those nodes perform**, not four additional devices. A node can perform one role or several roles depending on its sensors, processing, actuators, and communications.
 
@@ -41,18 +41,18 @@ The device inventions are the nodes. **Observe, Reason, Act, and Coordinate are 
 
 These roles are logical capabilities, not four mandatory circuit boards. A small deployment may place several roles on one SoC node; a larger deployment can connect and replicate many device nodes. The stable boundary is the [Unified Device Protocol](./protocol/), so hardware can evolve without rebuilding the entire system.
 
-## One fleet, all 57 designs
+## One fleet for every design
 
 Every imported design is registered in [`devices.json`](./devices.json), including instruments, monitors, creative interfaces, controllers, and fabrication tools. A device can serve several roles: for example, Mycelium Node observes its chamber, reasons over environmental state, acts through PID-controlled equipment, and coordinates remote monitoring.
 
-The registry is deliberately separate from firmware. Each design retains its native real-time implementation while a thin adapter publishes the shared protocol. This lets the greater system combine devices by capability instead of forcing 57 firmware projects onto one hardware stack.
+The registry is deliberately separate from firmware. Each design retains its native real-time implementation while a thin adapter publishes the shared protocol. This lets the greater system combine devices by capability without forcing every firmware project onto one hardware stack.
 
 ### The unified interconnection fabric
 
 All nodes join the same logical message fabric. They do not need bespoke pairwise integrations:
 
 ```text
-57 SoC device nodes
+Current and future SoC device nodes
         │
         ├── publish: telemetry, findings, feedback, health
         └── consume: commands, policy, relevant findings
@@ -71,7 +71,7 @@ This creates a many-node system while keeping local safety and real-time control
 
 ### How every device is linked
 
-[`devices.json`](./devices.json) is the complete connection map. Every entry uses the original SoC repository directory name as its stable device type, identifies its application domain, and assigns all roles the device can fulfill. The registry currently covers all 57 source directories with no omissions.
+[`devices.json`](./devices.json) is the growing connection map. Every entry uses the original SoC repository directory name as its stable device type, identifies its application domain, and assigns all roles the device can fulfill. It expands as new inventions are added.
 
 Most measurement instruments combine **Observe** and **Reason**. Devices with motors, heaters, excitation sources, haptics, printing mechanisms, or environmental controls also join **Act**. Field monitors and connected tools that publish fleet state additionally join **Coordinate**. Multi-purpose designs can participate in all four roles.
 
@@ -120,7 +120,7 @@ daily-ideas system nodes --domain analytical-chemistry
 daily-ideas system doctor
 ```
 
-The canonical topology is [`platform.json`](./platform.json). `system doctor` checks that it contains exactly four uniquely named roles, that every role link resolves, and that all 57 device-node directories appear exactly once in the unified registry.
+The canonical topology is [`platform.json`](./platform.json). `system doctor` checks that it contains exactly four uniquely named roles, that every role link resolves, and that every device-node directory appears exactly once in the unified registry. There is no maximum node count.
 
 ## From invention to system
 

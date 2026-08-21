@@ -1,6 +1,6 @@
 # Daily Ideas
 
-> A growing arcade, laboratory, and physical-computing workshop: 105 standalone terminal projects plus 57 open SoC device nodes, brought together by one launcher and four shared system roles.
+> A growing arcade, laboratory, and physical-computing workshop: 105 standalone terminal projects plus a growing fleet of open SoC device nodes, brought together by one launcher and four shared system roles.
 
 Daily Ideas is an autonomously grown collection of terminal games, simulations, generators, puzzles, audio experiments, science visualizations, and utilities. Every project begins as a new idea, then passes through enhancement and bug-hunting stages before joining the collection.
 
@@ -17,11 +17,11 @@ The projects remain deliberately independent: open any dated directory, read one
 - **Deterministic metadata** generated from the source tree and committed to Git.
 - **Automated quality gates** for catalog validity, compilation, tests, and bounded smoke checks.
 - **Learning-friendly layout** where every project retains its own source, tests, and documentation.
-- **Unified 57-node physical platform** that connects every SoC design through Observe, Reason, Act, and Coordinate roles.
+- **Expandable physical-node platform** that connects every current and future SoC design through Observe, Reason, Act, and Coordinate roles.
 
 ## Beyond standalone ideas
 
-The collection now has a second scale. Every design from the [SoC Device Inventions repository](https://github.com/jayis1/SoC-Device-Inventions) remains independently buildable and becomes one of 57 nodes in [unified TREE](https://github.com/jayis1/unified-TREE). Four functional roles connect the full collection into larger working systems:
+The collection now has a second scale. Every current and future design from the [SoC Device Inventions repository](https://github.com/jayis1/SoC-Device-Inventions) remains independently buildable and becomes a node in [unified TREE](https://github.com/jayis1/unified-TREE). Four functional roles connect the growing collection into larger working systems:
 
 ```text
 Observe ──telemetry──► Reason ──commands──► Act
@@ -30,7 +30,7 @@ Observe ──telemetry──► Reason ──commands──► Act
                          └── Coordinate ◄───┘
 ```
 
-All 57 hardware designs are connected through the [unified TREE registry](https://github.com/jayis1/unified-TREE/blob/main/devices.json) and [shared device protocol](https://github.com/jayis1/unified-TREE/tree/main/protocol). Its [complete front-page unification guide](https://github.com/jayis1/unified-TREE) explains repository ownership, device roles, message contracts, deployment composition, and how every design participates. This monorepo retains a synchronized integration under [`systems/`](./systems/).
+All currently registered hardware designs—and future additions—connect through the [unified TREE registry](https://github.com/jayis1/unified-TREE/blob/main/devices.json) and [shared device protocol](https://github.com/jayis1/unified-TREE/tree/main/protocol). Its [complete front-page unification guide](https://github.com/jayis1/unified-TREE) explains repository ownership, device roles, message contracts, deployment composition, and how every design participates. This monorepo retains a synchronized integration under [`systems/`](./systems/).
 
 ## Requirements
 
@@ -80,7 +80,7 @@ PYTHONPATH=src python3 -m daily_ideas.cli list
 | `run` | Launch an app in an isolated subprocess |
 | `random` | Choose an app, optionally launching it with `--run` |
 | `doctor` | Validate the catalog and report terminal/dependency support |
-| `system roles/nodes/info/doctor` | Inspect and validate the unified 57-node hardware platform |
+| `system roles/nodes/info/doctor` | Inspect and validate the expandable unified-node platform |
 
 Set `DAILY_IDEAS_ROOT` when invoking an installed launcher outside the source checkout. App-specific writable data locations are exposed through `DAILY_IDEAS_APP_DATA`.
 
