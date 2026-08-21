@@ -1,0 +1,31 @@
+# Levia Forge — STL placeholder for top array mount
+# This is a simplified placeholder. The actual STL should be generated
+# from a CAD model (FreeCAD, OpenSCAD, or Fusion 360).
+#
+# The top array mount holds 36 MA40S4S transducers in a 6×6 grid on
+# a curved (spherical cap) surface with R=40mm curvature.
+#
+# OpenSCAD source to generate this part:
+#
+# module array_mount_top() {
+#     // Base plate
+#     cube([70, 70, 3], center=true);
+#
+#     // Transducer holes (6x6 grid, 10mm spacing)
+#     for (row = [0:5], col = [0:5]) {
+#         x = (col - 2.5) * 10;
+#         y = (row - 2.5) * 10;
+#         r = sqrt(x*x + y*y);
+#         z_offset = (r < 40) ? 40 - sqrt(40*40 - r*r) : 0;
+#         translate([x, y, 1.5 + z_offset])
+#             cylinder(d=10.2, h=8, center=true, $fn=32);
+#     }
+# }
+#
+# array_mount_top();
+#
+# This file is a text placeholder. Generate the actual STL with:
+#   openscad -o array_mount_top.stl array_mount_top.scad
+
+This is a placeholder file. Generate the actual STL using OpenSCAD or
+similar CAD software. See the assembly guide for dimensions.

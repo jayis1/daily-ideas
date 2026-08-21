@@ -1,0 +1,455 @@
+(kicad_sch
+  (version 20240613)
+  (generator "vibra-beam-schematic")
+  (uuid "00000000-0000-0000-0000-vibrabeam001")
+  (paper "A3")
+  (title_block
+    (title "Vibra Beam — Pocket Laser Doppler Vibrometer")
+    (date "2026-08-19")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+  )
+
+  ;; ═══════════════════════════════════════════════════════════
+  ;; COMPONENT PLACEMENT
+  ;; ═══════════════════════════════════════════════════════════
+
+  ;; ── Main MCU ──
+  (symbol
+    (at 50 40)
+    (lib_id "MCU_ST_STM32G4:STM32G474RET6")
+    (property "Reference" "U1")
+    (property "Value" "STM32G474RET6")
+    (property "Footprint" "Package_QFP:LQFP-64_10x10mm_P0.5mm")
+    (uuid "stm32-001")
+  )
+
+  ;; ── Wireless MCU ──
+  (symbol
+    (at 150 40)
+    (lib_id "RF_Module:ESP32-C3-MINI-1")
+    (property "Reference" "U2")
+    (property "Value" "ESP32-C3-MINI-1")
+    (property "Footprint" "RF_Module:ESP32-C3-MINI-1")
+    (uuid "esp32-001")
+  )
+
+  ;; ── Laser diode ──
+  (symbol
+    (at 220 40)
+    (lib_id "Device:LaserDiode")
+    (property "Reference" "LD1")
+    (property "Value" "ADL-65005TL 650nm 5mW")
+    (property "Footprint" "Package_TO_SOT_THT:TO-18-3")
+    (uuid "laser-001")
+  )
+
+  ;; ── Laser driver (constant current) ──
+  (symbol
+    (at 220 90)
+    (lib_id "Driver_LED:AL8805")
+    (property "Reference" "U3")
+    (property "Value" "AL8805")
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-5")
+    (uuid "lddriver-001")
+  )
+
+  ;; ── Optics: NPBS cube ──
+  (symbol
+    (at 50 110)
+    (lib_id "Optics:NPBS_cube_650nm")
+    (property "Reference" "U4")
+    (property "Value" "NPBS 50:50 650nm 10mm cube")
+    (property "Footprint" "Optics:Cube_10mm")
+    (uuid "npbs-001")
+  )
+
+  ;; ── Optics: QWP ──
+  (symbol
+    (at 110 110)
+    (lib_id "Optics:Waveplate_QWP")
+    (property "Reference" "U5")
+    (property "Value" "QWP 650nm λ/4")
+    (property "Footprint" "Optics:Round_25mm")
+    (uuid "qwp-001")
+  )
+
+  ;; ── Optics: PBS cube ──
+  (symbol
+    (at 170 110)
+    (lib_id "Optics:PBS_cube_650nm")
+    (property "Reference" "U6")
+    (property "Value" "PBS 650nm 10mm cube")
+    (property "Footprint" "Optics:Cube_10mm")
+    (uuid "pbs-001")
+  )
+
+  ;; ── Photodiode I ──
+  (symbol
+    (at 50 170)
+    (lib_id "Sensor_Optical:TEMD5010")
+    (property "Reference" "PD1")
+    (property "Value" "TEMD5010 PIN")
+    (property "Footprint" "Package_TO_SOT_THT:TO-18-2")
+    (uuid "pd1-001")
+  )
+
+  ;; ── Photodiode Q ──
+  (symbol
+    (at 110 170)
+    (lib_id "Sensor_Optical:TEMD5010")
+    (property "Reference" "PD2")
+    (property "Value" "TEMD5010 PIN")
+    (property "Footprint" "Package_TO_SOT_THT:TO-18-2")
+    (uuid "pd2-001")
+  )
+
+  ;; ── TIA I ──
+  (symbol
+    (at 50 230)
+    (lib_id "Amplifier_Operational:OPA380")
+    (property "Reference" "U7")
+    (property "Value" "OPA380")
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-6")
+    (uuid "opa380-001")
+  )
+
+  ;; ── TIA Q ──
+  (symbol
+    (at 110 230)
+    (lib_id "Amplifier_Operational:OPA380")
+    (property "Reference" "U8")
+    (property "Value" "OPA380")
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-6")
+    (uuid "opa380-002")
+  )
+
+  ;; ── Audio amp ──
+  (symbol
+    (at 180 230)
+    (lib_id "Audio_Amplifier:MAX98357A")
+    (property "Reference" "U9")
+    (property "Value" "MAX98357A")
+    (property "Footprint" "Package_DFN_QFN:QFN-16-1EP_3x3mm_P0.4mm")
+    (uuid "max98357-001")
+  )
+
+  ;; ── OLED ──
+  (symbol
+    (at 250 230)
+    (lib_id "Display:SH1106_1.3in_128x64")
+    (property "Reference" "U10")
+    (property "Value" "SH1106 1.3in OLED")
+    (property "Footprint" "Display:OLED_1.3in_128x64")
+    (uuid "oled-001")
+  )
+
+  ;; ── MicroSD ──
+  (symbol
+    (at 50 290)
+    (lib_id "Connector:MicroSD_socket")
+    (property "Reference" "J1")
+    (property "Value" "MicroSD")
+    (property "Footprint" "Connector:MicroSD_Push-Push")
+    (uuid "sd-001")
+  )
+
+  ;; ── IMU ──
+  (symbol
+    (at 110 290)
+    (lib_id "Sensor_Motion:ICM-42688-P")
+    (property "Reference" "U11")
+    (property "Value" "ICM-42688-P")
+    (property "Footprint" "Sensor_Motion:QFN-14-1EP_3x2.5mm_P0.4mm")
+    (uuid "imu-001")
+  )
+
+  ;; ── DS18B20 ──
+  (symbol
+    (at 170 290)
+    (lib_id "Sensor_Temperature:DS18B20")
+    (property "Reference" "U12")
+    (property "Value" "DS18B20")
+    (property "Footprint" "Package_TO_SOT_THT:TO-92_Inline")
+    (uuid "ds18b20-001")
+  )
+
+  ;; ── BME280 ──
+  (symbol
+    (at 230 290)
+    (lib_id "Sensor:BME280")
+    (property "Reference" "U13")
+    (property "Value" "BME280")
+    (property "Footprint" "Sensor:Bosch_LGA-8")
+    (uuid "bme280-001")
+  )
+
+  ;; ── Shutter driver ──
+  (symbol
+    (at 50 350)
+    (lib_id "Driver_Motor:DRV8833")
+    (property "Reference" "U14")
+    (property "Value" "DRV8833")
+    (property "Footprint" "Package_SO:SOIC-16_3.9x9.9mm_P1.27mm")
+    (uuid "drv8833-001")
+  )
+
+  ;; ── Shutter solenoid ──
+  (symbol
+    (at 110 350)
+    (lib_id "Device:Solenoid")
+    (property "Reference" "L1")
+    (property "Value" "Shutter solenoid 5V")
+    (property "Footprint" "Device:Solenoid_15mm")
+    (uuid "shutter-001")
+  )
+
+  ;; ── Reed interlock ──
+  (symbol
+    (at 170 350)
+    (lib_id "Switch:Reed_Switch")
+    (property "Reference" "SW1")
+    (property "Value" "Reed")
+    (property "Footprint" "Switch:Reed_Glass")
+    (uuid "reed-001")
+  )
+
+  ;; ── Buttons ──
+  (symbol
+    (at 220 350)
+    (lib_id "Switch:SW_Push")
+    (property "Reference" "SW2")
+    (property "Value" "Button A")
+    (property "Footprint" "Button_SMD:6x6mm")
+    (uuid "btnA-001")
+  )
+
+  (symbol
+    (at 270 350)
+    (lib_id "Switch:SW_Push")
+    (property "Reference" "SW3")
+    (property "Value" "Button B")
+    (property "Footprint" "Button_SMD:6x6mm")
+    (uuid "btnB-001")
+  )
+
+  ;; ── Power: LiPo ──
+  (symbol
+    (at 50 410)
+    (lib_id "Device:Battery")
+    (property "Reference" "BT1")
+    (property "Value" "LP403450 3.7V 1500mAh")
+    (property "Footprint" "Battery:LiPo_40x34x5mm")
+    (uuid "battery-001")
+  )
+
+  ;; ── Power: Charger ──
+  (symbol
+    (at 110 410)
+    (lib_id "Power_Management:MCP73831T-2ACI")
+    (property "Reference" "U15")
+    (property "Value" "MCP73831")
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-5")
+    (uuid "charger-001")
+  )
+
+  ;; ── Power: Buck-boost ──
+  (symbol
+    (at 170 410)
+    (lib_id "Converter_DCDC:TPS63020")
+    (property "Reference" "U16")
+    (property "Value" "TPS63020")
+    (property "Footprint" "Package_DFN_QFN:QFN-14")
+    (uuid "tps63020-001")
+  )
+
+  ;; ── Power: LDO analog ──
+  (symbol
+    (at 230 410)
+    (lib_id "Regulator_Linear:TPS7A4700")
+    (property "Reference" "U17")
+    (property "Value" "TPS7A4700")
+    (property "Footprint" "Package_TO_SOT_SMD:TO-263-5")
+    (uuid "ldo-001")
+  )
+
+  ;; ── Power: 5V boost for laser ──
+  (symbol
+    (at 290 410)
+    (lib_id "Converter_DCDC:MT3601")
+    (property "Reference" "U18")
+    (property "Value" "MT3601")
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-6")
+    (uuid "boost-001")
+  )
+
+  ;; ── USB-C ──
+  (symbol
+    (at 350 410)
+    (lib_id "Connector:USB_C_16pin")
+    (property "Reference" "J2")
+    (property "Value" "USB-C 16P")
+    (property "Footprint" "Connector:USB_C_16P_SMD")
+    (uuid "usbc-001")
+  )
+
+  ;; ── RGB LED ──
+  (symbol
+    (at 50 470)
+    (lib_id "Device:LED_RGB")
+    (property "Reference" "D1")
+    (property "Value" "RGB 5050")
+    (property "Footprint" "LED_SMD:LED_5050")
+    (uuid "rgbled-001")
+  )
+
+  ;; ── TIA feedback resistors ──
+  (symbol
+    (at 110 470)
+    (lib_id "Device:R")
+    (property "Reference" "R1")
+    (property "Value" "1M 0.1%")
+    (property "Footprint" "Resistor_SMD:R_0603")
+    (uuid "r1-001")
+  )
+
+  (symbol
+    (at 150 470)
+    (lib_id "Device:R")
+    (property "Reference" "R2")
+    (property "Value" "1M 0.1%")
+    (property "Footprint" "Resistor_SMD:R_0603")
+    (uuid "r2-001")
+  )
+
+  ;; ── TIA feedback caps ──
+  (symbol
+    (at 190 470)
+    (lib_id "Device:C")
+    (property "Reference" "C1")
+    (property "Value" "2.2pF C0G")
+    (property "Footprint" "Capacitor_SMD:C_0603")
+    (uuid "c1-001")
+  )
+
+  (symbol
+    (at 230 470)
+    (lib_id "Device:C")
+    (property "Reference" "C2")
+    (property "Value" "2.2pF C0G")
+    (property "Footprint" "Capacitor_SMD:C_0603")
+    (uuid "c2-001")
+  )
+
+  ;; ── Reference mirror ──
+  (symbol
+    (at 290 470)
+    (lib_id "Optics:Mirror_Fixed")
+    (property "Reference" "M1")
+    (property "Value" "Fixed reference mirror λ/20")
+    (property "Footprint" "Optics:Mirror_12.7mm")
+    (uuid "mirror-001")
+  )
+
+  ;; ── Collimator lens ──
+  (symbol
+    (at 350 470)
+    (lib_id "Optics:Lens_Achromat")
+    (property "Reference" "L2")
+    (property "Value" "Achromat f=20mm 650nm AR")
+    (property "Footprint" "Optics:Lens_12mm")
+    (uuid "lens-001")
+  )
+
+  ;; ═══════════════════════════════════════════════════════════
+  ;; NETS / CONNECTIONS
+  ;; ═══════════════════════════════════════════════════════════
+
+  (net (name "GND") (code 0))
+  (net (name "VCC_3V3") (code 1))
+  (net (name "VCC_ANA_3V3") (code 2))
+  (net (name "VCC_5V_LASER") (code 3))
+  (net (name "VBAT") (code 4))
+  (net (name "VBUS_5V") (code 5))
+
+  ;; MCU → ESP32 UART
+  (net (name "USART2_TX") (code 10))
+  (net (name "USART2_RX") (code 11))
+
+  ;; MCU ADC I/Q
+  (net (name "ADC1_IN1_I") (code 20))
+  (net (name "ADC2_IN2_Q") (code 21))
+
+  ;; MCU → Laser driver
+  (net (name "LASER_PWM") (code 30))
+  (net (name "LASER_EN") (code 31))
+
+  ;; MCU → Shutter
+  (net (name "SHUTTER_PWM") (code 40))
+  (net (name "SHUTTER_EN") (code 41))
+
+  ;; MCU I2C bus
+  (net (name "I2C1_SCL") (code 50))
+  (net (name "I2C1_SDA") (code 51))
+
+  ;; MCU SPI bus (SD)
+  (net (name "SPI2_SCK") (code 60))
+  (net (name "SPI2_MISO") (code 61))
+  (net (name "SPI2_MOSI") (code 62))
+  (net (name "SPI2_NSS") (code 63))
+
+  ;; MCU I2S (audio)
+  (net (name "I2S_WS") (code 70))
+  (net (name "I2S_BCK") (code 71))
+  (net (name "I2S_SD") (code 72))
+
+  ;; GPIO inputs
+  (net (name "REED_INTERLOCK") (code 80))
+  (net (name "BTN_A") (code 81))
+  (net (name "BTN_B") (code 82))
+  (net (name "DS18B20_DQ") (code 83))
+
+  ;; Photodiode → TIA
+  (net (name "PD1_OUT") (code 90))
+  (net (name "PD2_OUT") (code 91))
+
+  ;; TIA → ADC
+  (net (name "TIA1_OUT") (code 100))
+  (net (name "TIA2_OUT") (code 101))
+
+  ;; ═══════════════════════════════════════════════════════════
+  ;; WIRES (summary — full netlist in PCB)
+  ;; ═══════════════════════════════════════════════════════════
+
+  (wire (start 55 45) (end 145 45))      ;; MCU ↔ ESP32 UART bus
+  (wire (start 55 175) (end 45 225))     ;; PD1 → U7 TIA1 input
+  (wire (start 115 175) (end 105 225))  ;; PD2 → U8 TIA2 input
+  (wire (start 55 235) (end 45 175))    ;; TIA1_OUT → ADC1_IN1 (PA0)
+  (wire (start 115 235) (end 105 175))  ;; TIA2_OUT → ADC2_IN2 (PA1)
+  (wire (start 225 45) (end 225 85))    ;; LD1 cathode → U3 driver
+  (wire (start 55 415) (end 105 415))   ;; BT1 → MCP73831
+  (wire (start 165 415) (end 225 415))  ;; TPS63020 → TPS7A4700
+  (wire (start 285 415) (end 345 415))  ;; MT3601 → USB-C VBUS
+  (wire (start 55 355) (end 105 355))   ;; DRV8833 → Shutter solenoid
+  (wire (start 175 355) (end 45 355))   ;; Reed → MCU PB14
+
+  ;; ── Labels ──
+  (label "ADC1_IN1_I" (at 45 175))
+  (label "ADC2_IN2_Q" (at 105 175))
+  (label "USART2_TX" (at 145 45))
+  (label "USART2_RX" (at 55 45))
+  (label "I2C1_SCL" (at 145 110))
+  (label "I2C1_SDA" (at 145 120))
+  (label "SPI2_SCK" (at 55 290))
+  (label "LASER_PWM" (at 225 85))
+  (label "SHUTTER_EN" (at 55 355))
+  (label "REED_INTERLOCK" (at 175 355))
+  (label "I2S_WS" (at 185 230))
+  (label "I2S_BCK" (at 185 240))
+  (label "I2S_SD" (at 185 250))
+
+  ;; ── Sheet ──
+  (sheet_instances
+    (path "/" (page "1"))
+  )
+)

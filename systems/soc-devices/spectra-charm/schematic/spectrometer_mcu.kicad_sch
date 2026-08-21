@@ -1,0 +1,27 @@
+(kicad_sch (version 20230614)
+  (generator "eeschema")
+  (uuid "00000000-0000-0000-0000-000000000010")
+  (paper "A3")
+  (title_block
+    (title "Spectrometer MCU — STM32G491RET6")
+    (date "2026-06-17")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+  )
+
+  (lib_symbols)
+
+  ;; STM32G491RET6 (LQFP-64)
+  (symbol "STM32G491RET6" (in_bom yes) (on_board yes)
+    (property "Reference" "U1" (at 0 1.27 0))
+    (property "Value" "STM32G491RET6" (at 0 -1.27 0))
+    (property "Footprint" "Package_QFP:LQFP-64_10x10mm_P0.5mm" (at 0 -3.81 0))
+    (symbol_name "STM32G491RET6")
+  )
+
+  ;; Decoupling capacitors for VDD pins (0.1uF + 4.7uF per pair)
+  (text "Decoupling: C1-C10 = 100nF, C11-C12 = 4.7uF\nPlace one 100nF per VDD pin pair,\n4.7uF bulk near power entry\n\nVBAT: C13 = 100nF\nVDDA: C14 = 100nF + C15 = 1uF (low-ESR)\nVREF+: C16 = 100nF (if used)\n\nCrystal: Y1 = 8MHz, C17/C18 = 20pF load\nRTC: Y2 = 32.768kHz, C19/C20 = 6pF load"
+    (at 127.0 25.4 0)
+    (uuid "00000000-0000-0000-0000-000000000011")
+  )
+)

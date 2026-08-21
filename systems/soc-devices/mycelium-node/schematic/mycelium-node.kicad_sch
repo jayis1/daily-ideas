@@ -1,0 +1,262 @@
+(kicad_sch
+  (version 20231120)
+  (generator "hermes-inventor")
+
+  (uuid e0000000-0000-0000-0000-000000000001)
+
+  (title "Mycelium Node - Mushroom Fruiting Chamber Controller")
+  (date "2026-06-16")
+  (rev "1.0")
+  (company "SoC Device Inventions")
+
+  (comment 1 "ESP32-C6-MINI-1 based environmental controller")
+  (comment 2 "Multi-zone temp/humidity/CO2/light with PID actuator control")
+
+  ;; ============================================================
+  ;; SHEET: TOP LEVEL
+  ;; ============================================================
+
+  (sheet e0000001-0000-0000-0000-000000000001
+    (property "Sheetname" "Mycelium Node Top")
+    (property "Sheetfile" "mycelium-node.kicad_sch")
+  )
+
+  ;; ============================================================
+  ;; POWER SECTION
+  ;; ============================================================
+
+  ;; USB-C Input Connector
+  (symbol (lib_id "Connector:USB_C_Receptacle") (at 25.4 25.4) (uuid p0000001)
+    (property "Reference" "J1")
+    (property "Value" "USB-C 5V/2A")
+    (property "Footprint" "Connector_USB:USB_C_Receptacle_GCT_USB4105")
+  )
+
+  ;; TP4056 LiPo Charger
+  (symbol (lib_id "Battery_Management:TP4056") (at 63.5 25.4) (uuid p0000002)
+    (property "Reference" "U2")
+    (property "Value" "TP4056")
+    (property "Footprint" "Package_SO:SOP-8_3.9x4.9mm_P1.27mm")
+  )
+
+  ;; LiPo Battery Connector
+  (symbol (lib_id "Connector:Conn_01x02") (at 101.6 25.4) (uuid p0000003)
+    (property "Reference" "J2")
+    (property "Value" "LiPo 2000mAh")
+    (property "Footprint" "Connector_JST:JST_PH_S2B-PH-K_1x02_P2.00mm_Horizontal")
+  )
+
+  ;; MT3608 Boost Converter (LiPo → 5V)
+  (symbol (lib_id "Converter_DCDC:MT3608") (at 139.7 25.4) (uuid p0000004)
+    (property "Reference" "U3")
+    (property "Value" "MT3608")
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-6")
+  )
+
+  ;; ME6211 LDO (5V → 3.3V)
+  (symbol (lib_id "Regulator_Linear:ME6211") (at 177.8 25.4) (uuid p0000005)
+    (property "Reference" "U4")
+    (property "Value" "ME6211-3.3")
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-89-3")
+  )
+
+  ;; 12V Barrel Jack
+  (symbol (lib_id "Connector:Barrel_Jack") (at 25.4 63.5) (uuid p0000006)
+    (property "Reference" "J3")
+    (property "Value" "12V/2A DC")
+    (property "Footprint" "Connector_BarrelJack:BarrelJack_Wuerth_6941xx301002")
+  )
+
+  ;; ============================================================
+  ;; ESP32-C6-MINI-1 MODULE
+  ;; ============================================================
+
+  (symbol (lib_id "RF_Module:ESP32-C6-MINI-1") (at 114.3 139.7) (uuid m0000001)
+    (property "Reference" "U10")
+    (property "Value" "ESP32-C6-MINI-1")
+    (property "Footprint" "RF_Module:ESP32-C6-MINI-1")
+  )
+
+  ;; ============================================================
+  ;; I2C SENSORS
+  ;; ============================================================
+
+  ;; SHT40 Chamber (I2C 0x44)
+  (symbol (lib_id "Sensor_Humidity:Sensirion_SHT40") (at 25.4 190.5) (uuid s0000001)
+    (property "Reference" "U20")
+    (property "Value" "SHT40-AD1B-B")
+    (property "Footprint" "Sensor_Humidity:Sensirion_DFN-4-1EP_2.5x2.5mm_P0.8mm")
+  )
+
+  ;; SHT40 Substrate (I2C 0x45)
+  (symbol (lib_id "Sensor_Humidity:Sensirion_SHT40") (at 63.5 190.5) (uuid s0000002)
+    (property "Reference" "U21")
+    (property "Value" "SHT40-AD1B-B")
+    (property "Footprint" "Sensor_Humidity:Sensirion_DFN-4-1EP_2.5x2.5mm_P0.8mm")
+  )
+
+  ;; SCD41 CO2 Sensor (I2C 0x62)
+  (symbol (lib_id "Sensor_Gas:Sensirion_SCD41") (at 101.6 190.5) (uuid s0000003)
+    (property "Reference" "U22")
+    (property "Value" "SCD41")
+    (property "Footprint" "Sensor_Gas:Sensirion_SCD4x_4.9x2.85mm_P1.27mm")
+  )
+
+  ;; TSL2591 Light Sensor (I2C 0x29)
+  (symbol (lib_id "Sensor_Optical:AMS_TSL2591") (at 139.7 190.5) (uuid s0000004)
+    (property "Reference" "U23")
+    (property "Value" "TSL2591")
+    (property "Footprint" "Package_DFN_QFN:DFN-6-1EP_2x2mm_P0.65mm_EP0.8x1.2mm")
+  )
+
+  ;; SSD1306 OLED Display (I2C 0x3C)
+  (symbol (lib_id "Display_OLED:SSD1306") (at 177.8 190.5) (uuid s0000005)
+    (property "Reference" "U24")
+    (property "Value" "SSD1306_128x64")
+    (property "Footprint" "Display_OLED:OLED_128x64_0.96in_I2C")
+  )
+
+  ;; ============================================================
+  ;; TEMPERATURE PROBES
+  ;; ============================================================
+
+  ;; DS18B20 #1 (Substrate deep probe 1)
+  (symbol (lib_id "Sensor_Temperature:DS18B20") (at 25.4 228.6) (uuid t0000001)
+    (property "Reference" "U30")
+    (property "Value" "DS18B20")
+    (property "Footprint" "Package_TO_SOT_THT:TO-92_3_Neutral3_Horizontal")
+  )
+
+  ;; DS18B20 #2 (Substrate deep probe 2)
+  (symbol (lib_id "Sensor_Temperature:DS18B20") (at 63.5 228.6) (uuid t0000002)
+    (property "Reference" "U31")
+    (property "Value" "DS18B20")
+    (property "Footprint" "Package_TO_SOT_THT:TO-92_3_Neutral3_Horizontal")
+  )
+
+  ;; ============================================================
+  ;; ACTUATOR MOSFET DRIVERS
+  ;; ============================================================
+
+  ;; Humidifier MOSFET (GPIO5)
+  (symbol (lib_id "Transistor_FET:IRLML6344") (at 215.9 63.5) (uuid a0000001)
+    (property "Reference" "Q1")
+    (property "Value" "IRLML6344")
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23")
+  )
+
+  ;; Heater MOSFET (GPIO6)
+  (symbol (lib_id "Transistor_FET:IRLML6344") (at 254 63.5) (uuid a0000002)
+    (property "Reference" "Q2")
+    (property "Value" "IRLML6344")
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23")
+  )
+
+  ;; Fan MOSFET (GPIO7)
+  (symbol (lib_id "Transistor_FET:IRLML6344") (at 215.9 101.6) (uuid a0000003)
+    (property "Reference" "Q3")
+    (property "Value" "IRLML6344")
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23")
+  )
+
+  ;; Grow Light MOSFET (GPIO8)
+  (symbol (lib_id "Transistor_FET:IRLML6344") (at 254 101.6) (uuid a0000004)
+    (property "Reference" "Q4")
+    (property "Value" "IRLML6344")
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23")
+  )
+
+  ;; Safety Relay
+  (symbol (lib_id "Relay:Relay_SPDT") (at 177.8 63.5) (uuid a0000005)
+    (property "Reference" "K1")
+    (property "Value" "5V_SPDT_Relay")
+    (property "Footprint" "Relay_THT:Relay_SPDT_Omron_G5LE-1")
+  )
+
+  ;; ============================================================
+  ;; USER INTERFACE
+  ;; ============================================================
+
+  ;; Rotary Encoder
+  (symbol (lib_id "Device:RotaryEncoder") (at 25.4 279.4) (uuid u0000001)
+    (property "Reference" "SW1")
+    (property "Value" "PEC11R-4220F-S0012")
+    (property "Footprint " "Rotary_Encoder:RotaryEncoder_Alps_EC11")
+  )
+
+  ;; Piezo Buzzer
+  (symbol (lib_id "Device:Buzzer") (at 63.5 279.4) (uuid u0000002)
+    (property "Reference" "BZ1")
+    (property "Value" "3V_Piezo")
+    (property "Footprint" "Buzzer_Beeper:Buzzer_Murata_PKMCS0")
+  )
+
+  ;; WS2812B Status LED
+  (symbol (lib_id "LED:WS2812B") (at 101.6 279.4) (uuid u0000003)
+    (property "Reference" "D1")
+    (property "Value" "WS2812B")
+    (property "Footprint" "LED_SMD:LED_WS2812B_PLCC4_5.0x5.0mm_P3.2mm")
+  )
+
+  ;; ============================================================
+  ;; PASSIVES (KEY BYPASS CAPS)
+  ;; ============================================================
+
+  ;; ESP32-C6 bypass caps (100nF each power pin)
+  (symbol (lib_id "Device:C") (at 88.9 119.38) (uuid c0000001)
+    (property "Reference" "C1")
+    (property "Value" "100nF")
+    (property "Footprint" "Capacitor_SMD:C_0402_1005Metric")
+  )
+  (symbol (lib_id "Device:C") (at 96.52 119.38) (uuid c0000002)
+    (property "Reference" "C2")
+    (property "Value" "100nF")
+    (property "Footprint" "Capacitor_SMD:C_0402_1005Metric")
+  )
+  (symbol (lib_id "Device:C") (at 104.14 119.38) (uuid c0000003)
+    (property "Reference" "C3")
+    (property "Value" "10uF")
+    (property "Footprint" "Capacitor_SMD:C_0805_2012Metric")
+  )
+
+  ;; I2C pull-ups (4.7K each)
+  (symbol (lib_id "Device:R") (at 50.8 180.34) (uuid r0000001)
+    (property "Reference" "R1")
+    (property "Value" "4.7K")
+    (property "Footprint" "Resistor_SMD:R_0402_1005Metric")
+  )
+  (symbol (lib_id "Device:R") (at 50.8 187.96) (uuid r0000002)
+    (property "Reference" "R2")
+    (property "Value" "4.7K")
+    (property "Footprint" "Resistor_SMD:R_0402_1005Metric")
+  )
+
+  ;; 1-Wire pull-up (4.7K)
+  (symbol (lib_id "Device:R") (at 25.4 215.9) (uuid r0000003)
+    (property "Reference" "R3")
+    (property "Value" "4.7K")
+    (property "Footprint" "Resistor_SMD:R_0402_1005Metric")
+  )
+
+  ;; Voltage dividers for ADC monitoring
+  (symbol (lib_id "Device:R") (at 292.1 50.8) (uuid r0000004)
+    (property "Reference" "R4")
+    (property "Value" "100K")
+    (property "Footprint" "Resistor_SMD:R_0402_1005Metric")
+  )
+  (symbol (lib_id "Device:R") (at 292.1 58.42) (uuid r0000005)
+    (property "Reference" "R5")
+    (property "Value" "100K")
+    (property "Footprint" "Resistor_SMD:R_0402_1005Metric")
+  )
+  (symbol (lib_id "Device:R") (at 292.1 88.9) (uuid r0000006)
+    (property "Reference" "R6")
+    (property "Value" "300K")
+    (property "Footprint" "Resistor_SMD:R_0402_1005Metric")
+  )
+  (symbol (lib_id "Device:R") (at 292.1 96.52) (uuid r0000007)
+    (property "Reference" "R7")
+    (property "Value" "100K")
+    (property "Footprint" "Resistor_SMD:R_0402_1005Metric")
+  )
+)

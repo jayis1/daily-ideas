@@ -1,0 +1,84 @@
+(kicad_pcb (version 20230121) (generator pcbnew)
+
+  (general
+    (thickness 1.2)
+    (drawings 10)
+    (tracks 200)
+    (zones 2)
+    (modules 16)
+    (nets 30)
+  )
+
+  (paper "A4")
+
+  (title_block
+    (title "Flux Ring - Wearable Magnetic Field Explorer")
+    (date "2026-06-14")
+    (rev "1.0")
+    (comment 1 "jayis1")
+  )
+
+  (layers
+    (0 "F.Cu" signal)
+    (1 "In1.Cu" power)
+    (2 "In2.Cu" ground)
+    (31 "B.Cu" signal)
+    (32 "B.Adhes" user)
+    (33 "F.Adhes" user)
+    (34 "B.Paste" user)
+    (35 "F.Paste" user)
+    (36 "B.Silk" user)
+    (37 "F.Silk" user)
+    (38 "B.Mask" user)
+    (39 "F.Mask" user)
+    (40 "Dwgs.User" user)
+    (41 "Cmts.User" user)
+    (42 "Eco1.User" user)
+    (43 "Eco2.User" user)
+    (44 "Edge.Cuts" user)
+  )
+
+  (setup
+    (stack_thickness 1.2)
+    (copper_trace_width 0.15)
+    (clearance 0.1)
+    (zone_clearance 0.2)
+    (pad_size 0.3 0.6)
+    (via_size 0.4)
+    (via_drill 0.2)
+    (blind_buried_vias_allowed no)
+  )
+
+  (net_class "Default" ""
+    (clearance 0.1)
+    (trace_width 0.15)
+    (via_dia 0.4)
+    (via_drill 0.2)
+    (uvia_dia 0.3)
+    (uvia_drill 0.1)
+  )
+
+  (net_class "Power" ""
+    (clearance 0.15)
+    (trace_width 0.3)
+    (via_dia 0.5)
+    (via_drill 0.25)
+  )
+
+  (net_class "I2C" ""
+    (clearance 0.1)
+    (trace_width 0.2)
+    (via_dia 0.4)
+    (via_drill 0.2)
+  )
+
+  ;; Board outline: 22mm x 18mm rectangle with rounded corners
+  (gr_rect (start 0 0) (end 22 18) (layer "Edge.Cuts") (width 0.15))
+
+  ;; Component placement notes:
+  ;; Top face: MMC5983MA (center), LIS2DH12 (adjacent), MS5837 (near edge)
+  ;; Bottom face: nRF52840 (center), DRV2603L, W25Q16
+  ;; Edge: USB-C receptacle (22mm side)
+  ;; Outer face: WS2812B (toward outside world)
+  ;; Inner face: SSD1306 OLED (toward wearer's skin)
+)

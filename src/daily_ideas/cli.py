@@ -14,6 +14,7 @@ from typing import Iterable, Optional, Sequence
 from . import __version__
 from .catalog import App, load_apps, repository_root, search, validate_apps
 from .runner import run_app
+from .systems import load_devices, load_platform, validate_platform
 
 
 def _table(apps: Iterable[App]) -> None:
@@ -88,6 +89,15 @@ def build_parser() -> argparse.ArgumentParser:
     choose.add_argument("--seed", type=int)
     commands.add_parser("doctor", help="check the catalog and local capabilities")
     commands.add_parser("browse", help="open the full-screen command center")
+    systems = commands.add_parser("system", help="inspect the four-node hardware platform")
+    system_commands = systems.add_subparsers(dest="system_command", required=True)
+    system_commands.add_parser("list", help="list the four platform nodes")
+    system_info = system_commands.add_parser("info", help="show one node and its reference devices")
+    system_info.add_argument("node")
+    system_commands.add_parser("doctor", help="validate topology and device references")
+    system_devices = system_commands.add_parser("devices", help="list every connected SoC design")
+    system_devices.add_argument("--node", choices=("observe", "reason", "act", "coordinate"))
+    system_devices.add_argument("--domain")
     return parser
 
 
@@ -111,6 +121,41 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 raise ValueError("app sources not found; run from a source checkout")
             from .tui import browse
             return browse(apps, root)
+        elif args.command == "system":
+            if not root:
+                raise ValueError("system manifest not found; run from a source checkout")
+            platform = load_platform(root / "systems" / "platform.json")
+            if args.system_command == "list":
+                for node in platform.nodes:
+                    print(f"{node.id:<12} {node.title:<18} {node.role}")
+            elif args.system_command == "info":
+                matches = [node for node in platform.nodes if node.id == args.node]
+                if not matches:
+                    raise ValueError(f"unknown system node: {args.node}")
+                node = matches[0]
+                print(node.title)
+                print(f"id:      {node.id}")
+                print(f"role:    {node.role}")
+                print(f"inputs:  {', '.join(node.inputs)}")
+                print(f"outputs: {', '.join(node.outputs)}")
+                print(f"devices: {', '.join(node.reference_devices)}")
+            elif args.system_command == "devices":
+                devices = load_devices(root / "systems" / "devices.json")
+                selected = [device for device in devices
+                            if (not args.node or args.node in device.roles)
+                            and (not args.domain or args.domain == device.domain)]
+                for device in selected:
+                    print(f"{device.id:<20} {device.domain:<24} {','.join(device.roles)}")
+                print(f"{len(selected)} connected device designs")
+            else:
+                problems = validate_platform(platform, root)
+                for problem in problems:
+                    print(f"ERROR: {problem}", file=sys.stderr)
+                if problems:
+                    return 1
+                devices = load_devices(root / "systems" / "devices.json")
+                print(f"Platform: {platform.name}, 4 nodes, {len(platform.links)} links, "
+                      f"{len(devices)} devices, valid")
         elif args.command in {"run", "random"}:
             if not root:
                 raise ValueError("app sources not found; run from a source checkout")

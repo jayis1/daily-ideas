@@ -1,0 +1,20 @@
+# Scribe Nib - Hardware Bill of Materials
+# Generated 2026-06-14
+
+Item,Part Number,Description,Package,Quantity,Unit Price USD,Extended Price,Supplier,Supplier PN,Notes
+1,ESP32-S3-MINI-1,SoC Module WiFi/BLE5 dual-core 240MHz,Module,1,3.50,3.50,Espressif,MFG_ESP32-S3-MINI-1,Main processor
+2,ICM-42688-P,6-axis IMU accelerometer+gyroscope SPI,LGA-14 2.5x3,1,2.40,2.40,TDK-InvenSense,MFG_ICM-42688-P,Pen motion tracking
+3,QMC5883L,3-axis magnetometer I2C,LGA-16 3x3,1,0.90,0.90,QST,MFG_QMC5883L,Heading reference
+4,SSD1306 64x32,0.49" OLED display I2C on flex,Custom flex,1,1.80,1.80,Generic,MFG_SSD1306-64X32,Character preview
+5,MCP73831T-2ACI/OT,LiPo charger 500mA,SOT-23-5,1,0.40,0.40,Microchip,MCP73831T-2ACI/OT,Battery charging
+6,ME6211A33M,LDO 3.3V 300mA low IQ,SOT-23-5,1,0.25,0.25,Microne,ME6211A33M,3.3V regulation
+7,LiPo 80mAh,3.7V lithium polymer pouch battery,Custom pouch,1,2.20,2.20,Generic,MFG_LIPO-80MAH,Power source
+8,USB-C 16-pin SMD,USB 2.0 Type-C receptacle 16-pin,16-pin SMD,1,0.35,0.35,Generic,MFG_USBC-16PIN,Charging + flash
+9,Vibration motor 4mm,Coin type eccentric motor SMD,4mm coin,1,0.60,0.60,Generic,MFG_VIBRA-4MM,Haptic feedback
+10,Si2302DS,N-channel MOSFET 20V 1.9A,SOT-23,1,0.08,0.08,Vishay,Si2302DS,Motor driver
+11,WS2812B-2020,RGB LED with controller,2020,1,0.15,0.15,Worldsemi,WS2812B-2020,Status indicator
+12,0.3mm Spring Steel Clip,Pen clip spring steel substrate,Custom,1,0.50,0.50,Custom,MFG_SPRING-CLIP,Mechanical clip body
+13,Passives kit,R/C/L 0402 assorted,0402,25,0.45,0.45,Various,Various,Pullups decoupling filter
+14,PCB 4-layer 12x18mm,FR4 1.0mm ENIG 4-layer,12x18mm,1,0.80,0.80,JLCPCB,MFG_PCB-SCRIBE,Main PCB
+
+,,Total BOM,,,,,,,,14.38

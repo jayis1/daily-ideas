@@ -1,0 +1,38 @@
+(kicad_pcb (version 20230121) (generator pcbnew)
+
+  (general
+    (thickness 1.6)
+    (drawings 0)
+    (tracks 0)
+    (zones 0)
+    (modules 0)
+    (nets 0)
+  )
+
+  (title "Tremor Tile — Structural Vibration Monitor")
+  (date "2026-06-15")
+  (rev "1.0")
+  (company "SoC Device Inventions")
+
+  (comment 1 "PCB: 85mm x 54mm x 1.6mm, 4-layer FR4")
+  (comment 2 "Mounting: 4x M3 + 2x N35 magnets")
+  (comment 3 "Solar: PowerFilm MPT3.6-75 on top face")
+
+  # PCB outline: 85mm x 54mm
+  # Layer stackup:
+  #   L1: Signal (top)
+  #   L2: GND plane
+  #   L3: Power plane (3V3)
+  #   L4: Signal (bottom)
+
+  # Placement notes:
+  # - ADXL355 centered on PCB (minimize board flex coupling)
+  # - RP2040 near center, QSPI flash adjacent
+  # - SX1262 near edge with PCB trace antenna
+  # - BME280 in corner (away from heat sources)
+  # - DS3231 near RP2040 (I2C bus)
+  # - Solar cell connector on top edge
+  # - USB-C on right edge
+  # - Buzzer near top-left corner
+
+)

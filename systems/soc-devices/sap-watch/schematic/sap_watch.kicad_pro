@@ -1,0 +1,61 @@
+{
+  "board": {
+    "3dpath": "${KICAD6_3DMODELS_DIR}",
+    "design_settings": {
+      "defaults": {
+        "board_outline_line_width": 0.15,
+        "copper_line_width": 0.2,
+        "copper_text_size_h": 1.5,
+        "copper_text_size_v": 1.5,
+        "copper_text_thickness": 0.3,
+        "edge_cut_line_width": 0.15,
+        "fab_line_width": 0.1,
+        "fab_text_size_h": 1.0,
+        "fab_text_size_v": 1.0,
+        "fab_text_thickness": 0.15,
+        "silk_line_width": 0.12,
+        "silk_text_size_h": 1.0,
+        "silk_text_size_v": 1.0,
+        "silk_text_thickness": 0.15
+      },
+      "diff_pair_dimensions": [],
+      "drc_exclusions": [],
+      "rule_severities": {
+        "copper_edge_clearance": "error",
+        "silk_over_copper": "warning",
+        "silk_overlap": "warning"
+      },
+      "rules": {
+        "min_clearance": 0.15,
+        "min_track_width": 0.15,
+        "min_via_diameter": 0.4,
+        "min_via_drill": 0.2
+      }
+    },
+    "layer_presets": [],
+    "layer_pairs": [],
+    "ipc2581": {
+      "dist": "",
+      "distpn": "",
+      "internal_id": "",
+      "mfg": "",
+      "mpn": ""
+    },
+    "schematic_blocks": [],
+    "panels": []
+  },
+  "libraries": {
+    "pinned_footprint_libs": [],
+    "pinned_symbol_libs": []
+  },
+  "meta": {
+    "filename": "sap_watch.kicad_pro",
+    "version": 3
+  },
+  "project": {
+    "name": "Sap Watch",
+    "sheets": [
+      ["sap_watch.kicad_sch", "Sap Watch — Tree Sap-Flow Monitor"]
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+(kicad_project
+  (version 20231120)
+  (generator "hermes-inventor")
+
+  (general
+    (project_name "mycelium-node")
+    (project_description "Mushroom Fruiting Chamber Environmental Controller - ESP32-C6")
+  )
+
+  (sheet_order
+    (sheet "mycelium-node.kicad_sch")
+  )
+
+  (pcb "mycelium-node.kicad_pcb")
+)

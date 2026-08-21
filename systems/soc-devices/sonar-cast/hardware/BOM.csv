@@ -1,0 +1,30 @@
+Part,Manufacturer,MPN,Qty,Unit Price (USD),Source,Notes
+STM32G474RET6,STMicroelectronics,STM32G474RET6,1,6.40,DigiKey/Mouser,Cortex-M4F 170MHz, CORDIC, HRTIM, LQFP64
+ESP32-C3-WROOM-02,Espressif,ESP32-C3-WROOM-02,1,2.70,Mouser/DigiKey,RISC-V 160MHz, BLE 5.0 + Wi-Fi
+200kHz piezo transducer,Airmar / generic,P66-style 200kHz,1,12.00,AliExpress/Amazon,8° beam, piezo-ceramic, waterproof
+IRFH7440 MOSFET,Infineon,IRFH7440TRPBF,4,1.10,DigiKey,40V 100A N-MOS, H-bridge
+MC34063 boost IC,TI/AZDelivery,MC34063SOIC,1,0.30,DigiKey,Boost to 12V for HV rail
+AD8331 VGA,Analog Devices,AD8331ARQZ,1,9.80,DigiKey,0-48 dB VGA, TGC ramp input
+ADS7945 ADC,TI,ADS7945SRGWR,1,5.20,DigiKey,12-bit 1Msps SPI ADC
+BAT54S diode,Nexperia,BAT54S,2,0.10,DigiKey,T/R switch clamp (antiparallel pair)
+ICM-42688-P,TDK InvenSense,ICM-42688-P,1,4.10,DigiKey,6-axis IMU, tilt compensation
+MS5837-30BA,TE Connectivity,MS5837-30BA,1,9.50,DigiKey,0-30 bar pressure, depth cross-check
+NEO-M9N GPS,u-blox,NEO-M9N-0-01,1,11.00,Mouser,1.5m CEP GPS, 1Hz NMEA
+DS18B20,Maxim/ADI,DS18B20,1,0.60,DigiKey,Water temp (speed-of-sound correction)
+SSD1306 OLED 0.96",Solomon/Waveshare,SSD1306 128x64 I2C,1,2.20,AliExpress,Local status display
+MicroSD socket,Molex,503182-1850,1,1.10,DigiKey,Push-push microSD, bathymetry CSV log
+TP4056 charge IC,Nanjing Top Power,TP4056,1,0.40,LCSC,18650 Li-ion USB-C charger
+DW02 battery protection,Sinicheck,DW02,1,0.25,LCSC,Over-discharge / over-current protection
+AP2112-3.3 LDO,Diodes Inc,AP2112K-3.3,1,0.25,DigiKey,3.3V LDO regulator
+USB-C connector,Amphenol,10137028-000200LF,1,0.60,DigiKey,USB-C 2.0 (charging only)
+WS2812 RGB LED,Worldsemi,WS2812B,1,0.20,DigiKey,Status LED
+18650 holder,Eaton,WHC-18650-BP-H,1,1.50,DigiKey,Single 18650 battery holder
+18650 battery,Panasonic/Sanyo,NCR18650B 3500mAh,1,5.00,Amazon,3.7V Li-ion
+PCB (2-layer Ø62mm),JLCPCB,JLCPCB 2-layer,1,2.50,JLCPCB,Custom circular PCB
+O-ring AS568-018,McMaster,9451K118,1,0.20,McMaster,26mm ID waterproof seal
+Enclosure (3D printed),N/A,N/A,1,1.50,Self-print,PETG two-piece puck IP68
+Float foam ring,N/A,N/A,1,0.30,Self-cut,Closed-cell foam buoyancy ring
+Resistors/caps/inductors,Yageo/Murata,assortment,1,3.00,DigiKey,Passives (HV rail filter, TGC RC, decoupling)
+M2.5 standoffs/screws,McMaster-Carr,assortment,1,1.00,McMaster,Hardware
+CR2032 + holder,Linx,BC5001-1,1,0.70,DigiKey,RTC backup battery (VBAT)
+Total,,,1,72.75,,Approximate BOM cost

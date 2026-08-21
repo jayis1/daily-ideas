@@ -1,0 +1,97 @@
+(kicad_sch (version 20230121) (generator eeschema)
+
+  (uuid e1a2b3c4-d5e6-f7a8-b9c0-d1e2f3a4b5c6)
+
+  (title "Tremor Tile — Structural Vibration Monitor")
+  (date "2026-06-15")
+  (rev "1.0")
+  (company "SoC Device Inventions")
+  (comment 1 "RP2040 + ADXL355 + SX1262 + BME280 + DS3231")
+
+  (lib_symbols)
+
+  # Power section: SPV1040 MPPT + TP4056 + RT9013
+
+  (symbol (lib_id "power:VCC") (at 25.4 25.4 0) (unit 1)
+    (uuid f1a2b3c4-0001-4000-8000-000000000001)
+    (property "Reference" "#PWR01" (at 25.4 21.59 0) (unit 1))
+    (property "Value" "VSOLAR" (at 25.4 19.05 0) (unit 1))
+  )
+
+  (symbol (lib_id "Regulator_Switching:SPV1040TR") (at 50.8 35.56 0) (unit 1)
+    (uuid f1a2b3c4-0001-4000-8000-000000000002)
+    (property "Reference" "U1" (at 50.8 27.94 0) (unit 1))
+    (property "Value" "SPV1040TR" (at 50.8 43.18 0) (unit 1))
+    (property "Footprint" "Package_SO:TSSOP-8_4.4x3mm_P0.65mm" (at 50.8 35.56 0) (unit 1))
+  )
+
+  (symbol (lib_id "Battery_Management:TP4056") (at 88.9 38.1 0) (unit 1)
+    (uuid f1a2b3c4-0001-4000-8000-000000000003)
+    (property "Reference" "U2" (at 88.9 30.48 0) (unit 1))
+    (property "Value" "TP4056" (at 88.9 45.72 0) (unit 1))
+    (property "Footprint" "Package_SO:SOP-8_3.9x4.9mm_P1.27mm" (at 88.9 38.1 0) (unit 1))
+  )
+
+  (symbol (lib_id "Regulator_Linear:RT9013-33GB") (at 121.92 38.1 0) (unit 1)
+    (uuid f1a2b3c4-0001-4000-8000-000000000004)
+    (property "Reference" "U3" (at 121.92 30.48 0) (unit 1))
+    (property "Value" "RT9013-33GB" (at 121.92 45.72 0) (unit 1))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-223-3_TabPin2" (at 121.92 38.1 0) (unit 1))
+  )
+
+  (symbol (lib_id "power:+3V3") (at 139.7 33.02 0) (unit 1)
+    (uuid f1a2b3c4-0001-4000-8000-000000000005)
+    (property "Reference" "#PWR02" (at 139.7 29.21 0) (unit 1))
+    (property "Value" "+3V3" (at 139.7 25.4 0) (unit 1))
+  )
+
+  # RP2040 section
+
+  (symbol (lib_id "MCU_RaspberryPi:RP2040") (at 152.4 101.6 0) (unit 1)
+    (uuid f1a2b3c4-0002-4000-8000-000000000001)
+    (property "Reference" "U4" (at 152.4 68.58 0) (unit 1))
+    (property "Value" "RP2040" (at 152.4 134.62 0) (unit 1))
+    (property "Footprint" "Package_DFN_QFN:QFN-56-1EP_7x7mm_P0.4mm_EP3.2x3.2mm_ThermalVias" (at 152.4 101.6 0) (unit 1))
+  )
+
+  # ADXL355 section
+
+  (symbol (lib_id "Sensor_Accelerometer:ADXL355") (at 38.1 101.6 0) (unit 1)
+    (uuid f1a2b3c4-0003-4000-8000-000000000001)
+    (property "Reference" "U5" (at 38.1 91.44 0) (unit 1))
+    (property "Value" "ADXL355" (at 38.1 111.76 0) (unit 1))
+    (property "Footprint" "Package_LGA:LGA-14-1EP_6x3mm_P1.27mm_EP4x1.8mm" (at 38.1 101.6 0) (unit 1))
+  )
+
+  # SX1262 section
+
+  (symbol (lib_id "RF_Module:SEMTECH_SX1262") (at 254 101.6 0) (unit 1)
+    (uuid f1a2b3c4-0004-4000-8000-000000000001)
+    (property "Reference" "U6" (at 254 88.9 0) (unit 1))
+    (property "Value" "SX1262IMLTRT" (at 254 114.3 0) (unit 1))
+    (property "Footprint" "Package_DFN_QFN:QFN-24-1EP_4x4mm_P0.5mm_EP2.6x2.6mm" (at 254 101.6 0) (unit 1))
+  )
+
+  # BME280 section
+
+  (symbol (lib_id "Sensor:BME280") (at 38.1 147.32 0) (unit 1)
+    (uuid f1a2b3c4-0005-4000-8000-000000000001)
+    (property "Reference" "U7" (at 38.1 139.7 0) (unit 1))
+    (property "Value" "BME280" (at 38.1 154.94 0) (unit 1))
+    (property "Footprint" "Package_LGA:Bosch_LGA-8_2.5x2.5mm_P0.65mm_ClockwisePinLayout" (at 38.1 147.32 0) (unit 1))
+  )
+
+  # DS3231 section
+
+  (symbol (lib_id "RTC:DS3231SN") (at 88.9 147.32 0) (unit 1)
+    (uuid f1a2b3c4-0006-4000-8000-000000000001)
+    (property "Reference" "U8" (at 88.9 137.16 0) (unit 1))
+    (property "Value" "DS3231SN#" (at 88.9 157.48 0) (unit 1))
+    (property "Footprint" "Package_SO:SOIC-16W_7.5x10.3mm_P1.27mm" (at 88.9 147.32 0) (unit 1))
+  )
+
+  # Passives and connectors noted in schematic netlist
+  # Full schematic would include all decoupling caps, pullups,
+  # voltage dividers, antenna matching network, etc.
+
+)

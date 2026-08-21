@@ -1,0 +1,633 @@
+(kicad_sch (version 20230121) (generator eeschema)
+
+  (uuid f0000000-0000-0000-0000-000000000001)
+  (paper "A3")
+
+  (title_block
+    (title "Refracto Bead — Pocket Digital Abbe Refractometer")
+    (date "2026-07-17")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+  )
+
+  (lib_symbols)
+
+  ;; ==========================================
+  ;; STM32G491RET6 Main MCU (U1)
+  ;; ==========================================
+  (symbol (lib_id "MCU_ST_STM32G4:STM32G491RET6") (at 127 76.2) (unit 1)
+    (uuid a0000001-0000-0000-0000-000000000001)
+    (property "Reference" "U1" (at 127 45.72 0))
+    (property "Value" "STM32G491RET6" (at 127 48.26 0))
+    (property "Footprint" "Package_QFP:LQFP-64_10x10mm_P0.5mm" (at 127 106.68 0))
+    (pin "1"  (uuid a0000001-0000-0000-0000-000000000002))  ;; VBAT
+    (pin "2"  (uuid a0000001-0000-0000-0000-000000000003))  ;; PC13 / BAT_TEMP
+    (pin "3"  (uuid a0000001-0000-0000-0000-000000000004))  ;; PC14 / OSC32_IN
+    (pin "4"  (uuid a0000001-0000-0000-0000-000000000005))  ;; PC15 / SPARE
+    (pin "5"  (uuid a0000001-0000-0000-0000-000000000006))  ;; PF0 / OSC_IN (8MHz)
+    (pin "6"  (uuid a0000001-0000-0000-0000-000000000007))  ;; PF1 / OSC_OUT (8MHz)
+    (pin "7"  (uuid a0000001-0000-0000-0000-000000000008))  ;; NRST
+    (pin "8"  (uuid a0000001-0000-0000-0000-000000000009))  ;; PA0 / ADC1_IN1 / TSL_AO
+    (pin "9"  (uuid a0000001-0000-0000-0000-00000000000A))  ;; PA1 / TIM2_CH1 / TSL_CLK
+    (pin "10" (uuid a0000001-0000-0000-0000-00000000000B))  ;; PA2 / TIM2_CH2 / TSL_SI
+    (pin "11" (uuid a0000001-0000-0000-0000-00000000000C))  ;; PA3 / LED1_EN (589nm)
+    (pin "12" (uuid a0000001-0000-0000-0000-00000000000D))  ;; PA4 / LED2_EN (525nm)
+    (pin "13" (uuid a0000001-0000-0000-0000-00000000000E))  ;; PA5 / LED3_EN (470nm)
+    (pin "14" (uuid a0000001-0000-0000-0000-00000000000F))  ;; PA6 / LED4_EN (655nm)
+    (pin "15" (uuid a0000001-0000-0000-0000-000000000010))  ;; PA7 / TEC_EN
+    (pin "16" (uuid a0000001-0000-0000-0000-000000000011))  ;; PA8 / SD_CS
+    (pin "17" (uuid a0000001-0000-0000-0000-000000000012))  ;; PA9 / USART1_TX → ESP32-C3
+    (pin "18" (uuid a0000001-0000-0000-0000-000000000013))  ;; PA10 / USART1_RX ← ESP32-C3
+    (pin "19" (uuid a0000001-0000-0000-0000-000000000014))  ;; PA11 / USB_D-
+    (pin "20" (uuid a0000001-0000-0000-0000-000000000015))  ;; PA12 / USB_D+
+    (pin "21" (uuid a0000001-0000-0000-0000-000000000016))  ;; PA13 / SWDIO
+    (pin "22" (uuid a0000001-0000-0000-0000-000000000017))  ;; VSS
+    (pin "23" (uuid a0000001-0000-0000-0000-000000000018))  ;; VDD
+    (pin "24" (uuid a0000001-0000-0000-0000-000000000019))  ;; PA14 / SWCLK
+    (pin "25" (uuid a0000001-0000-0000-0000-00000000001A))  ;; PA15 / TIM2_CH3 / BACKLIGHT
+    (pin "26" (uuid a0000001-0000-0000-0000-00000000001B))  ;; PB0 / I2C1_SCL
+    (pin "27" (uuid a0000001-0000-0000-0000-00000000001C))  ;; PB1 / I2C1_SDA
+    (pin "28" (uuid a0000001-0000-0000-0000-00000000001D))  ;; PB2 / ESP_EN
+    (pin "29" (uuid a0000001-0000-0000-0000-00000000001E))  ;; PB3 / SPI2_SCK
+    (pin "30" (uuid a0000001-0000-0000-0000-00000000001F))  ;; PB4 / SPI2_MISO
+    (pin "31" (uuid a0000001-0000-0000-0000-000000000020))  ;; PB5 / SPI2_MOSI
+    (pin "32" (uuid a0000001-0000-0000-0000-000000000021))  ;; PB6 / OLED_RST
+    (pin "33" (uuid a0000001-0000-0000-0000-000000000022))  ;; PB7 / STAT_LED
+    (pin "34" (uuid a0000001-0000-0000-0000-000000000023))  ;; PB8 / BTN_MEASURE
+    (pin "35" (uuid a0000001-0000-0000-0000-000000000024))  ;; PB9 / BTN_MODE
+    (pin "36" (uuid a0000001-0000-0000-0000-000000000025))  ;; PB10 / BTN_POWER
+    (pin "37" (uuid a0000001-0000-0000-0000-000000000026))  ;; PB11 / DS18B20_DATA
+    (pin "38" (uuid a0000001-0000-0000-0000-000000000027))  ;; PB12 / CHARGE_STAT
+    (pin "39" (uuid a0000001-0000-0000-0000-000000000028))  ;; PB13 / ADC1_IN11 / VBAT_SENSE
+    (pin "40" (uuid a0000001-0000-0000-0000-000000000029))  ;; PB14 / ADC1_IN5 / TEC_VSENSE
+  )
+
+  ;; ==========================================
+  ;; ESP32-C3-MINI-1 Connectivity MCU (U2)
+  ;; ==========================================
+  (symbol (lib_id "RF_Module:ESP32-C3-MINI-1") (at 203.2 76.2) (unit 1)
+    (uuid a0000002-0000-0000-0000-000000000001)
+    (property "Reference" "U2" (at 203.2 55.88 0))
+    (property "Value" "ESP32-C3-MINI-1" (at 203.2 58.42 0))
+    (property "Footprint" "RF_Module:ESP32-C3-MINI-1" (at 203.2 96.52 0))
+    (pin "1"  (uuid a0000002-0000-0000-0000-000000000002))  ;; GPIO2 / UART_RX ← STM32 PA9
+    (pin "2"  (uuid a0000002-0000-0000-0000-000000000003))  ;; GPIO3 / UART_TX → STM32 PA10
+    (pin "3"  (uuid a0000002-0000-0000-0000-000000000004))  ;; GPIO8 / BOOT_STRAP (10k pullup)
+    (pin "4"  (uuid a0000002-0000-0000-0000-000000000005))  ;; GPIO9 / EN ← STM32 PB2
+    (pin "5"  (uuid a0000002-0000-0000-0000-000000000006))  ;; GPIO10 / WS2812B data
+    (pin "6"  (uuid a0000002-0000-0000-0000-000000000007))  ;; GPIO18 / USB_D-
+    (pin "7"  (uuid a0000002-0000-0000-0000-000000000008))  ;; GPIO19 / USB_D+
+    (pin "8"  (uuid a0000002-0000-0000-0000-000000000009))  ;; 3V3
+    (pin "9"  (uuid a0000002-0000-0000-0000-00000000000A))  ;; GND
+  )
+
+  ;; ==========================================
+  ;; TSL1402R 256-pixel Linear CCD (U3)
+  ;; ==========================================
+  (symbol (lib_id "Sensor_Optical:TSL1402R") (at 50.8 127) (unit 1)
+    (uuid b0000001-0000-0000-0000-000000000001)
+    (property "Reference" "U3" (at 50.8 119.38 0))
+    (property "Value" "TSL1402R" (at 50.8 121.92 0))
+    (property "Footprint" "Package_DIP:DIP-8_W7.62mm" (at 50.8 132.08 0))
+    (pin "1" (uuid b0000001-0000-0000-0000-000000000002))  ;; AO  → PA0 (ADC1_IN1)
+    (pin "2" (uuid b0000001-0000-0000-0000-000000000003))  ;; SO  → GND
+    (pin "3" (uuid b0000001-0000-0000-0000-000000000004))  ;; SI  → PA2 (TIM2_CH2)
+    (pin "4" (uuid b0000001-0000-0000-0000-000000000005))  ;; CLK → PA1 (TIM2_CH1)
+    (pin "5" (uuid b0000001-0000-0000-0000-000000000006))  ;; VDD → 3.3V
+    (pin "6" (uuid b0000001-0000-0000-0000-000000000007))  ;; GND
+    (pin "7" (uuid b0000001-0000-0000-0000-000000000008))  ;; NC
+    (pin "8" (uuid b0000001-0000-0000-0000-000000000009))  ;; NC
+  )
+
+  ;; ==========================================
+  ;; SSD1306 OLED Display (U4)
+  ;; ==========================================
+  (symbol (lib_id "Display_Character:SSD1306") (at 203.2 127) (unit 1)
+    (uuid c0000001-0000-0000-0000-000000000001)
+    (property "Reference" "U4" (at 203.2 116.84 0))
+    (property "Value" "SSD1306_0.96in_128x64" (at 203.2 119.38 0))
+    (property "Footprint" "Display_OLED:SSD1306_0.96in_I2C" (at 203.2 132.08 0))
+    (pin "1" (uuid c0000001-0000-0000-0000-000000000002))  ;; GND
+    (pin "2" (uuid c0000001-0000-0000-0000-000000000003))  ;; VCC → 3.3V
+    (pin "3" (uuid c0000001-0000-0000-0000-000000000004))  ;; SCL → PB0 (I2C1_SCL)
+    (pin "4" (uuid c0000001-0000-0000-0000-000000000005))  ;; SDA → PB1 (I2C1_SDA)
+    (pin "5" (uuid c0000001-0000-0000-0000-000000000006))  ;; RES → PB6 (OLED_RST)
+  )
+
+  ;; ==========================================
+  ;; BME280 Ambient Sensor (U5)
+  ;; ==========================================
+  (symbol (lib_id "Sensor:BME280") (at 127 127) (unit 1)
+    (uuid d0000001-0000-0000-0000-000000000001)
+    (property "Reference" "U5" (at 127 119.38 0))
+    (property "Value" "BME280" (at 127 121.92 0))
+    (property "Footprint" "Sensor:Bosch_LGA-8_3x3mm" (at 127 132.08 0))
+    (pin "1" (uuid d0000001-0000-0000-0000-000000000002))  ;; SDA → PB1 (I2C1_SDA)
+    (pin "2" (uuid d0000001-0000-0000-0000-000000000003))  ;; SCL → PB0 (I2C1_SCL)
+    (pin "3" (uuid d0000001-0000-0000-0000-000000000004))  ;; VDD → 3.3V
+    (pin "4" (uuid d0000001-0000-0000-0000-000000000005))  ;; GND
+    (pin "5" (uuid d0000001-0000-0000-0000-000000000006))  ;; CSB → VDD (I2C mode)
+    (pin "6" (uuid d0000001-0000-0000-0000-000000000007))  ;; SDO → GND (addr 0x76)
+  )
+
+  ;; ==========================================
+  ;; DS18B20 Prism Temperature Sensor (U6)
+  ;; ==========================================
+  (symbol (lib_id "Sensor_Temperature:DS18B20") (at 50.8 76.2) (unit 1)
+    (uuid e0000001-0000-0000-0000-000000000001)
+    (property "Reference" "U6" (at 50.8 68.58 0))
+    (property "Value" "DS18B20" (at 50.8 71.12 0))
+    (property "Footprint" "Package_TO_SOT_THT:TO-92_3" (at 50.8 81.28 0))
+    (pin "1" (uuid e0000001-0000-0000-0000-000000000002))  ;; GND
+    (pin "2" (uuid e0000001-0000-0000-0000-000000000003))  ;; DQ → PB11 (DS18B20_DATA)
+    (pin "3" (uuid e0000001-0000-0000-0000-000000000004))  ;; VDD → 3.3V
+  )
+
+  ;; ==========================================
+  ;; LED Array — 4 Wavelengths (D1-D4)
+  ;; ==========================================
+  (symbol (lib_id "Device:LED") (at 25.4 30.48) (unit 1)
+    (uuid f0000001-0000-0000-0000-000000000001)
+    (property "Reference" "D1" (at 25.4 25.4 0))
+    (property "Value" "LED_589nm" (at 25.4 27.94 0))
+    (property "Footprint" "LED_THT:LED_D5.0mm" (at 25.4 30.48 0))
+    (pin "1" (uuid f0000001-0000-0000-0000-000000000002))  ;; A → Q1 collector (NPN driver)
+    (pin "2" (uuid f0000001-0000-0000-0000-000000000003))  ;; K → GND
+  )
+
+  (symbol (lib_id "Device:LED") (at 38.1 30.48) (unit 1)
+    (uuid f0000002-0000-0000-0000-000000000001)
+    (property "Reference" "D2" (at 38.1 25.4 0))
+    (property "Value" "LED_525nm" (at 38.1 27.94 0))
+    (property "Footprint" "LED_THT:LED_D5.0mm" (at 38.1 30.48 0))
+    (pin "1" (uuid f0000002-0000-0000-0000-000000000002))  ;; A → Q2 collector
+    (pin "2" (uuid f0000002-0000-0000-0000-000000000003))  ;; K → GND
+  )
+
+  (symbol (lib_id "Device:LED") (at 50.8 30.48) (unit 1)
+    (uuid f0000003-0000-0000-0000-000000000001)
+    (property "Reference" "D3" (at 50.8 25.4 0))
+    (property "Value" "LED_470nm" (at 50.8 27.94 0))
+    (property "Footprint" "LED_THT:LED_D5.0mm" (at 50.8 30.48 0))
+    (pin "1" (uuid f0000003-0000-0000-0000-000000000002))  ;; A → Q3 collector
+    (pin "2" (uuid f0000003-0000-0000-0000-000000000003))  ;; K → GND
+  )
+
+  (symbol (lib_id "Device:LED") (at 63.5 30.48) (unit 1)
+    (uuid f0000004-0000-0000-0000-000000000001)
+    (property "Reference" "D4" (at 63.5 25.4 0))
+    (property "Value" "LED_655nm" (at 63.5 27.94 0))
+    (property "Footprint" "LED_THT:LED_D5.0mm" (at 63.5 30.48 0))
+    (pin "1" (uuid f0000004-0000-0000-0000-000000000002))  ;; A → Q4 collector
+    (pin "2" (uuid f0000004-0000-0000-0000-000000000003))  ;; K → GND
+  )
+
+  ;; ==========================================
+  ;; LED NPN Drivers (Q1-Q4) — constant current sink
+  ;; ==========================================
+  (symbol (lib_id "Device:Q_NPN_BCE") (at 25.4 43.18) (unit 1)
+    (uuid g0000001-0000-0000-0000-000000000001)
+    (property "Reference" "Q1" (at 30.48 41.91 0))
+    (property "Value" "MMBT2222A" (at 30.48 44.45 0))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23" (at 25.4 43.18 0))
+    (pin "1" (uuid g0000001-0000-0000-0000-000000000002))  ;; B → PA3 (LED1_EN) via 1kΩ
+    (pin "2" (uuid g0000001-0000-0000-0000-000000000003))  ;; C → D1 anode
+    (pin "3" (uuid g0000001-0000-0000-0000-000000000004))  ;; E → GND (via 100Ω emitter degeneration)
+  )
+
+  (symbol (lib_id "Device:Q_NPN_BCE") (at 38.1 43.18) (unit 1)
+    (uuid g0000002-0000-0000-0000-000000000001)
+    (property "Reference" "Q2" (at 43.18 41.91 0))
+    (property "Value" "MMBT2222A" (at 43.18 44.45 0))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23" (at 38.1 43.18 0))
+    (pin "1" (uuid g0000002-0000-0000-0000-000000000002))  ;; B → PA4 via 1kΩ
+    (pin "2" (uuid g0000002-0000-0000-0000-000000000003))  ;; C → D2 anode
+    (pin "3" (uuid g0000002-0000-0000-0000-000000000004))  ;; E → GND via 100Ω
+  )
+
+  (symbol (lib_id "Device:Q_NPN_BCE") (at 50.8 43.18) (unit 1)
+    (uuid g0000003-0000-0000-0000-000000000001)
+    (property "Reference" "Q3" (at 55.88 41.91 0))
+    (property "Value" "MMBT2222A" (at 55.88 44.45 0))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23" (at 50.8 43.18 0))
+    (pin "1" (uuid g0000003-0000-0000-0000-000000000002))  ;; B → PA5 via 1kΩ
+    (pin "2" (uuid g0000003-0000-0000-0000-000000000003))  ;; C → D3 anode
+    (pin "3" (uuid g0000003-0000-0000-0000-000000000004))  ;; E → GND via 100Ω
+  )
+
+  (symbol (lib_id "Device:Q_NPN_BCE") (at 63.5 43.18) (unit 1)
+    (uuid g0000004-0000-0000-0000-000000000001)
+    (property "Reference" "Q4" (at 68.58 41.91 0))
+    (property "Value" "MMBT2222A" (at 68.58 44.45 0))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23" (at 63.5 43.18 0))
+    (pin "1" (uuid g0000004-0000-0000-0000-000000000002))  ;; B → PA6 via 1kΩ
+    (pin "2" (uuid g0000004-0000-0000-0000-000000000003))  ;; C → D4 anode
+    (pin "3" (uuid g0000004-0000-0000-0000-000000000004))  ;; E → GND via 100Ω
+  )
+
+  ;; ==========================================
+  ;; MCP73831 LiPo Charger (U7)
+  ;; ==========================================
+  (symbol (lib_id "Battery_Charger:MCP73831") (at 25.4 76.2) (unit 1)
+    (uuid h0000001-0000-0000-0000-000000000001)
+    (property "Reference" "U7" (at 25.4 68.58 0))
+    (property "Value" "MCP73831-2-OT" (at 25.4 71.12 0))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-5" (at 25.4 81.28 0))
+    (pin "1" (uuid h0000001-0000-0000-0000-000000000002))  ;; STAT → PB12 (CHARGE_STAT)
+    (pin "2" (uuid h0000001-0000-0000-0000-000000000003))  ;; VSS → GND
+    (pin "3" (uuid h0000001-0000-0000-0000-000000000004))  ;; VBAT → Battery+
+    (pin "4" (uuid h0000001-0000-0000-0000-000000000005))  ;; VDD → USB 5V (VBUS)
+    (pin "5" (uuid h0000001-0000-0000-0000-000000000006))  ;; PROG → 2kΩ to GND (500mA)
+  )
+
+  ;; ==========================================
+  ;; AP2112-3.3 LDO (U8)
+  ;; ==========================================
+  (symbol (lib_id "Regulator_Linear:AP2112-3.3") (at 76.2 76.2) (unit 1)
+    (uuid i0000001-0000-0000-0000-000000000001)
+    (property "Reference" "U8" (at 76.2 68.58 0))
+    (property "Value" "AP2112-3.3" (at 76.2 71.12 0))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-223-3_TabPin2" (at 76.2 81.28 0))
+    (pin "1" (uuid i0000001-0000-0000-0000-000000000002))  ;; IN → Battery VBAT
+    (pin "2" (uuid i0000001-0000-0000-0000-000000000003))  ;; GND
+    (pin "3" (uuid i0000001-0000-0000-0000-000000000004))  ;; OUT → 3.3V rail
+  )
+
+  ;; ==========================================
+  ;; microSD Card Socket (J2)
+  ;; ==========================================
+  (symbol (lib_id "Connector:Micro_SD_Card") (at 127 167.64) (unit 1)
+    (uuid j0000001-0000-0000-0000-000000000001)
+    (property "Reference" "J2" (at 127 157.48 0))
+    (property "Value" "Micro_SD" (at 127 160.02 0))
+    (property "Footprint" "Connector_Card:microSD_HC_Hirose_DM3D-SF" (at 127 172.72 0))
+    (pin "1" (uuid j0000001-0000-0000-0000-000000000002))  ;; CS → PA8 (SD_CS)
+    (pin "2" (uuid j0000001-0000-0000-0000-000000000003))  ;; MISO → PB4 (SPI2_MISO)
+    (pin "3" (uuid j0000001-0000-0000-0000-000000000004))  ;; GND
+    (pin "4" (uuid j0000001-0000-0000-0000-000000000005))  ;; VDD → 3.3V
+    (pin "5" (uuid j0000001-0000-0000-0000-000000000006))  ;; CLK → PB3 (SPI2_SCK)
+    (pin "6" (uuid j0000001-0000-0000-0000-000000000007))  ;; GND
+    (pin "7" (uuid j0000001-0000-0000-0000-000000000008))  ;; MOSI → PB5 (SPI2_MOSI)
+    (pin "8" (uuid j0000001-0000-0000-0000-000000000009))  ;; DET → PC14 (SD_DETECT)
+  )
+
+  ;; ==========================================
+  ;; USB-C Connector (J1)
+  ;; ==========================================
+  (symbol (lib_id "Connector:USB_C_Receptacle") (at 25.4 167.64) (unit 1)
+    (uuid k0000001-0000-0000-0000-000000000001)
+    (property "Reference" "J1" (at 25.4 157.48 0))
+    (property "Value" "USB-C_16pin" (at 25.4 160.02 0))
+    (property "Footprint" "Connector_USB:USB_C_Receptacle_GCT_USB4105" (at 25.4 172.72 0))
+    (pin "1" (uuid k0000001-0000-0000-0000-000000000002))  ;; VBUS → MCP73831 VDD
+    (pin "2" (uuid k0000001-0000-0000-0000-000000000003))  ;; GND
+    (pin "3" (uuid k0000001-0000-0000-0000-000000000004))  ;; D+ → USB mux
+    (pin "4" (uuid k0000001-0000-0000-0000-000000000005))  ;; D- → USB mux
+    (pin "5" (uuid k0000001-0000-0000-0000-000000000006))  ;; CC1 → 5.1kΩ to GND
+    (pin "6" (uuid k0000001-0000-0000-0000-000000000007))  ;; CC2 → 5.1kΩ to GND
+  )
+
+  ;; ==========================================
+  ;; WS2812B RGB LED (D5)
+  ;; ==========================================
+  (symbol (lib_id "LED:WS2812B-2020") (at 203.2 30.48) (unit 1)
+    (uuid l0000001-0000-0000-0000-000000000001)
+    (property "Reference" "D5" (at 203.2 25.4 0))
+    (property "Value" "WS2812B-2020" (at 203.2 27.94 0))
+    (property "Footprint" "LED_SMD:LED_WS2812B-2020" (at 203.2 33.02 0))
+    (pin "1" (uuid l0000001-0000-0000-0000-000000000002))  ;; DIN → ESP32 GPIO10
+    (pin "2" (uuid l0000001-0000-0000-0000-000000000003))  ;; VDD → 3.3V
+    (pin "3" (uuid l0000001-0000-0000-0000-000000000004))  ;; GND
+    (pin "4" (uuid l0000001-0000-0000-0000-000000000005))  ;; DOUT → NC
+  )
+
+  ;; ==========================================
+  ;; TEC1-04030 Peltier + DRV8833 Driver (U9)
+  ;; ==========================================
+  (symbol (lib_id "Driver_Motor:DRV8833") (at 76.2 127) (unit 1)
+    (uuid m0000001-0000-0000-0000-000000000001)
+    (property "Reference" "U9" (at 76.2 119.38 0))
+    (property "Value" "DRV8833" (at 76.2 121.92 0))
+    (property "Footprint" "Package_SO:SOIC-16_3.9x9.9mm_P1.27mm" (at 76.2 132.08 0))
+    (pin "1" (uuid m0000001-0000-0000-0000-000000000002))  ;; AIN1 → PA7 (TEC_EN)
+    (pin "2" (uuid m0000001-0000-0000-0000-000000000003))  ;; AIN2 → GND (unidirectional)
+    (pin "3" (uuid m0000001-0000-0000-0000-000000000004))  ;; AOUT1 → TEC+
+    (pin "4" (uuid m0000001-0000-0000-0000-000000000005))  ;; AOUT2 → TEC-
+    (pin "5" (uuid m0000001-0000-0000-0000-000000000006))  ;; VM → VBAT
+    (pin "6" (uuid m0000001-0000-0000-0000-000000000007))  ;; VINT → 3.3V
+    (pin "7" (uuid m0000001-0000-0000-0000-000000000008))  ;; GND
+    (pin "8" (uuid m0000001-0000-0000-0000-000000000009))  ;; GND
+  )
+
+  (symbol (lib_id "Device:Thermal_Element") (at 101.6 127) (unit 1)
+    (uuid m0000002-0000-0000-0000-000000000001)
+    (property "Reference" "TE1" (at 101.6 119.38 0))
+    (property "Value" "TEC1-04030" (at 101.6 121.92 0))
+    (property "Footprint" "Custom:TEC_4x3mm" (at 101.6 132.08 0))
+    (pin "1" (uuid m0000002-0000-0000-0000-000000000002))  ;; + → U9 AOUT1
+    (pin "2" (uuid m0000002-0000-0000-0000-000000000003))  ;; - → U9 AOUT2
+  )
+
+  ;; ==========================================
+  ;; Buttons (SW1-SW3)
+  ;; ==========================================
+  (symbol (lib_id "Switch:SW_Push") (at 76.2 160.02) (unit 1)
+    (uuid n0000001-0000-0000-0000-000000000001)
+    (property "Reference" "SW1" (at 76.2 154.94 0))
+    (property "Value" "MEASURE" (at 76.2 157.48 0))
+    (property "Footprint" "Button_Switch_SMD:SW_Push_6x6mm" (at 76.2 162.56 0))
+    (pin "1" (uuid n0000001-0000-0000-0000-000000000002))  ;; → PB8
+    (pin "2" (uuid n0000001-0000-0000-0000-000000000003))  ;; → GND
+  )
+
+  (symbol (lib_id "Switch:SW_Push") (at 88.9 160.02) (unit 1)
+    (uuid n0000002-0000-0000-0000-000000000001)
+    (property "Reference" "SW2" (at 88.9 154.94 0))
+    (property "Value" "MODE" (at 88.9 157.48 0))
+    (property "Footprint" "Button_Switch_SMD:SW_Push_6x6mm" (at 88.9 162.56 0))
+    (pin "1" (uuid n0000002-0000-0000-0000-000000000002))  ;; → PB9
+    (pin "2" (uuid n0000002-0000-0000-0000-000000000003))  ;; → GND
+  )
+
+  (symbol (lib_id "Switch:SW_Push") (at 101.6 160.02) (unit 1)
+    (uuid n0000003-0000-0000-0000-000000000001)
+    (property "Reference" "SW3" (at 101.6 154.94 0))
+    (property "Value" "POWER" (at 101.6 157.48 0))
+    (property "Footprint" "Button_Switch_SMD:SW_Push_6x6mm" (at 101.6 162.56 0))
+    (pin "1" (uuid n0000003-0000-0000-0000-000000000002))  ;; → PB10
+    (pin "2" (uuid n0000003-0000-0000-0000-000000000003))  ;; → GND
+  )
+
+  ;; ==========================================
+  ;; 8 MHz Crystal (Y1)
+  ;; ==========================================
+  (symbol (lib_id "Device:Crystal") (at 152.4 30.48) (unit 1)
+    (uuid o0000001-0000-0000-0000-000000000001)
+    (property "Reference" "Y1" (at 152.4 25.4 0))
+    (property "Value" "8MHz" (at 152.4 27.94 0))
+    (property "Footprint" "Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm" (at 152.4 30.48 0))
+    (pin "1" (uuid o0000001-0000-0000-0000-000000000002))  ;; → PF0 (OSC_IN)
+    (pin "2" (uuid o0000001-0000-0000-0000-000000000003))  ;; → PF1 (OSC_OUT)
+  )
+
+  ;; ==========================================
+  ;; Power Nets
+  ;; ==========================================
+  (net (code 1) (name "VDD_3.3")
+    (node (ref "U1") (pin "23") (pinfunction "VDD"))
+    (node (ref "U2") (pin "8") (pinfunction "3V3"))
+    (node (ref "U3") (pin "5") (pinfunction "VDD"))
+    (node (ref "U4") (pin "2") (pinfunction "VCC"))
+    (node (ref "U5") (pin "3") (pinfunction "VDD"))
+    (node (ref "U6") (pin "3") (pinfunction "VDD"))
+    (node (ref "U8") (pin "3") (pinfunction "OUT"))
+    (node (ref "U9") (pin "6") (pinfunction "VINT"))
+    (node (ref "D5") (pin "2") (pinfunction "VDD"))
+    (node (ref "J2") (pin "4") (pinfunction "VDD"))
+  )
+
+  (net (code 2) (name "VBUS_5V")
+    (node (ref "J1") (pin "1") (pinfunction "VBUS"))
+    (node (ref "U7") (pin "4") (pinfunction "VDD"))
+  )
+
+  (net (code 3) (name "VBAT")
+    (node (ref "U7") (pin "3") (pinfunction "VBAT"))
+    (node (ref "U8") (pin "1") (pinfunction "IN"))
+    (node (ref "U9") (pin "5") (pinfunction "VM"))
+  )
+
+  (net (code 4) (name "GND")
+    (node (ref "J1") (pin "2") (pinfunction "GND"))
+    (node (ref "U1") (pin "22") (pinfunction "VSS"))
+    (node (ref "U2") (pin "9") (pinfunction "GND"))
+    (node (ref "U3") (pin "6") (pinfunction "GND"))
+    (node (ref "U3") (pin "2") (pinfunction "SO"))
+    (node (ref "U4") (pin "1") (pinfunction "GND"))
+    (node (ref "U5") (pin "4") (pinfunction "GND"))
+    (node (ref "U6") (pin "1") (pinfunction "GND"))
+    (node (ref "U7") (pin "2") (pinfunction "VSS"))
+    (node (ref "U8") (pin "2") (pinfunction "GND"))
+    (node (ref "U9") (pin "7") (pinfunction "GND"))
+    (node (ref "U9") (pin "8") (pinfunction "GND"))
+    (node (ref "D1") (pin "2"))
+    (node (ref "D2") (pin "2"))
+    (node (ref "D3") (pin "2"))
+    (node (ref "D4") (pin "2"))
+    (node (ref "D5") (pin "3"))
+    (node (ref "Q1") (pin "3"))
+    (node (ref "Q2") (pin "3"))
+    (node (ref "Q3") (pin "3"))
+    (node (ref "Q4") (pin "3"))
+    (node (ref "SW1") (pin "2"))
+    (node (ref "SW2") (pin "2"))
+    (node (ref "SW3") (pin "2"))
+    (node (ref "J2") (pin "3"))
+    (node (ref "J2") (pin "6"))
+  )
+
+  ;; ==========================================
+  ;; CCD Bus (TSL1402R)
+  ;; ==========================================
+  (net (code 10) (name "TSL_AO")
+    (node (ref "U1") (pin "8"))   ;; PA0 / ADC1_IN1
+    (node (ref "U3") (pin "1") (pinfunction "AO"))
+  )
+  (net (code 11) (name "TSL_CLK")
+    (node (ref "U1") (pin "9"))   ;; PA1 / TIM2_CH1
+    (node (ref "U3") (pin "4") (pinfunction "CLK"))
+  )
+  (net (code 12) (name "TSL_SI")
+    (node (ref "U1") (pin "10"))  ;; PA2 / TIM2_CH2
+    (node (ref "U3") (pin "3") (pinfunction "SI"))
+  )
+
+  ;; ==========================================
+  ;; LED Enable Bus
+  ;; ==========================================
+  (net (code 20) (name "LED1_EN")
+    (node (ref "U1") (pin "11"))  ;; PA3
+    (node (ref "Q1") (pin "1"))   ;; via 1kΩ
+  )
+  (net (code 21) (name "LED2_EN")
+    (node (ref "U1") (pin "12"))  ;; PA4
+    (node (ref "Q2") (pin "1"))
+  )
+  (net (code 22) (name "LED3_EN")
+    (node (ref "U1") (pin "13"))  ;; PA5
+    (node (ref "Q3") (pin "1"))
+  )
+  (net (code 23) (name "LED4_EN")
+    (node (ref "U1") (pin "14"))  ;; PA6
+    (node (ref "Q4") (pin "1"))
+  )
+  (net (code 24) (name "TEC_EN")
+    (node (ref "U1") (pin "15"))  ;; PA7
+    (node (ref "U9") (pin "1") (pinfunction "AIN1"))
+  )
+
+  ;; ==========================================
+  ;; SD Card SPI Bus
+  ;; ==========================================
+  (net (code 30) (name "SD_CS")
+    (node (ref "U1") (pin "16"))  ;; PA8
+    (node (ref "J2") (pin "1"))
+  )
+  (net (code 31) (name "SPI2_SCK")
+    (node (ref "U1") (pin "29"))  ;; PB3
+    (node (ref "J2") (pin "5"))
+  )
+  (net (code 32) (name "SPI2_MISO")
+    (node (ref "U1") (pin "30"))  ;; PB4
+    (node (ref "J2") (pin "2"))
+  )
+  (net (code 33) (name "SPI2_MOSI")
+    (node (ref "U1") (pin "31"))  ;; PB5
+    (node (ref "J2") (pin "7"))
+  )
+  (net (code 34) (name "SD_DETECT")
+    (node (ref "U1") (pin "15"))  ;; PC15 / SPARE (alternate)
+    (node (ref "J2") (pin "8"))
+  )
+
+  ;; ==========================================
+  ;; UART to ESP32-C3
+  ;; ==========================================
+  (net (code 40) (name "UART_TX_STM32")
+    (node (ref "U1") (pin "17"))  ;; PA9 / USART1_TX
+    (node (ref "U2") (pin "1"))   ;; ESP32 GPIO2 / UART_RX
+  )
+  (net (code 41) (name "UART_RX_STM32")
+    (node (ref "U1") (pin "18"))  ;; PA10 / USART1_RX
+    (node (ref "U2") (pin "2"))   ;; ESP32 GPIO3 / UART_TX
+  )
+
+  ;; ==========================================
+  ;; I2C Bus (OLED + BME280)
+  ;; ==========================================
+  (net (code 50) (name "I2C_SCL")
+    (node (ref "U1") (pin "26"))  ;; PB0
+    (node (ref "U4") (pin "3") (pinfunction "SCL"))
+    (node (ref "U5") (pin "2") (pinfunction "SCL"))
+  )
+  (net (code 51) (name "I2C_SDA")
+    (node (ref "U1") (pin "27"))  ;; PB1
+    (node (ref "U4") (pin "4") (pinfunction "SDA"))
+    (node (ref "U5") (pin "1") (pinfunction "SDA"))
+  )
+
+  ;; ==========================================
+  ;; ESP32 Control
+  ;; ==========================================
+  (net (code 60) (name "ESP_EN")
+    (node (ref "U1") (pin "28"))  ;; PB2
+    (node (ref "U2") (pin "4"))   ;; ESP32 GPIO9 / EN
+  )
+
+  ;; ==========================================
+  ;; OLED Reset
+  ;; ==========================================
+  (net (code 61) (name "OLED_RST")
+    (node (ref "U1") (pin "32"))  ;; PB6
+    (node (ref "U4") (pin "5") (pinfunction "RES"))
+  )
+
+  ;; ==========================================
+  ;; 1-Wire (DS18B20)
+  ;; ==========================================
+  (net (code 70) (name "DS18B20_DATA")
+    (node (ref "U1") (pin "37"))  ;; PB11
+    (node (ref "U6") (pin "2") (pinfunction "DQ"))
+  )
+
+  ;; ==========================================
+  ;; Status / Charge
+  ;; ==========================================
+  (net (code 80) (name "STAT_LED")
+    (node (ref "U1") (pin "33"))  ;; PB7
+  )
+  (net (code 81) (name "CHARGE_STAT")
+    (node (ref "U1") (pin "38"))  ;; PB12
+    (node (ref "U7") (pin "1") (pinfunction "STAT"))
+  )
+
+  ;; ==========================================
+  ;; ADC Sense
+  ;; ==========================================
+  (net (code 90) (name "VBAT_SENSE")
+    (node (ref "U1") (pin "39"))  ;; PB13 / ADC1_IN11
+    ;; R1=100kΩ to VBAT, R2=100kΩ to GND (1:2 divider)
+  )
+  (net (code 91) (name "TEC_VSENSE")
+    (node (ref "U1") (pin "40"))  ;; PB14 / ADC1_IN5
+  )
+
+  ;; ==========================================
+  ;; Buttons
+  ;; ==========================================
+  (net (code 100) (name "BTN_MEASURE")
+    (node (ref "U1") (pin "34"))  ;; PB8
+    (node (ref "SW1") (pin "1"))
+  )
+  (net (code 101) (name "BTN_MODE")
+    (node (ref "U1") (pin "35"))  ;; PB9
+    (node (ref "SW2") (pin "1"))
+  )
+  (net (code 102) (name "BTN_POWER")
+    (node (ref "U1") (pin "36"))  ;; PB10
+    (node (ref "SW3") (pin "1"))
+  )
+
+  ;; ==========================================
+  ;; WS2812B
+  ;; ==========================================
+  (net (code 110) (name "WS2812_DATA")
+    (node (ref "U2") (pin "5"))   ;; ESP32 GPIO10
+    (node (ref "D5") (pin "1") (pinfunction "DIN"))
+  )
+
+  ;; ==========================================
+  ;; Crystal
+  ;; ==========================================
+  (net (code 120) (name "HSE_IN")
+    (node (ref "U1") (pin "5"))   ;; PF0 / OSC_IN
+    (node (ref "Y1") (pin "1"))
+  )
+  (net (code 121) (name "HSE_OUT")
+    (node (ref "U1") (pin "6"))   ;; PF1 / OSC_OUT
+    (node (ref "Y1") (pin "2"))
+  )
+
+  ;; ==========================================
+  ;; LED Anodes (to NPN collectors)
+  ;; ==========================================
+  (net (code 130) (name "LED1_A")
+    (node (ref "D1") (pin "1"))
+    (node (ref "Q1") (pin "2"))   ;; Collector
+  )
+  (net (code 131) (name "LED2_A")
+    (node (ref "D2") (pin "1"))
+    (node (ref "Q2") (pin "2"))
+  )
+  (net (code 132) (name "LED3_A")
+    (node (ref "D3") (pin "1"))
+    (node (ref "Q3") (pin "2"))
+  )
+  (net (code 133) (name "LED4_A")
+    (node (ref "D4") (pin "1"))
+    (node (ref "Q4") (pin "2"))
+  )
+
+  ;; ==========================================
+  ;; TEC Output
+  ;; ==========================================
+  (net (code 140) (name "TEC+")
+    (node (ref "U9") (pin "3") (pinfunction "AOUT1"))
+    (node (ref "TE1") (pin "1"))
+  )
+  (net (code 141) (name "TEC-")
+    (node (ref "U9") (pin "4") (pinfunction "AOUT2"))
+    (node (ref "TE1") (pin "2"))
+  )
+
+)

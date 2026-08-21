@@ -1,0 +1,34 @@
+Item,Quantity,Part Number,Value,Package,Source,Unit Price (USD),Notes
+RP2040,1,RP2040,,QFN-56,DigiKey/Mouser,1.00,Raspberry Pi dual-core MCU 133MHz
+W25Q16JVSIQ,1,W25Q16JVSIQ,16Mbit,SPI SOIC-8,DigiKey,0.55,External flash for patch/pattern storage
+PCM5102A,1,PCM5102A,I2S DAC,TSSOP-20,DigiKey,2.10,16-bit 44.1kHz stereo DAC
+MAX98357A,1,MAX98357AETE+,3W Class-D amp,QFN-16,DigiKey,1.80,I2S input, filterless
+SSD1306,1,SSD1306,128x64 OLED,Module,Adafruit/AliExpress,3.50,0.96" I2C OLED module
+MPR121,2,MPR121QR2,Cap touch controller,QFN-20,DigiKey,1.20,Two needed: keyboard + func buttons
+MCP73831,1,MCP73831T-2ACI/OT,LiPo charger,SOT-23-5,DigiKey,0.50,200mA charge current
+AP2112K-3.3,1,AP2112K-3.3,LDO 3.3V,SOT-23-5,DigiKey,0.30,600mA LDO
+TLV9062,1,TLV9062IDR,Dual op-amp,SOIC-8,DigiKey,0.60,Potentiometer buffer amplifiers
+Crystal,1,ABM8-27-T,12 MHz,SMD 3225,DigiKey,0.15,RP2040 system clock
+USB-C connector,1,USB4085-GF-3-01,USB-C receptacle,SMD,JLCPCB,0.35,USB 2.0 Type-C
+Rotary encoder,1,PEC11R-4015F-S0024,Encoder w/ switch,Through-hole,DigiKey,1.20,15mm shaft, 24 detents
+Potentiometer,4,PTV09A-4020F-B103,10kΩ linear,Through-hole,DigiKey,0.60,20mm shaft, knurled knob
+Speaker,1,AS04008MR-5-R,8Ω 3W,40mm round,DigiKey,0.80,40mm mylar cone speaker
+Headphone jack,1,SJ1-3523N,3.5mm stereo,Through-hole,DigiKey,0.40,Stereo switched jack
+LiPo battery,1,LP803050,800mAh 3.7V,Pouch,Various,4.00,With protection circuit
+Capacitors 100nF,8,CL05B104KO5NNNC,100nF 16V,0402,DigiKey,0.02,Bypass caps for all ICs
+Capacitors 10µF,4,CL05A106MP8NUB8,10µF 6.3V,0402,DigiKey,0.03,Power supply filtering
+Capacitor 1µF,2,CL05B105KQ5NQNC,1µF 16V,0402,DigiKey,0.02,MCP73831 decoupling
+Capacitor 22pF,2,C0402C220J5GACTU,22pF 50V,0402,DigiKey,0.01,Crystal load caps
+Resistors 4.7kΩ,4,RC0402FR-074K7L,4.7kΩ,0402,DigiKey,0.01,I2C pull-ups (SDA, SCL ×2 buses)
+Resistors 10kΩ,6,RC0402FR-0710KL,10kΩ,0402,DigiKey,0.01,Pull-ups, dividers, PROG resistor
+Resistor 5.1kΩ,1,RC0402FR-075K1L,5.1kΩ,0402,DigiKey,0.01,MCP73831 PROG (200mA charge)
+Resistor 100kΩ,2,RC0402FR-07100KL,100kΩ,0402,DigiKey,0.01,Voltage divider for VSYS monitor
+Inductor 10µH,1,SRR4028-100M,10µH 1.5A,SMD 4×4,DigiKey,0.25,Not used (linear reg design)
+Ferrite bead,1,BLM21PG221SN1,220Ω@100MHz,0805,DigiKey,0.02,USB VBUS filtering
+LED blue,1,LTST-C191TBKT,Blue LED,0603,DigiKey,0.04,Power/activity indicator
+LED green,1,LTST-C191KGKT,Green LED,0603,DigiKey,0.04,Sequencer step indicator
+Touch pads,16,Copper pads on PCB,9mm circle,PCB,,0.00,Keyboard pads (etched)
+Touch pads,8,Copper pads on PCB,7mm circle,PCB,,0.00,Function button pads
+PCB,1,Custom 4-layer,120×80mm,JLCPCB,5.00,4-layer, ENIG finish
+Switch,1,PTS810,SMT tactile switch,3×5mm,DigiKey,0.15,Power on/off (momentary hold)
+,, ,,,Total Est. BOM:,~$28.50,Excluding PCB fabrication

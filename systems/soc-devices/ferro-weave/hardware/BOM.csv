@@ -1,0 +1,45 @@
+Ref,Qty,Part,Manufacturer,MPN,Price(USD),Role,Notes
+U1,1,STM32G474RET6,STMicroelectronics,STM32G474RET6,6.80,DAQ + sweep SoC,LQFP64 170MHz CORDIC+FMAC
+U2,1,ESP32-C3-MINI-1,Espressif,ESP32-C3-MINI-1,2.60,BLE/Wi-Fi co-processor,4 MB flash
+U3,1,LM5035C,Texas Instruments,LM5035C,4.20,Half-bridge MOSFET controller,100V 1.5A gate drive
+Q1,1,IRFH7446,Infineon,IRFH7446PbF,0.55,High-side power FET,60V 18mΩ
+Q2,1,IRFH7446,Infineon,IRFH7446PbF,0.55,Low-side power FET,60V 18mΩ
+U4,1,OPA2188,Texas Instruments,OPA2188AIDR,2.90,Chopper integrator op-amp,zero-drift 0.05uV/C
+U5,1,TS5A3166,Texas Instruments,TS5A3166DCKR,0.40,Analog switch,SPST integrator reset
+U6,1,SSD1306 OLED 128x64 I2C,Solomon Systech,SSD1306,2.20,Display,I2C 0x3C
+U7,1,AMS1117-3.3,Advanced Monolithic Systems,AMS1117-3.3,0.15,3.3V LDO,1A
+U8,1,TPS61040,Texas Instruments,TPS61040DRCR,1.30,Boost converter,3.7V->15V 1A
+U9,1,TP4056,Nanjing Top Power,TP4056,0.35,LiPo charger,USB-C 500mA
+U10,1,MAX17048,Maxim/Analog Devices,MAX17048G+T10,2.30,LiPo fuel gauge,I2C 0x36
+J1,2,4mm banana binding post,Kelvin,PV4-40BP-G,1.20,Primary+secondary terminals,red+black pair
+J2,1,USB-C 2.0 receptacle,Amphenol,12401548E402A,0.30,Charging + ESP console,2.0
+J3,1,microSD socket,Molex,502570-0893,0.90,Logging,push-push
+BAT,1,3.7V 2200mAh LiPo,Adafruit,3.50,Battery,603049
+NTC,1,10kΩ B3950 NTC,Murata,NCP18XH103F03RB,0.20,Power-stage temp,B3950
+RSENSE,1,0.1Ω 1% 1W,Bourns,CSS2H-2512K-0R1FT,0.60,Current sense,2512 1W
+L1,1,22uH 3A power inductor,Coilcraft,XAL4040-223MEC,1.40,Boost inductor,shielded
+D1,2,Schottky 40V 1A,Diodes Inc,B140-13-F,0.20,Charge-pump diodes,2x for -15V rail
+D2,2,Schottky 40V 1A,Diodes Inc,B140-13-F,0.20,Charge-pump diodes,
+LED1,1,LED red 0603,Lite-On,LTST-C190KRKT,0.10,Fault indicator,
+LED2,1,LED green 0603,Lite-On,LTST-C191TGKT,0.10,Run indicator,
+LED3,1,LED blue 0603,Lite-On,LTST-C191TBKT,0.10,BLE indicator,
+LED4,1,LED yellow 0603,Lite-On,LTST-C191KSKT,0.10,SD activity,
+SW1,1,Tactile switch 6x6,C&K,PTS636SK50SMTR,0.20,STOP button,front panel
+SW2,1,Tactile switch 6x6,C&K,PTS636SK50SMTR,0.20,SWEEP button,
+SW3,1,Tactile switch 6x6,C&K,PTS636SK50SMTR,0.20,MODE button,
+R1,1,10kΩ 1%,Yageo,RC0603FR-0710KL,0.05,STOP pull-up,
+R2,1,10kΩ 1%,Yageo,RC0603FR-0710KL,0.05,SWEEP pull-up,
+R3,1,10kΩ 1%,Yageo,RC0603FR-0710KL,0.05,MODE pull-up,
+R4,1,100kΩ 1%,Yageo,RC0603FR-07100KL,0.05,Battery divider upper,
+R5,1,220kΩ 1%,Yageo,RC0603FR-07220KL,0.05,Battery divider lower,
+R6,1,10kΩ 1%,Yageo,RC0603FR-0710KL,0.05,NTC pull-up,
+R7,1,1kΩ 1%,Yageo,RC0603FR-071KL,0.05,Integrator input R,
+R8,1,100Ω 1%,Yageo,RC0603FR-07100RL,0.05,Gate series R,
+C1,1,100nF C0G 0603,Murata,GRM1885C1H104JA01,0.10,Integrator cap,C0G/NP0 low leakage
+C2,4,1uF X7R 0603,Murata,GRM188R71C105KA12,0.10,IC bypass,one per IC
+C3,2,10uF X5R 0805,Murata,GRM21BR61A106KE19,0.15,Power bulk,
+C4,2,4.7uF X7R 0805,Murata,GRM21BR61C475KA53,0.15,Charge-pump caps,for -15V rail
+C5,1,0.1uF 0603,Murata,GRM188R71H104KA93,0.05,ADC input filter,
+C6,1,10uF tantalum,KEMET,T520B107M006ATE040,0.25,Boost output cap,16V
+PCB,1,4-layer FR4 80x120mm,Custom,—,8.00,PCB,4-layer for power+analog
+,,Total,,,~$52.00,,

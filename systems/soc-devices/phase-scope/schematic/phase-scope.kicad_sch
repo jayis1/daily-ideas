@@ -1,0 +1,432 @@
+(kicad_sch
+  (version 20231120)
+  (generator "kicad")
+  (uuid e3b0c442-98fc-11ee-a1f2-0242ac120003)
+
+  (title "Phase Scope — 3-Phase Power Quality Analyzer")
+  (comment 1 "STM32G491RET6 + AMC1301 + OPA2376 + nRF52810 + SH1106 OLED")
+  (comment 2 "CAT III 300V Rated")
+  (comment 3 "MIT License")
+
+  ;; ============================================================
+  ;; SHEET 1: TOP-LEVEL INTERCONNECT
+  ;; ============================================================
+
+  (symbol (lib_id "MCU_ST_STM32G4:STM32G491RETx") (at 140 100) (unit 1)
+    (uuid u1)
+    (property "Reference" "U1" (at 140 60))
+    (property "Value" "STM32G491RET6" (at 140 65))
+    (property "Footprint" "Package_QFP:LQFP-64_10x10mm_P0.5mm" (at 140 70))
+    ;; PA0-PA3: ADC voltage + current inputs
+    ;; PA6: DAC1 calibration tone
+    ;; PA7/PB3/PB4/PB5: SPI1 (OLED)
+    ;; PB6/PB7: I2C1 (BLE config)
+    ;; PC10/PC11: UART4 (BLE data)
+    ;; PB12: SD CS
+    ;; PB13: OLED CS
+    ;; PC2-PC4: Range relay control
+    ;; PC13-PC15: Buttons
+    ;; PD2: Power enable
+  )
+
+  ;; ============================================================
+  ;; VOLTAGE INPUT CHANNELS (x3, showing L1 in detail)
+  ;; ============================================================
+
+  (symbol (lib_id "Device:R") (at 30 50) (unit 1)
+    (uuid r1)
+    (property "Reference" "R1" (at 30 45))
+    (property "Value" "470kΩ 1W 1%" (at 30 48))
+    (property "Footprint" "Resistor_THT:R_Axial_DIN0414_L11.0mm_D4.5mm_P15.24mm_Horizontal")
+    ;; L1 input → voltage divider upper leg
+  )
+
+  (symbol (lib_id "Device:R") (at 42 57) (unit 1)
+    (uuid r2)
+    (property "Reference" "R2" (at 42 52))
+    (property "Value" "1kΩ 0.25W 0.1%" (at 42 55))
+    (property "Footprint" "Resistor_SMD:R_0603_1608Metric")
+    ;; Voltage divider lower leg
+  )
+
+  (symbol (lib_id "Device:C") (at 36 63) (unit 1)
+    (uuid c1)
+    (property "Reference" "C1" (at 36 58))
+    (property "Value" "10nF 50V X7R" (at 36 61))
+    (property "Footprint" "Capacitor_SMD:C_0603_1608Metric")
+    ;; Input filter capacitor
+  )
+
+  (symbol (lib_id "Isolation:AMC1301") (at 65 52) (unit 1)
+    (uuid u2)
+    (property "Reference" "U2" (at 65 42))
+    (property "Value" "AMC1301DWVR" (at 65 45))
+    (property "Footprint" "Package_SO:SOIC-8_7.5x5.85mm_P1.27mm")
+    ;; Reinforced isolation amplifier, 5kV isolation
+    ;; Gain = 8.2V/V
+    ;; VIN+ connects to divider midpoint
+    ;; VOUT+ goes to ADC1_IN1 (PA0)
+  )
+
+  (symbol (lib_id "Device:D_TVS") (at 25 70) (unit 1)
+    (uuid d1)
+    (property "Reference" "D1" (at 25 65))
+    (property "Value" "SMBJ1000A" (at 25 68))
+    (property "Footprint" "Diode_SMD:D_SMB")
+    ;; 1kV bidirectional TVS on L1 input
+  )
+
+  (symbol (lib_id "Device:Fuse") (at 20 50) (unit 1)
+    (uuid f1)
+    (property "Reference" "F1" (at 20 45))
+    (property "Value" "500mA 5x20mm" (at 20 48))
+    (property "Footprint" "Fuse:Fuseholder5x20_Horizontal_Open")
+    ;; Input line fuse
+  )
+
+  ;; L2 and L3 voltage channels are identical copies (U3=AMC1301, U4=AMC1301)
+  ;; R3/R4 (L2 divider), R5/R6 (L3 divider), etc.
+
+  ;; ============================================================
+  ;; CURRENT INPUT CHANNELS (x3, showing I1 in detail)
+  ;; ============================================================
+
+  (symbol (lib_id "Connector:Conn_01x02") (at 20 110) (unit 1)
+    (uuid j2)
+    (property "Reference" "J2" (at 20 105))
+    (property "Value" "CT1_Input" (at 20 108))
+    (property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical")
+    ;; CT clamp jack (3.5mm or banana)
+  )
+
+  (symbol (lib_id "Device:R") (at 35 118) (unit 1)
+    (uuid r10)
+    (property "Reference" "R10" (at 35 113))
+    (property "Value" "100Ω 0.1% (low range) / 1Ω 0.1% (high range)" (at 35 116))
+    (property "Footprint" "Resistor_SMD:R_1206_3216Metric")
+    ;; Burden resistor for CT (selected by range relay)
+  )
+
+  (symbol (lib_id "Amplifier_Operational:OPA2376") (at 55 120) (unit 1)
+    (uuid u5)
+    (property "Reference" "U5" (at 55 112))
+    (property "Value" "OPA2376AIDGKT" (at 55 115))
+    (property "Footprint" "Package_SO:VSSOP-8_3x3mm_P0.65mm")
+    ;; Precision op-amp for CT signal conditioning
+    ;; Gain stage: ×10 (low range) or ×1 (high range)
+    ;; Output → ADC2_IN4 (PA3)
+  )
+
+  ;; I2, I3 channels use U5 unit 2 and U6 (OPA2376)
+
+  ;; ============================================================
+  ;; VOLTAGE REFERENCE
+  ;; ============================================================
+
+  (symbol (lib_id "Reference_Voltage:REF3030") (at 170 170) (unit 1)
+    (uuid u7)
+    (property "Reference" "U7" (at 170 165))
+    (property "Value" "REF3030AIDBZR" (at 170 168))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23")
+    ;; 3.0V precision reference for ADC
+    ;; 0.1% initial accuracy, 50ppm/°C
+  )
+
+  ;; ============================================================
+  ;; OLED DISPLAY
+  ;; ============================================================
+
+  (symbol (lib_id "Display_Graphic:SSD1306") (at 250 90) (unit 1)
+    (uuid u8)
+    (property "Reference" "U8" (at 250 80))
+    (property "Value" "SH1106_128x64_OLED" (at 250 83))
+    (property "Footprint" "footprints:OLED_1.3in_128x64")
+    ;; SPI interface: CS=PB13, SCK=PB3, MOSI=PA7, DC=PB5, RST=PC5
+  )
+
+  ;; ============================================================
+  ;; BLE MODULE
+  ;; ============================================================
+
+  (symbol (lib_id "RF_Bluetooth:nRF52810") (at 250 140) (unit 1)
+    (uuid u9)
+    (property "Reference" "U9" (at 250 130))
+    (property "Value" "nRF52810-QCAA" (at 250 133))
+    (property "Footprint" "Package_DFN_QFN:QFN-32-1EP_5x5mm_P0.5mm_EP3.6x3.6mm")
+    ;; BLE 5.0 module
+    ;; UART: PC10=TX, PC11=RX @ 115200
+    ;; I2C config: PB6=SCL, PB7=SDA
+    ;; Antenna: 2.4GHz PCB trace or chip antenna
+  )
+
+  ;; ============================================================
+  ;; MICROSD CARD SLOT
+  ;; ============================================================
+
+  (symbol (lib_id "Connector:MicroSD_Card") (at 250 50) (unit 1)
+    (uuid j3)
+    (property "Reference" "J3" (at 250 40))
+    (property "Value" "MicroSD_Card_Slot" (at 250 43))
+    (property "Footprint" "Connector_Card:microSD_HC_Hirose_DM3AT-SF-PEJ2")
+    ;; SPI mode: CS=PB12, SCK=PB3, MOSI=PA7, MISO=PB4
+  )
+
+  ;; ============================================================
+  ;; POWER SUPPLY
+  ;; ============================================================
+
+  (symbol (lib_id "Battery_Management:MCP73831") (at 20 170) (unit 1)
+    (uuid u10)
+    (property "Reference" "U10" (at 20 162))
+    (property "Value" "MCP73831T-2ACI/OT" (at 20 165))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-5")
+    ;; Li-Po charger, 500mA charge current
+    ;; USB-C input
+  )
+
+  (symbol (lib_id "Converter_DCDC:TPS63020") (at 80 170) (unit 1)
+    (uuid u11)
+    (property "Reference" "U11" (at 80 162))
+    (property "Value" "TPS63020DSHR" (at 80 165))
+    (property "Footprint" "Package_SON:VSON-10-1EP_2.5x2.5mm_P0.5mm_EP1.5x2.5mm")
+    ;; Buck-boost: 2.0-5.5V → 3.3V @ 2A
+    ;; Li-Po → 3.3V main rail
+  )
+
+  (symbol (lib_id "Device:C") (at 65 180) (unit 1)
+    (uuid c10)
+    (property "Reference" "C10" (at 65 175))
+    (property "Value" "10µF 10V X5R" (at 65 178))
+    (property "Footprint" "Capacitor_SMD:C_0805_2012Metric")
+    ;; TPS63020 output filter
+  )
+
+  (symbol (lib_id "Device:C") (at 95 180) (unit 1)
+    (uuid c11)
+    (property "Reference" "C11" (at 95 175))
+    (property "Value" "22µF 10V X5R" (at 95 178))
+    (property "Footprint" "Capacitor_SMD:C_0805_2012Metric")
+    ;; Additional output bulk cap
+  )
+
+  (symbol (lib_id "Device:L") (at 80 163) (unit 1)
+    (uuid l1)
+    (property "Reference" "L1" (at 80 158))
+    (property "Value" "2.2µH 3A" (at 80 161))
+    (property "Footprint" "Inductor_SMD:L_0805_2012Metric")
+    ;; TPS63020 inductor
+  )
+
+  ;; ============================================================
+  ;; USB-C CONNECTOR
+  ;; ============================================================
+
+  (symbol (lib_id "Connector:USB_C_Plug") (at -10 170) (unit 1)
+    (uuid j1)
+    (property "Reference" "J1" (at -10 160))
+    (property "Value" "USB_C_16P" (at -10 163))
+    (property "Footprint" "Connector_USB:USB_C_Receptacle_GCT_USB4105")
+    ;; USB-C for charging only (5V 500mA)
+  )
+
+  ;; ============================================================
+  ;; BATTERY
+  ;; ============================================================
+
+  (symbol (lib_id "Device:Battery") (at 45 180) (unit 1)
+    (uuid bt1)
+    (property "Reference" "BT1" (at 45 175))
+    (property "Value" "Li-Po 3.7V 2000mAh" (at 45 178))
+    (property "Footprint" "Battery:BatteryHolder_Keystone_1042_2x18650")
+    ;; 18650 or flat Li-Po cell
+  )
+
+  ;; ============================================================
+  ;; BUTTONS
+  ;; ============================================================
+
+  (symbol (lib_id "Switch:SW_Push") (at 180 40) (unit 1)
+    (uuid sw1)
+    (property "Reference" "SW1" (at 180 35))
+    (property "Value" "Mode" (at 180 38))
+    (property "Footprint" "Button_Switch_SMD:SW_Push_1P1T_NO_6x6mm_H9.5mm")
+    ;; PC13, active low with internal pull-up
+  )
+
+  (symbol (lib_id "Switch:SW_Push") (at 200 40) (unit 1)
+    (uuid sw2)
+    (property "Reference" "SW2" (at 200 35))
+    (property "Value" "Select" (at 200 38))
+    (property "Footprint" "Button_Switch_SMD:SW_Push_1P1T_NO_6x6mm_H9.5mm")
+    ;; PC14
+  )
+
+  (symbol (lib_id "Switch:SW_Push") (at 220 40) (unit 1)
+    (uuid sw3)
+    (property "Reference" "SW3" (at 220 35))
+    (property "Value" "Hold/Back" (at 220 38))
+    (property "Footprint" "Button_Switch_SMD:SW_Push_1P1T_NO_6x6mm_H9.5mm")
+    ;; PC15
+  )
+
+  ;; ============================================================
+  ;; STATUS LEDs
+  ;; ============================================================
+
+  (symbol (lib_id "Device:LED") (at 180 55) (unit 1)
+    (uuid d5)
+    (property "Reference" "D5" (at 180 50))
+    (property "Value" "Green L1" (at 180 53))
+    (property "Footprint" "LED_SMD:LED_0603_1608Metric")
+    ;; PB14
+  )
+
+  (symbol (lib_id "Device:R") (at 185 58) (unit 1)
+    (uuid r20)
+    (property "Reference" "R20" (at 185 55))
+    (property "Value" "330Ω" (at 185 58))
+    (property "Footprint" "Resistor_SMD:R_0603_1608Metric")
+    ;; LED current limiting
+  )
+
+  ;; L2 LED (PB15), L3 LED (PC0), BLE LED (PC1) — similar
+
+  ;; ============================================================
+  ;; DECOUPLING CAPACITORS (STM32G491)
+  ;; ============================================================
+
+  (symbol (lib_id "Device:C") (at 150 140) (unit 1)
+    (uuid c20)
+    (property "Reference" "C20" (at 150 135))
+    (property "Value" "100nF" (at 150 138))
+    (property "Footprint" "Capacitor_SMD:C_0402_1005Metric")
+    ;; VDD decoupling 1
+  )
+
+  (symbol (lib_id "Device:C") (at 155 140) (unit 1)
+    (uuid c21)
+    (property "Reference" "C21" (at 155 135))
+    (property "Value" "100nF" (at 155 138))
+    (property "Footprint" "Capacitor_SMD:C_0402_1005Metric")
+    ;; VDD decoupling 2
+  )
+
+  (symbol (lib_id "Device:C") (at 160 140) (unit 1)
+    (uuid c22)
+    (property "Reference" "C22" (at 160 135))
+    (property "Value" "4.7µF" (at 160 138))
+    (property "Footprint" "Capacitor_SMD:C_0603_1608Metric")
+    ;; VDD bulk
+  )
+
+  (symbol (lib_id "Device:C") (at 165 140) (unit 1)
+    (uuid c23)
+    (property "Reference" "C23" (at 165 135))
+    (property "Value" "1µF" (at 165 138))
+    (property "Footprint" "Capacitor_SMD:C_0603_1608Metric")
+    ;; VDDA decoupling
+  )
+
+  ;; ============================================================
+  ;; RANGE RELAY DRIVERS
+  ;; ============================================================
+
+  (symbol (lib_id "Relay:SIL_Relay_OUAZ") (at 110 50) (unit 1)
+    (uuid k1)
+    (property "Reference" "K1" (at 110 42))
+    (property "Value" "OUAZ-SL-112D" (at 110 45))
+    (property "Footprint" "Relay_THT:Relay_SPDT_OUAZ-SS-112D")
+    ;; CT range relay for I1 channel
+    ;; Driven from PC2 via NPN driver
+  )
+
+  (symbol (lib_id "Device:Q_NPN_BCE") (at 107 58) (unit 1)
+    (uuid q1)
+    (property "Reference" "Q1" (at 107 53))
+    (property "Value" "MMBT3904" (at 107 56))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23")
+    ;; Relay driver NPN
+  )
+
+  (symbol (lib_id "Device:D") (at 113 48) (unit 1)
+    (uuid d10)
+    (property "Reference" "D10" (at 113 43))
+    (property "Value" "1N4148" (at 113 46))
+    (property "Footprint" "Diode_SMD:D_SOD-323")
+    ;; Flyback diode for relay coil
+  )
+
+  ;; ============================================================
+  ;; NET LABELS
+  ;; ============================================================
+
+  (label "L1_IN" (at 15 50))
+  (label "L2_IN" (at 15 70))
+  (label "L3_IN" (at 15 90))
+  (label "CT1_IN" (at 15 115))
+  (label "CT2_IN" (at 15 135))
+  (label "CT3_IN" (at 15 155))
+  (label "V1_ADC" (at 85 55))
+  (label "V2_ADC" (at 85 75))
+  (label "V3_ADC" (at 85 95))
+  (label "I1_ADC" (at 85 115))
+  (label "I2_ADC" (at 85 135))
+  (label "I3_ADC" (at 85 155))
+  (label "VREF_3V0" (at 175 175))
+  (label "3V3_MAIN" (at 100 170))
+  (label "VBAT" (at 50 170))
+  (label "USB_5V" (at -5 170))
+  (label "SPI1_SCK" (at 240 85))
+  (label "SPI1_MOSI" (at 240 90))
+  (label "SPI1_MISO" (at 240 55))
+  (label "OLED_CS" (at 240 95))
+  (label "OLED_DC" (at 240 100))
+  (label "OLED_RST" (at 240 105))
+  (label "SD_CS" (at 240 50))
+  (label "BLE_TX" (at 240 140))
+  (label "BLE_RX" (at 240 145))
+  (label "SWDIO" (at 145 35))
+  (label "SWCLK" (at 150 35))
+
+  ;; ============================================================
+  ;; CONNECTORS
+  ;; ============================================================
+
+  (symbol (lib_id "Connector:Conn_01x04") (at -15 110) (unit 1)
+    (uuid j4)
+    (property "Reference" "J4" (at -15 105))
+    (property "Value" "CT_Input_3x2" (at -15 108))
+    (property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_2x03_P2.54mm_Vertical")
+    ;; 3x CT clamp input jacks
+  )
+
+  (symbol (lib_id "Connector:Conn_01x05") (at -15 55) (unit 1)
+    (uuid j5)
+    (property "Reference" "J5" (at -15 50))
+    (property "Value" "Voltage_Input_L1L2L3N_PE" (at -15 53))
+    (property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x05_P2.54mm_Vertical")
+    ;; L1, L2, L3, N, PE voltage input terminals
+    ;; Shrouded banana jacks for safety
+  )
+
+  (symbol (lib_id "Connector:Conn_01x04") (at 290 140) (unit 1)
+    (uuid j6)
+    (property "Reference" "J6" (at 290 135))
+    (property "Value" "SWD_Debug" (at 290 138))
+    (property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical")
+    ;; SWDIO, SWCLK, GND, 3V3
+  )
+
+  ;; ============================================================
+  ;; ESD PROTECTION (on all external inputs)
+  ;; ============================================================
+
+  (symbol (lib_id "Device:TVS") (at 40 73) (unit 1)
+    (uuid tvs1)
+    (property "Reference" "TVS1" (at 40 68))
+    (property "Value" "TPD4E05U06" (at 40 71))
+    (property "Footprint" "Package_SO:USON-4_1x1mm_P0.6mm")
+    ;; Quad ESD protection for ADC inputs
+  )
+
+)

@@ -1,0 +1,48 @@
+# Build artifacts
+build/
+*.elf
+*.bin
+*.hex
+*.o
+*.a
+*.so
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# ESP-IDF
+sdkconfig
+sdkconfig.old
+managed_components/
+dependencies.lock
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Gerbers (generated)
+schematic/gerbers/
+*.gerber
+*.ger
+*.drl
+
+# KiCad backup
+*-backups/
+*.bak
+*.sch-bak
+*.kicad_pcb-bak

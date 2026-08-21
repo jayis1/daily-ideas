@@ -1,0 +1,14 @@
+(kicad_pro (version 20230121)
+
+  (general
+    (project "Therma Weave")
+  )
+
+  (sheets
+    (sheet (path "/") (uuid e0a1b2c3-d4e5-f678-9012-3456789abcde)
+      (property "Sheetname" "Root")
+      (property "Sheetfile" "therma-weave.kicad_sch")
+    )
+  )
+
+)

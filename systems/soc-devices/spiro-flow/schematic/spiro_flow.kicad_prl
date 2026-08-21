@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "meta": {
+    "filename": "spiro_flow.kicad_prl",
+    "version": 1
+  },
+  "board": {
+    "current_layer": "F.Cu"
+  }
+}

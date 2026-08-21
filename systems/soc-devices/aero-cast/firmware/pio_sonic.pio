@@ -1,0 +1,57 @@
+; pio_sonic.pio — PIO programs for ultrasonic burst generation and echo timestamping
+;
+; TX state machine: generates a 40 kHz burst of N cycles on PIN_PIO_TX
+; RX state machine: counts clock cycles from burst start until echo edge on PIN_PIO_RX
+;
+; The RP2040 runs at 125 MHz. 40 kHz = 125 MHz / 3125.
+; Each 40 kHz cycle = 3125 clock cycles = 25 µs.
+; A 16-cycle burst takes 16 × 25 µs = 400 µs.
+;
+; The TX program reads a timeout value from the TX FIFO, generates the burst,
+; and simultaneously signals the RX program to start counting.
+
+.program sonic_tx
+.side_set 1
+
+; TX program: receives timeout_cycles in OSR, generates 40 kHz burst
+; Uses side-set to drive PIN_PIO_TX
+;
+; 40 kHz = 12.5 µs high + 12.5 µs low
+; 12.5 µs at 125 MHz = 1562.5 cycles → use 1563 cycles per half-cycle
+; We use a loop to generate 16 cycles of 40 kHz
+
+.wrap_target
+wait 0 irq 0           ; wait for trigger from main code
+pull block             ; get burst length (number of cycles) from FIFO
+mov x, osr             ; x = cycle count
+
+burst_loop:
+    set pins, 1 [1562]  ; high for ~12.5 µs (40 kHz half-period)
+    set pins, 0 [1562]  ; low for ~12.5 µs
+    jmp x-- burst_loop  ; repeat for N cycles
+
+    set pins, 0         ; ensure pin low after burst
+    irq 1               ; signal RX that burst is done (start counting)
+.wrap
+
+; ---------------------------------------------------------------
+
+.program sonic_rx
+.side_set 0
+
+; RX program: counts clock cycles from burst end until echo arrives
+; Output: cycle count pushed to RX FIFO
+
+.wrap_target
+wait 1 irq 1           ; wait for burst-complete signal from TX
+mov x, !irq 1          ; reset counter (use ISR as counter)
+set x, 0               ; clear counter
+
+count_loop:
+    jmp pin echo_received   ; if echo pin is high, echo received
+    jmp x-- count_loop      ; otherwise increment and loop
+
+echo_received:
+    mov isr, x           ; put count in ISR
+    push block           ; push to FIFO (main code reads this)
+.wrap

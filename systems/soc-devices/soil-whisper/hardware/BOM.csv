@@ -1,0 +1,25 @@
+Item,Qty,Reference,Value,Footprint,Manufacturer,MPN,Category,Unit_Price,Notes
+1,1,U1,STM32WL55JC,QFN-48,STMicroelectronics,STM32WL55JCIX,SoC,5.42,Dual-core Cortex-M4/M0+ with integrated Sub-GHz radio
+2,1,U2,ADS1115,TSSOP-10,Texas Instruments,ADS1115IDGSR,ADC,2.95,16-bit 4-channel ADC for NPK/pH
+3,1,U3,CD74HC4067,TSSOP-24,Texas Instruments,CD74HC4067M96,MUX,0.78,16-channel analog multiplexer
+4,3,U4-U6,TLC555,SOIC-8,Texas Instruments,TLC555IDR,Timer,0.42,Precision timer for capacitive moisture probes
+5,2,U7-U8,TLV8542,TSSOP-8,Texas Instruments,TLV8542DGKR,Op-Amp,0.65,Dual low-power op-amp for ISE/pH buffering
+6,1,U9,SHT40-AD1B,DFN-4,Sensirion,SHT40-AD1B-R3,Temp/Humidity,1.85,Digital humidity sensor (I2C)
+7,3,U10-U12,DS18B20,TO-92,Maxim Integrated,DS18B20+,Temp Sensor,1.20,Digital temperature (1-Wire) at each depth
+8,1,U13,BQ25570,VQFN-14,Texas Instruments,BQ25570RGRR,Power Mgmt,3.40,Ultra-low-power solar harvester + buck-boost
+9,1,U14,TPS7A02,SOT-23-5,Texas Instruments,TPS7A0233PDBVR,LDO,0.45,3.3V ultra-low-Iq LDO (25 nA)
+10,1,C1,10F,Supercapacitor,EDHC,EATON,XL70-2R5108-R,Energy Storage,3.20,10F 3.6V supercapacitor (energy buffer)
+11,1,C2,100µF,Ceramic X7R 1206,Murata,GRM31CR71E107ME21K,Capacitor,0.15,Buck-boost output filter
+12,4,C3-C6,100nF,Ceramic X7R 0402,Yageo,CC0402KRX7R8BB104,Capacitor,0.008,Decoupling caps
+13,2,C7-C8,10µF,Ceramic X7R 0603,Samsung,CL10A106KP8NNNC,Capacitor,0.02,Bulk decoupling
+14,1,C9,1µF,Ceramic X7R 0402,Yageo,CC0402KRX7R7BB105,Capacitor,0.01,LDO output
+15,1,R1-R2,1MΩ,0402 Thick Film,Yageo,RC0402FR-071ML,Resistor,0.001,Voltage divider for VBAT sense
+16,1,SP1,6V 2W,Solar Panel,Monocrystalline,Anysolar AS-0208-06,Solar,4.50,6V 2W monocrystalline solar panel
+17,1,L1,10µH,Inductor SMD 0806,Wurth,74404021010,Inductor,0.35,Buck-boost inductor for BQ25570
+18,1,ANT1,868/915MHz,PCB Antenna + IPEX, Johanson,2450AT18A100,Fabricated,0.50,Sub-GHz LoRa antenna
+19,3,NO3/H2PO4/K+,ISE Sensor,Probe body,Vernier,ISE-N03/ISE-PO4/ISE-K,NPK ISE,85.00 each,Ion-selective electrodes (replaceable)
+20,1,pH1,pH Glass Electrode,Probe body,Atlas Scientific,PH-4502C,pH Sensor,45.00,pH electrode with BNC connector
+21,1,REF1,Ag/AgCl Reference,Probe body,Atlas Scientific,REF-4502C,Reference,35.00,Ag/AgCl reference electrode
+22,1,Q1,SI2301DS,P-Channel MOSFET,SOT-23,Vishay,SI2301DS-T1-E3,MOSFET,0.12,Power gating for DS18B20
+23,1,Y1,32.768kHz,Crystal 3215,Epson,FC-135 32.768KHZ,Crystal,0.15,RTC LSE crystal
+24,3,LED1-LED3,Green/Red/Yellow,0402 LED,Kingbright,APHHS1005,LED,0.04,Status indicators

@@ -1,0 +1,49 @@
+Ref,Designator,Value,Footprint,Qty,Unit USD,Total USD,Note,Source
+U1,STM32G474RET6,STM32G474RET6,LQFP-64_10x10mm_P0.5mm,1,6.40,6.40,SoC ARM Cortex-M4F 170MHz CORDIC FMAC,Mouser
+U2,TP4056,TP4056,SOP-8,1,0.45,0.45,Li-ion charger,LCSC
+U3,MCP1640B,MCP1640B,SOT-23-5,1,1.10,1.10,3.7V→5V boost,LCSC
+U4,AP2112-3.3,AP2112-3.3,SOT-23-5,1,0.30,0.30,3.3V digital LDO,LCSC
+U5,LP5907-3.3,LP5907-3.3,SOT-23-5,1,1.20,1.20,Ultra-low-noise 3.3V analog LDO,Mouser
+U6,ADS122U04,ADS122U04,TSSOP-16,1,3.20,3.20,24-bit delta-sigma ADC 4-ch PGA,LCSC
+U7,NEO-M9N,NEO-M9N,Module 16x12.2mm,1,7.50,7.50,72-channel L1 GNSS module,u-blox
+U8,LSM6DSO,LSM6DSO,LGA-14,1,2.50,2.50,6-axis IMU accel+gyro,LCSC
+U9,MMC5603NJ,MMC5603NJ,LGA-12,1,1.80,1.80,3-axis magnetometer,LCSC
+U10,ESP32-C3-MINI-1,ESP32-C3-MINI-1,Module,1,2.70,2.70,BLE/WiFi bridge,LCSC
+U11,W25Q128JVSIQ,W25Q128,SOIC-8,1,1.10,1.10,16 MB SPI flash data buffer,LCSC
+U12_disp,SH1106 OLED,SH1106 1.3" 128x64 I2C,Module,1,2.80,2.80,OLED display,LCSC
+U13,A4988,A4988 stepper driver,Module,2,1.00,2.00,AZ + EL stepper drivers,LCSC
+D1,Thermopile,Thin-film thermopile 2mm,Custom,1,4.50,4.50,Thermopile detector (solar),Mouser
+F1,405nm filter,405nm 10nm FWHM,25mm dia,1,1.00,1.00,Interference filter 405nm,Thorlabs
+F2,440nm filter,440nm 10nm FWHM,25mm dia,1,1.00,1.00,Interference filter 440nm,Thorlabs
+F3,675nm filter,675nm 10nm FWHM,25mm dia,1,1.00,1.00,Interference filter 675nm,Thorlabs
+F4,870nm filter,870nm 10nm FWHM,25mm dia,1,1.00,1.00,Interference filter 870nm,Thorlabs
+F5,940nm filter,940nm 10nm FWHM,25mm dia,1,1.00,1.00,Interference filter 940nm (water vapor),Thorlabs
+F6,1640nm filter,1640nm 75nm FWHM,25mm dia,1,1.00,1.00,Interference filter 1640nm (coarse aerosol),Thorlabs
+M1,NEMA8 AZ,NEMA8 12V 200 steps/rev,Custom,1,4.00,4.00,Azimuth stepper,Amazon
+M2,NEMA8 EL,NEMA8 12V 200 steps/rev,Custom,1,4.00,4.00,Elevation stepper,Amazon
+M3,SG90 servo,SG90 9g servo,Standard,1,1.50,1.50,Filter wheel rotation servo,Amazon
+OPT1,Collimator tube,30mm aperture 350mm FL 5deg FOV,Custom,1,3.00,3.00,Collimator tube assembly,Local
+OPT2,Filter wheel,3D-printed PLA 6-position,Custom,1,1.00,1.00,Filter wheel disk,Local
+BT1,18650 holder,18650 3.7V 2600mAh,Keystone 1042,1,2.50,2.50,Battery (not in BOM cost),Local
+J1,USB-C,USB-C 2.0 receptacle,USB-C 16-pin,1,0.60,0.60,Charge port,LCSC
+J2,MicroSD,MicroSD socket push-push,MMCX,1,1.10,1.10,SD card slot,LCSC
+SW1,EC11 encoder,EC11 rotary encoder,EC11,1,1.20,1.20,Rotary nav,LCSC
+SW2,Mode button,TS-1187A tactile,TACT-6x6,1,0.15,0.15,Mode,LCSC
+SW3,Start/Stop button,TS-1187A tactile,TACT-6x6,1,0.15,0.15,Start/Stop,LCSC
+SW4,Calibrate button,TS-1187A tactile,TACT-6x6,1,0.15,0.15,Calibrate,LCSC
+SW5,AZ home switch,Limit switch lever,SW_LIMIT,1,0.40,0.40,Azimuth home,LCSC
+SW6,EL home switch,Limit switch lever,SW_LIMIT,1,0.40,0.40,Elevation home,LCSC
+SW7,Filter wheel home,Optical slot sensor,OPT_SLOT,1,0.50,0.50,Filter wheel home,LCSC
+D2,Green LED,Green 0805,LED-0805,1,0.08,0.08,Tracking indicator,LCSC
+D3,Blue LED,Blue 0805,LED-0805,1,0.08,0.08,Calibrating indicator,LCSC
+D4,WS2812B,WS2812B,LED-5050,1,0.20,0.20,RGB status LED,LCSC
+R1,Battery divider,100k 1%,R_0603,2,0.02,0.04,Vbat 2:1 divider,LCSC
+R2-R5,Gain/bias resistors,10k 1%,R_0603,4,0.02,0.08,ADS122U04 bias resistors,LCSC
+C1-C6,Decoupling 100n,100n X7R,C_0603,6,0.02,0.12,Decoupling,LCSC
+C7-C8,Decoupling 10u,10u X5R,C_0805,2,0.05,0.10,Bulk decoupling,LCSC
+L1-L2,Ferrite beads,BLM18PG121,FB-0603,2,0.10,0.20,Analog/digital isolation,LCSC
+PCB,PCB,4-layer 80x50mm,JLCPCB,1,4.00,4.00,4-layer PCB fab,JLCPCB
+MISC,Enclosure,3D-printed PLA,Custom,1,2.00,2.00,Case + tracking head,Local
+MISC,Worm gear,60:1 brass worm gear,Custom,1,1.50,1.50,Azimuth worm gear,Local
+MISC,Timing belt,GT2 200mm,Standard,1,0.50,0.50,Elevation drive belt,Amazon
+,,Total,,,,~$74.00,,

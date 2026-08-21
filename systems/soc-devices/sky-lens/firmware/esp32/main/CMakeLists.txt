@@ -1,0 +1,29 @@
+/* CMakeLists for the ESP32-S3 main component.
+   This is included by the idf.py build. */
+idf_component_register(
+    SRCS
+        "main.c"
+        "coincidence.c"
+        "adc.c"
+        "sipm_bias.c"
+        "imu.c"
+        "pressure.c"
+        "skymap.c"
+        "zenith.c"
+        "lifetime.c"
+        "sdlog.c"
+        "display.c"
+        "ble.c"
+        "wifi.c"
+        "proto.c"
+        "power.c"
+    INCLUDE_DIRS
+        "."
+    REQUIRES
+        driver
+        esp_timer
+        nvs_flash
+        fatfs
+        bt
+        esp_wifi
+)

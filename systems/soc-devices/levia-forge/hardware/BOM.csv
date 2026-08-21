@@ -1,0 +1,50 @@
+# Levia Forge — Bill of Materials
+
+| Ref | Qty | Part | Package | Value | Notes |
+|-----|-----|------|---------|-------|-------|
+| U1 | 1 | RP2040 | QFN-56 | | Main MCU, dual-core 133 MHz |
+| U2 | 1 | W25Q128JVSIQ | SOIC-8 | 16MB | SPI flash |
+| U3 | 1 | ESP32-C3-WROOM-02 | Module | | BLE/WiFi bridge |
+| U4-U12 | 9 | 74HC595 | SOIC-16 | | 8-bit shift register |
+| U13 | 1 | TPS61023 | SOT-563 | | Boost 7.4V→10V |
+| U14 | 1 | MCP1603T-3.3 | SOT-23-5 | | Buck 7.4V→3.3V |
+| U15 | 1 | AP2112K-5.0 | SOT-23-5 | | LDO 5V |
+| U16 | 1 | TP4056 | SOP-8 | | LiPo charger |
+| U17 | 1 | VL53L0X | Custom | | ToF distance sensor |
+| U18 | 1 | LSM6DSO | QFN-14 | | IMU (tilt safety) |
+| DISP1 | 1 | SSD1306 OLED 128×64 | Module | I2C | Display |
+| Q1-Q72 | 72 | MMBT3904 | SOT-23 | NPN | High-side driver |
+| Q73-Q144 | 72 | MMBT3906 | SOT-23 | PNP | Low-side driver |
+| TD1-TD72 | 72 | MA40S4S | 10mm | 40kHz | Murata ultrasonic transducer |
+| Y1 | 1 | 12 MHz crystal | 3225 | | RP2040 clock |
+| Y2 | 1 | 32.768 kHz crystal | 3215 | | ESP32-C3 RTC |
+| L1 | 1 | 10µH 2A | SMD 6×6mm | | Boost inductor |
+| L2 | 1 | 4.7µH 1A | SMD 4×4mm | | Buck inductor |
+| J1 | 1 | USB-C 16-pin | SMD | | Programming + charging |
+| J2 | 1 | microSD push-push | SMD | | SD card socket |
+| J3 | 1 | 2×18650 holder | THT | | Battery holder |
+| J4 | 1 | Joystick 2-axis | THT | KY-023 | Analog joystick |
+| J5 | 1 | Rotary encoder | THT | EC11 | Z-axis control |
+| SW1 | 1 | Tactile 6mm | THT | | MODE button |
+| SW2 | 1 | Tactile 6mm | THT | | RELEASE button |
+| SW3 | 1 | Reed switch glass | THT | 10mm | Safety interlock |
+| SW4 | 1 | Tactile (BOOTSEL) | THT | | RP2040 boot |
+| LED1 | 1 | LED 0805 | SMD | Blue | Status |
+| LED2 | 1 | LED 0805 | SMD | Green | BLE status (ESP32) |
+| D1 | 1 | Schottky | SOD-123 | | Battery reverse protection |
+| R1-R72 | 72 | 1kΩ 0805 | SMD | | BJT base resistor |
+| R73 | 1 | 1MΩ 0805 | SMD | | Boost feedback top |
+| R74 | 1 | 118kΩ 0805 | SMD | | Boost feedback bottom |
+| R75-R76 | 2 | 27Ω 0805 | SMD | | USB series |
+| R77-R82 | 6 | 10kΩ 0805 | SMD | | Pull-ups |
+| R83-R84 | 2 | 4.7kΩ 0805 | SMD | | I2C pull-ups |
+| R85 | 1 | 100kΩ 0805 | SMD | | TP4056 charge rate |
+| C1-C10 | 10 | 10µF 16V X7R | 0805 | | Bulk decoupling |
+| C11-C40 | 30 | 100nF 16V X7R | 0805 | | Decoupling |
+| C41 | 1 | 22µF 10V X7R | 0805 | | Boost output |
+| C42 | 1 | 10µF 10V X7R | 0805 | | USB input |
+| C43-C46 | 4 | 0.1µF | 0805 | | Button debounce |
+| PCB1 | 1 | 4-layer 80×60mm | | | Custom PCB |
+| MECH1 | 1 | Top array mount | 3D print | PETG | 36 transducer holder |
+| MECH2 | 1 | Bottom array mount | 3D print | PETG | 36 transducer holder |
+| MECH3 | 1 | Enclosure base | 3D print | PETG | PCB + battery holder |

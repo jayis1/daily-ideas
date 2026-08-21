@@ -1,0 +1,16 @@
+(kicad_pcb
+  (version 20240613)
+  (generator "vibra-beam-pcb")
+  (general (thickness 1.6) (layers 4))
+  (layer "F.Cu" type "copper")
+  (layer "In1.Cu" type "copper")
+  (layer "In2.Cu" type "copper")
+  (layer "B.Cu" type "copper")
+  (setup
+    (pad_to_mask_clearance 0.05)
+    (min_track_width 0.15)
+    (min_via_drill 0.25)
+  )
+  (net 0 "GND")
+  (net 1 "VCC_3V3")
+  (net 2 "VCC_ANA"))

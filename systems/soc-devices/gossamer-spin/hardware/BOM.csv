@@ -1,0 +1,43 @@
+Part,Manufacturer,MPN,Qty,Unit Price (USD),Source,Notes
+STM32G474RET6,STMicroelectronics,STM32G474RET6,1,6.40,DigiKey/Mouser,Cortex-M4F 170MHz HRTIM CORDIC LQFP64
+ESP32-C3-WROOM-02,Espressif,ESP32-C3-WROOM-02,1,2.70,Mouser/DigiKey,RISC-V 160MHz BLE 5.0 + Wi-Fi
+EE25 flyback transformer,Wurth/CUSTOM,760390014 (custom wind),1,3.50,DigiKey,EE25 core 1:80 turns (custom wind primary 15T secondary 1200T)
+IRFH7440 MOSFET,Infineon,IRFH7440TRPBF,1,1.10,DigiKey,40V N-MOS flyback primary switch
+1N4007 diode (×20),Diodes Inc,1N4007-T,20,2.00,DigiKey,1kV 1A rectifier for CW multiplier stages ($0.10 each)
+3kV 1nF ceramic cap (×20),Vishay,CD15FD101JO3,20,4.00,Mouser,3kV 1nF NP0 ceramic for CW multiplier ($0.20 each)
+910MΩ HV resistor,Vishay,HVC0603T9100KKE,1,3.20,DigiKey,910MΩ 1% 3kV thick-film HV series resistor
+900MΩ HV divider resistor,Vishay,HVC1206T9000KKE,1,3.80,DigiKey,900MΩ 1% 3kV voltage divider top
+900kΩ divider resistor,Yageo,RT0603FRE07900KL,1,0.10,DigiKey,900kΩ 1% bottom of 1000:1 divider
+100MΩ feedback resistor,Vishay,VR37000010004JR500,1,2.40,DigiKey,100MΩ TIA feedback (through-hole)
+ADA4530-1 op-amp,Analog Devices,ADA4530-1ARZ,1,8.90,DigiKey,Electrometer-grade femtoamp TIA
+ADS122U04 24-bit ADC,TI,ADS122U04IRVAR,1,4.50,DigiKey,24-bit delta-sigma SPI ADC
+TLV3201 comparator,TI,TLV3201AIDBVR,1,1.20,DigiKey,High-speed comparator for current cutoff
+BME280 temp/humidity,Bosch,BME280,1,4.50,DigiKey,Temp ±1°C humidity ±3% RH I2C
+SSD1306 OLED 0.96",Solomon/Waveshare,SSD1306 128x64 I2C,1,2.20,AliExpress,Process dashboard display
+A4988 stepper driver (×2),Allegro,A4988 module,2,2.00,AliExpress,Syringe + drum NEMA8 drivers ($1.00 each)
+NEMA8 stepper motor (×2),Generic,NEMA8 20mm,2,6.00,AliExpress,Syringe pump + drum collector ($3.00 each)
+MicroSD socket,Molex,503182-1850,1,1.10,DigiKey,Push-push microSD process CSV log
+TP4056 charge IC,Nanjing Top Power,TP4056,1,0.40,LCSC,18650 Li-ion USB-C charger
+DW02 battery protection,Sinicheck,DW02,1,0.25,LCSC,Over-discharge/over-current protection
+AP2112-3.3 LDO,Diodes Inc,AP2112K-3.3,1,0.25,DigiKey,3.3V LDO regulator
+USB-C connector,Amphenol,10137028-000200LF,1,0.60,DigiKey,USB-C 2.0 charging
+Reed switch interlock,Meder,MK15-B,1,1.20,DigiKey,Magnetic reed door interlock
+Tilt sensor,Hamlin,59135-1-T-02-A,1,1.40,DigiKey,30° ball tilt sensor
+100MΩ bleeder resistor,Vishay,VR37000010004JR500,1,2.40,DigiKey,100MΩ HV bleeder discharge
+M4×0.35 leadscrew + nut,Amazon,M4 threaded rod 0.35 pitch,1,1.50,Amazon,Syringe pump lead screw
+Linear rail 6mm (50mm),Amazon,Linear guide rail MGN9,1,2.00,AliExpress,Syringe carriage rail
+GT2 belt + pulley (×2),Amazon,GT2 200mm belt + 20T pulley,1,2.00,AliExpress,Drum drive belt
+21G blunt needle,Amazon,21G 0.8mm blunt tip,5,1.50,AliExpress,Spinneret needles ($0.30 each)
+Aluminum drum (20×60mm),Self-machined,N/A,1,1.00,Self-machined,Collector drum
+Slip ring (gold contact),Senring,SNR-2G,1,2.50,AliExpress,2-channel gold slip ring for drum
+5mL syringe (×10),BD,5mL Luer-lock,10,2.00,Amazon,Polymer solution syringes ($0.20 each)
+PCB (2-layer 80×40mm),JLCPCB,JLCPCB 2-layer,1,2.50,JLCPCB,Custom control PCB
+Chamber (3D printed PETG),N/A,N/A,1,3.00,Self-print,110×60×50mm spinning chamber
+Control box (3D printed),N/A,N/A,1,1.50,Self-print,80×40×25mm control box
+18650 holder,Eaton,WHC-18650-BP-H,1,1.50,DigiKey,Single 18650 battery holder
+18650 battery,Panasonic/Sanyo,NCR18650B 3500mAh,1,5.00,Amazon,3.7V Li-ion
+Resistors/caps/inductors,Yageo/Murata,assortment,1,3.00,DigiKey,Passives (decoupling, filter, pull-up)
+M2.5 standoffs/screws,McMaster-Carr,assortment,1,1.00,McMaster,Hardware
+CR2032 + holder,Linx,BC5001-1,1,0.70,DigiKey,RTC backup battery (VBAT)
+HV silicone wire (30kV),Amazon,Silicone HV wire 30kV,1,1.50,Amazon,30kV insulated wire needle connection
+Total,,,1,68.20,,Approximate BOM cost

@@ -1,0 +1,306 @@
+(kicad_sch
+  (version "20220920")
+  (generator "hermes-inventor")
+
+  ; ====== Lode Sweep — Pocket PI Metal Detector with On-Device Target ID ======
+  ; DSP SoC: STM32G474RET6  |  Radio/GPS SoC: ESP32-C3-WROOM-02
+  ; PI 100µs pulse, 16-gate decay sampling, k-NN target classification
+
+  (lib_symbols)
+
+  ; ====== DSP Core: STM32G474RET6 ======
+  (symbol (id 0) (at 120 80) (name "STM32G474RET6")
+    (in_bom yes)
+    (uuid "stm32-main")
+    (property "Reference" "U1")
+    (property "Value" "STM32G474RET6")
+    (pins
+      (pin (name "VDD")     (type power_in))
+      (pin (name "VDDA")    (type power_in))
+      (pin (name "GND")     (type power_in))
+      (pin (name "VBAT")    (type power_in))
+      (pin (name "PA0/DAC1")     (type output))   ; Audio out (PWM alt)
+      (pin (name "PA1/ADC1")     (type input))    ; Battery monitor ÷2
+      (pin (name "PA2/USART2_TX")(type output))   ; -> ESP32-C3 RX
+      (pin (name "PA3/USART2_RX")(type input))    ; <- ESP32-C3 TX
+      (pin (name "PA4/HRTIM_CHA1")(type output))  ; MOSFET gate driver (TX)
+      (pin (name "PA5/HRTIM_CHA2")(type output))  ; MOSFET gate driver (discharge)
+      (pin (name "PA6/ADC1_IN3") (type input))    ; Coil voltage from AD8226
+      (pin (name "PA7/TIM3_CH1") (type output))   ; PWM audio output
+      (pin (name "PA8/GAIN_SW")  (type output))   ; AD8226 gain switch
+      (pin (name "PA9/BTN")      (type input))    ; Mode / ground balance button
+      (pin (name "PA10/LED")     (type output))   ; Status LED
+      (pin (name "PA11/CHG")     (type input))    ; TP4056 charge status
+      (pin (name "PA12/WATER")   (type input))    ; Coil water detect
+      (pin (name "PA13/DISC")    (type input))    ; Discrimination toggle
+      (pin (name "PA15/SENS_A")  (type input))    ; Sensitivity rotary enc A
+      (pin (name "PB0/I2C1_SCL") (type output))   ; IMU/OLED SCL
+      (pin (name "PB1/I2C1_SDA") (type bidirectional)) ; IMU/OLED SDA
+      (pin (name "PB2/SPI2_SCK") (type output))   ; microSD SCK
+      (pin (name "PB3/SPI2_MISO")(type input))    ; microSD MISO
+      (pin (name "PB4/SPI2_MOSI")(type output))   ; microSD MOSI
+      (pin (name "PB5/SPI2_NSS") (type output))   ; microSD CS
+      (pin (name "PB6/SENS_B")   (type input))    ; Sensitivity rotary enc B
+      (pin (name "PB7/PHONE")    (type input))    ; Headphone detect
+      (pin (name "PC13/BOOT")    (type input))    ; boot button
+      (pin (name "PC14/SD_DET")  (type input))    ; microSD detect
+      (pin (name "PC15/BOOST_EN")(type output))   ; MC34063 boost enable
+      (pin (name "NRST")         (type input))
+      (pin (name "BOOT0")        (type input))
+      (pin (name "SWDIO")        (type bidirectional))
+      (pin (name "SWCLK")        (type input))
+    )
+  )
+
+  ; ====== Radio/GPS Core: ESP32-C3-WROOM-02 ======
+  (symbol (id 1) (at 220 80) (name "ESP32-C3-WROOM-02")
+    (in_bom yes)
+    (uuid "esp32c3-radio")
+    (property "Reference" "U2")
+    (property "Value" "ESP32-C3-WROOM-02")
+    (pins
+      (pin (name "3V3")   (type power_in))
+      (pin (name "GND")   (type power_in))
+      (pin (name "EN")    (type input))
+      (pin (name "GPIO2/RX0")(type input))   ; <- STM32 USART2_TX
+      (pin (name "GPIO3/TX0")(type output))  ; -> STM32 USART2_RX
+      (pin (name "GPIO4/RX1")(type input))   ; <- NEO-M9N TX (NMEA)
+      (pin (name "GPIO5/TX1")(type output))  ; -> NEO-M9N RX (cfg)
+      (pin (name "GPIO6/PPS")(type input))   ; NEO-M9N PPS
+      (pin (name "GPIO7/LED")(type output))  ; radio status LED
+      (pin (name "GPIO8/WAKE")(type output)) ; STM32 wake
+      (pin (name "GPIO9/BOOT")(type input))  ; boot strap
+      (pin (name "GPIO10/SCL")(type output)) ; I2C expansion
+      (pin (name "GPIO11/SDA")(type bidirectional)) ; I2C expansion
+    )
+  )
+
+  ; ====== Power: 18650 + TP4056 + DW02 + AP2112 ======
+  (symbol (id 2) (at 30 40) (name "18650_BATTERY")
+    (uuid "bat1")
+    (property "Reference" "BAT1")
+    (property "Value" "18650 3.7V 3500mAh")
+    (pins (pin (name "+") (type power_out)) (pin (name "-") (type power_in)))
+  )
+
+  (symbol (id 3) (at 55 40) (name "TP4056")
+    (uuid "chg1")
+    (property "Reference" "U3")
+    (property "Value" "TP4056 charger")
+    (pins
+      (pin (name "VIN") (type power_in))
+      (pin (name "BAT") (type power_out))
+      (pin (name "CHG") (type output))
+      (pin (name "GND") (type power_in))
+    )
+  )
+
+  (symbol (id 4) (at 80 40) (name "DW02")
+    (uuid "prot1")
+    (property "Reference" "U4")
+    (property "Value" "DW02 protection")
+    (pins (pin (name "BAT+") (type power_in)) (pin (name "OUT+") (type power_out))
+          (pin (name "GND") (type power_in)))
+  )
+
+  (symbol (id 5) (at 105 40) (name "AP2112_LDO")
+    (uuid "ldo1")
+    (property "Reference" "U5")
+    (property "Value" "AP2112-3.3")
+    (pins (pin (name "VIN") (type power_in)) (pin (name "VOUT") (type power_out))
+          (pin (name "GND") (type power_in)))
+  )
+
+  ; ====== TX coil driver: MC34063 boost + IRFH7440 MOSFET ======
+  (symbol (id 6) (at 30 130) (name "MC34063")
+    (uuid "boost1")
+    (property "Reference" "U6")
+    (property "Value" "MC34063 boost 12V")
+    (pins (pin (name "VIN") (type power_in)) (pin (name "VOUT") (type power_out))
+          (pin (name "GND") (type power_in)) (pin (name "SW") (type output))
+          (pin (name "EN")  (type input)))
+  )
+
+  (symbol (id 7) (at 75 130) (name "IRFH7440_MOSFET")
+    (uuid "mos1")
+    (property "Reference" "Q1")
+    (property "Value" "IRFH7440 N-MOS")
+    (pins (pin (name "G") (type input))    ; <- HRTIM CHA1 via driver
+          (pin (name "D") (type input))    ; <- 12V rail
+          (pin (name "S") (type output))   ; -> Search coil
+          (pin (name "GND")(type power_in)))
+  )
+
+  ; ====== Search coil + damping + TVS ======
+  (symbol (id 8) (at 120 130) (name "SEARCH_COIL")
+    (uuid "coil1")
+    (property "Reference" "L1")
+    (property "Value" "25cm air-core 0.5mH 2Ω")
+    (pins (pin (name "+" (type input)) (pin (name "-" (type power_in))))
+  )
+
+  (symbol (id 9) (at 120 155) (name "SMBJ18A_TVS")
+    (uuid "tvs1")
+    (property "Reference" "D1")
+    (property "Value" "SMBJ18A TVS")
+    (pins (pin (name "A") (type bidirectional)) (pin (name "K") (type bidirectional)))
+  )
+
+  (symbol (id 10) (at 120 165) (name "DAMPING_R")
+    (uuid "r1")
+    (property "Reference" "R1")
+    (property "Value" "470Ω damping")
+    (pins (pin (name "1") (type bidirectional)) (pin (name "2") (type bidirectional)))
+  )
+
+  ; ====== RX signal chain: AC couple + AD8226 inst amp ======
+  (symbol (id 11) (at 160 130) (name "AC_COUPLE")
+    (uuid "ac1")
+    (property "Reference" "C1")
+    (property "Value" "1µF AC couple")
+    (pins (pin (name "1") (type input)) (pin (name "2") (type output)))
+  )
+
+  (symbol (id 12) (at 190 130) (name "AD8226")
+    (uuid "amp1")
+    (property "Reference" "U7")
+    (property "Value" "AD8226 inst amp 100x")
+    (pins
+      (pin (name "IN+") (type input))   ; <- AC couple
+      (pin (name "IN-") (type input))   ; <- ground ref
+      (pin (name "GAIN")(type input))   ; gain set resistor
+      (pin (name "OUT") (type output))  ; -> STM32 ADC1_IN3
+      (pin (name "VDD") (type power_in))
+      (pin (name "GND") (type power_in))
+    )
+  )
+
+  ; ====== I2C sensors: ICM-42688-P + SSD1306 ======
+  (symbol (id 13) (at 220 40) (name "ICM-42688-P")
+    (uuid "imu1")
+    (property "Reference" "U8")
+    (property "Value" "ICM-42688-P")
+    (pins (pin (name "VDD") (type power_in)) (pin (name "GND") (type power_in))
+          (pin (name "SCL") (type input)) (pin (name "SDA") (type bidirectional))
+          (pin (name "INT") (type output)))
+  )
+
+  (symbol (id 14) (at 220 70) (name "SSD1306_OLED")
+    (uuid "oled1")
+    (property "Reference" "U9")
+    (property "Value" "SSD1306 0.96in 128x64 I2C")
+    (pins (pin (name "VCC") (type power_in)) (pin (name "GND") (type power_in))
+          (pin (name "SCL") (type input)) (pin (name "SDA") (type bidirectional)))
+  )
+
+  ; ====== GPS: NEO-M9N ======
+  (symbol (id 15) (at 300 80) (name "NEO-M9N")
+    (uuid "gps1")
+    (property "Reference" "U10")
+    (property "Value" "NEO-M9N GPS")
+    (pins (pin (name "VDD") (type power_in)) (pin (name "GND") (type power_in))
+          (pin (name "TX") (type output))  ; -> ESP32 GPIO4
+          (pin (name "RX") (type input))   ; <- ESP32 GPIO5
+          (pin (name "PPS")(type output))  ; -> ESP32 GPIO6
+          (pin (name "ANT")(type input)))
+  )
+
+  ; ====== microSD ======
+  (symbol (id 16) (at 160 40) (name "MicroSD_socket")
+    (uuid "sd1")
+    (property "Reference" "U11")
+    (property "Value" "MicroSD FAT32")
+    (pins (pin (name "VCC") (type power_in)) (pin (name "GND") (type power_in))
+          (pin (name "CS") (type input)) (pin (name "CLK") (type input))
+          (pin (name "MISO")(type output)) (pin (name "MOSI")(type input))
+          (pin (name "DET") (type output)))
+  )
+
+  ; ====== USB-C charging ======
+  (symbol (id 17) (at 30 70) (name "USB-C")
+    (uuid "usb1")
+    (property "Reference" "J1")
+    (property "Value" "USB-C 2.0")
+    (pins (pin (name "VBUS") (type power_out)) (pin (name "D+") (type bidirectional))
+          (pin (name "D-") (type bidirectional)) (pin (name "GND") (type power_in)))
+  )
+
+  ; ====== Headphone jack ======
+  (symbol (id 18) (at 30 100) (name "HEADPHONE_JACK")
+    (uuid "hp1")
+    (property "Reference" "J2")
+    (property "Value" "3.5mm TRS")
+    (pins (pin (name "TIP") (type input)) (pin (name "RING") (type input))
+          (pin (name "SLEEVE") (type power_in)) (pin (name "SW") (type output)))
+  )
+
+  ; ====== Nets ======
+  (net (code 1) (name "V_BAT")  (node "bat1.+") (node "chg1.BAT") (node "prot1.BAT+"))
+  (net (code 2) (name "V_5V")   (node "usb1.VBUS") (node "chg1.VIN"))
+  (net (code 3) (name "V_3V3")  (node "ldo1.VOUT") (node "stm32-main.VDD")
+                            (node "esp32c3-radio.3V3") (node "imu1.VDD")
+                            (node "oled1.VCC") (node "sd1.VCC")
+                            (node "amp1.VDD") (node "gps1.VDD"))
+  (net (code 4) (name "V_3V3A") (node "stm32-main.VDDA") (node "amp1.VDD"))
+  (net (code 5) (name "V_12V")  (node "boost1.VOUT") (node "mos1.D"))
+  (net (code 6) (name "GND")    (node "bat1.-") (node "chg1.GND") (node "prot1.GND")
+                            (node "ldo1.GND") (node "stm32-main.GND")
+                            (node "esp32c3-radio.GND") (node "imu1.GND")
+                            (node "oled1.GND") (node "sd1.GND")
+                            (node "amp1.GND") (node "mos1.GND")
+                            (node "boost1.GND") (node "usb1.GND")
+                            (node "gps1.GND") (node "hp1.SLEEVE"))
+
+  ; TX coil drive
+  (net (code 7)  (name "HRTIM_TX")    (node "stm32-main.PA4/HRTIM_CHA1") (node "mos1.G"))
+  (net (code 8)  (name "HRTIM_DISCH") (node "stm32-main.PA5/HRTIM_CHA2"))
+  (net (code 9)  (name "COIL_OUT")    (node "mos1.S") (node "coil1.+"))
+  (net (code 10) (name "COIL_GND")    (node "coil1.-"))
+  (net (code 11) (name "TVS_CLAMP")   (node "coil1.+") (node "tvs1.K") (node "r1.1"))
+  (net (code 12) (name "TVS_GND")     (node "tvs1.A") (node "r1.2") (node "GND"))
+
+  ; RX signal chain
+  (net (code 13) (name "COIL_RX")     (node "coil1.+") (node "ac1.1"))
+  (net (code 14) (name "AC_OUT")      (node "ac1.2") (node "amp1.IN+"))
+  (net (code 15) (name "AMP_OUT")     (node "amp1.OUT") (node "stm32-main.PA6/ADC1_IN3"))
+
+  ; Audio
+  (net (code 16) (name "AUDIO_PWM")   (node "stm32-main.PA7/TIM3_CH1") (node "hp1.TIP"))
+
+  ; UART to ESP32-C3
+  (net (code 17) (name "STM_TX")      (node "stm32-main.PA2/USART2_TX") (node "esp32c3-radio.GPIO2/RX0"))
+  (net (code 18) (name "STM_RX")      (node "stm32-main.PA3/USART2_RX") (node "esp32c3-radio.GPIO3/TX0"))
+
+  ; GPS NMEA
+  (net (code 19) (name "GPS_TX")      (node "gps1.TX") (node "esp32c3-radio.GPIO4/RX1"))
+  (net (code 20) (name "GPS_RX")      (node "gps1.RX") (node "esp32c3-radio.GPIO5/TX1"))
+  (net (code 21) (name "GPS_PPS")     (node "gps1.PPS") (node "esp32c3-radio.GPIO6/PPS"))
+
+  ; I2C bus
+  (net (code 22) (name "I2C_SCL")     (node "stm32-main.PB0/I2C1_SCL") (node "imu1.SCL")
+                                 (node "oled1.SCL"))
+  (net (code 23) (name "I2C_SDA")     (node "stm32-main.PB1/I2C1_SDA") (node "imu1.SDA")
+                                 (node "oled1.SDA"))
+
+  ; SPI2 microSD
+  (net (code 24) (name "SD_SCK")      (node "stm32-main.PB2/SPI2_SCK") (node "sd1.CLK"))
+  (net (code 25) (name "SD_MISO")     (node "stm32-main.PB3/SPI2_MISO") (node "sd1.MISO"))
+  (net (code 26) (name "SD_MOSI")     (node "stm32-main.PB4/SPI2_MOSI") (node "sd1.MOSI"))
+  (net (code 27) (name "SD_CS")       (node "stm32-main.PB5/SPI2_NSS") (node "sd1.CS"))
+  (net (code 28) (name "SD_DET")      (node "stm32-main.PC14/SD_DET") (node "sd1.DET"))
+
+  ; Misc GPIO
+  (net (code 29) (name "BTN_MODE")    (node "stm32-main.PA9/BTN"))
+  (net (code 30) (name "BTN_DISC")    (node "stm32-main.PA13/DISC"))
+  (net (code 31) (name "SENS_A")      (node "stm32-main.PA15/SENS_A"))
+  (net (code 32) (name "SENS_B")      (node "stm32-main.PB6/SENS_B"))
+  (net (code 33) (name "PHONE_DET")   (node "stm32-main.PB7/PHONE") (node "hp1.SW"))
+  (net (code 34) (name "BOOST_EN")    (node "stm32-main.PC15/BOOST_EN") (node "boost1.EN"))
+  (net (code 35) (name "BAT_MON")     (node "stm32-main.PA1/ADC1"))
+  (net (code 36) (name "CHG_STAT")    (node "stm32-main.PA11/CHG") (node "chg1.CHG"))
+  (net (code 37) (name "STATUS_LED")  (node "stm32-main.PA10/LED"))
+  (net (code 38) (name "ESP_WAKE")    (node "esp32c3-radio.GPIO8/WAKE"))
+  (net (code 39) (name "ESP_LED")     (node "esp32c3-radio.GPIO7/LED"))
+
+  (sheet_instances)
+)

@@ -1,0 +1,129 @@
+(kicad_sch (version 20230121) (generator "eeschema")
+  (uuid "a1b2c3d4-e5f6-7890-abcd-ef0123456789")
+  (paper "A4")
+  (title_block
+    (title "Scribe Nib - Smart Pen Clip Handwriting Digitizer")
+    (date "2026-06-14")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+  )
+  (lib_symbols)
+  
+  ;; ============================================
+  ;; ESP32-S3-MINI-1 Main SoC
+  ;; ============================================
+  (symbol "esp32-s3-mini-1" (in_bom yes) (on_board yes)
+    (property "Reference" "U1" (at 0 0 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "ESP32-S3-MINI-1" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+    (property "Footprint" "RF_Module:ESP32-S3-MINI-1" (at 0 -2.54 0) (effects (font (size 1.27 1.27)) hide))
+    (symbol "esp32-s3-mini-1_1_1"
+      (pin input line (at -15.24 20.32 0) (length 2.54) (name "GPIO0/SPIMISO" (effects (font (size 1.27 1.27)))) (number "1"))
+      (pin input line (at -15.24 17.78 0) (length 2.54) (name "GPIO1/TOUCH0" (effects (font (size 1.27 1.27)))) (number "2"))
+      (pin input line (at -15.24 15.24 0) (length 2.54) (name "GPIO2/TOUCH1" (effects (font (size 1.27 1.27)))) (number "3"))
+      (pin input line (at -15.24 12.7 0) (length 2.54) (name "GPIO3/TOUCH_IRQ" (effects (font (size 1.27 1.27)))) (number "4"))
+      (pin input line (at -15.24 10.16 0) (length 2.54) (name "GPIO4/SPICLK" (effects (font (size 1.27 1.27)))) (number "5"))
+      (pin input line (at -15.24 7.62 0) (length 2.54) (name "GPIO5/SPIMOSI" (effects (font (size 1.27 1.27)))) (number "6"))
+      (pin input line (at -15.24 5.08 0) (length 2.54) (name "GPIO6/SPICS0" (effects (font (size 1.27 1.27)))) (number "7"))
+      (pin input line (at -15.24 2.54 0) (length 2.54) (name "GPIO7/I2CSDA" (effects (font (size 1.27 1.27)))) (number "8"))
+      (pin input line (at -15.24 0 0) (length 2.54) (name "GPIO8/I2CSCL" (effects (font (size 1.27 1.27)))) (number "9"))
+      (pin input line (at -15.24 -2.54 0) (length 2.54) (name "GPIO9/OLED_RST" (effects (font (size 1.27 1.27)))) (number "10"))
+      (pin input line (at -15.24 -5.08 0) (length 2.54) (name "GPIO10/QMC_DRDY" (effects (font (size 1.27 1.27)))) (number "11"))
+      (pin input line (at -15.24 -7.62 0) (length 2.54) (name "GPIO11/VIBRA_EN" (effects (font (size 1.27 1.27)))) (number "12"))
+      (pin input line (at -15.24 -10.16 0) (length 2.54) (name "GPIO12/CHARGE_STAT" (effects (font (size 1.27 1.27)))) (number "13"))
+      (pin input line (at -15.24 -12.7 0) (length 2.54) (name "GPIO13/LED_DATA" (effects (font (size 1.27 1.27)))) (number "14"))
+      (pin input line (at -15.24 -15.24 0) (length 2.54) (name "GPIO15/BOOT" (effects (font (size 1.27 1.27)))) (number "15"))
+      (pin input line (at 15.24 20.32 0) (length 2.54) (name "GPIO16/U0TXD" (effects (font (size 1.27 1.27)))) (number "16") (inverted yes))
+      (pin input line (at 15.24 17.78 0) (length 2.54) (name "GPIO17/U0RXD" (effects (font (size 1.27 1.27)))) (number "17") (inverted yes))
+      (pin input line (at 15.24 15.24 0) (length 2.54) (name "GPIO18/USBDP" (effects (font (size 1.27 1.27)))) (number "18"))
+      (pin input line (at 15.24 12.7 0) (length 2.54) (name "GPIO19/USBDM" (effects (font (size 1.27 1.27)))) (number "19"))
+      (pin input line (at 15.24 10.16 0) (length 2.54) (name "GPIO20/EN" (effects (font (size 1.27 1.27)))) (number "20"))
+      (pin input line (at 15.24 7.62 0) (length 2.54) (name "GPIO21/IMU_CS_ALT" (effects (font (size 1.27 1.27)))) (number "21"))
+      (pin input line (at 15.24 5.08 0) (length 2.54) (name "GPIO42/MOTOR_PWM" (effects (font (size 1.27 1.27)))) (number "22"))
+      (pin input line (at 15.24 2.54 0) (length 2.54) (name "3V3" (effects (font (size 1.27 1.27)))) (number "23") (inverted yes))
+      (pin input line (at 15.24 0 0) (length 2.54) (name "GND" (effects (font (size 1.27 1.27)))) (number "24") (inverted yes))
+    )
+  )
+
+  ;; ============================================
+  ;; ICM-42688-P 6-axis IMU
+  ;; ============================================
+  (symbol "icm-42688-p" (in_bom yes) (on_board yes)
+    (property "Reference" "U2" (at 0 0 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "ICM-42688-P" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+    (property "Footprint" "Sensor_Motion:TDK_ICM-42688-P" (at 0 -2.54 0) (effects (font (size 1.27 1.27)) hide))
+    (symbol "icm-42688-p_1_1"
+      (pin input line (at -10.16 7.62 0) (length 2.54) (name "SCLK" (effects (font (size 1.27 1.27)))) (number "1"))
+      (pin input line (at -10.16 5.08 0) (length 2.54) (name "SDI/MOSI" (effects (font (size 1.27 1.27)))) (number "2"))
+      (pin input line (at -10.16 2.54 0) (length 2.54) (name "SDO/MISO" (effects (font (size 1.27 1.27)))) (number "3"))
+      (pin input line (at -10.16 0 0) (length 2.54) (name "CS_N" (effects (font (size 1.27 1.27)))) (number "4"))
+      (pin input line (at -10.16 -2.54 0) (length 2.54) (name "INT1" (effects (font (size 1.27 1.27)))) (number "5"))
+      (pin input line (at 10.16 7.62 0) (length 2.54) (name "VDD" (effects (font (size 1.27 1.27)))) (number "6") (inverted yes))
+      (pin input line (at 10.16 5.08 0) (length 2.54) (name "VDDIO" (effects (font (size 1.27 1.27)))) (number "7") (inverted yes))
+      (pin input line (at 10.16 0 0) (length 2.54) (name "GND" (effects (font (size 1.27 1.27)))) (number "8") (inverted yes))
+    )
+  )
+
+  ;; ============================================
+  ;; QMC5883L Magnetometer
+  ;; ============================================
+  (symbol "qmc5883l" (in_bom yes) (on_board yes)
+    (property "Reference" "U3" (at 0 0 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "QMC5883L" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+    (property "Footprint" "Sensor_Magnetic:QMC5883L" (at 0 -2.54 0) (effects (font (size 1.27 1.27)) hide))
+    (symbol "qmc5883l_1_1"
+      (pin input line (at -7.62 5.08 0) (length 2.54) (name "SDA" (effects (font (size 1.27 1.27)))) (number "1"))
+      (pin input line (at -7.62 2.54 0) (length 2.54) (name "SCL" (effects (font (size 1.27 1.27)))) (number "2"))
+      (pin input line (at -7.62 0 0) (length 2.54) (name "DRDY" (effects (font (size 1.27 1.27)))) (number "3"))
+      (pin input line (at 7.62 5.08 0) (length 2.54) (name "VDD" (effects (font (size 1.27 1.27)))) (number "4") (inverted yes))
+      (pin input line (at 7.62 2.54 0) (length 2.54) (name "GND" (effects (font (size 1.27 1.27)))) (number "5") (inverted yes))
+    )
+  )
+
+  ;; ============================================
+  ;; SSD1306 64x32 OLED
+  ;; ============================================
+  (symbol "ssd1306-64x32" (in_bom yes) (on_board yes)
+    (property "Reference" "U4" (at 0 0 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "SSD1306-64x32" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+    (property "Footprint" "Display:SSD1306-64x32-Flex" (at 0 -2.54 0) (effects (font (size 1.27 1.27)) hide))
+    (symbol "ssd1306-64x32_1_1"
+      (pin input line (at -7.62 5.08 0) (length 2.54) (name "SDA" (effects (font (size 1.27 1.27)))) (number "1"))
+      (pin input line (at -7.62 2.54 0) (length 2.54) (name "SCL" (effects (font (size 1.27 1.27)))) (number "2"))
+      (pin input line (at -7.62 0 0) (length 2.54) (name "RST" (effects (font (size 1.27 1.27)))) (number "3"))
+      (pin input line (at 7.62 5.08 0) (length 2.54) (name "VDD" (effects (font (size 1.27 1.27)))) (number "4") (inverted yes))
+      (pin input line (at 7.62 2.54 0) (length 2.54) (name "GND" (effects (font (size 1.27 1.27)))) (number "5") (inverted yes))
+    )
+  )
+
+  ;; ============================================
+  ;; MCP73831 LiPo Charger
+  ;; ============================================
+  (symbol "mcp73831" (in_bom yes) (on_board yes)
+    (property "Reference" "U5" (at 0 0 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "MCP73831T-2ACI/OT" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-5" (at 0 -2.54 0) (effects (font (size 1.27 1.27)) hide))
+    (symbol "mcp73831_1_1"
+      (pin input line (at -7.62 5.08 0) (length 2.54) (name "VDD" (effects (font (size 1.27 1.27)))) (number "1"))
+      (pin input line (at -7.62 2.54 0) (length 2.54) (name "STAT" (effects (font (size 1.27 1.27)))) (number "2"))
+      (pin input line (at -7.62 0 0) (length 2.54) (name "VBAT" (effects (font (size 1.27 1.27)))) (number "3"))
+      (pin input line (at 7.62 5.08 0) (length 2.54) (name "PROG" (effects (font (size 1.27 1.27)))) (number "4"))
+      (pin input line (at 7.62 2.54 0) (length 2.54) (name "GND" (effects (font (size 1.27 1.27)))) (number "5") (inverted yes))
+    )
+  )
+
+  ;; ============================================
+  ;; ME6211 3.3V LDO
+  ;; ============================================
+  (symbol "me6211-3.3" (in_bom yes) (on_board yes)
+    (property "Reference" "U6" (at 0 0 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "ME6211A33M" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-5" (at 0 -2.54 0) (effects (font (size 1.27 1.27)) hide))
+    (symbol "me6211-3.3_1_1"
+      (pin input line (at -7.62 2.54 0) (length 2.54) (name "VIN" (effects (font (size 1.27 1.27)))) (number "1"))
+      (pin input line (at -7.62 0 0) (length 2.54) (name "GND" (effects (font (size 1.27 1.27)))) (number "2") (inverted yes))
+      (pin input line (at -7.62 -2.54 0) (length 2.54) (name "EN" (effects (font (size 1.27 1.27)))) (number "3"))
+      (pin input line (at 7.62 2.54 0) (length 2.54) (name "VOUT" (effects (font (size 1.27 1.27)))) (number "4"))
+      (pin input line (at 7.62 0 0) (length 2.54) (name "NC" (effects (font (size 1.27 1.27)))) (number "5"))
+    )
+  )
+)

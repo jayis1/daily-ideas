@@ -1,0 +1,42 @@
+{
+  "board": {
+    "3dmodelsversion": "1.0",
+    "auto_zone_fill": true,
+    "aux_axes_origin": { "x": 0, "y": 0 },
+    "design_settings": {
+      "defaults": {
+        "board_outline_line_width": 0.1,
+        "copper_line_width": 0.2,
+        "copper_text_size_h": 1.5,
+        "copper_text_size_v": 1.5,
+        "copper_text_thickness": 0.3,
+        "courtyard_line_width": 0.05,
+        "dimension_precision": 4,
+        "fab_line_width": 0.1,
+        "fab_text_size_h": 1.0,
+        "fab_text_size_v": 1.0,
+        "fab_text_thickness": 0.15,
+        "other_line_width": 0.1,
+        "silkscreen_line_width": 0.12,
+        "silkscreen_text_size_h": 1.0,
+        "silkscreen_text_size_v": 1.0,
+        "silkscreen_text_thickness": 0.15,
+        "solder_mask_margin": 0.05
+      },
+      "diff_pair_dimensions": [],
+      "drc_exclusions": [],
+      "metadata": { "filename": "taste_bead.kicad_pro", "version": 1 },
+      "rules": {
+        "min_clearance": 0.15,
+        "min_track_width": 0.15,
+        "min_via_diameter": 0.3,
+        "min_via_drill": 0.2
+      },
+      "track_widths": [0.0, 0.15, 0.2, 0.25, 0.5],
+      "via_dimensions": [{ "diameter": 0.0, "drill": 0.0 }]
+    },
+    "ipc2581": { "dist": "", "distpn": "", "internal_id": "", "mfg": "", "mpn": "" },
+    "layer_presets": [],
+    "viewports": []
+  }
+}

@@ -1,0 +1,48 @@
+(kicad_pro
+  (version "1.0")
+  (meta (filename "visco-shear.kicad_pro"))
+  (general
+    (project_name "Visco Shear")
+    (project_version "1.0"))
+  (board
+    (layer_setup
+      (layers
+        (0 "F.Cu" signal)
+        (1 "In1.Cu" signal)
+        (2 "In2.Cu" signal)
+        (3 "B.Cu" signal)
+        (4 "F.SilkS" user)
+        (5 "B.SilkS" user)
+        (6 "F.Mask" user)
+        (7 "B.Mask" user)
+        (8 "Edge.Cuts" user)))
+    (setup
+      (trace_min_width 0.12)
+      (via_min_size 0.25)
+      (via_min_drill 0.15)))
+  (schematic
+    (default_line_width 0.15)
+    (default_text_size 1.27))
+  (erc
+    (rule "no_unconnected"))
+  (drc
+    (rule "min_clearance" 0.12))
+  (libraries
+    (lib (name "MCU_RaspberryPi") (type "kicad_sym"))
+    (lib (name "RF_Module") (type "kicad_sym"))
+    (lib (name "Memory_Flash") (type "kicad_sym"))
+    (lib (name "Analog_ADC") (type "kicad_sym"))
+    (lib (name "Driver_Motor") (type "kicad_sym"))
+    (lib (name "Sensor") (type "kicad_sym"))
+    (lib (name "Sensor_Temperature") (type "kicad_sym"))
+    (lib (name "Display") (type "kicad_sym"))
+    (lib (name "Connector") (type "kicad_sym"))
+    (lib (name "Device") (type "kicad_sym"))
+    (lib (name "Motor") (type "kicad_sym"))
+    (lib (name "Regulator_Switching") (type "kicad_sym"))
+    (lib (name "Regulator_Linear") (type "kicad_sym"))
+    (lib (name "Battery_Management") (type "kicad_sym"))
+    (lib (name "Battery_Protection") (type "kicad_sym"))
+    (lib (name "Switch") (type "kicad_sym"))
+    (lib (name "Transistor_FET") (type "kicad_sym")))
+  (copyright "MIT License"))

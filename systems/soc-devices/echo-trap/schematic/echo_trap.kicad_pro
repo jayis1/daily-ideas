@@ -1,0 +1,101 @@
+{
+    "board": {
+        "design_settings": {
+            "defaults": {
+                "board_outline_line_width": 0.1,
+                "copper_line_width": 0.2,
+                "copper_text_size_h": 1.5,
+                "copper_text_size_v": 1.5,
+                "copper_text_thickness": 0.3,
+                "other_line_width": 0.15,
+                "silk_line_width": 0.15
+            },
+            "diff_pair_dimensions": [],
+            "drc_exclusions": [],
+            "rules": {
+                "min_clearance": 0.2,
+                "min_track_width": 0.2,
+                "min_via_diameter": 0.4,
+                "min_via_drill": 0.2
+            }
+        },
+        "layer_presets": []
+    },
+    "boards": [],
+    "cvpcb": {
+        "equivalence_files": []
+    },
+    "libraries": {
+        "pinned_footprint_libs": [],
+        "pinned_symbol_libs": []
+    },
+    "meta": {
+        "filename": "echo_trap.kicad_pro",
+        "version": 1
+    },
+    "pcbnew": {
+        "last_paths": {
+            "gencad": "",
+            "idf": "",
+            "netlist": "echo_trap.net",
+            "plot": "",
+            "pos_files": "",
+            "specctra_dsn": "",
+            "step": "",
+            "vrml": ""
+        },
+        "page": "A4",
+        "page_layout_descr_file": "",
+        "version": "20241129"
+    },
+    "schematic": {
+        "annotate": "0",
+        "drawing": {
+            "dashed_lines_dma": "0",
+            "default_bus_thickness": 12,
+            "default_junction_size": 0.5,
+            "default_line_thickness": 6,
+            "default_text_size": 50,
+            "field_names": [],
+            "intersheets_ref_own_page": false,
+            "intersheets_ref_prefix": "",
+            "intersheets_ref_short": false,
+            "intersheets_ref_show": false,
+            "intersheets_ref_suffix": "",
+            "junction_size_choice": 3,
+            "label_size_ratio": 0.375,
+            "pin_symbol_size": 25,
+            "text_offset_ratio": 0.15
+        },
+        "legacy_lib_dir": "",
+        "legacy_lib_list": [],
+        "meta": {
+            "version": 1
+        },
+        "net_format_name": "",
+        "page_layout_descr_file": "",
+        "page_type": "A3",
+        "plot_directory": "",
+        "spice_current_sheet_as_root": false,
+        "spice_external_command": "",
+        "spice_model_current_sheet_as_root": true,
+        "subpart_first_id": 65,
+        "subpart_id_separator": 0,
+        "symbol": {
+            "pin_numbers": false,
+            "pin_names": false,
+            "units": false
+        },
+        "transition": {
+            "cubic": "0",
+            "dashed_lines_dma": "0"
+        }
+    },
+    "sheets": [
+        [
+            "echo_trap.kicad_sch",
+            ""
+        ]
+    ],
+    "text_variables": []
+}

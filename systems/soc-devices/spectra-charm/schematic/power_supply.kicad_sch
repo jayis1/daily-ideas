@@ -1,0 +1,18 @@
+(kicad_sch (version 20230614)
+  (generator "eeschema")
+  (uuid "00000000-0000-0000-0000-000000000040")
+  (paper "A3")
+  (title_block
+    (title "Power Supply — TPS63020 + TP4056 + AP2112")
+    (date "2026-06-17")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+  )
+
+  (lib_symbols)
+
+  (text "Power Supply Architecture:\n\nUSB-C Input (5V VBUS) →\n  TP4056 (U7): CC/CV LiPo charger, 1A\n    + DW01A (U8): Overcharge/overdischarge protection\n    + FS8205A: Dual MOSFET for battery switch\n  → VBAT (3.7-4.2V LiPo 1000mAh, 402020 cell)\n\nVBAT → BQ27441 (U6): Fuel gauge\n    I2C to STM32 (PB5/PB6)\n\nVBAT → TPS63020 (U9): Buck-boost 3.3V @ 2A\n    L1: 2.2uH 1.5A (Murata LQH32MN2R2K21L)\n    96% efficiency, 2.5V-5.5V input range\n    → 3.3V main rail (MCU, sensors, OLED)\n\n3.3V → AP2112-3.3 (U10): Low-noise LDO\n    PSRR >70dB, noise <50uV RMS\n    → 3.3V quiet rail (ADC reference, op-amps)\n    → VREF+ for STM32 ADC\n\nLED Power:\n  VBAT → AL8805 (U11): Buck LED driver for white LED\n    L2: 4.7uH (Murata LQH32PN4R7NN0L)\n    DAC1_CH1 controls current via ADJ pin\n  3.3V → MOSFET Q2 → UV LED\n    DAC1_CH2 sets current\n\nPower sequencing:\n  1. VBAT always present\n  2. TPS63020 always enabled (3.3V rail)\n  3. AP2112 always enabled (quiet rail)\n  4. PC6 (SHUTDOWN_N) can disable 3.3V for deep sleep\n  5. LED drivers enabled on-demand by GPIO\n\nDecoupling:\n  TP4056: C40 = 10uF input, C41 = 10uF output\n  TPS63020: C42/C43 = 10uF input/output, C44 = 0.1uF\n  AP2112: C45 = 1uF input, C46 = 2.2uF output (low-ESR)\n  BQ27441: C47 = 0.1uF on VDD"
+    (at 25.4 25.4 0)
+    (uuid "00000000-0000-0000-0000-000000000041")
+  )
+)

@@ -1,6 +1,6 @@
 # Daily Ideas
 
-> A growing arcade, laboratory, and creative workshop for the terminal—105 standalone Python projects under one searchable launcher.
+> A growing arcade, laboratory, and physical-computing workshop: 105 standalone terminal projects plus 57 open SoC device designs, brought together by one launcher and a four-node system architecture.
 
 Daily Ideas is an autonomously grown collection of terminal games, simulations, generators, puzzles, audio experiments, science visualizations, and utilities. Every project begins as a new idea, then passes through enhancement and bug-hunting stages before joining the collection.
 
@@ -17,6 +17,20 @@ The projects remain deliberately independent: open any dated directory, read one
 - **Deterministic metadata** generated from the source tree and committed to Git.
 - **Automated quality gates** for catalog validity, compilation, tests, and bounded smoke checks.
 - **Learning-friendly layout** where every project retains its own source, tests, and documentation.
+- **Four-node physical platform** that composes novel SoC designs into Observe, Reason, Act, and Coordinate systems.
+
+## Beyond standalone ideas
+
+The collection now has a second scale. Every design from the [SoC Device Inventions repository](https://github.com/jayis1/SoC-Device-Inventions) remains independently buildable, while the [Unified Four-Node System](./systems/) connects the full collection into larger working systems:
+
+```text
+Observe ──telemetry──► Reason ──commands──► Act
+   ▲                     ▲                  │
+   └──────feedback───────┘                  │
+                         └── Coordinate ◄───┘
+```
+
+All 57 hardware designs are connected through a [unified registry](./systems/devices.json) and [shared device protocol](./systems/protocol/). The [complete unification guide](./systems/README.md) explains repository ownership, device roles, message contracts, deployment composition, and how every design participates. Use `daily-ideas system list` to see the roles, `daily-ideas system devices` to browse the complete fleet, and `daily-ideas system doctor` to prove that no imported design is missing.
 
 ## Requirements
 
@@ -36,6 +50,8 @@ git clone https://github.com/jayis1/daily-ideas.git
 cd daily-ideas
 python3 -m pip install -e .
 daily-ideas doctor
+daily-ideas system list
+daily-ideas system doctor
 daily-ideas browse
 daily-ideas list
 daily-ideas search dungeon
@@ -64,6 +80,7 @@ PYTHONPATH=src python3 -m daily_ideas.cli list
 | `run` | Launch an app in an isolated subprocess |
 | `random` | Choose an app, optionally launching it with `--run` |
 | `doctor` | Validate the catalog and report terminal/dependency support |
+| `system list/info/doctor` | Inspect and validate the four-node hardware platform |
 
 Set `DAILY_IDEAS_ROOT` when invoking an installed launcher outside the source checkout. App-specific writable data locations are exposed through `DAILY_IDEAS_APP_DATA`.
 
@@ -171,6 +188,9 @@ daily-ideas/
 │   └── tui.py                    # Full-screen Command Center
 ├── tools/                        # Discovery, docs, validation, smoke checks
 ├── tests/                        # Shared integration tests
+├── systems/
+│   ├── platform.json             # Four-node topology and contracts
+│   └── soc-devices/              # Imported open hardware design library
 ├── .github/workflows/            # Collection-wide CI
 └── YYYY-MM-DD-project-name/      # Independent app, README, and tests
 ```

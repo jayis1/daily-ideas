@@ -1,0 +1,25 @@
+Ref,Part,Qty,Unit Price (USD),Extended Price (USD),Role,Supplier P/N
+U1,ESP32-S3-WROOM-1 (16 MB flash 8 MB PSRAM),1,4.20,4.20,Core SoC,1965-ESP32-S3-WROOM-1-N16R8
+U2,ADS7946SRHFR,1,6.10,6.10,Dual 14-bit 1 Msps SAR ADC,ADS7946SRHFR
+U3,Onsemi J-Series 60035 SiPM 6x6mm 35um,2,14.00,28.00,Scintillator readout,MICROC-Series-60035
+U4,Eljen EJ-200 plastic scintillator 50x50x5mm,2,9.50,19.00,Detector tiles,EJ-200-50x50x5
+U5,OPA2356 dual rail-to-rail 50MHz op-amp,1,3.20,3.20,Transimpedance amp,OPA2356PA
+U6,TLV3501 ultra-fast comparator,2,1.10,2.20,Fast discriminators,TLV3501AIDBVFR
+U7,SSD1306 OLED 128x64 I2C,1,2.20,2.20,Dashboard display,MSS1306-128x64
+U8,BMP390 pressure + temperature,1,3.40,3.40,Barometric correction,BMP390
+U9,ICM-42688-P 6-axis IMU,1,3.60,3.60,Attitude tracking,ICM-42688-P
+U10,TPS61158 LED/supply boost controller,1,1.60,1.60,SiPM 30V bias boost,TPS61158PWP
+U11,AMS1117-3.3 LDO,1,0.15,0.15,3.3V logic rail,AMS1117-3.3
+U12,TP4056 LiPo charger,1,0.35,0.35,USB-C LiPo charge,TP4056
+U13,MAX17048 LiPo fuel gauge,1,2.30,2.30,Battery monitoring,MAX17048G+T10
+D1,1N4148 signal diode,2,0.05,0.10,TIA input clamp,1N4148
+D2,1N4148 signal diode,2,0.05,0.10,TIA input clamp,1N4148
+J1,USB-C 2.0 receptacle,1,0.30,0.30,Charge + console,TYPE-C-31-M-12
+µSD,Molex 502570-0893 microSD socket,1,0.90,0.90,Event logging,502570-0893
+BAT,3.7V 1500mAh LiPo,1,4.50,4.50,Battery,LP-503562-1500
+Q1,DMN2041L N-FET,1,0.40,0.40,Bias enable switch,DMN2041L-7
+REF,REF5045 4.5V voltage reference,1,2.80,2.80,ADC reference,REF5045AIDR
+PCB,4-layer FR4 70x100mm,1,7.00,7.00,PCB,--
+CAGE,3D-printed scintillator tile cage,1,0.00,0.00,Mechanical,tile_cage.stl
+MISC,Passives + inductors + LEDs + buttons + optocoupler + PTFE tape + black foil,1,9.00,9.00,--,--
+,,Total,,94.70,,

@@ -1,0 +1,48 @@
+{
+  "board": {
+    "design_rules": {
+      "min_track_width_mm": 0.15,
+      "min_via_drill_mm": 0.3,
+      "min_clearance_mm": 0.15
+    },
+    "layers": 2,
+    "thickness_mm": 1.6,
+    "copper_weight_oz": 1
+  },
+  "meta": {
+    "filename": "glyph_press.kicad_pcb",
+    "version": "20231120",
+    "generator": "glyph_press",
+    "title": "Glyph Press — Portable Braille Embosser",
+    "rev": "1.0",
+    "company": "SoC Device Inventions",
+    "date": "2026-06-29"
+  },
+  "net_classes": [
+    {"name": "Default", "track_width_mm": 0.2, "via_drill_mm": 0.3},
+    {"name": "Power", "track_width_mm": 0.4, "via_drill_mm": 0.4},
+    {"name": "Solenoid", "track_width_mm": 0.5, "via_drill_mm": 0.5}
+  ],
+  "components": [
+    {"ref": "U1", "name": "RP2040", "footprint": "QFN-56-1EP_7x7mm_P0.4mm", "layer": "F.Cu"},
+    {"ref": "U2", "name": "W25Q16JVSN", "footprint": "SOIC-8_3.9x4.9mm_P1.27mm", "layer": "F.Cu"},
+    {"ref": "U3", "name": "HC-05", "footprint": "HC-05_Module", "layer": "F.Cu"},
+    {"ref": "U4", "name": "SH1106 OLED", "footprint": "OLED_1.3in_128x64_I2C", "layer": "F.Cu"},
+    {"ref": "U5", "name": "TMC2209", "footprint": "TMC2209_Module", "layer": "F.Cu"},
+    {"ref": "U6", "name": "TPS63020", "footprint": "SON-14", "layer": "F.Cu"},
+    {"ref": "U7", "name": "TLV70033", "footprint": "SOT-23-5", "layer": "F.Cu"},
+    {"ref": "U8", "name": "MCP73831", "footprint": "DFN-8", "layer": "F.Cu"},
+    {"ref": "U9", "name": "DW01A", "footprint": "SOT-23-6", "layer": "F.Cu"},
+    {"ref": "U10", "name": "FS8205A", "footprint": "SOT-23-6", "layer": "F.Cu"},
+    {"ref": "U11", "name": "DRV8833 x8", "footprint": "TSSOP-16", "layer": "F.Cu"},
+    {"ref": "U12", "name": "TCRT5000", "footprint": "TCRT5000", "layer": "F.Cu"},
+    {"ref": "U13", "name": "74HC595 x2", "footprint": "SOIC-16", "layer": "F.Cu"},
+    {"ref": "MOT1", "name": "NEMA8", "footprint": "NEMA8_20mm", "layer": "F.Cu"},
+    {"ref": "SERVO1", "name": "SG90", "footprint": "SG90_Servo", "layer": "F.Cu"},
+    {"ref": "SOL1-16", "name": "Solenoid x16", "footprint": "ZYE1-0530Z", "layer": "F.Cu"},
+    {"ref": "J1", "name": "USB-C", "footprint": "USB-C_16pin", "layer": "F.Cu"},
+    {"ref": "J2", "name": "JST-PH 2pin", "footprint": "JST_PH_S2B-PH-K", "layer": "F.Cu"},
+    {"ref": "J3", "name": "SWD 6pin", "footprint": "PinHeader_1x6_P1.27mm", "layer": "F.Cu"},
+    {"ref": "J4", "name": "microSD", "footprint": "microSD_PushPush", "layer": "F.Cu"}
+  ]
+}

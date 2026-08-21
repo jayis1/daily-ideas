@@ -1,0 +1,20 @@
+{
+  "board": {
+    "layer_presets": [],
+    "view3d": { "coords": [0, 0, 0], "zoom": 1.0 }
+  },
+  "meta": {
+    "filename": "bolt-compass.kicad_pro",
+    "version": 1
+  },
+  "schematic": {
+    "drawing": {
+      "default_line_thickness": 6.0,
+      "default_text_size": 1.27,
+      "label_size": 1.0,
+      "pin_symbol_size": 25.0
+    },
+    "legacy_lib_dir": "",
+    "legacy_lib_list": []
+  }
+}

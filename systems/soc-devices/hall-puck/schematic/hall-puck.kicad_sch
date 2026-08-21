@@ -1,0 +1,195 @@
+(kicad_sch
+  (version 20231120)
+  (generator "hermes-inventor")
+  (paper "A3")
+  (title_block
+    (title "Hall Puck — Pocket Hall Effect & Van der Pauw Semiconductor Characterization")
+    (date "2026-07-29")
+    (company "SoC Device Inventions")
+    (comment 1 "STM32G474RET6 + ESP32-C3")
+    (comment 2 "ADS122U04 24-bit ADC + INA333 inst amp + 2x ADG714 switch matrix")
+    (comment 3 "28BYJ-48 stepper + N52 magnet for B-field reversal")
+    (comment 4 "ASTM F76 Van der Pauw + Hall method — MIT License"))
+
+  ; ===== POWER SECTION =====
+  (symbol (lib_id "power:VBAT") (at 50 40) (fields_autoplaced)
+    (property "Value" "VBAT3V7") (at 50 34 0))
+  (symbol (lib_id "Device:C") (at 70 45 0)
+    (property "Value" "10uF") (at 70 45 0))
+  (symbol (lib_id "Regulator_Linear:AP2112K-3.3") (at 100 45 0)
+    (property "Reference" "U10") (at 100 45 0)
+    (property "Value" "AP2112K-3.3") (at 100 38 0))
+  (symbol (lib_id "Device:C") (at 130 45 0)
+    (property "Value" "10uF") (at 130 45 0))
+  (symbol (lib_id "power:+3V3") (at 140 40 0))
+  (symbol (lib_id "power:GND") (at 50 100 0))
+
+  ; ===== USB-C CHARGE =====
+  (symbol (lib_id "Connector:USB_C_Plug") (at 40 130 0)
+    (property "Reference" "J3") (at 40 130 0)
+    (property "Value" "USB-C 5V") (at 40 122 0))
+  (symbol (lib_id "Battery_Management:TP4056") (at 90 135 0)
+    (property "Reference" "U11") (at 90 135 0)
+    (property "Value" "TP4056") (at 90 128 0))
+
+  ; ===== STM32G474RET6 (main SoC) =====
+  (symbol (lib_id "MCU_ST_STM32G4:STM32G474RET6") (at 220 130 0)
+    (property "Reference" "U1") (at 220 130 0)
+    (property "Value" "STM32G474RET6") (at 220 60 0))
+
+  ; ===== SPI1: ADS122U04 + 2x ADG714 =====
+  (net (code 1) (name "SPI1_SCK")  (node "U1.PA5"  "U3.SCLK" "U5.SCLK" "U6.SCLK"))
+  (net (code 2) (name "SPI1_MISO") (node "U1.PA6"  "U3.DOUT" "U5.SDO"  "U6.SDO"))
+  (net (code 3) (name "SPI1_MOSI") (node "U1.PA7"  "U3.DIN"  "U5.SDI"  "U6.SDI"))
+
+  ; ===== ADS122U04 24-bit ADC =====
+  (symbol (lib_id "Analog_ADC:ADS122U04") (at 110 260 0)
+    (property "Reference" "U3") (at 110 260 0)
+    (property "Value" "ADS122U04") (at 110 235 0))
+  (net (code 4) (name "ADC_CS")   (node "U3.CS"   "U1.PA8"))
+  (net (code 5) (name "ADC_DRDY") (node "U3.DRDY" "U1.PB1"))
+
+  ; ===== INA333 instrumentation amplifier =====
+  (symbol (lib_id "Amplifier_Operational:INA333") (at 110 320 0)
+    (property "Reference" "U4") (at 110 320 0)
+    (property "Value" "INA333") (at 110 305 0))
+  (net (code 6) (name "INA_VOUT") (node "U4.VOUT" "U3.AIN0"))
+  (net (code 7) (name "INA_VIN_P") (node "U4.VIN+" "VSENSE_P"))
+  (net (code 8) (name "INA_VIN_N") (node "U4.VIN-" "VSENSE_N"))
+  (net (code 9) (name "INA_GAIN_SEL") (node "U4.GAIN_SEL" "U1.PA11"))
+  (net (code 10) (name "INA_GAIN_CLK") (node "U4.GAIN_CLK" "U1.PA12"))
+
+  ; ===== ADG714 #1 — current switch matrix =====
+  (symbol (lib_id "Analog_Switch:ADG714") (at 320 260 0)
+    (property "Reference" "U5") (at 320 260 0)
+    (property "Value" "ADG714") (at 320 235 0))
+  (net (code 11) (name "SW1_CS") (node "U5.CS" "U1.PA15"))
+
+  ; ===== ADG714 #2 — voltage sense switch matrix =====
+  (symbol (lib_id "Analog_Switch:ADG714") (at 450 260 0)
+    (property "Reference" "U6") (at 450 260 0)
+    (property "Value" "ADG714") (at 450 235 0))
+  (net (code 12) (name "SW2_CS") (node "U6.CS" "U1.PB0"))
+
+  ; ===== Switch matrix → sample contacts =====
+  ; SW1 (current): I+ and I- to contacts 1-4
+  (net (code 13) (name "I_FORCE_P") (node "U5.SW0" "U5.SW1" "U5.SW2" "U5.SW3"))
+  (net (code 14) (name "I_FORCE_N") (node "U5.SW4" "U5.SW5" "U5.SW6" "U5.SW7"))
+  ; SW2 (voltage): V+ and V- to contacts 1-4
+  (net (code 15) (name "V_SENSE_P") (node "U6.SW0" "U6.SW1" "U6.SW2" "U6.SW3" "U4.VIN+"))
+  (net (code 16) (name "V_SENSE_N") (node "U6.SW4" "U6.SW5" "U6.SW6" "U6.SW7" "U4.VIN-"))
+
+  ; ===== Sample contact nets =====
+  (net (code 17) (name "CONTACT_1_I_P")  (node "U5.SW0" "J4.1"))
+  (net (code 18) (name "CONTACT_1_I_N")  (node "U5.SW4" "J4.1"))
+  (net (code 19) (name "CONTACT_1_V_P")  (node "U6.SW0" "J4.1"))
+  (net (code 20) (name "CONTACT_1_V_N")  (node "U6.SW4" "J4.1"))
+  (net (code 21) (name "CONTACT_2_I_P")  (node "U5.SW1" "J4.2"))
+  (net (code 22) (name "CONTACT_2_I_N")  (node "U5.SW5" "J4.2"))
+  (net (code 23) (name "CONTACT_2_V_P")  (node "U6.SW1" "J4.2"))
+  (net (code 24) (name "CONTACT_2_V_N")  (node "U6.SW5" "J4.2"))
+  (net (code 25) (name "CONTACT_3_I_P")  (node "U5.SW2" "J4.3"))
+  (net (code 26) (name "CONTACT_3_I_N")  (node "U5.SW6" "J4.3"))
+  (net (code 27) (name "CONTACT_3_V_P")  (node "U6.SW2" "J4.3"))
+  (net (code 28) (name "CONTACT_3_V_N")  (node "U6.SW6" "J4.3"))
+  (net (code 29) (name "CONTACT_4_I_P")  (node "U5.SW3" "J4.4"))
+  (net (code 30) (name "CONTACT_4_I_N")  (node "U5.SW7" "J4.4"))
+  (net (code 31) (name "CONTACT_4_V_P")  (node "U6.SW3" "J4.4"))
+  (net (code 32) (name "CONTACT_4_V_N")  (node "U6.SW7" "J4.4"))
+
+  ; ===== OPA2188 Howland current pump =====
+  (symbol (lib_id "Amplifier_Operational:OPA2188") (at 430 370 0)
+    (property "Reference" "U7") (at 430 370 0)
+    (property "Value" "OPA2188") (at 430 355 0))
+  (net (code 33) (name "DAC1_OUT") (node "U1.PA4" "U7.IN+"))
+  (net (code 34) (name "I_ENABLE") (node "U1.PA3" "Q2.GATE"))
+  (net (code 35) (name "I_RANGE_SEL") (node "U1.PA2" "U7.IN-"))
+  (net (code 36) (name "I_SENSE_MON") (node "U1.PA0" "R_SENSE.1"))
+  (net (code 37) (name "I_OUT_PUMP") (node "U7.OUT" "I_FORCE_P"))
+  (net (code 38) (name "I_RET_PUMP") (node "U7.OUT2" "I_FORCE_N"))
+
+  ; ===== SAMPLE CONNECTOR (4 pogo pins) =====
+  (symbol (lib_id "Connector:Conn_01x04") (at 40 400 0)
+    (property "Reference" "J4") (at 40 400 0)
+    (property "Value" "Sample 4-pin pogo") (at 40 390 0))
+
+  ; ===== 28BYJ-48 STEPPER + ULN2003 =====
+  (symbol (lib_id "Driver_Relay:ULN2003A") (at 320 400 0)
+    (property "Reference" "U8") (at 320 400 0)
+    (property "Value" "ULN2003A") (at 320 380 0))
+  (symbol (lib_id "Motor:Stepper_Motor_bipolar") (at 430 400 0)
+    (property "Reference" "M1") (at 430 400 0)
+    (property "Value" "28BYJ-48") (at 430 390 0))
+  (net (code 39) (name "STEP_IN1") (node "U8.IN1" "U1.PC0" "M1.A+"))
+  (net (code 40) (name "STEP_IN2") (node "U8.IN2" "U1.PC1" "M1.A-"))
+  (net (code 41) (name "STEP_IN3") (node "U8.IN3" "U1.PC2" "M1.B+"))
+  (net (code 42) (name "STEP_IN4") (node "U8.IN4" "U1.PC3" "M1.B-"))
+
+  ; ===== DRV5053 HALL POSITION SENSOR =====
+  (symbol (lib_id "Sensor:DRV5053") (at 560 400 0)
+    (property "Reference" "U9") (at 560 400 0)
+    (property "Value" "DRV5053-A1") (at 560 390 0))
+  (net (code 43) (name "MAGNET_POS") (node "U9.OUT" "U1.PC5"))
+
+  ; ===== DS18B20 TEMPERATURE =====
+  (symbol (lib_id "Sensor:DS18B20") (at 560 320 0)
+    (property "Reference" "TEMP1") (at 560 320 0)
+    (property "Value" "DS18B20") (at 560 310 0))
+  (net (code 44) (name "DS18B20_DQ") (node "TEMP1.DQ" "U1.PC4"))
+
+  ; ===== ESP32-C3 COMPANION =====
+  (symbol (lib_id "RF_Module:ESP32-C3-MINI-1") (at 560 130 0)
+    (property "Reference" "U2") (at 560 130 0)
+    (property "Value" "ESP32-C3-MINI-1") (at 560 90 0))
+  (net (code 45) (name "UART_TX_STM") (node "U1.PA9"  "U2.GPIO1"))
+  (net (code 46) (name "UART_RX_STM") (node "U1.PA10" "U2.GPIO0"))
+
+  ; ===== SPI2: OLED + SD CARD =====
+  (net (code 47) (name "SPI2_SCK")  (node "U1.PB13" "OLED1.SCK" "J2.SCK"))
+  (net (code 48) (name "SPI2_MISO") (node "U1.PB14" "J2.MISO"))
+  (net (code 49) (name "SPI2_MOSI") (node "U1.PB15" "OLED1.SDA" "J2.MOSI"))
+
+  ; ===== SSD1306 OLED (SPI) =====
+  (symbol (lib_id "Display:SSD1306_128x64_SPI") (at 560 200 0)
+    (property "Reference" "OLED1") (at 560 200 0)
+    (property "Value" "SSD1306 1.3in") (at 560 170 0))
+  (net (code 50) (name "OLED_CS") (node "OLED1.CS"  "U1.PB12"))
+  (net (code 51) (name "OLED_DC") (node "OLED1.DC"  "U1.PB10"))
+
+  ; ===== MICROSD (SPI) =====
+  (symbol (lib_id "Connector:MicroSD") (at 560 260 0)
+    (property "Reference" "J2") (at 560 260 0)
+    (property "Value" "MicroSD") (at 560 230 0))
+  (net (code 52) (name "SD_CS") (node "J2.CS" "U1.PB11"))
+
+  ; ===== BUTTONS + BUZZER + LED =====
+  (symbol (lib_id "Switch:SW_Push") (at 560 350 0)
+    (property "Reference" "S1") (at 560 350 0)
+    (property "Value" "MEASURE") (at 560 340 0))
+  (symbol (lib_id "Switch:SW_Push") (at 620 350 0)
+    (property "Reference" "S2") (at 620 350 0)
+    (property "Value" "MODE") (at 620 340 0))
+  (symbol (lib_id "Switch:SW_Push") (at 680 350 0)
+    (property "Reference" "S3") (at 680 350 0)
+    (property "Value" "MENU") (at 680 340 0))
+  (symbol (lib_id "Device:Buzzer") (at 560 440 0)
+    (property "Reference" "BUZ1") (at 560 440 0)
+    (property "Value" "Active 5V") (at 560 430 0))
+  (symbol (lib_id "Device:LED") (at 620 440 0)
+    (property "Reference" "LED1") (at 620 440 0)
+    (property "Value" "White") (at 620 430 0))
+  (net (code 53) (name "BTN_MEASURE") (node "S1.1" "U1.PC8"))
+  (net (code 54) (name "BTN_MODE")    (node "S2.1" "U1.PC9"))
+  (net (code 55) (name "BTN_MENU")    (node "S3.1" "U1.PC10"))
+  (net (code 56) (name "BUZZER")      (node "BUZ1.1" "U1.PC12"))
+  (net (code 57) (name "STATUS_LED")  (node "LED1.A" "U1.PC11"))
+
+  ; ===== OPTIONAL HEATER =====
+  (symbol (lib_id "Device:R") (at 700 400 0)
+    (property "Value" "10R") (at 700 400 0)
+    (property "Reference" "HEAT1"))
+  (net (code 58) (name "HEATER_PWM") (node "U1.PA1" "Q3.GATE"))
+  (net (code 59) (name "HEATER_OUT") (node "Q3.DRAIN" "HEAT1.1"))
+
+  ; ===== USB-C DATA (not used — ESP32-C3 has own USB) =====
+)

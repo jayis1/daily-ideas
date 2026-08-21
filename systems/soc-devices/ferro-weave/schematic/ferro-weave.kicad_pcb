@@ -1,0 +1,21 @@
+(kicad_pcb
+  (version 20231120)
+  (generator "ferro-weave")
+  (general (thickness 1.6) (layers "F.Cu" "In1.Cu" "In2.Cu" "B.Cu" "F.Paste" "B.Paste" "F.SilkS" "B.SilkS" "F.Mask" "B.Mask" "Edge.Cuts"))
+  (paper "A4")
+  (title_block
+    (title "Ferro Weave — Pocket Magnetic Hysteresis Loop Tracer")
+    (date "2026-06-19")
+    (rev "1.0")
+    (company "SoC Device Inventions"))
+  (setup
+    (pad_to_mask_clearance 0)
+    (pcbplotparams (layerselection 0x00010fc_ffffffff)))
+  (net 0 "")
+  (net 1 "GND")
+  (net 2 "+3V3")
+  (net 3 "VBAT")
+  (net 4 "+15V")
+  (net 5 "-15V")
+  (net 6 "Vdrive")
+)

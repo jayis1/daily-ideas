@@ -1,0 +1,108 @@
+(kicad_sch (version 20230121) (generator eeschema)
+
+  (uuid e0a1b2c3-d4e5-f678-9012-3456789abcde)
+
+  (title "Therma Weave — Multi-Zone Heated Textile Controller")
+  (date "2026-06-16")
+  (rev "1.0")
+  (company "SoC Device Inventions")
+
+  (lib_symbols)
+
+  (symbol (lib_id "MCU_Module:ESP32-C3-MINI-1") (at 127 76.2) (unit 1)
+    (uuid 10000001-0000-0000-0000-000000000001)
+    (property "Reference" "U1" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "ESP32-C3-MINI-1" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+  )
+
+  (symbol (lib_id "Sensor:BME280") (at 38.1 33.02) (unit 1)
+    (uuid 10000001-0000-0000-0000-000000000002)
+    (property "Reference" "U2" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "BME280" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+  )
+
+  (symbol (lib_id "Sensor_Motion:LSM6DS3") (at 38.1 58.42) (unit 1)
+    (uuid 10000001-0000-0000-0000-000000000003)
+    (property "Reference" "U3" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "LSM6DS3TR-C" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+  )
+
+  (symbol (lib_id "Analog_Switch:74HC4051") (at 195.58 33.02) (unit 1)
+    (uuid 10000001-0000-0000-0000-000000000004)
+    (property "Reference" "U4" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "74HC4051PW" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+  )
+
+  (symbol (lib_id "Driver_FET:TC4427") (at 213.36 88.9) (unit 1)
+    (uuid 10000001-0000-0000-0000-000000000005)
+    (property "Reference" "U5" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "TC4427COA" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+  )
+
+  (symbol (lib_id "Driver_FET:TC4427") (at 213.36 116.84) (unit 1)
+    (uuid 10000001-0000-0000-0000-000000000006)
+    (property "Reference" "U6" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "TC4427COA" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+  )
+
+  (symbol (lib_id "Transistor_FET:IRF3205") (at 251.46 86.36) (unit 1)
+    (uuid 10000001-0000-0000-0000-000000000007)
+    (property "Reference" "Q1" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "IRF3205" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+  )
+
+  (symbol (lib_id "Transistor_FET:IRF3205") (at 251.46 96.52) (unit 1)
+    (uuid 10000001-0000-0000-0000-000000000008)
+    (property "Reference" "Q2" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "IRF3205" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+  )
+
+  (symbol (lib_id "Transistor_FET:IRF3205") (at 251.46 106.68) (unit 1)
+    (uuid 10000001-0000-0000-0000-000000000009)
+    (property "Reference" "Q3" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "IRF3205" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+  )
+
+  (symbol (lib_id "Transistor_FET:IRF3205") (at 251.46 116.84) (unit 1)
+    (uuid 10000001-0000-0000-0000-00000000000a)
+    (property "Reference" "Q4" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "IRF3205" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+  )
+
+  (symbol (lib_id "Display:SSD1306") (at 127 127) (unit 1)
+    (uuid 10000001-0000-0000-0000-00000000000b)
+    (property "Reference" "U7" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "SSD1306_128x64" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+  )
+
+  (symbol (lib_id "Sensor_Current:INA199") (at 195.58 149.86) (unit 1)
+    (uuid 10000001-0000-0000-0000-00000000000c)
+    (property "Reference" "U8" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "INA199A2DBVR" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+  )
+
+  (symbol (lib_id "Regulator_Switching:LM2596-5.0") (at 63.5 149.86) (unit 1)
+    (uuid 10000001-0000-0000-0000-00000000000d)
+    (property "Reference" "U9" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "LM2596-5.0" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+  )
+
+  (symbol (lib_id "Regulator_Linear:AP2112K-3.3") (at 63.5 170.18) (unit 1)
+    (uuid 10000001-0000-0000-0000-00000000000e)
+    (property "Reference" "U10" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "AP2112-3.3" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+  )
+
+  (symbol (lib_id "74xx:74HC32") (at 251.46 149.86) (unit 1)
+    (uuid 10000001-0000-0000-0000-00000000000f)
+    (property "Reference" "U11" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "74HC32" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+  )
+
+  (symbol (lib_id "Comparator:LM393") (at 251.46 170.18) (unit 1)
+    (uuid 10000001-0000-0000-0000-000000000010)
+    (property "Reference" "U12" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+    (property "Value" "LM393" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+  )
+
+)

@@ -1,0 +1,6 @@
+(kicad_prl
+  (version "1.0")
+  (meta (filename "aero-reed.kicad_pro"))
+  (board (last_layer "F.Cu"))
+  (schematic (last_sheet 0))
+)

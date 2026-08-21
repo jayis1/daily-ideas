@@ -1,0 +1,253 @@
+(kicad_sch
+  (version "20220920")
+  (generator "hermes-inventor")
+
+  ; ====== Cor Sono — Pocket Smart Stethoscope ======
+  ; SoC: ESP32-S3-WROOM-1
+  ; Dual-mic chest piece: piezo contact + ICS-43434 ambient ref
+  ; int8 CNN heart/lung sound classification on-device
+
+  (lib_symbols)
+
+  (symbol (id 0) (at 120 80) (name "ESP32-S3-WROOM-1")
+    (in_bom yes)
+    (uuid "esp32s3-main")
+    (property "Reference" "U1")
+    (property "Value" "ESP32-S3-WROOM-1")
+    (pins
+      (pin (name "3V3")    (type power_in))
+      (pin (name "GND")    (type power_in))
+      (pin (name "EN")     (type input))
+      (pin (name "GPIO1/I2S_WS")  (type bidirectional))
+      (pin (name "GPIO2/I2S_SCK") (type bidirectional))
+      (pin (name "GPIO4/I2S_SD")  (type input))
+      (pin (name "GPIO5/I2S_AMP_WS")  (type output))
+      (pin (name "GPIO6/I2S_AMP_SCK") (type output))
+      (pin (name "GPIO7/I2S_AMP_DATA")(type output))
+      (pin (name "GPIO8/PIEZO_ADC")   (type input))
+      (pin (name "GPIO9/VOLUME_ADC")  (type input))
+      (pin (name "GPIO10/OLED_CS")    (type output))
+      (pin (name "GPIO11/OLED_DC")    (type output))
+      (pin (name "GPIO12/OLED_RST")   (type output))
+      (pin (name "GPIO13/SPI_CLK")    (type output))
+      (pin (name "GPIO14/SPI_MISO")   (type input))
+      (pin (name "GPIO15/SPI_MOSI")   (type output))
+      (pin (name "GPIO16/SD_CS")      (type output))
+      (pin (name "GPIO17/BTN_REC")    (type input))
+      (pin (name "GPIO18/BTN_MODE")   (type input))
+      (pin (name "GPIO19/BTN_MENU")   (type input))
+      (pin (name "GPIO21/I2C_SCL")    (type output))
+      (pin (name "GPIO35/I2C_SDA")    (type bidirectional))
+      (pin (name "GPIO36/STATUS_LED") (type output))
+      (pin (name "GPIO37/CHG_STAT")   (type input))
+      (pin (name "GPIO38/1WIRE")      (type bidirectional))
+      (pin (name "GPIO20/USB_D+")     (type bidirectional))
+    )
+  )
+
+  ; ====== Power ======
+  (symbol (id 1) (at 30 40) (name "18650_BATTERY")
+    (uuid "bat1")
+    (property "Reference" "BAT1")
+    (property "Value" "18650 3.7V 3500mAh")
+    (pins
+      (pin (name "+") (type power_out))
+      (pin (name "-") (type power_in))
+    )
+  )
+
+  (symbol (id 2) (at 55 40) (name "TP4056")
+    (uuid "chg1")
+    (property "Reference" "U2")
+    (property "Value" "TP4056 charger")
+    (pins
+      (pin (name "VIN")  (type power_in))
+      (pin (name "BAT")  (type power_out))
+      (pin (name "CHG")  (type output))
+      (pin (name "GND")  (type power_in))
+    )
+  )
+
+  (symbol (id 3) (at 80 40) (name "ME6211_LDO")
+    (uuid "ldo1")
+    (property "Reference" "U3")
+    (property "Value" "ME6211 3.3V")
+    (pins
+      (pin (name "VIN")  (type power_in))
+      (pin (name "VOUT") (type power_out))
+      (pin (name "GND")  (type power_in))
+    )
+  )
+
+  ; ====== Audio Front End ======
+  (symbol (id 4) (at 30 100) (name "PIEZO_7BB-27")
+    (uuid "piezo1")
+    (property "Reference" "MIC1")
+    (property "Value" "7BB-27-3L0 piezo contact")
+    (pins
+      (pin (name "+") (type output))
+      (pin (name "-") (type output))
+    )
+  )
+
+  (symbol (id 5) (at 60 100) (name "OPA2333")
+    (uuid "opamp1")
+    (property "Reference" "U4")
+    (property "Value" "OPA2333 charge amp")
+    (pins
+      (pin (name "IN+")  (type input))
+      (pin (name "IN-")  (type input))
+      (pin (name "OUT")  (type output))
+      (pin (name "V+")   (type power_in))
+      (pin (name "V-")   (type power_in))
+    )
+  )
+  ; OPA2333 OUT → ESP32 GPIO8 (ADC1_CH7)
+
+  (symbol (id 6) (at 100 100) (name "ICS-43434")
+    (uuid "mic2")
+    (property "Reference" "MIC2")
+    (property "Value" "ICS-43434 I2S MEMS")
+    (pins
+      (pin (name "WS")   (type input))
+      (pin (name "SCK")  (type input))
+      (pin (name "SD")   (type output))
+      (pin (name "L/R")  (type input))
+      (pin (name "VDD")  (type power_in))
+      (pin (name "GND")  (type power_in))
+    )
+  )
+  ; ICS-43434 WS→GPIO1, SCK→GPIO2, SD→GPIO4
+
+  ; ====== Audio Output ======
+  (symbol (id 7) (at 140 100) (name "MAX98357A")
+    (uuid "amp1")
+    (property "Reference" "U5")
+    (property "Value" "MAX98357A I2S amp")
+    (pins
+      (pin (name "DIN")  (type input))
+      (pin (name "BCLK") (type input))
+      (pin (name "LRCLK")(type input))
+      (pin (name "GAIN") (type input))
+      (pin (name "SD")   (type input))
+      (pin (name "OUT+") (type output))
+      (pin (name "OUT-") (type output))
+      (pin (name "VDD")  (type power_in))
+      (pin (name "GND")  (type power_in))
+    )
+  )
+  ; MAX98357A DIN→GPIO7, BCLK→GPIO6, LRCLK→GPIO5 → 8Ω speaker
+
+  (symbol (id 8) (at 170 100) (name "SPEAKER_8R")
+    (uuid "spk1")
+    (property "Reference" "LS1")
+    (property "Value" "8Ω 0.5W mylar")
+    (pins (pin (name "+") (type input)) (pin (name "-") (type input)))
+  )
+
+  ; ====== Display + SD + IMU ======
+  (symbol (id 9) (at 200 60) (name "SSD1306_OLED")
+    (uuid "oled1")
+    (property "Reference" "U6")
+    (property "Value" "SSD1306 1.3in 128x64")
+    (pins
+      (pin (name "VCC") (type power_in))
+      (pin (name "GND") (type power_in))
+      (pin (name "CS")  (type input))
+      (pin (name "DC")  (type input))
+      (pin (name "RST") (type input))
+      (pin (name "CLK") (type input))
+      (pin (name "MOSI")(type input))
+    )
+  )
+  ; OLED CS→GPIO10, DC→GPIO11, RST→GPIO12, CLK→GPIO13, MOSI→GPIO15
+
+  (symbol (id 10) (at 200 100) (name "MicroSD_socket")
+    (uuid "sd1")
+    (property "Reference" "U7")
+    (property "Value" "MicroSD FAT32")
+    (pins
+      (pin (name "VCC") (type power_in))
+      (pin (name "GND") (type power_in))
+      (pin (name "CS")  (type input))
+      (pin (name "CLK") (type input))
+      (pin (name "MISO")(type output))
+      (pin (name "MOSI")(type input))
+    )
+  )
+  ; SD CS→GPIO16, CLK→GPIO13, MISO→GPIO14, MOSI→GPIO15 (shared SPI)
+
+  (symbol (id 11) (at 240 60) (name "ICM-42688-P")
+    (uuid "imu1")
+    (property "Reference" "U8")
+    (property "Value" "ICM-42688-P")
+    (pins
+      (pin (name "VDD") (type power_in))
+      (pin (name "GND") (type power_in))
+      (pin (name "SCL") (type input))
+      (pin (name "SDA") (type bidirectional))
+      (pin (name "INT") (type output))
+    )
+  )
+  ; IMU SCL→GPIO21, SDA→GPIO35
+
+  ; ====== DS18B20 skin temp ======
+  (symbol (id 12) (at 240 100) (name "DS18B20")
+    (uuid "ds1")
+    (property "Reference" "U9")
+    (property "Value" "DS18B20")
+    (pins
+      (pin (name "VDD") (type power_in))
+      (pin (name "DQ")  (type bidirectional))
+      (pin (name "GND") (type power_in))
+    )
+  )
+  ; DS18B20 DQ→GPIO38 (1-Wire)
+
+  ; ====== USB-C + charge status ======
+  (symbol (id 13) (at 30 70) (name "USB-C")
+    (uuid "usb1")
+    (property "Reference" "J1")
+    (property "Value" "USB-C 2.0")
+    (pins (pin (name "VBUS") (type power_out)) (pin (name "D+") (type bidirectional))
+          (pin (name "D-") (type bidirectional)) (pin (name "GND") (type power_in)))
+  )
+
+  ; ====== Net connections ======
+  (net (code 1) (name "V_BAT")  (node "bat1.+") (node "chg1.BAT"))
+  (net (code 2) (name "V_5V")   (node "usb1.VBUS") (node "chg1.VIN"))
+  (net (code 3) (name "V_3V3")  (node "ldo1.VOUT") (node "esp32s3-main.3V3")
+                            (node "mic2.VDD") (node "amp1.VDD")
+                            (node "oled1.VCC") (node "sd1.VCC")
+                            (node "imu1.VDD") (node "ds1.VDD"))
+  (net (code 4) (name "GND")    (node "bat1.-") (node "chg1.GND") (node "ldo1.GND")
+                            (node "mic2.GND") (node "amp1.GND")
+                            (node "oled1.GND") (node "sd1.GND")
+                            (node "imu1.GND") (node "ds1.GND")
+                            (node "usb1.GND") (node "esp32s3-main.GND"))
+
+  (net (code 5)  (name "I2S_WS")    (node "esp32s3-main.GPIO1/I2S_WS")  (node "mic2.WS"))
+  (net (code 6)  (name "I2S_SCK")   (node "esp32s3-main.GPIO2/I2S_SCK") (node "mic2.SCK"))
+  (net (code 7)  (name "I2S_SD")    (node "esp32s3-main.GPIO4/I2S_SD")  (node "mic2.SD"))
+  (net (code 8)  (name "PIEZO_OUT") (node "opamp1.OUT")  (node "esp32s3-main.GPIO8/PIEZO_ADC"))
+  (net (code 9)  (name "PIEZO_IN")  (node "piezo1.+")    (node "opamp1.IN+"))
+
+  (net (code 10) (name "AMP_WS")    (node "esp32s3-main.GPIO5/I2S_AMP_WS")  (node "amp1.LRCLK"))
+  (net (code 11) (name "AMP_SCK")  (node "esp32s3-main.GPIO6/I2S_AMP_SCK") (node "amp1.BCLK"))
+  (net (code 12) (name "AMP_DATA")  (node "esp32s3-main.GPIO7/I2S_AMP_DATA")(node "amp1.DIN"))
+
+  (net (code 13) (name "OLED_CS")   (node "esp32s3-main.GPIO10/OLED_CS")  (node "oled1.CS"))
+  (net (code 14) (name "OLED_DC")   (node "esp32s3-main.GPIO11/OLED_DC")  (node "oled1.DC"))
+  (net (code 15) (name "OLED_RST")  (node "esp32s3-main.GPIO12/OLED_RST") (node "oled1.RST"))
+  (net (code 16) (name "SPI_CLK")   (node "esp32s3-main.GPIO13/SPI_CLK")  (node "oled1.CLK")  (node "sd1.CLK"))
+  (net (code 17) (name "SPI_MISO")  (node "esp32s3-main.GPIO14/SPI_MISO") (node "sd1.MISO"))
+  (net (code 18) (name "SPI_MOSI")  (node "esp32s3-main.GPIO15/SPI_MOSI")(node "oled1.MOSI") (node "sd1.MOSI"))
+  (net (code 19) (name "SD_CS")     (node "esp32s3-main.GPIO16/SD_CS")    (node "sd1.CS"))
+
+  (net (code 20) (name "I2C_SCL")   (node "esp32s3-main.GPIO21/I2C_SCL") (node "imu1.SCL"))
+  (net (code 21) (name "I2C_SDA")   (node "esp32s3-main.GPIO35/I2C_SDA") (node "imu1.SDA"))
+  (net (code 22) (name "ONEWIRE")   (node "esp32s3-main.GPIO38/1WIRE")   (node "ds1.DQ"))
+  (net (code 23) (name "VOL_ADC")   (node "esp32s3-main.GPIO9/VOLUME_ADC"))
+
+  (sheet_instances)
+)

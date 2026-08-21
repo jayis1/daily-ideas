@@ -1,0 +1,28 @@
+Part,Manufacturer,MPN,Qty,Unit Price (USD),Source,Notes
+ESP32-S3-WROOM-1,Espressif,ESP32-S3-WROOM-1-N8R2,1,3.20,Mouser/DigiKey,Dual-core 240MHz, 512KB SRAM, 8MB flash, 2MB PSRAM
+ICS-43434 MEMS Mic,TDK InvenSense,ICS-43434,1,2.90,DigiKey,I2S digital MEMS mic, ambient noise reference
+7BB-27-3L0 Piezo Disc,Murata,7BB-27-3L0,1,0.80,Mouser,27mm piezo contact microphone
+OPA2333AIDR,TI,OPA2333AIDR,1,2.40,DigiKey,Chopper-stabilized op-amp for piezo charge amp
+MAX98357AETE,Maxim/ADI,MAX98357AETE+,1,2.10,DigiKey,I2S class-D audio amp
+8 ohm 0.5W mylar speaker,CUI,CMR-08S-050,1,0.90,DigiKey,8 ohm micro speaker
+TP4056 charge IC,Nanjing Top Power,TP4056,1,0.40,LCSC,18650 Li-ion charger
+DW02 battery protection,Sinicheck,DW02,1,0.25,LCSC,Over-discharge protection
+3.3V LDO (ME6211),Microne,ME6211C33M5G,1,0.30,LCSC,Low-dropout 3.3V regulator
+SSD1306 OLED 1.3",Solomon/Waveshare,SSD1306 128x64 I2C,1,2.80,AliExpress/Amazon,1.3 inch OLED display
+MicroSD socket,Molex,503182-1850,1,1.10,DigiKey,Push-push microSD socket
+ICM-42688-P,TDK InvenSense,ICM-42688-P,1,4.10,DigiKey,6-axis IMU for chest-piece orientation
+TP4056 USB-C connector,Amphenol,10137028-000200LF,1,0.60,DigiKey,USB-C 2.0 receptacle
+3x4 tact switches,TE Connectivity,FSM4JH,3,0.30,DigiKey,Tactile buttons
+10k volume potentiometer,Bourns,PTV09A-2020U-B103,1,1.20,DigiKey,Rotary volume potentiometer
+PCF85263A RTC,NXP,PCF85263ATL/1,1,1.90,DigiKey,Real-time clock (timestamping)
+20mm coin cell holder,Linx,BC5001-1,1,0.70,DigiKey,CR2032 for RTC
+18650 holder,Eaton,WHC-18650-BP-H,1,1.50,DigiKey,Single 18650 battery holder
+Shielded twisted pair cable,Belden,8453 100ft,1,0.80,DigiKey,Shielded mic cable (per 0.5m)
+PCB (2-layer 38x82mm),JLCPCB,JLCPCB 2-layer,1,2.00,JLCPCB,Custom PCB
+Diaphragm cup (3D printed),N/A,N/A,1,0.50,Self-print,PETG diaphragm housing
+Enclosure (3D printed),N/A,N/A,1,1.50,Self-print,PETG body enclosure
+Resistors/caps (assorted),Yageou/Murata,assortment,1,2.00,DigiKey,Passives for circuit
+M2.5 standoffs/screws,McMaster-Carr,assortment,1,1.00,McMaster,Hardware
+DS18B20 skin temp,Maxim/ADI,DS18B20,1,0.60,DigiKey,Skin temperature sensor
+Status LED (white),Lite-On,LTST-C193VKG-5A,1,0.15,DigiKey,White status LED
+Total,,,1,48.75,,Approximate BOM cost

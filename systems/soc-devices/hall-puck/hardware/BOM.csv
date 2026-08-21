@@ -1,0 +1,40 @@
+# Hall Puck — Bill of Materials
+# Prices in USD, indicative (Oct 2025, LCSC/DigiKey/Adafruit/Amazon)
+# Total: ~$44
+
+Part,Qty,Unit,Sub,Ref,Notes
+STM32G474RET6 Cortex-M4 170MHz,1,4.20,4.20,U1,LQFP-64, 512KB flash, 96KB SRAM, CORDIC+FMAC
+ESP32-C3-MINI-1,1,2.20,2.20,U2,BLE 5.0 + WiFi, companion MCU
+ADS122U04 24-bit delta-sigma ADC,1,4.20,4.20,U3,TSSOP-16, SPI, differential, PGA
+INA333 chopper-stabilized inst amp,1,5.10,5.10,U4,MSOP-8, 10uV offset, gain 1-1000x
+ADG714 8-channel SPST switch,2,2.10,4.20,U5/U6,TSSOP-16, SPI, 2.7V-5.5V, switch matrix
+OPA2188 dual zero-drift op-amp,1,1.80,1.80,U7,SOIC-8, 0.03uV offset, Howland pump
+ULN2003 Darlington array,1,0.40,0.40,U8,SOIC-16, stepper driver
+DRV5053 Hall-effect switch,1,1.20,1.20,U9,SOT-23, magnet position feedback
+AP2112K-3.3 LDO,1,0.30,0.30,U10,SOT-23-5, 3.3V/600mA
+TP4056 USB-C charger,1,0.90,0.90,U11,SOIC-8, 18650 charge
+N52 neodymium magnet 10x5mm,1,0.80,0.80,MAG1,NdFeB, 0.48T at surface
+28BYJ-48 stepper motor,1,2.00,2.00,M1,5V unipolar, 2048 steps/rev
+SSD1306 OLED 1.3in 128x64 (SPI),1,2.50,2.50,OLED1,SPI variant
+MicroSD socket (push-push),1,0.70,0.70,J2,SPI
+DS18B20 temperature sensor,1,1.00,1.00,TEMP1,TO-92, 1-wire, +/-0.5C
+P75-B2 pogo pins (spring-loaded),4,0.35,1.40,P1-P4,0.68mm tip, 100g force
+Pogo pin receptacles (PCB mount),4,0.30,1.20,PR1-PR4,for pogo pin contacts
+Precision resistors 0.1% (Howland),5,0.15,0.75,R*,1k/10k/100k for current pump
+Sense resistor 100Ω 0.1%,1,0.30,0.30,R_SENSE,current monitoring
+Gain resistors (INA333),4,0.10,0.40,RG*,1k/10k/100k/1M for gain select
+0.1uF ceramic caps,12,0.02,0.24,C*,decoupling
+10uF tantalum caps,3,0.10,0.30,C*,rail decoupling
+Resistors 0603 (assorted),30,0.01,0.30,R*,pullups/dividers/protection
+18650 holder,1,0.40,0.40,H2,single cell
+18650 3500mAh (Samsung 30Q),1,4.50,4.50,BAT1,optional if not supplied
+USB-C connector 16-pin,1,0.60,0.60,J3,surface mount
+Tactile buttons 6x6mm,3,0.10,0.30,S1-S3,MEASURE/MODE/MENU
+Active buzzer 5V,1,0.50,0.50,BUZ1,PWM
+White LED + 1k resistor,1,0.10,0.10,LED1,status indicator
+Blue LED + 1k resistor,1,0.10,0.10,LED2,BLE/WiFi status (ESP32-C3)
+PCB (4-layer JLCPCJ),1,5.00,5.00,PCB1,72mm circular, 4-layer
+3D-printed enclosure (PETG),1,2.50,2.50,CASE1,puck-shaped 72x28mm
+M3 standoffs + screws,,1.00,1.00,MECH,assembly
+Polyimide film heater 10Ω (optional),1,1.20,1.20,HEAT1,for temperature sweep mode
+,,TOTAL,~44.00,

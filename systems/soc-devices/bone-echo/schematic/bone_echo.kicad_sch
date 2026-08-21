@@ -1,0 +1,161 @@
+(kicad_sch
+  (version 20231120)
+  (generator "bone_echo")
+  (general (thickness 1.6) (drawings 13) (tracks 0))
+  (paper "A4")
+  (title_block
+    (title "Bone Echo — Pocket QUS Bone Densitometer")
+    (date "2026-07-05")
+    (rev "1.0")
+    (company "SoC Device Inventions"))
+
+  ; ---- Sheet labels ----
+  (sheet (at 25 25) (size 160 110)
+    (property "Sheetname" "Bone Echo Top")
+    (property "Sheetfile" "bone_echo.kicad_sch"))
+
+  ; ============ Power Section ============
+  ; USB-C 5V → TP4056 → 18650 → boost → rails
+  (symbol (lib_id "Connector:USB_C_Plug_USB2.0") (at 30 60) (unit 1)
+    (property "Reference" "J1") (property "Value" "USB-C 2.0")
+    (property "Footprint" "Connector_USB:USB_C_Plug_USB2.0"))
+  (symbol (lib_id "Battery:Battery_Cell") (at 95 60) (unit 1)
+    (property "Reference" "BT1") (property "Value" "18650 3.7V 2600mAh")
+    (property "Footprint" "BatteryHolder:Keystone_1042"))
+  (symbol (lib_id "TP4056:TP4056") (at 60 65) (unit 1)
+    (property "Reference" "U2") (property "Value" "TP4056"))
+  (symbol (lib_id "Regulator_Switching:MCP1640B") (at 130 65) (unit 1)
+    (property "Reference" "U3") (property "Value" "MCP1640B")
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-5"))
+  (symbol (lib_id "Regulator_Linear:AP2112-3.3") (at 200 65) (unit 1)
+    (property "Reference" "U5") (property "Value" "AP2112-3.3")
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-5"))
+  (symbol (lib_id "Regulator_Linear:LP5907-3.3") (at 200 90) (unit 1)
+    (property "Reference" "U6") (property "Value" "LP5907-3.3")
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-5"))
+  (symbol (lib_id "Reference_Voltage:REF3030") (at 215 105) (unit 1)
+    (property "Reference" "U7") (property "Value" "REF3030")
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-3"))
+
+  ; ============ HV Section (200V pulser) ============
+  (symbol (lib_id "Regulator_Switching:MAX668") (at 165 65) (unit 1)
+    (property "Reference" "U4") (property "Value" "MAX668EPA")
+    (property "Footprint" "Package_SO:SO-8"))
+  (symbol (lib_id "Analog_Switch:TC6320") (at 30 150) (unit 1)
+    (property "Reference" "U9") (property "Value" "TC6320TG")
+    (property "Footprint" "Package_SO:SO-16"))
+  (symbol (lib_id "Device:R") (at 30 175) (unit 1)
+    (property "Reference" "R1") (property "Value" "100M") (property "Footprint" "Resistor_SMD:R_0805"))
+  (symbol (lib_id "Device:R") (at 50 175) (unit 1)
+    (property "Reference" "R2") (property "Value" "1M") (property "Footprint" "Resistor_SMD:R_0603"))
+  (symbol (lib_id "Device:R") (at 70 175) (unit 1)
+    (property "Reference" "R10") (property "Value" "100k 2W") (property "Footprint" "Resistor_THT:R_Axial"))
+  (symbol (lib_id "Device:C") (at 90 175) (unit 1)
+    (property "Reference" "C10") (property "Value" "1u 250V") (property "Footprint" "Capacitor_SMD:C_1206_250V"))
+  (symbol (lib_id "Device:C") (at 110 175) (unit 1)
+    (property "Reference" "C11") (property "Value" "10n 250V") (property "Footprint" "Capacitor_SMD:C_1206_250V"))
+
+  ; ============ SoC ============
+  (symbol (lib_id "MCU_ST_STM32G4:STM32G474RET6") (at 240 65) (unit 1)
+    (property "Reference" "U1") (property "Value" "STM32G474RET6")
+    (property "Footprint" "Package_QFP:LQFP-64_10x10mm_P0.5mm"))
+
+  ; ============ Analog RX Front End ============
+  (symbol (lib_id "Analog:AD8331") (at 30 110) (unit 1)
+    (property "Reference" "U8") (property "Value" "AD8331")
+    (property "Footprint" "Package_QFP:LQFP-32"))
+  (symbol (lib_id "Filter:Bessel_BP_0.5_2MHz") (at 70 110) (unit 1)
+    (property "Reference" "U10") (property "Value" "4th-order Bessel BPF 0.5–2MHz"))
+  (symbol (lib_id "Device:C") (at 50 110) (unit 1)
+    (property "Reference" "C12") (property "Value" "1n C0G") (property "Footprint" "Capacitor_SMD:C_0603"))
+
+  ; ============ Transducers ============
+  (symbol (lib_id "Sensor_Ultrasound:TX_PZT_1MHz") (at 15 150) (unit 1)
+    (property "Reference" "QTX") (property "Value" "1 MHz PZT 13mm TX"))
+  (symbol (lib_id "Sensor_Ultrasound:RX_PZT_1MHz") (at 15 110) (unit 1)
+    (property "Reference" "QRX") (property "Value" "1 MHz PZT 13mm RX"))
+
+  ; ============ Memory / Logging ============
+  (symbol (lib_id "Connector:MicroSD") (at 280 110) (unit 1)
+    (property "Reference" "J2") (property "Value" "MicroSD SPI"))
+  (symbol (lib_id "Memory_Flash:W25Q128") (at 280 90) (unit 1)
+    (property "Reference" "U14") (property "Value" "W25Q128JVSIQ")
+    (property "Footprint" "Package_SO:SOIC-8"))
+
+  ; ============ Display ============
+  (symbol (lib_id "Display:SH1106_OLED_128x64_I2C") (at 280 65) (unit 1)
+    (property "Reference" "U11") (property "Value" "SH1106 1.3\" OLED")
+    (property "Footprint" "Module:OLED_128x64_I2C"))
+
+  ; ============ Aux ADC ============
+  (symbol (lib_id "Analog_ADC:ADS1115") (at 30 200) (unit 1)
+    (property "Reference" "U12") (property "Value" "ADS1115")
+    (property "Footprint" "Package_SO:MSOP-10"))
+
+  ; ============ BLE Bridge ============
+  (symbol (lib_id "RF_Module:ESP32-C3-MINI-1") (at 280 150) (unit 1)
+    (property "Reference" "U13") (property "Value" "ESP32-C3-MINI-1")
+    (property "Footprint" "RF_Module:ESP32-C3-MINI-1"))
+
+  ; ============ Sensors ============
+  (symbol (lib_id "Sensor_Temperature:DS18B20") (at 60 200) (unit 1)
+    (property "Reference" "U15") (property "Value" "DS18B20")
+    (property "Footprint" "Package_TO_SOT_THT:TO-92"))
+  (symbol (lib_id "Sensor:BME280") (at 90 200) (unit 1)
+    (property "Reference" "U16") (property "Value" "BME280")
+    (property "Footprint" "Package_LGA:BME280"))
+
+  ; ============ Connectors / Front Panel ============
+  (symbol (lib_id "Connector:Conn_Coaxial") (at 15 90) (unit 1)
+    (property "Reference" "J3") (property "Value" "RX SMA (optional ext xdr)"))
+  (symbol (lib_id "Connector:Conn_Coaxial") (at 15 130) (unit 1)
+    (property "Reference" "J4") (property "Value" "TX SMA (optional ext xdr)"))
+  (symbol (lib_id "Mechanical:Phantom_25mm_Acrylic") (at 95 150) (unit 1)
+    (property "Reference" "PH1") (property "Value" "25mm Acrylic Phantom"))
+
+  ; ============ UI ============
+  (symbol (lib_id "Device:Rotary_Encoder") (at 280 180) (unit 1)
+    (property "Reference" "SW1") (property "Value" "EC11 Encoder"))
+  (symbol (lib_id "Switch:SW_Push") (at 305 180) (unit 1)
+    (property "Reference" "SW2") (property "Value" "Mode"))
+  (symbol (lib_id "Switch:SW_Push") (at 305 195) (unit 1)
+    (property "Reference" "SW3") (property "Value" "Scan"))
+  (symbol (lib_id "Switch:SW_Push") (at 305 210) (unit 1)
+    (property "Reference" "SW4") (property "Value" "ID"))
+  (symbol (lib_id "Switch:SW_Push") (at 320 210) (unit 1)
+    (property "Reference" "SW5") (property "Value" "Age"))
+  (symbol (lib_id "Switch:SW_Push") (at 335 210) (unit 1)
+    (property "Reference" "SW6") (property "Value" "Sex"))
+  (symbol (lib_id "Switch:SW_Push") (at 350 210) (unit 1)
+    (property "Reference" "SW7") (property "Value" "Eth"))
+  (symbol (lib_id "LED:WS2812B") (at 305 225) (unit 1)
+    (property "Reference" "D1") (property "Value" "WS2812B"))
+
+  ; ============ Caliper potentiometer ============
+  (symbol (lib_id "Device:Potentiometer") (at 60 240) (unit 1)
+    (property "Reference" "RV1") (property "Value" "10k lin")
+    (property "Footprint" "Potentiometer_THT:RV-9mm"))
+
+  ; ============ Decoupling ============
+  (symbol (lib_id "Device:C") (at 60 90) (unit 1)
+    (property "Reference" "C1") (property "Value" "100n") (property "Footprint" "Capacitor_SMD:C_0603"))
+  (symbol (lib_id "Device:C") (at 80 90) (unit 1)
+    (property "Reference" "C2") (property "Value" "10µ") (property "Footprint" "Capacitor_SMD:C_0805"))
+  (symbol (lib_id "Device:C") (at 130 90) (unit 1)
+    (property "Reference" "C3") (property "Value" "4.7µ") (property "Footprint" "Capacitor_SMD:C_0805"))
+  (symbol (lib_id "Device:C") (at 200 90) (unit 1)
+    (property "Reference" "C4") (property "Value" "1µ") (property "Footprint" "Capacitor_SMD:C_0603"))
+  (symbol (lib_id "Device:C") (at 215 105) (unit 1)
+    (property "Reference" "C5") (property "Value" "100n") (property "Footprint" "Capacitor_SMD:C_0603"))
+  (symbol (lib_id "Device:C") (at 240 90) (unit 1)
+    (property "Reference" "C6") (property "Value" "100n") (property "Footprint" "Capacitor_SMD:C_0603"))
+  (symbol (lib_id "Device:C") (at 260 90) (unit 1)
+    (property "Reference" "C9") (property "Value" "1u X7R") (property "Footprint" "Capacitor_SMD:C_0603"))
+
+  ; ============ Ferrites ============
+  (symbol (lib_id "Device:Ferrite_Bead") (at 175 90) (unit 1)
+    (property "Reference" "L1") (property "Value" "BLM18PG121")
+    (property "Footprint" "Inductor_SMD:L_0603"))
+  (symbol (lib_id "Device:Ferrite_Bead") (at 175 105) (unit 1)
+    (property "Reference" "L2") (property "Value" "BLM18PG121")
+    (property "Footprint" "Inductor_SMD:L_0603")))

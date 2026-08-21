@@ -1,0 +1,6 @@
+# Levia Forge — STL placeholder for enclosure base
+# Holds PCB, battery holder, and array mounts.
+# See the assembly guide for dimensions.
+
+This is a placeholder file. Generate the actual STL using OpenSCAD or
+similar CAD software. See the assembly guide for dimensions.

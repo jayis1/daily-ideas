@@ -1,0 +1,255 @@
+(kicad_sch
+  (version 20240613)
+  (generator "fluor-cast-schematic")
+  (uuid "00000000-0000-0000-0000-fluorcast001")
+  (paper "A3")
+  (title_block
+    (title "Fluor Cast — Pocket Spectrofluorometer")
+    (date "2026-08-14")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+  )
+
+  ;; ═══════════════════════════════════════════════════════════
+  ;; COMPONENT PLACEMENT (text labels for net connections)
+  ;; ═══════════════════════════════════════════════════════════
+
+  (symbol
+    (at 50 40)
+    (lib_id "MCU_ST_STM32G4:STM32G474RET6")
+    (property "Reference" "U1")
+    (property "Value" "STM32G474RET6")
+    (property "Footprint" "Package_QFP:LQFP-64_10x10mm_P0.5mm")
+    (uuid "stm32-001")
+  )
+
+  (symbol
+    (at 150 40)
+    (lib_id "RF_Module:ESP32-C3-MINI-1")
+    (property "Reference" "U2")
+    (property "Value" "ESP32-C3-MINI-1")
+    (property "Footprint" "RF_Module:ESP32-C3-MINI-1")
+    (uuid "esp32-001")
+  )
+
+  (symbol
+    (at 50 120)
+    (lib_id "Sensor_Optical:TSL1402R")
+    (property "Reference" "U3")
+    (property "Value" "TSL1402R")
+    (property "Footprint" "Package_DIP:DIP-8_W7.62mm")
+    (uuid "ccd-001")
+  )
+
+  (symbol
+    (at 120 120)
+    (lib_id "Sensor_Optical:OPT101")
+    (property "Reference" "U4")
+    (property "Value" "OPT101")
+    (property "Footprint" "Package_DIP:DIP-8_W7.62mm")
+    (uuid "refpd-001")
+  )
+
+  (symbol
+    (at 50 180)
+    (lib_id "Motor:Stepper_Motor_bipolar")
+    (property "Reference" "M1")
+    (property "Value" "28BYJ-48")
+    (property "Footprint" "Motor:Motor_28BYJ-48")
+    (uuid "stepper-001")
+  )
+
+  (symbol
+    (at 100 180)
+    (lib_id "Driver_Motor:ULN2003A")
+    (property "Reference" "U5")
+    (property "Value" "ULN2003A")
+    (property "Footprint" "Package_DIP:DIP-16_W7.62mm")
+    (uuid "driver-001")
+  )
+
+  (symbol
+    (at 150 180)
+    (lib_id "Analog_DAC:MCP4131")
+    (property "Reference" "U6")
+    (property "Value" "MCP4131-103")
+    (property "Footprint" "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm")
+    (uuid "digipot-001")
+  )
+
+  (symbol
+    (at 200 180)
+    (lib_id "Amplifier_Operational:OPA548T")
+    (property "Reference" "U7")
+    (property "Value" "OPA548T")
+    (property "Footprint" "Package_TO_SOT_THT:TO-220-7_P2.54x3.7mm_StaggerOdd_Lead3.8mm_Vertical")
+    (uuid "ledamp-001")
+  )
+
+  (symbol
+    (at 50 240)
+    (lib_id "74xx:74HC138")
+    (property "Reference" "U8")
+    (property "Value" "74HC138")
+    (property "Footprint" "Package_SO:SOIC-16_3.9x9.9mm_P1.27mm")
+    (uuid "decoder-001")
+  )
+
+  (symbol
+    (at 120 240)
+    (lib_id "power:TPS63020")
+    (property "Reference" "U9")
+    (property "Value" "TPS63020")
+    (property "Footprint" "Package_DFN_QFN:QFN-14-1EP_4x4mm_P0.5mm")
+    (uuid "buckboost-001")
+  )
+
+  (symbol
+    (at 180 240)
+    (lib_id "Battery_Management:MCP73831T")
+    (property "Reference" "U10")
+    (property "Value" "MCP73831T-2ACI")
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-5")
+    (uuid "charger-001")
+  )
+
+  (symbol
+    (at 50 300)
+    (lib_id "Sensor_Temperature:DS18B20")
+    (property "Reference" "U11")
+    (property "Value" "DS18B20")
+    (property "Footprint" "Package_TO_SOT_THT:TO-92_Inline")
+    (uuid "temp-001")
+  )
+
+  (symbol
+    (at 100 300)
+    (lib_id "Sensor:Magnetic_Hall_AH49E")
+    (property "Reference" "U12")
+    (property "Value" "AH49E")
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23")
+    (uuid "hall-001")
+  )
+
+  (symbol
+    (at 150 300)
+    (lib_id "Display:SH1106_OLED_128x64")
+    (property "Reference" "DS1")
+    (property "Value" "SH1106 1.3in OLED")
+    (property "Footprint" "Display:OLED_128x64_I2C")
+    (uuid "oled-001")
+  )
+
+  (symbol
+    (at 200 300)
+    (lib_id "Memory_Flash:W25Q128JVSIQ")
+    (property "Reference" "U13")
+    (property "Value" "W25Q128JVSIQ")
+    (property "Footprint" "Package_SO:SOIC-8_5.3x6.2mm_P1.27mm")
+    (uuid "flash-001")
+  )
+
+  (symbol
+    (at 50 360)
+    (lib_id "Connector:USB_C_16P")
+    (property "Reference" "J1")
+    (property "Value" "USB-C 16P")
+    (property "Footprint" "Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-16")
+    (uuid "usbc-001")
+  )
+
+  (symbol
+    (at 120 360)
+    (lib_id "Connector:MicroSD_Card")
+    (property "Reference" "J2")
+    (property "Value" "MicroSD")
+    (property "Footprint" "Connector_Card:microSD_HC_Hirose_DM3D-SF")
+    (uuid "sdcard-001")
+  )
+
+  ;; ═══════════════════════════════════════════════════════════
+  ;; NET CONNECTIONS (key signal paths)
+  ;; ═══════════════════════════════════════════════════════════
+
+  ;; STM32 ↔ ESP32-C3 UART bridge
+  (net "(PB8 → ESP32 GPIO1 / USART3_RX → UART_TX)")
+  (net "(PB9 → ESP32 GPIO2 / USART3_TX → UART_RX)")
+
+  ;; STM32 → CCD (TSL1402R)
+  (net "(PA5 → CCD SI / GPIO_Output)")
+  (net "(PA6 → CCD CLK / TIM3_CH1_PWM)")
+  (net "(PA3 ← CCD AO / ADC2_IN4)")
+  (net "(PA4 → CCD reference / DAC1_OUT)")
+
+  ;; STM32 → OPT101 reference photodiode
+  (net "(PA1 ← OPT101 Vout / ADC1_IN2)")
+
+  ;; STM32 → LED driver (OPA548)
+  (net "(PA0 → OPA548 Vin+ / TIM2_CH1_PWM)")
+  (net "(PA7 → OPA548 Enable / GPIO_Output)")
+
+  ;; STM32 → 74HC138 LED select
+  (net "(PC0 → 74HC138 A0 / GPIO_Output)")
+  (net "(PC1 → 74HC138 A1 / GPIO_Output)")
+  (net "(PC2 → 74HC138 A2 / GPIO_Output)")
+
+  ;; STM32 → ULN2003 → 28BYJ-48 stepper
+  (net "(PA8 → ULN2003 IN1 → M1 Coil A+)")
+  (net "(PA9 → ULN2003 IN2 → M1 Coil B+)")
+  (net "(PA10 → ULN2003 IN3 → M1 Coil A-)")
+  (net "(PA11 → ULN2003 IN4 → M1 Coil B-)")
+  (net "(PA12 ← AH49E Hall sensor / GPIO_Input)")
+
+  ;; STM32 → SPI (SD card + OLED + Flash)
+  (net "(PB3 → SPI1_SCK → SD CLK + W25Q CLK)")
+  (net "(PB4 ← SPI1_MISO ← SD DAT0 + W25Q DO)")
+  (net "(PB5 → SPI1_MOSI → SD CMD + W25Q DI)")
+  (net "(PB10 → SD CS / GPIO_Output)")
+  (net "(PB11 → OLED CS / GPIO_Output)")
+  (net "(PB12 → OLED DC / GPIO_Output)")
+
+  ;; STM32 → I2C (OLED)
+  (net "(PB6 → I2C1_SCL → OLED SCL)")
+  (net "(PB7 → I2C1_SDA → OLED SDA)")
+
+  ;; STM32 → DS18B20 (1-Wire)
+  (net "(PB13 → DS18B20 DQ / GPIO_Output_OD)")
+
+  ;; STM32 → Battery monitoring
+  (net "(PC4 ← Battery V / ADC1_IN13)")
+  (net "(PC5 ← Battery I / ADC1_IN14)")
+  (net "(PC3 ← Charge Status / GPIO_Input)")
+
+  ;; STM32 → Status LEDs
+  (net "(PC8 → Status LED Red)")
+  (net "(PC9 → Status LED Green)")
+  (net "(PC10 → Status LED Blue)")
+
+  ;; STM32 → Safety
+  (net "(PB14 ← Lid Interlock / GPIO_Input)")
+  (net "(PB15 → HV Safety Enable / GPIO_Output)")
+
+  ;; STM32 → Motor Enable
+  (net "(PC11 → Motor Enable / GPIO_Output)")
+
+  ;; STM32 → User Button
+  (net "(PC15 ← Button / GPIO_Input_EXTI)")
+
+  ;; Power nets
+  (net "+3V3 → STM32 VDD, ESP32 3V3, OLED VCC, SD VCC, DS18B20 VDD, CCD VDD")
+  (net "+5V → USB-C, Stepper, LED Driver, OPA548 V+")
+  (net "+VBAT → LiPo + → TPS63020 VIN")
+  (net "GND → Common ground")
+
+  ;; LED Wheel: 8 LEDs
+  (net "LED0: 255nm → 74HC138 Y0")
+  (net "LED1: 280nm → 74HC138 Y1")
+  (net "LED2: 340nm → 74HC138 Y2")
+  (net "LED3: 365nm → 74HC138 Y3")
+  (net "LED4: 405nm → 74HC138 Y4")
+  (net "LED5: 440nm → 74HC138 Y5")
+  (net "LED6: 470nm → 74HC138 Y6")
+  (net "LED7: 525nm → 74HC138 Y7")
+  (net "LED_PWM: PA0 → OPA548 Vin+ → LED cathode (current sink)")
+  (net "REF_PD: OPT101 Vout → PA1 (ADC1_IN2)")
+)

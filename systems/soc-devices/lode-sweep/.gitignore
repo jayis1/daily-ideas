@@ -1,0 +1,10 @@
+# Generated simulation outputs
+*.png
+__pycache__/
+*.pyc
+
+# Build artifacts
+build/
+*.elf
+*.bin
+*.map

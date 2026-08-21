@@ -1,0 +1,42 @@
+Component,Value,Package,Quantity,Reference,Manufacturer,MPN,Unit_Price_USD,Notes
+STM32G491RET6,MCU Cortex-M4F 170MHz 512KB,LQFP-64,1,U1,STMicroelectronics,STM32G491RET6,8.50,Main processor with dual ADC + DAC
+AMC1301DWVR,Isolation Amplifier 5kV,SOIC-8,3,U2-U4,Texas Instruments,AMC1301DWVR,2.80,Reinforced isolation for voltage inputs
+OPA2376AIDGKT,Dual Precision Op-Amp,VSSOP-8,3,U5-U7,Texas Instruments,OPA2376AIDGKT,1.50,CT signal conditioning
+nRF52810-QCAA,BLE 5.0 SoC,QFN-32,1,U9,Nordic,nRF52810-QCAA,2.20,BLE UART bridge
+SH1106 1.3 OLED,128x64 OLED Display Module,Module,1,U8,Various,SH1106-1.3-OLED,3.50,SPI interface
+REF3030AIDBZR,Voltage Reference 3.0V,SOT-23,1,U7,Texas Instruments,REF3030AIDBZR,0.80,Precision ADC reference
+MCP73831T-2ACI_OT,Li-Po Charger 500mA,SOT-23-5,1,U10,Microchip,MCP73831T-2ACI_OT,0.60,USB-C battery charging
+TPS63020DSHR,Buck-Boost 2A,VSON-10,1,U11,Texas Instruments,TPS63020DSHR,2.10,Li-Po to 3.3V regulator
+SMBJ1000A,TVS Diode 1kV Bidirectional,SMB,3,D1-D3,Littelfuse,SMBJ1000A,0.40,Mains input protection
+TPD4E05U06,ESD Protection 4-Channel,USON-4,2,TVS1-TVS2,Texas Instruments,TPD4E05U06,0.50,ADC input ESD protection
+1N4148,Switching Diode,SOD-323,3,D10-D12,Various,1N4148W,0.02,Flyback for relay coils
+470k Resistor 1W 1PCT,Axial DIN0414,3,R1-R3,Various,470k-1W-1PCT,0.15,Voltage divider upper leg
+1k Resistor 0.25W 0.1PCT,0603,3,R4-R6,Various,1k-025W-01PCT,0.05,Voltage divider lower leg
+100 Resistor 0.1PCT,1206,3,R10-R12,Various,100-01PCT-1206,0.10,CT burden low range
+1 Resistor 0.1PCT,1206,3,R13-R15,Various,1-01PCT-1206,0.10,CT burden high range
+330 Resistor,0603,4,R20-R23,Various,330-0603,0.01,LED current limiting
+10nF Cap 50V X7R,0603,3,C1-C3,Various,10nF-50V-X7R-0603,0.02,Input filter
+100nF Cap,0402,10,C20-C29,Various,100nF-0402,0.01,VDD decoupling
+4.7uF Cap 10V X5R,0603,3,C30-C32,Various,4u7-10V-X5R-0603,0.03,VDD bulk
+1uF Cap 10V X5R,0603,2,C33-C34,Various,1uF-10V-X5R-0603,0.02,VDDA decoupling
+22uF Cap 10V X5R,0805,3,C35-C37,Various,22uF-10V-X5R-0805,0.08,Output filtering
+10uF Cap 10V X5R,0805,2,C10-C11,Various,10uF-10V-X5R-0805,0.05,Buck-boost output
+2.2uH Inductor 3A,0805,1,L1,Various,2u2-3A-0805,0.20,TPS63020 inductor
+OUAZ-SL-112D,SPDT Relay 5V Coil,DIP,3,K1-K3,Omron,OUAZ-SL-112D,1.20,Range selection
+MMBT3904,NPN Transistor,SOT-23,3,Q1-Q3,Various,MMBT3904,0.03,Relay driver
+Green LED 0603,Green,0603,1,D5,Various,Green-0603,0.02,L1 status
+Yellow LED 0603,Yellow,0603,1,D6,Various,Yellow-0603,0.02,L2 status
+Red LED 0603,Red,0603,1,D7,Various,Red-0603,0.02,L3 status
+Blue LED 0603,Blue,0603,1,D8,Various,Blue-0603,0.02,BLE status
+USB-C 16P Connector,USB-C Female,SMD,1,J1,GCT,USB4105,0.40,Charging input
+5-pin Voltage Input Terminal,5mm Screw Terminal,TH,1,J5,Various,5P-5mm-Terminal,0.50,L1 L2 L3 N PE
+6-pin CT Input Header,2.54mm Pin Header,TH,1,J4,Various,2x3-Pin-Header,0.20,CT clamp inputs
+4-pin SWD Debug Header,2.54mm Pin Header,TH,1,J6,Various,1x4-Pin-Header,0.15,SWD programming
+MicroSD Card Slot,Push-Push SMD,MicroSD,1,J3,Hirose,DM3AT-SF-PEJ2,0.80,Data logging
+Push Button 6x6mm,Tactile Switch,6x6mm SMD,3,SW1-SW3,Various,Tact-6x6-SMD,0.05,Mode Select Hold
+10k NTC Thermistor,NTC 10k 3950B,0603,1,NTC1,Various,NTC-10k-3950-0603,0.10,PCB temperature
+500mA Fuse 5x20mm,Glass Fuse,Fuse Holder,3,F1-F3,Various,5x20-500mA,0.30,Mains input fuses
+Li-Po Battery 3.7V 2000mAh,18650 Flat Cell,18650,1,BT1,Various,3.7V-2000mAh,5.00,Main battery
+2-pin Battery Connector,JST-PH 2-pin,SMD,1,J7,Various,JST-PH-2,0.15,Battery connector
+PCB 4-layer 1.6mm ENIG,Custom PCB,160x80mm,1,PCB1,Various,Custom-4L-ENIG,8.00,Main PCB
+ABS Enclosure 160x80x30mm,IP54 Enclosure,160x80x30mm,1,ENC1,Various,ABS-160x80x30,3.00,Double-insulated case

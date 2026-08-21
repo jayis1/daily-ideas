@@ -1,0 +1,33 @@
+(kicad_pcb (version 20240101)
+  (generator "pcbnew")
+  (general
+    (thickness 1.6)
+  )
+  (paper "A3")
+  (title_block
+    (title "Soil Whisper — Soil Intelligence Probe")
+    (date "2026-06-16")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+  )
+  
+  ;; PCB: 50mm × 200mm (fits inside Ø50mm stake tube)
+  ;; 4-layer: Top, GND, PWR (3.3V + VSUPERCAP), Bottom
+  
+  (setup
+    (stackup
+      (layer "F.Cu" "Top Signal" type="copper" thickness="0.035")
+      (layer "Dielectric 1" type="core" thickness="0.2" material="FR4")
+      (layer "In1.Cu" "GND" type="copper" thickness="0.035")
+      (layer "Dielectric 2" type="core" thickness="1.0" material="FR4")
+      (layer "In2.Cu" "PWR" type="copper" thickness="0.035")
+      (layer "Dielectric 3" type="core" thickness="0.2" material="FR4")
+      (layer "B.Cu" "Bottom Signal" type="copper" thickness="0.035")
+    )
+    (pad_size "0.6x0.6" "SMD")
+    (grid_origin 0 0)
+  )
+  
+  ;; Sub-GHz RF section requires controlled impedance traces
+  ;; 50Ω microstrip on 0.2mm dielectric over In1.Cu (GND plane)
+)

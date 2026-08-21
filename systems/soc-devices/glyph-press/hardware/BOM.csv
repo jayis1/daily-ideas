@@ -1,0 +1,37 @@
+Ref,Qty,Part,Manufacturer,MPN,Package,Unit_USD,Source,Notes
+U1,1,RP2040,Raspberry Pi,RP2040,QFN-56,1.00,Mouser,Dual Cortex-M0+ 133MHz 264KB SRAM
+U2,1,W25Q16JVSN,Winbond,W25Q16JVSN,SOIC-8,0.30,Digi-Key,2MB external QSPI flash for Braille tables
+U3,1,HC-05 Bluetooth module,Generic,HC-05,module,2.50,AliExpress,Classic Bluetooth SPP bridge UART
+U4,1,SH1106 OLED 1.3,Generic,SH1106-1.3-128x64,PCB,3.50,AliExpress,128x64 monochrome OLED I2C display
+U5,1,TMC2209 v1.2,Trinamic,TMC2209-Q1,module,3.50,AliExpress,Stepper driver 2A stealthChop 256 microstep
+U6,1,TPS63020DSJR,Texas Instruments,TPS63020,SON-14,3.90,Digi-Key,3.3V buck-boost 2A
+U7,1,TLV70033DDCR,Texas Instruments,TLV70033,SOT-23-5,0.50,Digi-Key,3.3V LDO for sensor low-noise rail
+U8,1,MCP73831T-2ACI/MC,Microchip,MCP73831,DFN-8,0.60,Digi-Key,USB-C LiPo charger 4.2V 500mA
+U9,1,DW01A,Sileic,DW01A,SOT-23-6,0.10,Digi-Key,Battery protection IC
+U10,1,FS8205A,Fairchild,FS8205A,SOT-23-6,0.20,Digi-Key,Dual MOSFET for DW01A
+U11,8,DRV8833,TI,DRV8833PW,TSSOP-16,1.80,Digi-Key,Dual H-bridge for solenoid pairs (8 chips for 16 solenoids)
+U12,1,TCRT5000,Vishay,TCRT5000,module,0.50,AliExpress,Reflective IR sensor for paper-present detection
+U13,1,74HC595,TI,SN74HC595D,SOIC-16,0.30,Digi-Key,8-bit shift register for solenoid control (x2)
+SOL1,16,5V push-pull solenoid,Generic,ZYE1-0530Z,5V mini,0.60,AliExpress,5mm stroke 3N force micro solenoid for embossing
+MOT1,1,NEMA8 stepper 20mm,Generic,NEMA8-20mm,NEMA8,8.00,AliExpress,200 step/rev 0.28A bipolar stepper for paper feed
+SERVO1,1,SG90 servo,TowerPro,SG90,mini,3.00,AliExpress,Paper-tray release / cutter
+LED1,1,WS2812B,Worldsemi,WS2812B,5050,0.20,AliExpress,RGB LED status indicator
+LED2,1,Green LED 0603,Generic,LTST-C193KGKT,0603,0.10,Digi-Key,Status LED
+J1,1,USB-C 2.0 receptacle,Amphenol,12401610E4#2A,USB-C,0.50,Digi-Key,USB-C 16-pin charging + USB-CDC
+J2,1,JST-PH 2-pin,JST,S2B-PH-K,2mm,0.20,Digi-Key,Battery connector
+J3,1,6-pin SWD header,Generic,SWD-6,1.27mm,0.15,Digi-Key,SWD programming header
+J4,1,microSD socket,Amphenol,101-00559-82,push-push,0.80,Digi-Key,microSD card slot SPI mode
+SW1,1,Tactile 6x6mm,Generic,TS-6x6,6x6mm,0.15,AliExpress,START button
+SW2,1,Tactile 6x6mm,Generic,TS-6x6,6x6mm,0.15,AliExpress,MODE button
+SW3,1,Tactile 6x6mm,Generic,TS-6x6,6x6mm,0.15,AliExpress,FEED button
+ENC1,1,Rotary encoder EC11,ALPS,EC11E-S,panel,1.20,AliExpress,Embossing force / spacing adjust
+BUZ1,1,Piezo buzzer 5V,CUI,PS1240P02BT,12mm,0.40,Digi-Key,Audible feedback
+L1,1,2.2uH inductor 3A,Coilcraft,XAL4040-222MEB,4x4mm,0.80,Digi-Key,Inductor for TPS63020
+Y1,1,12MHz crystal,Abracon,ABM3-12.000MHZ,3.2x2.5mm,0.30,Digi-Key,RP2040 system crystal
+MECH1,1,Embosser head frame,custom,custom,3D printed,4.00,3D printed,Mount for 16 solenoids + pin guide
+MECH2,1,Paper feed assembly,custom,custom,3D printed,3.00,3D printed,Roller mount idler paper slot
+MECH3,1,Rubber anvil strip,custom,custom,silicone,1.00,hardware,Soft anvil for dot formation
+BAT1,1,LiPo 2000mAh 603048,Generic,LP603048,60x34x8mm,5.50,BatteryJunction,3.7V 2000mAh
+MISC,1,Passives kit,Various,,mixed,5.00,Digi-Key,R/C/L 0402/0603 pull-ups decoupling
+MISC2,1,Solenoid driver PCB,custom,custom,PCB,4.00,JLCPCB,Custom PCB for 8x DRV8833 + solenoid headers
+SD1,1,microSD 2GB,SanDisk,SD-2GB,card,2.00,Amazon,FAT32 text storage

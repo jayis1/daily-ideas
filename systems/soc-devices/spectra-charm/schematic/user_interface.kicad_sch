@@ -1,0 +1,18 @@
+(kicad_sch (version 20230614)
+  (generator "eeschema")
+  (uuid "00000000-0000-0000-0000-000000000050")
+  (paper "A3")
+  (title_block
+    (title "User Interface — OLED + Buttons + RGB LED")
+    (date "2026-06-17")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+  )
+
+  (lib_symbols)
+
+  (text "User Interface:\n\nSSD1306 OLED (U12):\n  - 0.96\" 128x64 pixel monochrome\n  - I2C address 0x3C\n  - ESP32-C3 GPIO2(SDA), GPIO3(SCL)\n  - RST on GPIO4 (active-low reset)\n  - 4.7k pullups on SDA/SCL\n\nScan Button (SW1):\n  - STM32 PC7 (BUTTON1)\n  - Pullup to 3.3V, active low\n  - 100nF debounce cap in parallel\n\nMode Button (SW2):\n  - STM32 PC8 (BUTTON2)\n  - Same as SW1\n\nWS2812B RGB LED (D3):\n  - ESP32-C3 GPIO8\n  - Series 470R resistor on data line\n  - 100nF decoupling cap\n  - 3.3V supply (not 5V — dimmer but safe)\n\nStatus LEDs (STM32):\n  - PC11: Green (scan ready)\n  - PC12: Red (error/low battery)\n  - PC13: Blue (BLE connected)\n  - 1k series resistors\n\nUSB-C (J1):\n  - USB 2.0 receptacle\n  - VBUS → TP4056 via protection\n  - D-/D+ → ESP32-C3 GPIO18/GPIO19\n  - USBLC6-2 ESD protection (U13)\n  - VBUS detect → ESP32-C3 GPIO6"
+    (at 25.4 25.4 0)
+    (uuid "00000000-0000-0000-0000-000000000051")
+  )
+)

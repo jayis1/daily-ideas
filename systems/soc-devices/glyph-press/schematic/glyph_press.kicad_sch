@@ -1,0 +1,248 @@
+(kicad_sch
+  (version 20231120)
+  (generator "glyph_press")
+  (general (thickness 1.6) (layers 2))
+  (paper "A3")
+  (title_block
+    (title "Glyph Press — Portable Braille Embosser")
+    (date "2026-06-29")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+  )
+
+  ;; ── RP2040 MCU ──
+  (symbol (lib "MCU_RaspberryPi:RP2040") (at 120 60) (unit 1)
+    (property "Ref" "U1" (at 120 30))
+    (property "Value" "RP2040" (at 120 35))
+    (property "Footprint" "Package_DFN_QFN:QFN-56-1EP_7x7mm_P0.4mm")
+    (pin "GP0"  1  (at 90 60))   ;; UART0 TX → HC-05
+    (pin "GP1"  2  (at 90 63))   ;; UART0 RX ← HC-05
+    (pin "GP2"  3  (at 90 66))   ;; SPI0 SCK → flash + SD
+    (pin "GP3"  4  (at 90 69))   ;; SPI0 MOSI
+    (pin "GP4"  5  (at 90 72))   ;; SPI0 MISO
+    (pin "GP5"  6  (at 90 75))   ;; Flash CS
+    (pin "GP6"  7  (at 90 78))   ;; SD CS
+    (pin "GP7"  8  (at 90 81))   ;; I2C SDA → OLED
+    (pin "GP8"  9  (at 90 84))   ;; I2C SCL → OLED
+    (pin "GP9" 10  (at 90 87))   ;; Stepper STEP
+    (pin "GP10" 11 (at 90 90))   ;; Stepper DIR
+    (pin "GP11" 12 (at 90 93))   ;; Stepper EN
+    (pin "GP12" 13 (at 90 96))   ;; Servo PWM
+    (pin "GP13" 14 (at 90 99))   ;; Paper sensor (digital/ADC)
+    (pin "GP14" 15 (at 90 102))  ;; BTN_START
+    (pin "GP15" 16 (at 90 105))  ;; BTN_MODE
+    (pin "GP16" 17 (at 90 108))  ;; BTN_FEED
+    (pin "GP17" 18 (at 90 111))  ;; ENC_A
+    (pin "GP18" 19 (at 90 114))  ;; ENC_B
+    (pin "GP19" 20 (at 90 117))  ;; SR_DATA / ENC_BTN
+    (pin "GP20" 21 (at 90 120))  ;; SR_CLK / BUZZER
+    (pin "GP21" 22 (at 90 123))  ;; SR_LATCH / WS2812
+    (pin "GP22" 23 (at 90 126))  ;; LED_STATUS / DRV_ENABLE
+    (pin "GP26" 26 (at 90 129))  ;; ADC0 battery
+    (pin "GP27" 27 (at 90 132))  ;; ADC1 force/paper
+    (pin "GP28" 28 (at 90 135))  ;; ADC2 spare
+    (pin "3V3"  43 (at 150 30))
+    (pin "GND"  44 (at 150 135))
+  )
+
+  ;; ── W25Q16 External Flash ──
+  (symbol (lib "Memory_Flash:W25Q16JVSN") (at 200 60) (unit 1)
+    (property "Ref" "U2")
+    (property "Value" "W25Q16JVSN")
+    (property "Footprint" "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm")
+    (pin "CS#"   1 (at 180 50))
+    (pin "DO"    2 (at 180 55))
+    (pin "WP#"   3 (at 180 60))
+    (pin "GND"   4 (at 180 65))
+    (pin "DI"    5 (at 220 55))
+    (pin "CLK"   6 (at 220 50))
+    (pin "HOLD#" 7 (at 220 60))
+    (pin "VCC"   8 (at 220 65))
+  )
+
+  ;; ── HC-05 BLE Module ──
+  (symbol (lib "RF_Bluetooth:HC-05") (at 200 100) (unit 1)
+    (property "Ref" "U3")
+    (property "Value" "HC-05")
+    (pin "VCC" 1 (at 180 95))
+    (pin "GND" 2 (at 180 105))
+    (pin "TXD" 3 (at 180 100))  ;; → RP2040 GP1
+    (pin "RXD" 4 (at 180 97))   ;; ← RP2040 GP0
+  )
+
+  ;; ── SH1106 OLED ──
+  (symbol (lib "Display:SH1106") (at 250 60) (unit 1)
+    (property "Ref" "U4")
+    (property "Value" "SH1106 128x64 OLED")
+    (pin "VCC" 1)
+    (pin "GND" 2)
+    (pin "SCL" 3 (at 230 50))  ;; ← RP2040 GP8
+    (pin "SDA" 4 (at 230 55))  ;; ← RP2040 GP7
+  )
+
+  ;; ── TMC2209 Stepper Driver ──
+  (symbol (lib "Driver_Motor:TMC2209") (at 250 100) (unit 1)
+    (property "Ref" "U5")
+    (property "Value" "TMC2209 v1.2")
+    (pin "STEP" 1 (at 230 95))   ;; ← RP2040 GP9
+    (pin "DIR"  2 (at 230 100))  ;; ← RP2040 GP10
+    (pin "EN"  3 (at 230 105))   ;; ← RP2040 GP11
+    (pin "VMOT" 4)
+    (pin "A1"  5)
+    (pin "A2"  6)
+    (pin "B1"  7)
+    (pin "B2"  8)
+  )
+
+  ;; ── DRV8833 x8 (solenoid drivers, shown as single instance) ──
+  (symbol (lib "Driver_Motor:DRV8833") (at 250 140) (unit 1)
+    (property "Ref" "U11")
+    (property "Value" "DRV8833 x8")
+    (pin "AIN1" 1)
+    (pin "AIN2" 2)
+    (pin "BIN1" 3)
+    (pin "BIN2" 4)
+    (pin "AO1"  5  (at 270 135))  ;; → solenoid
+    (pin "AO2" 6  (at 270 140))
+    (pin "BO1" 7  (at 270 145))
+    (pin "BO2" 8  (at 270 150))
+    (pin "VMOT" 9)
+    (pin "VCC" 10)
+  )
+
+  ;; ── 74HC595 x2 (shift registers for solenoid control) ──
+  (symbol (lib "Logic:74HC595") (at 300 60) (unit 1)
+    (property "Ref" "U13")
+    (property "Value" "74HC595 x2")
+    (pin "SER"  14 (at 280 50))  ;; ← RP2040 GP19 (SR_DATA)
+    (pin "SRCLK" 11 (at 280 55)) ;; ← RP2040 GP20 (SR_CLK)
+    (pin "RCLK" 12 (at 280 60))  ;; ← RP2040 GP21 (SR_LATCH)
+    (pin "Q0-Q7" 0 (at 320 50))
+  )
+
+  ;; ── TCRT5000 Paper Sensor ──
+  (symbol (lib "Sensor:TCRT5000") (at 300 100) (unit 1)
+    (property "Ref" "U12")
+    (property "Value" "TCRT5000")
+    (pin "VCC" 1)
+    (pin "OUT" 2 (at 280 100))  ;; → RP2040 GP27 ADC1
+    (pin "GND" 3)
+  )
+
+  ;; ── NEMA8 Stepper Motor ──
+  (symbol (lib "Motor:NEMA8") (at 320 100) (unit 1)
+    (property "Ref" "MOT1")
+    (property "Value" "NEMA8 20mm")
+    (pin "A+" 1 (at 300 90))
+    (pin "A-" 2 (at 300 95))
+    (pin "B+" 3 (at 300 100))
+    (pin "B-" 4 (at 300 105))
+  )
+
+  ;; ── Solenoid Array (16x) ──
+  (symbol (lib "Device:Solenoid") (at 320 140) (unit 1)
+    (property "Ref" "SOL1-16")
+    (property "Value" "5V push-pull x16")
+  )
+
+  ;; ── Power: TPS63020 buck-boost ──
+  (symbol (lib "Regulator:TPS63020") (at 60 60) (unit 1)
+    (property "Ref" "U6")
+    (property "Value" "TPS63020 3.3V 2A")
+    (pin "VIN" 1 (at 40 50))
+    (pin "VOUT" 2 (at 80 50))
+    (pin "GND" 3 (at 60 70))
+  )
+
+  ;; ── Battery Protection ──
+  (symbol (lib "Power:DW01A") (at 60 100) (unit 1)
+    (property "Ref" "U9")
+    (property "Value" "DW01A")
+  )
+  (symbol (lib "Transistor:FS8205A") (at 90 100) (unit 1)
+    (property "Ref" "U10")
+    (property "Value" "FS8205A")
+  )
+
+  ;; ── USB-C Charger ──
+  (symbol (lib "Connector:USB-C") (at 30 60) (unit 1)
+    (property "Ref" "J1")
+    (property "Value" "USB-C 2.0")
+  )
+  (symbol (lib "Battery_Management:MCP73831") (at 30 100) (unit 1)
+    (property "Ref" "U8")
+    (property "Value" "MCP73831 4.2V 500mA")
+  )
+
+  ;; ── LiPo Battery ──
+  (symbol (lib "Device:Battery") (at 30 130) (unit 1)
+    (property "Ref" "BAT1")
+    (property "Value" "LiPo 3.7V 2000mAh")
+  )
+
+  ;; ── Buttons x3 ──
+  (symbol (lib "Switch:SW_Push") (at 150 160) (unit 1)
+    (property "Ref" "SW1")
+    (property "Value" "START")
+  )
+  (symbol (lib "Switch:SW_Push") (at 165 160) (unit 1)
+    (property "Ref" "SW2")
+    (property "Value" "MODE")
+  )
+  (symbol (lib "Switch:SW_Push") (at 180 160) (unit 1)
+    (property "Ref" "SW3")
+    (property "Value" "FEED")
+  )
+
+  ;; ── Rotary Encoder ──
+  (symbol (lib "Device:RotaryEncoder") (at 210 160) (unit 1)
+    (property "Ref" "ENC1")
+    (property "Value" "EC11")
+  )
+
+  ;; ── Buzzer ──
+  (symbol (lib "Device:Buzzer") (at 240 160) (unit 1)
+    (property "Ref" "BUZ1")
+    (property "Value" "Piezo 5V")
+  )
+
+  ;; ── WS2812B LED ──
+  (symbol (lib "LED:WS2812B") (at 270 160) (unit 1)
+    (property "Ref" "LED1")
+    (property "Value" "WS2812B")
+  )
+
+  ;; ── microSD Socket ──
+  (symbol (lib "Connector:microSD") (at 300 30) (unit 1)
+    (property "Ref" "J4")
+    (property "Value" "microSD FAT32")
+    (pin "CS"   1 (at 280 25))  ;; ← RP2040 GP6
+    (pin "MOSI" 2 (at 280 28))
+    (pin "MISO" 3 (at 280 31))
+    (pin "CLK"  4 (at 280 34))
+  )
+
+  ;; ── Net labels ──
+  (net "UART_TX"   (RP2040.GP0  HC-05.RXD))
+  (net "UART_RX"   (RP2040.GP1  HC-05.TXD))
+  (net "SPI_SCK"   (RP2040.GP2  W25Q16.CLK microSD.CLK))
+  (net "SPI_MOSI"  (RP2040.GP3  W25Q16.DI  microSD.MOSI))
+  (net "SPI_MISO"  (RP2040.GP4  W25Q16.DO  microSD.MISO))
+  (net "FLASH_CS"  (RP2040.GP5  W25Q16.CS#))
+  (net "SD_CS"     (RP2040.GP6  microSD.CS))
+  (net "I2C_SDA"   (RP2040.GP7  SH1106.SDA))
+  (net "I2C_SCL"   (RP2040.GP8  SH1106.SCL))
+  (net "STEP"      (RP2040.GP9  TMC2209.STEP))
+  (net "DIR"       (RP2040.GP10 TMC2209.DIR))
+  (net "EN"        (RP2040.GP11 TMC2209.EN))
+  (net "SERVO"     (RP2040.GP12 SG90.SIGNAL))
+  (net "PAPER"     (RP2040.GP27 TCRT5000.OUT))
+  (net "SR_DATA"   (RP2040.GP19 74HC595.SER))
+  (net "SR_CLK"    (RP2040.GP20 74HC595.SRCLK))
+  (net "SR_LATCH"  (RP2040.GP21 74HC595.RCLK))
+  (net "DRV_EN"    (RP2040.GP22 DRV8833.nEN))
+  (net "BATT"      (RP2040.GP26 battery.divider))
+  (net "3V3"       (TPS63020.VOUT all_3v3))
+  (net "VBATT"     (LiPo+ DW01A TPS63020.VIN DRV8833.VMOT))
+  (net "GND"       (all_gnd))
+)

@@ -1,0 +1,25 @@
+{
+  "header": {
+    "creation": "2026-07-02T00:00:00Z",
+    "generator": "manual",
+    "generator_version": "1.0"
+  },
+  "metadata": {
+    "filename": "opti_rot.kicad_prl",
+    "version": 1
+  },
+  "project": {
+    "name": "opti_rot",
+    "version": "1.0.0"
+  },
+  "settings": {
+    "3d_model_path": "",
+    "bg_color": "rgb(255,255,255)",
+    "grid_color": "rgb(200,200,200)",
+    "grid_size": 1.27,
+    "highlight_color": "rgb(255,0,0)",
+    "selection_color": "rgb(0,0,255)",
+    "sheet_color": "rgb(255,255,255)",
+    "text_color": "rgb(0,0,0)"
+  }
+}

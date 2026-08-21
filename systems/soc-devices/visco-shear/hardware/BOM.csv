@@ -1,0 +1,51 @@
+Ref,Qty,Part,Manufacturer,MPN,Package,Unit_USD,Source,Notes
+U1,1,RP2040,Raspberry Pi,RP2040,QFN-56,1.00,Mouser,Dual Cortex-M0+ 133MHz 264KB SRAM
+U2,1,W25Q16JVSN,Winbond,W25Q16JVSN,SOIC-8,0.30,Digi-Key,2MB external QSPI flash
+U3,1,ESP32-C3-WROOM-02,Espressif,ESP32-C3-WROOM-02,module,2.80,Mouser,Wi-Fi + BLE 5.0 companion MCU
+U4,1,ADS1115IDGS,Texas Instruments,ADS1115IDGS,VSSOP-10,4.20,Digi-Key,16-bit ADC I2C 860SPS for Hall torque
+U5,1,TMC2209 v1.2,Trinamic,TMC2209-Q1,module,3.50,AliExpress,Stepper driver 1/256 microstep StealthChop2
+U6,1,DRV8833PW,Texas Instruments,DRV8833PW,TSSOP-16,1.80,Digi-Key,Dual H-bridge for Peltier TEC
+U7,1,TPS63020DSJR,Texas Instruments,TPS63020,SON-14,3.90,Digi-Key,3.3V buck-boost 2A
+U8,1,TLV70033DDCR,Texas Instruments,TLV70033,SOT-23-5,0.50,Digi-Key,3.3V LDO low-noise sensor rail
+U9,1,MCP73831T-2ACI/MC,Microchip,MCP73831,DFN-8,0.60,Digi-Key,USB-C LiPo charger 4.2V 500mA
+U10,1,DW01A,Sileic,DW01A,SOT-23-6,0.10,Digi-Key,Battery protection IC
+U11,1,FS8205A,Fairchild,FS8205A,SOT-23-6,0.20,Digi-Key,Dual MOSFET for DW01A
+U12,1,DRV5053CAQLPGM,Texas Instruments,DRV5053CAQLPGM,SOT-23L,1.20,Digi-Key,Linear Hall sensor analog 25mV/mT (x2 for differential)
+U13,1,DRV5053CAQLPGM,Texas Instruments,DRV5053CAQLPGM,SOT-23L,1.20,Digi-Key,Second Hall sensor for reference
+U14,1,SH1106 OLED 1.3in,Generic,SH1106-1.3-128x64,PCB,3.50,AliExpress,128x64 monochrome OLED I2C
+MOT1,1,NEMA8 stepper 20mm,Generic,NEMA8-20mm,NEMA8,8.00,AliExpress,200 step/rev 0.28A bipolar stepper
+TEC1,1,TEC1-12706,Marlow,TEC1-12706,40x40mm,3.20,AliExpress,40mm Peltier 12V 6A (undervolted to 5V)
+SPRING1,1,Torsion spring beryllium copper,Custom,C17200-0.5mNm/rad,machined,2.00,McMaster,Custom torsion spring k_tau ~0.5mNm/rad
+MAG1,2,N42 disc magnet 6x3mm,K&J,D6-N42,6x3mm,0.30,K&J Magnets,NdFeB disc for magnetic coupling + Hall bias
+CUP1,1,PEEK sample cup 14.5mm ID,Custom,PEEK-cup,machined,3.50,McMaster,PEEK cup with 0.5mm wall for magnetic coupling
+SP1,1,CC-13 coaxial cylinder spindle,Custom,CC-13,316L,4.00,McMaster,Ø13x20mm bob 316L stainless
+SP2,1,CP-25 cone-plate spindle,Custom,CP-25,316L,5.00,McMaster,Ø25mm 1° cone 316L
+SP3,1,VN-16 vane spindle,Custom,VN-16,316L,4.00,McMaster,4-blade Ø16x16mm vane 316L
+SP4,1,TB-3 T-bar spindle,Custom,TB-3,316L,3.00,McMaster,Ø3mm cross-bar T-bar 316L
+NTC1,1,NTC thermistor 10kΩ,Murata,NCP18XH103F03RB,0603,0.20,Digi-Key,10kΩ B=3950 Peltier temp feedback
+J1,1,USB-C 2.0 receptacle,Amphenol,12401610E4#2A,USB-C,0.50,Digi-Key,USB-C 16-pin charging + ESP32-C3 flash
+J2,1,JST-PH 2-pin,JST,S2B-PH-K,2mm,0.20,Digi-Key,Battery connector
+J3,1,6-pin SWD header,Generic,SWD-6,1.27mm,0.15,Digi-Key,SWD programming header for RP2040
+J4,1,microSD socket,Amphenol,101-00559-82,push-push,0.80,Digi-Key,microSD card slot SPI mode
+J5,1,Spindle quick-change coupling,Custom,magnetic-coupling,custom,2.00,McMaster,Magnetic quick-change spindle interface
+SW1,1,Tactile 6x6mm,Generic,TS-6x6,6x6mm,0.15,AliExpress,START button
+SW2,1,Tactile 6x6mm,Generic,TS-6x6,6x6mm,0.15,AliExpress,MODE button
+SW3,1,Tactile 6x6mm,Generic,TS-6x6,6x6mm,0.15,AliExpress,MENU button
+BUZ1,1,Piezo buzzer 5V,CUI,PS1240P02BT,12mm,0.40,Digi-Key,Audible feedback
+LED1,1,White LED 0603,Generic,LTST-C193TWKT,0603,0.10,Digi-Key,Status LED
+LED2,1,Blue LED 0603,Generic,LTST-C191TBKT,0603,0.10,Digi-Key,BLE/Wi-Fi status LED
+L1,1,2.2uH inductor 3A,Coilcraft,XAL4040-222MEB,4x4mm,0.80,Digi-Key,Inductor for TPS63020
+Y1,1,12MHz crystal,Abracon,ABM3-12.000MHZ,3.2x2.5mm,0.30,Digi-Key,RP2040 system crystal
+HS1,1,Heatsink 40mm,Generic,HS-40x40x11,40x40mm,0.80,AliExpress,Peltier hot-side heatsink
+FAN1,1,40mm fan 5V,Generic,Fan-40x10-5V,40x10mm,1.50,AliExpress,Peltier heatsink cooling fan
+R1,1,0.1Ω 1% sense resistor,Vishay,WSL2010R1000FEA,2010,0.40,Digi-Key,Current sense for Peltier
+R2,4,10kΩ 0603,Generic,RC0603FR-0710KL,0603,0.01,Digi-Key,Pull-ups (I2C, buttons)
+R3,2,4.7kΩ 0603,Generic,RC0603FR-074K7L,0603,0.01,Digi-Key,I2C pull-ups for ADS1115 + OLED
+C1,4,10uF 0805,Generic,CL21B106KOQNNNG,0805,0.10,Digi-Key,Decoupling caps
+C2,4,0.1uF 0603,Generic,CL21B104KBCNNNC,0603,0.05,Digi-Key,Decoupling caps
+C3,2,22uF 0805,Generic,CL21A226MQQNNNE,0805,0.15,Digi-Key,Bulk caps for buck-boost
+ENC1,1,Rotary encoder EC11,ALPS,EC11E-S,panel,1.20,AliExpress,Temperature / parameter adjust
+PCB1,1,PCB 4-layer 30x80mm,JLCPCB,JLC-PCB-4L,30x80mm,4.00,JLCPCB,Custom 4-layer PCB
+CASE1,1,3D-printed enclosure,PETG,custom,printed,1.50,Prusa,3D-printed pen-style enclosure
+SCREW1,8,M2x6mm stainless,Generic,M2x6,M2,0.05,McMaster,Assembly screws
+SCREW2,4,M3x8mm stainless,Generic,M3x8,M3,0.05,McMaster,Motor mount screws

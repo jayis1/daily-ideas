@@ -1,0 +1,37 @@
+(kicad_sch (version 20230121) (generator eeschema)
+
+  (uuid c0000000-0000-0000-0000-000000000001)
+
+  (paper "A3")
+
+  (title_block
+    (title "Quartz Tuner - Crystal Oscillator Parameter Analyzer")
+    (date "2026-06-26")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+  )
+
+  (lib_symbols)
+
+  ;; This is a schematic placeholder. Full KiCad schematic should be
+  ;; created with proper component symbols, wiring, and net labels.
+  ;; See README.md for complete pin assignments and connections.
+  ;;
+  ;; Key connections:
+  ;;   STM32G491RET6 PB6/PB7 (I2C1) -> Si5351A SDA/SCL, AD5933 SDA/SCL, OLED, MAX17048
+  ;;   STM32G491RET6 PA5/PA6/PA7/PC4 (SPI1) -> microSD
+  ;;   Si5351A CLK0 -> pi-network stimulus (through DUT fixture)
+  ;;   pi-network output -> AD5933 VIN+/VIN-
+  ;;   STM32G491RET6 PA4 (DAC1) -> Heater MOSFET gate
+  ;;   STM32G491RET6 PC12 -> DS18B20 1-Wire data
+  ;;   STM32G491RET6 PB0 (TIM3) -> Frequency counter input
+  ;;   STM32G491RET6 PA11/PA12 -> USB-C data
+  ;;   STM32G491RET6 PA15/PB3/PB4/PB5 (SPI3) -> SX1262 LoRa (optional)
+  ;;
+  ;; Power: USB-C 5V -> TP4056 -> LiPo -> AMS1117-3.3V -> 3V3 rail
+  ;;         3V3 -> LC filter (L1 10uH + C9 22uF) -> 3V3A (analog rail)
+
+  (text "Quartz Tuner Schematic Placeholder\nSee README.md for full pin assignments and block diagram"
+    (at 50 50) (uuid c0000000-0000-0000-0000-000000000002)
+  )
+)

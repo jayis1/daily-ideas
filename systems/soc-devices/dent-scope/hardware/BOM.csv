@@ -1,0 +1,38 @@
+# Dent Scope — Bill of Materials
+# Prices in USD, indicative (Oct 2025, LCSC/DigiKey/Adafruit/Amazon)
+# Total: ~$85
+
+Part,Qty,Unit,Sub,Ref,Notes
+STM32G474RET6,1,6.40,6.40,U1,LQFP64, 170MHz M4F, CORDIC+FMAC
+ESP32-C3-MINI-1,1,3.20,3.20,U2,WiFi+BLE module
+20N foil-strain load cell (sub-miniature beam),1,12.00,12.00,LOAD1,20N, ~1mN resolution, 5-pin
+HX711 24-bit ADC breakout,1,1.20,1.20,U3,24-bit ADC for load cell
+AD7746 24-bit capacitive sensor ADC,1,5.80,5.80,U4,TSSOP-16, I2C, ±4pF range
+Capacitive parallel-plate depth sensor (custom PCB),1,3.50,3.50,CAP1,2 PCB plates Ø10mm @ 1mm gap, spring-mounted
+28BYJ-48 geared stepper motor (5V),1,2.50,2.50,M1,1/64 gearbox, 5V
+DRV8833 dual H-bridge,1,1.20,1.20,U5,stepper driver
+M4×0.35 leadscrew + nut (50mm travel),1,2.00,2.00,LS1,fine thread, brass nut, anti-backlash
+Vickers diamond indenter tip (136°),1,8.00,8.00,TIP1,threaded collet mount, interchangeable
+Berkovich diamond tip (65.27°),1,6.00,6.00,TIP2,optional
+WC ball indenter (1mm),1,1.50,1.50,TIP3,tungsten carbide, threaded mount
+Spring-loaded reference ring (custom machined),1,4.00,4.00,RING1,Ø20mm spring-loaded, sample contact
+25N mechanical over-travel clutch,1,2.00,2.00,CL1,slip clutch on leadscrew
+SSD1306 OLED 1.3in 128x64 (SPI),1,2.50,2.50,OLED1,SPI variant
+ICM-42688-P 6-axis IMU,1,3.80,3.80,U6,SPI, leveling
+DS18B20 temperature probe,1,1.20,1.20,RTD1,1-wire, sample temperature
+MicroSD socket (push-push),1,0.70,0.70,J1,SPI
+TP4056 USB-C charger module,1,0.90,0.90,U7,18650 charge
+MP1584 buck 5V/1.5A,1,0.90,0.90,U8,logic rail
+18650 holder ×2,2,0.40,0.80,H1,
+18650 3500mAh (Samsung 30Q),2,4.50,9.00,B1,optional if not supplied
+Reed interlock switch (tip present),1,0.60,0.60,S1,
+Tactile buttons,3,0.10,0.30,S2-S4,START/STOP/MENU
+Active buzzer 5V,1,0.50,0.50,BUZ1,
+White LED + 1k,1,0.10,0.10,LED1,
+0.1uF ceramic caps,20,0.02,0.40,C*,decoupling
+10uF tantalum caps,5,0.10,0.50,C*,rail decoupling
+Resistors 0603 (assorted),50,0.01,0.50,R*,pullups/dividers
+PCB (4-layer JLCPCJ),1,6.00,6.00,PCB1,34x180mm
+M3 standoffs + screws,,1.00,1.00,MECH,assembly
+3D-printed enclosure (PETG),1,3.00,3.00,CASE1,pen-sized Ø34×180mm
+,,TOTAL,~85.00,,

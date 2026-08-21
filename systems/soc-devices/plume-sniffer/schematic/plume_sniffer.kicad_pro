@@ -1,0 +1,25 @@
+{
+  "board": {
+    "3d_viewer_filters": [],
+    "design_settings": {
+      "defaults": {
+        "board_outline_thickness": 0.15
+      }
+    },
+    "ipc2581": {
+      "dist": "",
+      "dist_md5": "",
+      "mfg": "",
+      "mpn": ""
+    },
+    "layer_presets": []
+  },
+  "meta": {
+    "filename": "plume_sniffer.kicad_pro",
+    "version": 1
+  },
+  "net_settings": {
+    "class": "default",
+    "class1": "power"
+  }
+}

@@ -1,0 +1,295 @@
+(kicad_sch
+  (page "A3")
+  (title_block
+    (title "Terra Pin — Soil Microbiome Activity Probe")
+    (company "SoC Device Inventions")
+    (rev "1")
+    (comment 1 "ESP32-S3-WROOM-1 + SCD41 + EZO-ORP + EZO-EC + DS18B20")
+  )
+
+  (net_class "Power" ""
+    (via_dia 0.6) (via_drill 0.3)
+    (uvia_dia 0.3) (uvia_drill 0.1)
+    (trace_width 0.4))
+
+  (net_class "Signal" ""
+    (via_dia 0.4) (via_drill 0.2)
+    (uvia_dia 0.3) (uvia_drill 0.1)
+    (trace_width 0.2))
+
+  (net_class "I2C" ""
+    (via_dia 0.4) (via_drill 0.2)
+    (trace_width 0.2))
+
+  (net_class "SPI" ""
+    (via_dia 0.4) (via_drill 0.2)
+    (trace_width 0.2))
+
+  (net_class "UART" ""
+    (via_dia 0.4) (via_drill 0.2)
+    (trace_width 0.2))
+
+  ;; ── U1: ESP32-S3-WROOM-1 ──────────────────────────────────────────
+  (symbol (lib_id "RF_Module:ESP32-S3-WROOM-1") (at 127 76.2 0)
+    (property "Reference" "U1" (at 127 50.8 0))
+    (property "Value" "ESP32-S3-WROOM-1" (at 127 53.34 0))
+    (property "Footprint" "RF_Module:ESP32-S3-WROOM-1" (at 127 101.6 0))
+    (pin "IO0"  (net "BOOT_STRAP"))     ; boot strap, pull-up
+    (pin "IO1"  (net "UART3_TX"))       ; → EZO-ORP
+    (pin "IO2"  (net "UART3_RX"))       ; ← EZO-ORP
+    (pin "IO3"  (net "SCD41_RESET"))    ; reset both SCD41
+    (pin "IO4"  (net "UART4_TX"))       ; → EZO-EC
+    (pin "IO5"  (net "UART4_RX"))       ; ← EZO-EC
+    (pin "IO6"  (net "I2C_SCL"))        ; shared I2C SCL
+    (pin "IO7"  (net "I2C_SDA"))        ; shared I2C SDA
+    (pin "IO8"  (net "SD_CS"))          ; microSD CS
+    (pin "IO9"  (net "SPI_MISO"))       ; SD MISO
+    (pin "IO10" (net "SPI_MOSI"))       ; SD MOSI
+    (pin "IO11" (net "SPI_SCK"))        ; SD SCK
+    (pin "IO12" (net "ONEWIRE"))        ; DS18B20 1-Wire
+    (pin "IO13" (net "MOIST_FREQ"))     ; PCNT moisture freq
+    (pin "IO14" (net "BTN_MEASURE"))    ; MEASURE button
+    (pin "IO15" (net "BTN_MODE"))       ; MODE button
+    (pin "IO16" (net "ENC_A"))          ; rotary encoder A
+    (pin "IO17" (net "ENC_B"))          ; rotary encoder B
+    (pin "IO18" (net "ENC_BTN"))        ; encoder push
+    (pin "IO19" (net "WS2812_DATA"))    ; RGB LED
+    (pin "IO20" (net "LED_STATUS"))     ; status LED
+    (pin "IO21" (net "CHG_STAT"))       ; MCP73831 STAT
+    (pin "IO22" (net "BATT_DIV"))       ; ADC battery voltage
+    (pin "3V3"  (net "+3V3"))
+    (pin "GND"  (net "GND"))
+  )
+
+  ;; ── U2: SCD41 chamber CO2 (I2C addr 0x62 via mux ch0) ─────────────
+  (symbol (lib_id "Sensor:SCD41") (at 180 60 0)
+    (property "Reference" "U2" (at 180 52 0))
+    (property "Value" "SCD41_chamber" (at 180 54.5 0))
+    (property "Footprint" "Sensor:SCD41" (at 180 68 0))
+    (pin "VDD"   (net "+3V3_SENS"))
+    (pin "GND"   (net "GND"))
+    (pin "SCL"   (net "MUX_SCL0"))
+    (pin "SDA"   (net "MUX_SDA0"))
+    (pin "RDY"   (net "SCD41_RDY"))
+    (pin "INT"   (net "SCD41_INT"))
+  )
+
+  ;; ── U3: SCD41 ambient CO2 (I2C addr 0x62 via mux ch1) ─────────────
+  (symbol (lib_id "Sensor:SCD41") (at 180 85 0)
+    (property "Reference" "U3" (at 180 77 0))
+    (property "Value" "SCD41_ambient" (at 180 79.5 0))
+    (property "Footprint" "Sensor:SCD41" (at 180 93 0))
+    (pin "VDD"   (net "+3V3_SENS"))
+    (pin "GND"   (net "GND"))
+    (pin "SCL"   (net "MUX_SCL1"))
+    (pin "SDA"   (net "MUX_SDA1"))
+  )
+
+  ;; ── U4: TCA9548A I2C multiplexer ──────────────────────────────────
+  (symbol (lib_id "Logic_LevelTranslator:TCA9548APWR") (at 155 100 0)
+    (property "Reference" "U4" (at 155 88 0))
+    (property "Value" "TCA9548A" (at 155 90.5 0))
+    (property "Footprint" "Package_SO:TSSOP-24" (at 155 118 0))
+    (pin "SCL"   (net "I2C_SCL"))
+    (pin "SDA"   (net "I2C_SDA"))
+    (pin "VDD"   (net "+3V3"))
+    (pin "GND"   (net "GND"))
+    (pin "SC0"   (net "MUX_SCL0"))    ; → SCD41 #1
+    (pin "SD0"   (net "MUX_SDA0"))
+    (pin "SC1"   (net "MUX_SCL1"))    ; → SCD41 #2
+    (pin "SD1"   (net "MUX_SDA1"))
+    (pin "SC2"   (net "I2C_SCL"))     ; passthrough to OLED
+    (pin "SD2"   (net "I2C_SDA"))
+  )
+
+  ;; ── U5: Atlas Scientific EZO-ORP (UART) ───────────────────────────
+  (symbol (lib_id "Sensor_Chemical:EZO-ORP") (at 200 130 0)
+    (property "Reference" "U5" (at 200 122 0))
+    (property "Value" "EZO-ORP" (at 200 124.5 0))
+    (property "Footprint" "Module:Atlas_EZO" (at 200 140 0))
+    (pin "VCC"   (net "+3V3"))
+    (pin "GND"   (net "GND"))
+    (pin "RX"    (net "UART3_TX"))
+    (pin "TX"    (net "UART3_RX"))
+    (pin "PROBE" (net "ORP_PROBE"))
+  )
+
+  ;; ── U6: Atlas Scientific EZO-EC (UART) ────────────────────────────
+  (symbol (lib_id "Sensor_Chemical:EZO-EC") (at 200 150 0)
+    (property "Reference" "U6" (at 200 142 0))
+    (property "Value" "EZO-EC" (at 200 144.5 0))
+    (property "Footprint" "Module:Atlas_EZO" (at 200 160 0))
+    (pin "VCC"   (net "+3V3"))
+    (pin "GND"   (net "GND"))
+    (pin "RX"    (net "UART4_TX"))
+    (pin "TX"    (net "UART4_RX"))
+    (pin "PROBE" (net "EC_PROBE"))
+  )
+
+  ;; ── U7: DS18B20 waterproof temperature ────────────────────────────
+  (symbol (lib_id "Sensor_Temperature:DS18B20") (at 60 140 0)
+    (property "Reference" "U7" (at 60 133 0))
+    (property "Value" "DS18B20" (at 60 135.5 0))
+    (property "Footprint" "Package_TO_SOT_THT:TO-92_Inline" (at 60 148 0))
+    (pin "VDD"   (net "+3V3"))
+    (pin "GND"   (net "GND"))
+    (pin "DQ"    (net "ONEWIRE"))
+  )
+
+  ;; ── U8: SH1106 OLED display ───────────────────────────────────────
+  (symbol (lib_id "Display:SH1106") (at 100 160 0)
+    (property "Reference" "U8" (at 100 152 0))
+    (property "Value" "SH1106_OLED_1.3in" (at 100 154.5 0))
+    (property "Footprint" "Display:OLED_128x64_1.3in" (at 100 170 0))
+    (pin "VCC"   (net "+3V3"))
+    (pin "GND"   (net "GND"))
+    (pin "SCL"   (net "I2C_SCL"))
+    (pin "SDA"   (net "I2C_SDA"))
+  )
+
+  ;; ── U9: MCP73831 LiPo charger ─────────────────────────────────────
+  (symbol (lib_id "Battery_Management:MCP73831T-2ACI") (at 50 50 0)
+    (property "Reference" "U9" (at 50 44 0))
+    (property "Value" "MCP73831" (at 50 46.5 0))
+    (property "Footprint" "Package_DFN_QFN:DFN-8" (at 50 58 0))
+    (pin "VDD"  (net "VBUS_5V"))
+    (pin "BAT"  (net "VBAT"))
+    (pin "STAT" (net "CHG_STAT"))
+    (pin "GND"  (net "GND"))
+    (pin "PROG" (net "PROG_R"))      ; 2kΩ → 500mA charge
+  )
+
+  ;; ── U10: TPS63020 buck-boost 3.3V ─────────────────────────────────
+  (symbol (lib_id "Regulator_Switching:TPS63020DSJ") (at 120 45 0)
+    (property "Reference" "U10" (at 120 38 0))
+    (property "Value" "TPS63020" (at 120 40.5 0))
+    (property "Footprint" "Package_SON:SON-14" (at 120 55 0))
+    (pin "VIN"  (net "VBAT"))
+    (pin "VOUT" (net "+3V3"))
+    (pin "GND"  (net "GND"))
+    (pin "EN"   (net "+3V3"))        ; always enabled
+  )
+
+  ;; ── U11: TLV70033 LDO for SCD41 sensors ───────────────────────────
+  (symbol (lib_id "Regulator_Linear:TLV70033") (at 120 65 0)
+    (property "Reference" "U11" (at 120 60 0))
+    (property "Value" "TLV70033" (at 120 62.5 0))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-5" (at 120 72 0))
+    (pin "VIN"  (net "+3V3"))
+    (pin "VOUT" (net "+3V3_SENS"))
+    (pin "GND"  (net "GND"))
+    (pin "EN"   (net "+3V3"))
+  )
+
+  ;; ── U12/U13: Battery protection DW01A + FS8205A ───────────────────
+  (symbol (lib_id "Battery_Protection:DW01A") (at 75 50 0)
+    (property "Reference" "U12" (at 75 44 0))
+    (property "Value" "DW01A" (at 75 46.5 0))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-6" (at 75 58 0))
+    (pin "VDD"  (net "VBAT_RAW"))
+    (pin "GND"  (net "GND"))
+    (pin "CS"   (net "PROT_CS"))
+  )
+
+  (symbol (lib_id "Transistor_FET:FS8205A") (at 75 65 0)
+    (property "Reference" "U13" (at 75 60 0))
+    (property "Value" "FS8205A" (at 75 62.5 0))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-6" (at 75 72 0))
+    (pin "S1"   (net "VBAT_RAW"))
+    (pin "D1"   (net "VBAT"))
+    (pin "S2"   (net "GND"))
+    (pin "G1"   (net "PROT_CS"))
+    (pin "G2"   (net "PROT_CS"))
+  )
+
+  ;; ── MicroSD card socket (SPI) ─────────────────────────────────────
+  (symbol (lib_id "Connector:MicroSD") (at 250 60 0)
+    (property "Reference" "J2" (at 250 52 0))
+    (property "Value" "microSD" (at 250 54.5 0))
+    (property "Footprint" "Connector:MicroSD_Hirose_DM3D" (at 250 72 0))
+    (pin "CS"   (net "SD_CS"))
+    (pin "MISO" (net "SPI_MISO"))
+    (pin "MOSI" (net "SPI_MOSI"))
+    (pin "SCK"  (net "SPI_SCK"))
+    (pin "VDD"  (net "+3V3"))
+    (pin "GND"  (net "GND"))
+  )
+
+  ;; ── USB-C connector ───────────────────────────────────────────────
+  (symbol (lib_id "Connector:USB_C_2.0") (at 30 50 0)
+    (property "Reference" "J1" (at 30 40 0))
+    (property "Value" "USB-C" (at 30 42.5 0))
+    (property "Footprint" "Connector_USB:USB_C_16pin" (at 30 62 0))
+    (pin "VBUS" (net "VBUS_5V"))
+    (pin "GND"  (net "GND"))
+    (pin "D+"   (net "USB_DP"))
+    (pin "D-"   (net "USB_DM"))
+  )
+
+  ;; ── Capacitive moisture probe (MCB-01-A → PCNT freq) ──────────────
+  (symbol (lib_id "Sensor:MCB-01-A") (at 60 110 0)
+    (property "Reference" "MOIST" (at 60 104 0))
+    (property "Value" "MCB-01-A" (at 60 106.5 0))
+    (property "Footprint" "Sensor:Capacitive_Moisture" (at 60 118 0))
+    (pin "VCC"   (net "+3V3"))
+    (pin "GND"   (net "GND"))
+    (pin "AOUT"  (net "MOIST_FREQ"))   ; 555 oscillator → PCNT
+  )
+
+  ;; ── Buttons ───────────────────────────────────────────────────────
+  (symbol (lib_id "Switch:SW_Push") (at 230 100 0)
+    (property "Reference" "SW1" (at 230 95 0))
+    (property "Value" "MEASURE" (at 230 97.5 0))
+    (pin "1" (net "BTN_MEASURE"))
+    (pin "2" (net "GND"))
+  )
+  (symbol (lib_id "Switch:SW_Push") (at 230 115 0)
+    (property "Reference" "SW2" (at 230 110 0))
+    (property "Value" "MODE" (at 230 112.5 0))
+    (pin "1" (net "BTN_MODE"))
+    (pin "2" (net "GND"))
+  )
+
+  ;; ── Rotary encoder ────────────────────────────────────────────────
+  (symbol (lib_id "Device:RotaryEncoder") (at 230 135 0)
+    (property "Reference" "ENC1" (at 230 128 0))
+    (property "Value" "EC11" (at 230 130.5 0))
+    (pin "A"  (net "ENC_A"))
+    (pin "B"  (net "ENC_B"))
+    (pin "C"  (net "GND"))
+    (pin "SW" (net "ENC_BTN"))
+  )
+
+  ;; ── WS2812B RGB LED ───────────────────────────────────────────────
+  (symbol (lib_id "LED:WS2812B") (at 260 100 0)
+    (property "Reference" "LED1" (at 260 95 0))
+    (property "Value" "WS2812B" (at 260 97.5 0))
+    (property "Footprint" "LED_SMD:LED_WS2812B_5050" (at 260 108 0))
+    (pin "VDD" (net "+3V3"))
+    (pin "DIN" (net "WS2812_DATA"))
+    (pin "GND" (net "GND"))
+  )
+
+  ;; ── Battery voltage divider ───────────────────────────────────────
+  (symbol (lib_id "Device:R") (at 90 85 0)
+    (property "Reference" "R_DIV1" (at 90 82 0))
+    (property "Value" "100kΩ" (at 90 87.5 0))
+    (pin "1" (net "VBAT"))
+    (pin "2" (net "BATT_DIV"))
+  )
+  (symbol (lib_id "Device:R") (at 90 95 0)
+    (property "Reference" "R_DIV2" (at 90 92 0))
+    (property "Value" "100kΩ" (at 90 97.5 0))
+    (pin "1" (net "BATT_DIV"))
+    (pin "2" (net "GND"))
+  )
+
+  ;; ── Pull-ups and decoupling (summary) ─────────────────────────────
+  ;; I2C: 4.7kΩ pull-ups on SCL/SDA to +3V3
+  ;; 1-Wire: 4.7kΩ pull-up on ONEWIRE to +3V3
+  ;; BOOT: 10kΩ pull-up on IO0 to +3V3
+  ;; Buttons: 10kΩ pull-ups to +3V3 (internal also available)
+  ;; Decoupling: 100nF on each IC VDD pin, 10µF on power rails
+  ;; SCD41: 10µF on VDD (per datasheet for NDIR current pulses)
+
+)

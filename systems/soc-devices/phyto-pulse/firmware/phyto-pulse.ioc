@@ -1,0 +1,90 @@
+# STM32CubeMX project file (text representation)
+# Phyto Pulse — Plant Electrophysiology Recorder
+# MCU: STM32G474RET6, LQFP64
+#
+# This is a simplified text representation of the .ioc file.
+# In practice, open STM32CubeMX and configure peripherals as below.
+
+Mcu.Name=STM32G474RET6
+Mcu.Package=LQFP64
+Mcu.UserName=STM32G474RETx
+
+# Clock: HSE 8 MHz → PLL → 170 MHz SYSCLK
+RCC.HSEValue=8000000
+RCC.PLLM=1
+RCC.PLLN=42
+RCC.PLLP=7
+RCC.PLLR=2
+RCC.SYSCLKSource=PLLCLK
+RCC.AHBFreq_Value=170000000
+RCC.APB1Freq_Value=170000000
+RCC.APB2Freq_Value=170000000
+
+# SPI1 — ADS1256 ADC (MODE0, 21 MHz)
+SPI1.VirtualType=VM_MASTER
+SPI1.Mode=MASTER
+SPI1.DataSize=8
+SPI1.CLKPolarity=LOW
+SPI1.CLKPhase=1EDGE
+SPI1.NSS=SOFT
+SPI1.BaudRatePrescaler=PRESCALER_8
+
+# SPI2 — microSD card (MODE3, 42 MHz)
+SPI2.VirtualType=VM_MASTER
+SPI2.Mode=MASTER
+SPI2.DataSize=8
+SPI2.CLKPolarity=HIGH
+SPI2.CLKPhase=2EDGE
+SPI2.NSS=SOFT
+SPI2.BaudRatePrescaler=PRESCALER_4
+
+# I2C1 — OLED + BME280 (400 kHz)
+I2C1.Mode=I2C_FAST
+I2C1.I2CFreq_Value=400000
+
+# USART1 — ESP32-C3 link (460800 baud)
+USART1.BaudRate=460800
+USART1.WordLength=8
+USART1.StopBits=1
+USART1.Parity=NONE
+USART1.Mode=TX_RX
+
+# ADC1 — Battery voltage (PA0)
+ADC1.Resolution=ADC_12_BIT
+ADC1.ExternalTrigConv=SOFTWARE_START
+
+# GPIO assignments:
+# PA4  = SPI1_NSS (ADC_CS) — Output, Push-Pull, High
+# PA15 = EXTI Falling (ADC_DRDY)
+# PB0  = I2C1_SCL
+# PB1  = I2C1_SDA
+# PB2  = ESP_EN (Output, Push-Pull)
+# PB3  = SPI2_SCK
+# PB4  = SPI2_MISO
+# PB5  = SPI2_MOSI
+# PB6  = OLED_RST (Output)
+# PB7  = STAT_LED (Output)
+# PB8  = BTN_RECORD (Input, Pullup)
+# PB9  = BTN_MODE (Input, Pullup)
+# PB10 = BTN_STIM (Input, Pullup)
+# PB11 = GAIN_SEL0 (Output)
+# PB12 = GAIN_SEL1 (Output)
+# PB13 = GAIN_SEL2 (Output)
+# PB14 = STIM_EN (Output)
+# PB15 = CHARGE_STAT (Input)
+# PC14 = SD_DETECT (Input, Pullup)
+
+# DMA:
+# DMA1 Channel2 = SPI1_RX (high priority)
+# DMA1 Channel3 = SPI1_TX (medium priority)
+
+# NVIC:
+# EXTI15_10 — ADC DRDY (priority 5)
+# DMA1_Channel2 — SPI1 RX DMA (priority 5)
+
+# FreeRTOS: not used (bare-metal super-loop)
+# Heap size: 0x1000
+# Stack size: 0x800
+
+# Peripherals used: GPIO, SPI1, SPI2, I2C1, USART1, ADC1, DMA, RTC
+# Middleware: FatFs (SPI2 SD card), CMSIS-NN (optional, for CNN)

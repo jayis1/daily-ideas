@@ -1,0 +1,42 @@
+# Pyro Balance — Bill of Materials
+# Prices in USD, indicative (Oct 2025, LCSC/DigiKey/Adafruit/Amazon)
+# Total: ~$81
+
+Part,Qty,Unit,Sub,Ref,Notes
+STM32G474RET6,1,6.40,6.40,U1,LQFP64, 170MHz M4F, CORDIC+FMAC
+ESP32-C3-MINI-1,1,3.20,3.20,U2,WiFi+BLE module
+5g foil-strain load cell (0.1 mg),1,9.50,9.50,LOAD1,5g, 0.1mg, 5-pin, beam type
+HX711 24-bit ADC breakout,1,1.20,1.20,U3,24-bit ADC for load cell
+ADS122U04 24-bit ADC,1,4.50,4.50,U4,TSSOP-16, PT1000 4-wire
+PT1000 RTD (3.2mm probe),1,2.80,2.80,RTD1,class A, 3.2mm × 25mm sheath
+Nichrome wire (80/20) 30 AWG,0.5m,0.60,0.60,FURN,~6 ohm/m, wound on alumina tube
+Alumina ceramic tube (Ø12 × 40 mm),1,1.40,1.40,TUBE1,sample crucible holder / furnace liner
+Alumina crucible 50 µL,5,0.25,1.25,CR1,disposable
+Alumina hang-down rod (Ø1 × 80 mm),1,0.80,0.80,ROD1,thin rod, low thermal cond
+Ceramic insulation block (fiber),1,1.20,1.20,INS1,balance/furnace thermal break
+SSD1306 OLED 1.3in 128x64 (SPI),1,2.50,2.50,OLED1,SPI variant
+BME280 breakout,1,1.80,1.80,U5,ambient T/P/H
+SFM3300 flow sensor (optional purge),1,9.00,9.00,U6,optional; 0–200 L/h
+Micro diaphragm pump 12V (purge),1,4.50,4.50,PUMP1,optional N2 purge
+Solenoid valve 12V (N2 select),1,1.80,1.80,V1,optional
+MicroSD socket (push-push),1,0.70,0.70,J1,SPI
+TP4056 USB-C charger module,1,0.90,0.90,U7,18650 charge
+MP1584 buck 5V/1.5A,1,0.90,0.90,U8,logic rail
+MT3608 boost 12V/1.2A,1,1.20,1.20,U9,furnace rail
+18650 holder ×2,2,0.40,0.80,H1,
+18650 3500mAh (Samsung 30Q),2,4.50,9.00,B1,optional if not supplied
+IRLZ44N MOSFET (furnace PWM),1,0.60,0.60,Q1,logic-level N-MOS
+2N7002 (pump/valve/fan),3,0.10,0.30,Q2-Q4,
+TLV3201 comparator,1,1.10,1.10,U10,over-temp hardware cut
+250C thermal fuse (15A),1,0.50,0.50,F1,series with 12V furnace rail
+Reed interlock switch,1,0.60,0.60,S1,lid-closed interlock
+Tactile buttons,3,0.10,0.30,S2-S4,START/STOP/MENU
+Active buzzer 5V,1,0.50,0.50,BUZ1,
+White LED + 1k,1,0.10,0.10,LED1,
+0.1uF ceramic caps,20,0.02,0.40,C*,decoupling
+10uF tantalum caps,5,0.10,0.50,C*,rail decoupling
+Resistors 0603 (assorted),50,0.01,0.50,R*,pullups/dividers
+PCB (4-layer JLCPCJ),1,5.00,5.00,PCB1,70x110mm
+M3 standoffs + screws,,1.00,1.00,MECH,assembly
+3D-printed enclosure (PETG),1,2.00,2.00,CASE1,coffee-mug sized
+,,TOTAL,~81.00,,

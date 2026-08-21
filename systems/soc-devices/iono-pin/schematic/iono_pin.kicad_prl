@@ -1,0 +1,23 @@
+{
+  "board": {
+    "design_settings": {
+      "defaults": {
+        "track_width": 0.2,
+        "via_diameter": 0.6
+      },
+      "layer_presets": [
+        {"name": "F.Cu", "thickness": 0.035},
+        {"name": "In1.Cu", "thickness": 0.018, "type": "plane", "net": "GND"},
+        {"name": "In2.Cu", "thickness": 0.018, "type": "plane", "net": "+3V3A"},
+        {"name": "B.Cu", "thickness": 0.035}
+      ]
+    },
+    "setup": {
+      "pad_to_mask_clearance": 0.05
+    },
+    "rules": {
+      "min_track_width": 0.127,
+      "min_via_diameter": 0.4
+    }
+  }
+}

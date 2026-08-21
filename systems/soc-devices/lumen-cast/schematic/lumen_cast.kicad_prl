@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "meta": {
+    "filename": "lumen_cast.kicad_prl",
+    "version": 1
+  },
+  "board": {
+    "current_layer": "F.Cu"
+  }
+}

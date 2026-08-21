@@ -1,0 +1,337 @@
+(kicad_sch
+  (version 20231113)
+  (generator "hermes-soc-inventor")
+  (generator_version "1.0")
+  (uuid "b7f2c9d1-3a4e-4f5b-8c6d-7e8f9a0b1c2d")
+  (paper "A2")
+  (title_block
+    (title "Mussel Watch — Bivalve Biomonitoring Sensor")
+    (date "2026-06-19")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+  )
+
+  ;; ============================================================
+  ;; Sheet 1: Main schematic — nRF52840 + SX1262 + sensors + power
+  ;; ============================================================
+
+  (lib_symbols
+    ;; nRF52840 module (Raytac MDBT50Q-1M)
+    (symbol "nRF52840_module"
+      (pin power_in VCC 1)
+      (pin power_in GND 2)
+      (pin bidirectional P0.02 3)
+      (pin bidirectional P0.03 4)
+      (pin bidirectional P0.04 5)
+      (pin bidirectional P0.05 6)
+      (pin bidirectional P0.06 7)
+      (pin bidirectional P0.07 8)
+      (pin bidirectional P0.08 9)
+      (pin bidirectional P0.09 10)
+      (pin bidirectional P0.10 11)
+      (pin bidirectional P0.11 12)
+      (pin bidirectional P0.12 13)
+      (pin bidirectional P0.15 14)
+      (pin bidirectional P0.16 15)
+      (pin bidirectional P0.24 16)
+      (pin bidirectional P0.25 17)
+      (pin bidirectional P0.26 18)
+      (pin bidirectional P0.28 19)
+      (pin bidirectional P0.29 20)
+      (pin bidirectional P0.30 21)
+      (pin bidirectional P0.31 22)
+      (pin input SWDIO 23)
+      (pin input SWDCLK 24)
+    )
+
+    ;; SX1262 LoRa radio
+    (symbol "SX1262"
+      (pin power_in VCC 1)
+      (pin power_in GND 2)
+      (pin input NSS 3)
+      (pin input SCK 4)
+      (pin input MOSI 5)
+      (pin output MISO 6)
+      (pin bidirectional DIO1 7)
+      (pin input NRST 8)
+      (pin input TCXO 9)
+      (pin output ANT 10)
+    )
+
+    ;; ADS1115 16-bit ADC
+    (symbol "ADS1115"
+      (pin power_in VDD 1)
+      (pin power_in GND 2)
+      (pin bidirectional SDA 3)
+      (pin input SCL 4)
+      (pin input ADDR 5)
+      (pin input AIN0 6)
+      (pin input AIN1 7)
+      (pin input AIN2 8)
+      (pin input AIN3 9)
+      (pin output ALERT 10)
+    )
+
+    ;; DRV5053 linear Hall sensor
+    (symbol "DRV5053"
+      (pin power_in VCC 1)
+      (pin power_in GND 2)
+      (pin output OUT 3)
+    )
+
+    ;; TCA9548A I2C multiplexer
+    (symbol "TCA9548A"
+      (pin power_in VDD 1)
+      (pin power_in GND 2)
+      (pin bidirectional SDA 3)
+      (pin input SCL 4)
+      (pin input RESET 5)
+      (pin bidirectional SD0 6)
+      (pin bidirectional SD1 7)
+      (pin bidirectional SD2 8)
+      (pin bidirectional SD3 9)
+    )
+
+    ;; DS18B20 temperature sensor
+    (symbol "DS18B20"
+      (pin power_in VDD 1)
+      (pin power_in GND 2)
+      (pin bidirectional DQ 3)
+    )
+
+    ;; MS5837 pressure sensor
+    (symbol "MS5837"
+      (pin power_in VDD 1)
+      (pin power_in GND 2)
+      (pin bidirectional SDA 3)
+      (pin input SCL 4)
+    )
+
+    ;; BME280
+    (symbol "BME280"
+      (pin power_in VDD 1)
+      (pin power_in GND 2)
+      (pin bidirectional SDA 3)
+      (pin input SCL 4)
+      (pin input CSB 5)
+      (pin input SDO 6)
+    )
+
+    ;; MCP73871 charge controller
+    (symbol "MCP73871"
+      (pin power_in VIN 1)
+      (pin power_in BAT 2)
+      (pin power_out VBUS 3)
+      (pin output STAT1 4)
+      (pin output STAT2 5)
+      (pin input PROG 6)
+      (pin input TE 7)
+      (pin input VSEL 8)
+    )
+
+    ;; Atlas DO EZO
+    (symbol "Atlas_DO_EZO"
+      (pin power_in VCC 1)
+      (pin power_in GND 2)
+      (pin bidirectional SDA 3)
+      (pin input SCL 4)
+      (pin input PWR 5)
+    )
+  )
+
+  ;; ---- Components ----
+
+  (symbol (lib_id "nRF52840_module") (at 120 70 0)
+    (property "Reference" "U1") (property "Value" "MDBT50Q-1M")
+    (property "Footprint" "RF_Module:MDBT50Q")
+    (uuid "a1b2c3d4-0001-4000-8000-000000000001")
+  )
+
+  (symbol (lib_id "SX1262") (at 180 70 0)
+    (property "Reference" "U2") (property "Value" "SX1262IMLTRTC")
+    (property "Footprint" "Package_DFN_QFN:QFN-24")
+    (uuid "a1b2c3d4-0001-4000-8000-000000000002")
+  )
+
+  (symbol (lib_id "TCA9548A") (at 70 120 0)
+    (property "Reference" "U3") (property "Value" "TCA9548APWR")
+    (property "Footprint" "Package_SO:TSSOP-24")
+    (uuid "a1b2c3d4-0001-4000-8000-000000000003")
+  )
+
+  (symbol (lib_id "ADS1115") (at 40 160 0)
+    (property "Reference" "U4") (property "Value" "ADS1115")
+    (property "Footprint" "Package_SO:MSOP-10")
+    (uuid "a1b2c3d4-0001-4000-8000-000000000004")
+  )
+
+  (symbol (lib_id "DRV5053") (at 40 180 0)
+    (property "Reference" "U5") (property "Value" "DRV5053VAQDBZR")
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23")
+    (uuid "a1b2c3d4-0001-4000-8000-000000000005")
+  )
+
+  (symbol (lib_id "DS18B20") (at 120 130 0)
+    (property "Reference" "U6") (property "Value" "DS18B20+")
+    (property "Footprint" "Package_TO_SOT_THT:TO-92_Inline")
+    (uuid "a1b2c3d4-0001-4000-8000-000000000006")
+  )
+
+  (symbol (lib_id "MS5837") (at 120 145 0)
+    (property "Reference" "U7") (property "Value" "MS583702BA01-50")
+    (property "Footprint" "Sensor:MS5837")
+    (uuid "a1b2c3d4-0001-4000-8000-000000000007")
+  )
+
+  (symbol (lib_id "BME280") (at 120 160 0)
+    (property "Reference" "U8") (property "Value" "BME280")
+    (property "Footprint" "Sensor:Bosch_BME280")
+    (uuid "a1b2c3d4-0001-4000-8000-000000000008")
+  )
+
+  (symbol (lib_id "Atlas_DO_EZO") (at 120 100 0)
+    (property "Reference" "U9") (property "Value" "EZO-DO")
+    (property "Footprint" "Module:Atlas_EZO")
+    (uuid "a1b2c3d4-0001-4000-8000-000000000009")
+  )
+
+  (symbol (lib_id "MCP73871") (at 180 130 0)
+    (property "Reference" "U10") (property "Value" "MCP73871T-I/ML")
+    (property "Footprint" "Package_DFN_QFN:QFN-20")
+    (uuid "a1b2c3d4-0001-4000-8000-00000000000A")
+  )
+
+  ;; ---- Power nets ----
+  (net (code 1) (name "VCC_3V3") (tstamp "p1"))
+  (net (code 2) (name "GND") (tstamp "p2"))
+  (net (code 3) (name "VBUS_5V") (tstamp "p3"))
+  (net (code 4) (name "VBAT_3V7") (tstamp "p4"))
+  (net (code 5) (name "I2C_SDA") (tstamp "p5"))
+  (net (code 6) (name "I2C_SCL") (tstamp "p6"))
+  (net (code 7) (name "SPI_MISO") (tstamp "p7"))
+  (net (code 8) (name "SPI_MOSI") (tstamp "p8"))
+  (net (code 9) (name "SPI_SCK") (tstamp "p9"))
+  (net (code 10) (name "SX1262_CS") (tstamp "p10"))
+  (net (code 11) (name "SD_CS") (tstamp "p11"))
+  (net (code 12) (name "SX1262_DIO1") (tstamp "p12"))
+  (net (code 13) (name "SX1262_NRST") (tstamp "p13"))
+  (net (code 14) (name "SX1262_TCXO") (tstamp "p14"))
+  (net (code 15) (name "ONEWIRE") (tstamp "p15"))
+  (net (code 16) (name "BATTERY_V") (tstamp "p16"))
+  (net (code 17) (name "SOLAR_V") (tstamp "p17"))
+  (net (code 18) (name "SENSOR_PWR") (tstamp "p18"))
+  (net (code 19) (name "MODE_BTN") (tstamp "p19"))
+  (net (code 20) (name "LED_BLUE") (tstamp "p20"))
+  (net (code 21) (name "LED_RED") (tstamp "p21"))
+  (net (code 22) (name "MUX_RESET") (tstamp "p22"))
+  (net (code 23) (name "SD_PWR") (tstamp "p23"))
+  (net (code 24) (name "DO_PWR") (tstamp "p24"))
+  (net (code 25) (name "HALL_OUT") (tstamp "p25"))
+  (net (code 26) (name "MUX_SD0") (tstamp "p26"))
+  (net (code 27) (name "MUX_SD1") (tstamp "p27"))
+  (net (code 28) (name "MUX_SD2") (tstamp "p28"))
+  (net (code 29) (name "MUX_SD3") (tstamp "p29"))
+
+  ;; ---- Connections (wire labels for net topology) ----
+  ;; nRF52840 U1:
+  ;;   P0.02 → ONEWIRE (DS18B20 1-Wire bus)
+  ;;   P0.03 → I2C_SDA (TCA9548A, ADS1115, MS5837, Atlas DO, BME280)
+  ;;   P0.04 → I2C_SCL
+  ;;   P0.05 → BATTERY_V (SAADC, ÷2 divider)
+  ;;   P0.06 → SOLAR_V (SAADC, ÷2 divider)
+  ;;   P0.07 → SX1262_TCXO
+  ;;   P0.08 → SENSOR_PWR (load switch to sensor head)
+  ;;   P0.09 → MODE_BTN (tactile, active low with 10k pull-up)
+  ;;   P0.10 → LED_BLUE
+  ;;   P0.11 → LED_RED
+  ;;   P0.12 → MUX_RESET (TCA9548A active-low reset)
+  ;;   P0.15 → SD_PWR (load switch for SD card)
+  ;;   P0.16 → DO_PWR (load switch for Atlas DO probe)
+  ;;   P0.24 → SX1262_DIO1 (LoRa IRQ)
+  ;;   P0.25 → SX1262_NRST (LoRa reset)
+  ;;   P0.26 → SD_CS (SD card SPI CS)
+  ;;   P0.28 → SPI_MISO (shared SX1262 + SD)
+  ;;   P0.29 → SPI_MOSI
+  ;;   P0.30 → SPI_SCK
+  ;;   P0.31 → SX1262_CS (LoRa SPI CS)
+
+  ;; SX1262 U2:
+  ;;   NSS → SX1262_CS (P0.31)
+  ;;   SCK → SPI_SCK (P0.30)
+  ;;   MOSI → SPI_MOSI (P0.29)
+  ;;   MISO → SPI_MISO (P0.28)
+  ;;   DIO1 → SX1262_DIO1 (P0.24)
+  ;;   NRST → SX1262_NRST (P0.25)
+  ;;   TCXO → SX1262_TCXO (P0.07) + 3.3V TCXO enable
+  ;;   ANT → 868/915 MHz antenna via SMA
+
+  ;; TCA9548A U3:
+  ;;   SDA/SCL → I2C_SDA/I2C_SCL (main bus from nRF)
+  ;;   SD0-SD3 → separate I2C sub-buses to ADS1115 #0-#3 (4 mussel heads)
+  ;;   RESET → MUX_RESET (P0.12)
+
+  ;; ADS1115 U4 (Mussel A, address 0x48):
+  ;;   SDA/SCL → MUX_SD0 (TCA9548A channel 0)
+  ;;   AIN0 → HALL_OUT (DRV5053 output)
+  ;;   ADDR → GND (0x48)
+
+  ;; DRV5053 U5:
+  ;;   OUT → HALL_OUT → ADS1115 AIN0
+  ;;   VCC → VCC_3V3 (via SENSOR_PWR load switch)
+
+  ;; DS18B20 U6:
+  ;;   DQ → ONEWIRE (P0.02) with 4.7k pull-up to VCC_3V3
+  ;;   VDD → VCC_3V3 (parasitic power mode optional; standard 3.3V mode)
+
+  ;; MS5837 U7:
+  ;;   SDA/SCL → I2C_SDA/I2C_SCL (main bus)
+  ;;   VDD → VCC_3V3 (sensor head power)
+
+  ;; BME280 U8:
+  ;;   SDA/SCL → I2C_SDA/I2C_SCL (main bus)
+  ;;   CSB → GND (I2C mode), SDO → GND (address 0x77)
+  ;;   VDD → VCC_3V3 (always powered, in air pod)
+
+  ;; Atlas DO EZO U9:
+  ;;   SDA/SCL → I2C_SDA/I2C_SCL (main bus)
+  ;;   PWR → DO_PWR (P0.16, load switch for power-gating)
+
+  ;; MCP73871 U10:
+  ;;   VIN → SOL1 (solar panel 6V via Schottky D1)
+  ;;   BAT → BAT1 (LiPo 3.7V)
+  ;;   VBUS → VBUS_5V (system power rail)
+  ;;   STAT1 → LED charging indicator (optional)
+  ;;   PROG → resistor sets charge current to ~500mA
+
+  ;; ---- Decoupling capacitors ----
+  ;; C1: 100nF on U1 VCC → GND
+  ;; C2: 100nF on U2 VCC → GND
+  ;; C3: 100nF on U3 VDD → GND
+  ;; C4: 100nF on U4 VDD → GND
+  ;; C5: 100nF on U7 VDD → GND
+  ;; C6: 100nF on U8 VDD → GND
+  ;; C7: 10uF bulk on VCC_3V3
+  ;; C8: 4.7uF tantalum on LDO output
+
+  ;; ---- Pull-up resistors ----
+  ;; R1: 4.7k on I2C_SDA → VCC_3V3
+  ;; R2: 4.7k on I2C_SCL → VCC_3V3
+  ;; R3: 4.7k on ONEWIRE → VCC_3V3
+  ;; R4: 4.7k on MUX_RESET → VCC_3V3 (active low)
+
+  ;; ---- Voltage dividers for ADC ----
+  ;; R5: 100k (VCC_3V3 → BATTERY_V) — actually from VBAT_3V7 through ÷2 to P0.05
+  ;; R6: 100k (SOL1 → SOLAR_V) — ÷2 divider to P0.06
+  ;; Each divider: top resistor 100k, bottom resistor 100k → ÷2
+
+  ;; ---- LEDs ----
+  ;; D2: Blue LED (P0.10) via 330Ω R7
+  ;; D3: Red LED (P0.11) via 330Ω
+
+  ;; ---- Mode button ----
+  ;; SW1: Tactile (P0.09) to GND, 10k pull-up R8 to VCC_3V3
+
+  (sheet_instances
+    (path "/" (page "1"))
+  )
+)

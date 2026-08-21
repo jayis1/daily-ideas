@@ -1,0 +1,11 @@
+(kicad_pro (version 20240108)
+  (general
+    (project "Hive Mind")
+  )
+  (meta
+    (filename "hive_mind.kicad_pro")
+  )
+  (sheets
+    (sheet "Root")
+  )
+)

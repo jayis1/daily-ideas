@@ -1,0 +1,5 @@
+build_sim/
+build-stm32/
+build/
+sdkconfig
+managed_components/

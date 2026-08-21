@@ -1,0 +1,25 @@
+(kicad_sch (version 20230614)
+  (generator "eeschema")
+  (uuid "00000000-0000-0000-0000-000000000030")
+  (paper "A3")
+  (title_block
+    (title "Optical Path — AS7343 + Broadband LED + UV LED")
+    (date "2026-06-17")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+  )
+
+  (lib_symbols)
+
+  (symbol "AS7343" (in_bom yes) (on_board yes)
+    (property "Reference" "U3" (at 0 1.27 0))
+    (property "Value" "AS7343" (at 0 -1.27 0))
+    (property "Footprint" "OptoDevice:ams-OSRAM_AS7343" (at 0 -3.81 0))
+    (symbol_name "AS7343")
+  )
+
+  (text "Optical Path Notes:\n\nAS7343 (U3):\n  - 10-channel spectral sensor\n  - SPI1: PA6(MISO), PA7(MOSI), PA11(SCK), PA4(NSS)\n  - INT: PB7 (data-ready, active-low)\n  - LDR: PD2 (gain control)\n  - 6-bit LED driver integrated\n  - Place sensor at focal point of integrating diffuser\n\nWhite LED (D1):\n  - AL8805 buck LED driver (U11)\n  - DAC1_CH1 (PA4) → AL8805 ADJ → sets current 0-350mA\n  - MOSFET Q1 enable via PA9 (WHITE_LED_EN)\n  - High CRI white, 400-700nm\n\nUV LED (D2):\n  - 365nm near-UV for 340-400nm coverage\n  - DAC1_CH2 (PA5) → current set via MOSFET Q2\n  - Enable via PA8 (UV_LED_EN)\n  - INTERLOCK: Hall sensor H1 disables UV when cuvette removed\n\nIntegrating Diffuser:\n  - PTFE disc, 5mm diameter, 0.5mm thick\n  - Placed between cuvette exit and AS7343 aperture\n  - Provides cosine correction and uniform illumination"
+    (at 50.8 38.1 0)
+    (uuid "00000000-0000-0000-0000-000000000031")
+  )
+)

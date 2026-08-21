@@ -1,0 +1,30 @@
+#,Part,Package,Qty,Unit_USD,Note
+1,STM32G491RET6,LQFP-64,1,4.50,170MHz Cortex-M4F CORDIC 12-bit ADC
+2,ESP32-C3-MINI-1,Module,1,2.20,BLE 5.0 + Wi-Fi 4
+3,TSL1402R,DIP-8,1,9.50,256x1 linear CCD 63.5um pitch
+4,SF11 flint glass prism 10mm,Optical,1,6.00,n_D=1.785 custom cut
+5,Plano-convex lens f=12mm,O6mm,1,1.50,CCD imaging lens
+6,Ground-glass diffuser,O6mm,1,0.50,600 grit
+7,LED 589nm 5mm,T-1-3/4,1,0.80,Kingbright L-934ND1D
+8,LED 525nm 5mm,T-1-3/4,1,0.25,Green 30nm FWHM
+9,LED 470nm 5mm,T-1-3/4,1,0.25,Blue 25nm FWHM
+10,LED 655nm 5mm,T-1-3/4,1,0.25,Red 20nm FWHM
+11,SSD1306 OLED 0.96in 128x64,Module,1,1.80,I2C monochrome
+12,BME280,LGA-8,1,2.00,Ambient T/H/P
+13,DS18B20,TO-92,1,1.20,Prism temperature +-0.1C
+14,TEC1-04030 Peltier,4x3mm,1,1.50,Optional prism temp control
+15,DRV8833,SOIC-16,1,1.00,TEC H-bridge driver
+16,microSD socket,SMD,1,0.40,Push-push SPI mode
+17,microSD card 8GB,--,1,1.50,Logging
+18,MCP73831-2-OT,SOT-23-5,1,0.40,LiPo charger 500mA
+19,AP2112-3.3,SOT-223,1,0.30,LDO 600mA
+20,LiPo 800mAh,Pouch,1,3.00,3.7V with protection PCB
+21,USB-C 16-pin receptacle,SMD,1,0.35,Power + data
+22,WS2812B-2020,2020,1,0.15,Status RGB LED
+23,Tactile switch 6x6mm,SMD,3,0.15,Measure/Mode/Power
+24,NTC 10k 1%,0402,1,0.05,Battery temperature
+25,Resistors/Caps 0402,0402,50,0.75,Pullups decoupling dividers
+26,8 MHz crystal,3225,1,0.20,STM32 HSE
+27,74LVC1G66 analog switch,SOT-23-5,1,0.10,USB D+/D- mux
+28,MMBT2222A NPN,SOT-23,4,0.20,LED constant-current drivers
+29,PCB 4-layer 85x54mm,Rect,1,2.00,JLCPCB black mask

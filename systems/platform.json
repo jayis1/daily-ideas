@@ -1,0 +1,48 @@
+{
+  "name": "Daily Ideas Four-Node Platform",
+  "version": 1,
+  "source_repository": "https://github.com/jayis1/SoC-Device-Inventions",
+  "device_registry": "devices.json",
+  "protocol": "protocol/README.md",
+  "nodes": [
+    {
+      "id": "observe",
+      "title": "Observe Node",
+      "role": "Sense the physical world and produce timestamped measurements.",
+      "inputs": ["physical signals", "environment", "operator requests"],
+      "outputs": ["telemetry", "events", "raw samples"],
+      "reference_devices": ["neuro-sense-puck", "canopy-listener", "halo-pin", "terra-pin"]
+    },
+    {
+      "id": "reason",
+      "title": "Reason Node",
+      "role": "Fuse observations, run models, and turn measurements into decisions.",
+      "inputs": ["telemetry", "events", "device health"],
+      "outputs": ["findings", "commands", "confidence"],
+      "reference_devices": ["phase-scope", "spectra-charm", "echo-mote", "sky-lens"]
+    },
+    {
+      "id": "act",
+      "title": "Act Node",
+      "role": "Apply safe physical actions and close local control loops.",
+      "inputs": ["commands", "safety policy", "local feedback"],
+      "outputs": ["actuation state", "interlocks", "results"],
+      "reference_devices": ["mycelium-node", "therma-weave", "levia-forge", "glyph-press"]
+    },
+    {
+      "id": "coordinate",
+      "title": "Coordinate Node",
+      "role": "Connect deployments to people, storage, and other node groups.",
+      "inputs": ["findings", "results", "fleet state"],
+      "outputs": ["workflows", "history", "user interfaces"],
+      "reference_devices": ["hive-mind", "soil-whisper", "tremor-tile", "sap-watch"]
+    }
+  ],
+  "links": [
+    {"from": "observe", "to": "reason", "contract": "telemetry/v1"},
+    {"from": "reason", "to": "act", "contract": "command/v1"},
+    {"from": "act", "to": "observe", "contract": "feedback/v1"},
+    {"from": "reason", "to": "coordinate", "contract": "finding/v1"},
+    {"from": "coordinate", "to": "reason", "contract": "policy/v1"}
+  ]
+}

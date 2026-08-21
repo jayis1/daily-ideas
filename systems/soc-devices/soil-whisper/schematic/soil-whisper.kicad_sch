@@ -1,0 +1,267 @@
+(kicad_sch
+  (version 20240101)
+  (generator "eeschema")
+  (uuid e1a2b3c4-d5e6-f7a8-b9c0-d1e2f3a4b5c6)
+
+  (paper "A3")
+
+  (title_block
+    (title "Soil Whisper — Soil Intelligence Probe")
+    (date "2026-06-16")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+    (comment 1 "STM32WL55JC + LoRaWAN + NPK/pH/Moisture")
+  )
+
+  ;; ── General Info ──────────────────────────────────────────────────
+
+  (lib_symbols)
+
+  ;; ── STM32WL55JC (U1) ─────────────────────────────────────────────
+
+  (symbol (lib_id "MCU_ST_STM32WL:STM32WL55JCIX") (at 152.4 88.9) (uuid 10000001-0000-0000-0000-000000000001)
+    (property "Reference" "U1" (at 0 0) (uuid 10000002))
+    (property "Value" "STM32WL55JCIX" (at 0 2.54) (uuid 10000003))
+    (property "Footprint" "Package_DFN_QFN:QFN-48-1EP_7x7mm_P0.5mm_EP5.6x5.6mm" (at 0 5.08) (uuid 10000004))
+    (pin "PA0/ADC1_IN5" (uuid 10000010))
+    (pin "PA1/ADC1_IN6" (uuid 10000011))
+    (pin "PA2/USART2_TX" (uuid 10000012))
+    (pin "PA3/USART2_RX" (uuid 10000013))
+    (pin "PA4/MUX_EN" (uuid 10000014))
+    (pin "PA5/SPI1_SCK" (uuid 10000015))
+    (pin "PA6/SPI1_MISO" (uuid 10000016))
+    (pin "PA7/SPI1_MOSI" (uuid 10000017))
+    (pin "PA8/MUX_S0" (uuid 10000018))
+    (pin "PA9/MUX_S1" (uuid 10000019))
+    (pin "PA10/MUX_S2" (uuid 1000001a))
+    (pin "PA12/1WIRE_PWR" (uuid 1000001c))
+    (pin "PB0/NPK_PWR" (uuid 10000020))
+    (pin "PB2/LED_G" (uuid 10000022))
+    (pin "PB3/LED_R" (uuid 10000023))
+    (pin "PB6/I2C1_SCL" (uuid 10000026))
+    (pin "PB7/I2C1_SDA" (uuid 10000027))
+    (pin "PB9/MUX_S3" (uuid 10000029))
+    (pin "PB11/VBAT_SENSE" (uuid 1000002b))
+    (pin "PC0/ADC_IN1" (uuid 10000030))
+    (pin "PC1/ADC_IN2" (uuid 10000031))
+    (pin "PC13/1WIRE_DATA" (uuid 1000003d))
+    (pin "PC6/TIM3_CH1" (uuid 10000036))
+    (pin "PC7/TIM3_CH2" (uuid 10000037))
+    (pin "PC8/TIM3_CH3" (uuid 10000038))
+    (pin "RF_TX" (uuid 10000040))
+    (pin "VDD" (uuid 10000050))
+    (pin "VSS" (uuid 10000051))
+  )
+
+  ;; ── ADS1115 16-bit ADC (U2) ──────────────────────────────────────
+
+  (symbol (lib_id "Analog_ADC:ADS1115IDGS") (at 254 66.04) (uuid 20000001-0000-0000-0000-000000000001)
+    (property "Reference" "U2" (at 0 0) (uuid 20000002))
+    (property "Value" "ADS1115IDGS" (at 0 2.54) (uuid 20000003))
+    (property "Footprint" "Package_SO:TSSOP-10_3x3mm_P0.5mm" (at 0 5.08) (uuid 20000004))
+    (pin "SCL" (uuid 20000010))
+    (pin "SDA" (uuid 20000011))
+    (pin "ADDR" (uuid 20000012))
+    (pin "ALERT/RDY" (uuid 20000013))
+    (pin "A0" (uuid 20000014))
+    (pin "A1" (uuid 20000015))
+    (pin "A2" (uuid 20000016))
+    (pin "A3" (uuid 20000017))
+    (pin "VDD" (uuid 20000018))
+    (pin "GND" (uuid 20000019))
+  )
+
+  ;; ── CD74HC4067 MUX (U3) ──────────────────────────────────────────
+
+  (symbol (lib_id "Analog_Switch:CD74HC4067M96") (at 254 114.3) (uuid 30000001-0000-0000-0000-000000000001)
+    (property "Reference" "U3" (at 0 0) (uuid 30000002))
+    (property "Value" "CD74HC4067M96" (at 0 2.54) (uuid 30000003))
+    (property "Footprint" "Package_SO:TSSOP-24_4.4x7.4mm_P0.65mm" (at 0 5.08) (uuid 30000004))
+    (pin "S0" (uuid 30000010))
+    (pin "S1" (uuid 30000011))
+    (pin "S2" (uuid 30000012))
+    (pin "S3" (uuid 30000013))
+    (pin "EN" (uuid 30000014))
+    (pin "COM" (uuid 30000015))
+    (pin "I0" (uuid 30000020))
+    (pin "I1" (uuid 30000021))
+    (pin "I2" (uuid 30000022))
+    (pin "I3" (uuid 30000023))
+    (pin "I4-I15" (uuid 30000024))
+    (pin "VDD" (uuid 30000030))
+    (pin "GND" (uuid 30000031))
+  )
+
+  ;; ── TLC555 Moisture Oscillators (U4, U5, U6) ────────────────────
+
+  ;; Each TLC555 is configured in astable mode with capacitive PCB traces
+  ;; as the timing capacitor. Output frequency changes with soil moisture.
+
+  (symbol (lib_id "Timer:TLC555IDR") (at 45.72 152.4) (uuid 40000001)
+    (property "Reference" "U4" (at 0 0) (uuid 40000002))
+    (property "Value" "TLC555" (at 0 2.54) (uuid 40000003))
+    (property "Footprint" "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm" (at 0 5.08) (uuid 40000004))
+    (pin "GND" (uuid 40000010))
+    (pin "TRIG" (uuid 40000011))
+    (pin "OUT" (uuid 40000012))  ;; → PC6/TIM3_CH1
+    (pin "RESET" (uuid 40000013))
+    (pin "CTRL" (uuid 40000014))
+    (pin "THRESH" (uuid 40000015))
+    (pin "DISCH" (uuid 40000016))
+    (pin "VDD" (uuid 40000017))
+  )
+
+  (symbol (lib_id "Timer:TLC555IDR") (at 45.72 177.8) (uuid 50000001)
+    (property "Reference" "U5" (at 0 0) (uuid 50000002))
+    (property "Value" "TLC555" (at 0 2.54) (uuid 50000003))
+    (property "Footprint" "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm" (at 0 5.08) (uuid 50000004))
+    (pin "OUT" (uuid 50000012))  ;; → PC7/TIM3_CH2
+  )
+
+  (symbol (lib_id "Timer:TLC555IDR") (at 45.72 203.2) (uuid 60000001)
+    (property "Reference" "U6" (at 0 0) (uuid 60000002))
+    (property "Value" "TLC555" (at 0 2.54) (uuid 60000003))
+    (property "Footprint" "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm" (at 0 5.08) (uuid 60000004))
+    (pin "OUT" (uuid 60000012))  ;; → PC8/TIM3_CH3
+  )
+
+  ;; ── TLV8542 Op-Amps (U7, U8) ─────────────────────────────────────
+
+  ;; U7: Buffer for NO3 ISE (A) and PO4 ISE (B)
+  ;; U8: Buffer for K+ ISE (A) and pH glass electrode (B)
+
+  (symbol (lib_id "Amplifier_Operational:TLV8542DGKR") (at 127 152.4) (uuid 70000001)
+    (property "Reference" "U7" (at 0 0) (uuid 70000002))
+    (property "Value" "TLV8542" (at 0 2.54) (uuid 70000003))
+    (property "Footprint" "Package_SO:TSSOP-8_3x3mm_P0.65mm" (at 0 5.08) (uuid 70000004))
+  )
+
+  (symbol (lib_id "Amplifier_Operational:TLV8542DGKR") (at 127 177.8) (uuid 80000001)
+    (property "Reference" "U8" (at 0 0) (uuid 80000002))
+    (property "Value" "TLV8542" (at 0 2.54) (uuid 80000003))
+    (property "Footprint" "Package_SO:TSSOP-8_3x3mm_P0.65mm" (at 0 5.08) (uuid 80000004))
+  )
+
+  ;; ── SHT40 (U9) ───────────────────────────────────────────────────
+
+  (symbol (lib_id "Sensor_Humidity:Sensirion_SHT40") (at 254 38.1) (uuid 90000001)
+    (property "Reference" "U9" (at 0 0) (uuid 90000002))
+    (property "Value" "SHT40-AD1B" (at 0 2.54) (uuid 90000003))
+    (property "Footprint" "Sensor_Humidity:Sensirion_DFN-4-1EP_2.5x2.5mm_P1mm" (at 0 5.08) (uuid 90000004))
+    (pin "SCL" (uuid 90000010))
+    (pin "SDA" (uuid 90000011))
+    (pin "VDD" (uuid 90000012))
+    (pin "GND" (uuid 90000013))
+  )
+
+  ;; ── BQ25570 Solar Harvester (U13) ────────────────────────────────
+
+  (symbol (lib_id "Power_Management:BQ25570RGRR") (at 45.72 50.8) (uuid d0000001)
+    (property "Reference" "U13" (at 0 0) (uuid d0000002))
+    (property "Value" "BQ25570" (at 0 2.54) (uuid d0000003))
+    (property "Footprint" "Package_DFN_QFN:VQFN-14-1EP_3.5x3.5mm_P0.5mm" (at 0 5.08) (uuid d0000004))
+    (pin "VIN_DC" (uuid d0000010))   ;; ← Solar panel +
+    (pin "VOUT" (uuid d0000011))      ;; → Supercap +
+    (pin "VBAT" (uuid d0000012))     ;; ← Supercap + (backup)
+    (pin "OK_HYST" (uuid d0000013))
+    (pin "OK_PROG" (uuid d0000014))
+    (pin "VBAT_OK" (uuid d0000015))  ;; → PB10 (interrupt)
+    (pin "VREF_SAMP" (uuid d0000016))
+    (pin "EN" (uuid d0000017))
+    (pin "GND" (uuid d0000018))
+  )
+
+  ;; ── TPS7A02 LDO (U14) ────────────────────────────────────────────
+
+  (symbol (lib_id "Regulator_Linear:TPS7A0233PDBVR") (at 101.6 50.8) (uuid e0000001)
+    (property "Reference" "U14" (at 0 0) (uuid e0000002))
+    (property "Value" "TPS7A02" (at 0 2.54) (uuid e0000003))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-5" (at 0 5.08) (uuid e0000004))
+    (pin "IN" (uuid e0000010))    ;; ← Supercap + via BQ25570 VOUT
+    (pin "OUT" (uuid e0000011))   ;; → 3.3V rail
+    (pin "EN" (uuid e0000012))   // ← PA15 (power gating)
+    (pin "GND" (uuid e0000013))
+    (pin "NR" (uuid e0000014))   // ← 1µF noise reduction cap
+  )
+
+  ;; ── Supercapacitor (C1) ──────────────────────────────────────────
+
+  (symbol (lib_id "Device:C_Polarized") (at 76.2 63.5) (uuid f0000001)
+    (property "Reference" "C1" (at 0 0) (uuid f0000002))
+    (property "Value" "10F/3.6V" (at 0 2.54) (uuid f0000003))
+    (property "Footprint" "Capacitor_THT:CP_Radial_D18.0mm_P7.50mm" (at 0 5.08) (uuid f0000004))
+  )
+
+  ;; ── Solar Panel Connector (J1) ───────────────────────────────────
+
+  (symbol (lib_id "Connector:Screw_Terminal_01x02") (at 15.24 50.8) (uuid f1000001)
+    (property "Reference" "J1" (at 0 0) (uuid f1000002))
+    (property "Value" "Solar_6V" (at 0 2.54) (uuid f1000003))
+  )
+
+  ;; ── ISE Probe Connectors (J2-J5) ─────────────────────────────────
+
+  (symbol (lib_id "Connector:BNC") (at 203.2 152.4) (uuid f2000001)
+    (property "Reference" "J2" (at 0 0) (uuid f2000002))
+    (property "Value" "NO3_ISE" (at 0 2.54) (uuid f2000003))
+  )
+
+  (symbol (lib_id "Connector:BNC") (at 203.2 167.64) (uuid f3000001)
+    (property "Reference" "J3" (at 0 0) (uuid f3000002))
+    (property "Value" "PO4_ISE" (at 0 2.54) (uuid f3000003))
+  )
+
+  (symbol (lib_id "Connector:BNC") (at 203.2 182.88) (uuid f4000001)
+    (property "Reference" "J4" (at 0 0) (uuid f4000002))
+    (property "Value" "K_ISE" (at 0 2.54) (uuid f4000003))
+  )
+
+  (symbol (lib_id "Connector:BNC") (at 203.2 198.12) (uuid f5000001)
+    (property "Reference" "J5" (at 0 0) (uuid f5000002))
+    (property "Value" "pH_Glass" (at 0 2.54) (uuid f5000003))
+  )
+
+  ;; ── Antenna (AE1) ────────────────────────────────────────────────
+
+  (symbol (lib_id "RF:IPEX_Antenna") (at 30.48 114.3) (uuid f6000001)
+    (property "Reference" "AE1" (at 0 0) (uuid f6000002))
+    (property "Value" "868/915MHz" (at 0 2.54) (uuid f6000003))
+  )
+
+  ;; ── DS18B20 Temperature Probes ───────────────────────────────────
+
+  (symbol (lib_id "Sensor_Temperature:DS18B20") (at 177.8 152.4) (uuid f7000001)
+    (property "Reference" "U10" (at 0 0) (uuid f7000002))
+    (property "Value" "DS18B20" (at 0 2.54) (uuid f7000003))
+    (property "Footprint" "Package_TO_SOT_THT:TO-92_3" (at 0 5.08) (uuid f7000004))
+    (pin "VDD" (uuid f70000010))  ;; ← PA12 (power gated)
+    (pin "DQ" (uuid f70000011))   ;; ← PC13 (1-Wire data)
+    (pin "GND" (uuid f70000012))
+  )
+
+  ;; ── Net labels and power symbols ─────────────────────────────────
+
+  (symbol (lib_id "power:+3V3") (at 101.6 43.18) (uuid p0000001))
+  (symbol (lib_id "power:GND") (at 101.6 58.42) (uuid p0000002))
+  (symbol (lib_id "power:VOUT") (at 76.2 43.18) (uuid p0000003))  ;; Supercap rail
+
+  ;; ── Connections / Net labels ──────────────────────────────────────
+
+  ;; I2C bus: PB6 (SCL) → U2.SCL, U9.SCL
+  ;;           PB7 (SDA) → U2.SDA, U9.SDA
+
+  ;; MUX select: PA8→S0, PA9→S1, PA10→S2, PB9→S3
+  ;; MUX enable: PA4 (active low) → U3.EN
+  ;; MUX common → U2.A0 (ADS1115 single-ended input)
+
+  ;; Moisture oscillators: U4.OUT→PC6, U5.OUT→PC7, U6.OUT→PC8
+
+  ;; DS18B20: PC13 (data, open-drain), PA12 (power, push-pull)
+
+  ;; VBAT sense: PB11 ← voltage divider on supercap
+
+  ;; 1-Wire: PC13 ← DS18B20 data (with 4.7kΩ pullup)
+
+  ;; Status LEDs: PB2 (green), PB3 (red)
+
+)

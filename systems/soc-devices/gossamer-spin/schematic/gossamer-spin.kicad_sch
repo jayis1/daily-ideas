@@ -1,0 +1,407 @@
+(kicad_sch
+  (version "20220920")
+  (generator "hermes-inventor")
+
+  ; ====== Gossamer Spin — Pocket Electrospinning Nanofiber Generator ======
+  ; Control SoC: STM32G474RET6  |  Radio SoC: ESP32-C3-WROOM-02
+  ; 0-30kV HV supply + syringe pump + drum collector + jet current monitor
+
+  (lib_symbols)
+
+  ; ====== Control Core: STM32G474RET6 ======
+  (symbol (id 0) (at 120 80) (name "STM32G474RET6")
+    (in_bom yes)
+    (uuid "stm32-main")
+    (property "Reference" "U1")
+    (property "Value" "STM32G474RET6")
+    (pins
+      (pin (name "VDD")     (type power_in))
+      (pin (name "VDDA")    (type power_in))
+      (pin (name "GND")     (type power_in))
+      (pin (name "VBAT")    (type power_in))
+      (pin (name "PA1/ADC1")     (type input))    ; Battery monitor ÷2
+      (pin (name "PA2/USART2_TX")(type output))   ; -> ESP32-C3 RX
+      (pin (name "PA3/USART2_RX")(type input))    ; <- ESP32-C3 TX
+      (pin (name "PA4/HRTIM_CHA1")(type output))  ; Boost MOSFET PWM
+      (pin (name "PA5/HRTIM_CHA2")(type output))  ; Boost discharge
+      (pin (name "PA6/TIM1_CH1") (type output))   ; Syringe step
+      (pin (name "PA7/TIM1_CH2") (type output))   ; Syringe dir
+      (pin (name "PA8/TIM8_CH1") (type output))   ; Drum step
+      (pin (name "PA9/TIM8_CH2") (type output))   ; Drum dir
+      (pin (name "PA10/HV_EN")   (type output))   ; Boost enable
+      (pin (name "PA11/HV_CUT")  (type input))    ; Hardware HV cutoff
+      (pin (name "PA12/DOOR")    (type input))    ; Door interlock
+      (pin (name "PA13/TILT")    (type input))    ; Tilt sensor
+      (pin (name "PA14/SYR_LIM") (type input))    ; Syringe empty limit
+      (pin (name "PA15/BUTTON")  (type input))    ; Start/stop button
+      (pin (name "PB0/I2C1_SCL") (type output))   ; BME280/OLED SCL
+      (pin (name "PB1/I2C1_SDA") (type bidirectional)) ; BME280/OLED SDA
+      (pin (name "PB2/SPI2_SCK") (type output))   ; microSD SCK
+      (pin (name "PB3/SPI2_MISO")(type input))    ; microSD MISO
+      (pin (name "PB4/SPI2_MOSI")(type output))   ; microSD MOSI
+      (pin (name "PB5/SPI2_NSS") (type output))   ; microSD CS
+      (pin (name "PB6/SPI3_SCK") (type output))   ; ADS122U04 SCK
+      (pin (name "PB7/SPI3_MISO")(type input))    ; ADS122U04 DOUT/DRDY
+      (pin (name "PB8/SPI3_MOSI")(type output))   ; ADS122U04 DIN
+      (pin (name "PB9/SPI3_NSS") (type output))   ; ADS122U04 CS
+      (pin (name "PB10/CHG")     (type input))    ; TP4056 charge status
+      (pin (name "PB11/LED")     (type output))   ; Status LED
+      (pin (name "PB12/SAFE_LED")(type output))   ; HV-safe LED
+      (pin (name "PC13/BOOT")    (type input))    ; boot button
+      (pin (name "PC14/SD_DET")  (type input))    ; microSD detect
+      (pin (name "PC15/BOOST_EN")(type output))   ; Boost enable secondary
+      (pin (name "NRST")         (type input))
+      (pin (name "BOOT0")        (type input))
+      (pin (name "SWDIO")        (type bidirectional))
+      (pin (name "SWCLK")        (type input))
+    )
+  )
+
+  ; ====== Radio Core: ESP32-C3-WROOM-02 ======
+  (symbol (id 1) (at 220 80) (name "ESP32-C3-WROOM-02")
+    (in_bom yes)
+    (uuid "esp32c3-radio")
+    (property "Reference" "U2")
+    (property "Value" "ESP32-C3-WROOM-02")
+    (pins
+      (pin (name "3V3")   (type power_in))
+      (pin (name "GND")   (type power_in))
+      (pin (name "EN")    (type input))
+      (pin (name "GPIO2/RX0")(type input))   ; <- STM32 USART2_TX
+      (pin (name "GPIO3/TX0")(type output))  ; -> STM32 USART2_RX
+      (pin (name "GPIO7/LED")(type output))  ; radio status LED
+      (pin (name "GPIO8/WAKE")(type output)) ; STM32 wake
+      (pin (name "GPIO9/BOOT")(type input))  ; boot strap
+      (pin (name "GPIO10/SCL")(type output)) ; I2C expansion
+      (pin (name "GPIO11/SDA")(type bidirectional)) ; I2C expansion
+    )
+  )
+
+  ; ====== Power: 18650 + TP4056 + DW02 + AP2112 ======
+  (symbol (id 2) (at 30 40) (name "18650_BATTERY")
+    (uuid "bat1")
+    (property "Reference" "BAT1")
+    (property "Value" "18650 3.7V 3500mAh")
+    (pins (pin (name "+") (type power_out)) (pin (name "-") (type power_in)))
+  )
+
+  (symbol (id 3) (at 55 40) (name "TP4056")
+    (uuid "chg1")
+    (property "Reference" "U3")
+    (property "Value" "TP4056 charger")
+    (pins
+      (pin (name "VIN") (type power_in))
+      (pin (name "BAT") (type power_out))
+      (pin (name "CHG") (type output))
+      (pin (name "GND") (type power_in))
+    )
+  )
+
+  (symbol (id 4) (at 80 40) (name "DW02")
+    (uuid "prot1")
+    (property "Reference" "U4")
+    (property "Value" "DW02 protection")
+    (pins (pin (name "BAT+") (type power_in)) (pin (name "OUT+") (type power_out))
+          (pin (name "GND") (type power_in)))
+  )
+
+  (symbol (id 5) (at 105 40) (name "AP2112_LDO")
+    (uuid "ldo1")
+    (property "Reference" "U5")
+    (property "Value" "AP2112-3.3")
+    (pins (pin (name "VIN") (type power_in)) (pin (name "VOUT") (type power_out))
+          (pin (name "GND") (type power_in)))
+  )
+
+  ; ====== HV supply: Flyback transformer + IRFH7440 + CW multiplier ======
+  (symbol (id 6) (at 30 130) (name "EE25_FLYBACK")
+    (uuid "tx1")
+    (property "Reference" "T1")
+    (property "Value" "EE25 flyback 1:80")
+    (pins
+      (pin (name "PRI+") (type input))    ; <- 3.7V battery
+      (pin (name "PRI-") (type output))   ; -> MOSFET drain
+      (pin (name "SEC+") (type output))   ; -> CW input
+      (pin (name "SEC-") (type power_in)) ; GND
+    )
+  )
+
+  (symbol (id 7) (at 70 130) (name "IRFH7440_MOSFET")
+    (uuid "mos1")
+    (property "Reference" "Q1")
+    (property "Value" "IRFH7440 N-MOS")
+    (pins (pin (name "G") (type input))    ; <- HRTIM CHA1 via driver
+          (pin (name "D") (type input))    ; <- flyback PRI-
+          (pin (name "S") (type output))   ; -> GND
+          (pin (name "GND")(type power_in)))
+  )
+
+  (symbol (id 8) (at 110 130) (name "CW_MULTIPLIER")
+    (uuid "cw1")
+    (property "Reference" "U6")
+    (property "Value" "10-stage Cockcroft-Walton 30kV")
+    (pins
+      (pin (name "AC_IN") (type input))   ; <- flyback SEC+
+      (pin (name "GND")   (type power_in))
+      (pin (name "HV_OUT")(type output))  ; -> 910MΩ series -> needle
+    )
+  )
+
+  ; ====== HV voltage divider (1000:1) ======
+  (symbol (id 9) (at 150 130) (name "HV_DIVIDER")
+    (uuid "div1")
+    (property "Reference" "R1")
+    (property "Value" "900MΩ:900kΩ 1000:1")
+    (pins (pin (name "HV") (type input))   ; <- CW HV_OUT
+          (pin (name "GND") (type power_in))
+          (pin (name "SENSE") (type output)) ; -> ADS122U04 ch1
+    )
+  )
+
+  ; ====== Jet current TIA: ADA4530-1 ======
+  (symbol (id 10) (at 150 170) (name "ADA4530-1")
+    (uuid "tia1")
+    (property "Reference" "U7")
+    (property "Value" "ADA4530-1 electrometer TIA")
+    (pins
+      (pin (name "IN-")  (type input))    ; <- collector electrode (virtual gnd)
+      (pin (name "IN+")  (type power_in)) ; GND (virtual ground ref)
+      (pin (name "RFB")  (type bidirectional)) ; 100MΩ feedback
+      (pin (name "OUT")  (type output))   ; -> 1/10 divider -> ADS122U04 ch0
+      (pin (name "VDD")  (type power_in))
+      (pin (name "VSS")  (type power_in))
+    )
+  )
+
+  (symbol (id 11) (at 130 170) (name "RFB_100M")
+    (uuid "rfb1")
+    (property "Reference" "R2")
+    (property "Value" "100MΩ feedback")
+    (pins (pin (name "1") (type bidirectional)) (pin (name "2") (type bidirectional)))
+  )
+
+  ; ====== ADS122U04 24-bit ADC ======
+  (symbol (id 12) (at 190 160) (name "ADS122U04")
+    (uuid "adc1")
+    (property "Reference" "U8")
+    (property "Value" "ADS122U04 24-bit ADC")
+    (pins
+      (pin (name "AIN0") (type input))   ; <- TIA OUT (via 1/10 divider)
+      (pin (name "AIN1") (type input))   ; <- HV divider sense
+      (pin (name "SCLK") (type input))   ; <- STM32 SPI3_SCK
+      (pin (name "DOUT") (type output))  ; -> STM32 SPI3_MISO
+      (pin (name "DIN")  (type input))   ; <- STM32 SPI3_MOSI
+      (pin (name "CS")   (type input))   ; <- STM32 SPI3_NSS
+      (pin (name "DRDY") (type output))  ; data ready
+      (pin (name "VDD")  (type power_in))
+      (pin (name "GND")  (type power_in))
+    )
+  )
+
+  ; ====== Safety: TLV3201 comparator ======
+  (symbol (id 13) (at 190 200) (name "TLV3201")
+    (uuid "cmp1")
+    (property "Reference" "U9")
+    (property "Value" "TLV3201 comparator")
+    (pins
+      (pin (name "IN+") (type input))   ; <- TIA OUT (current monitor)
+      (pin (name "IN-") (type input))   ; <- 1V ref (10µA threshold)
+      (pin (name "OUT") (type output))  ; -> HV_CUTOFF line
+      (pin (name "VDD") (type power_in))
+      (pin (name "GND") (type power_in))
+    )
+  )
+
+  ; ====== Stepper drivers: 2× A4988 ======
+  (symbol (id 14) (at 220 130) (name "A4988_SYRINGE")
+    (uuid "drv1")
+    (property "Reference" "U10")
+    (property "Value" "A4988 syringe pump")
+    (pins
+      (pin (name "STEP") (type input))   ; <- STM32 TIM1_CH1
+      (pin (name "DIR")  (type input))   ; <- STM32 TIM1_CH2
+      (pin (name "EN")   (type input))
+      (pin (name "A1")   (type output))  ; -> NEMA8 coil A
+      (pin (name "A2")   (type output))
+      (pin (name "B1")   (type output))  ; -> NEMA8 coil B
+      (pin (name "B2")   (type output))
+      (pin (name "VDD")  (type power_in))
+      (pin (name "GND")  (type power_in))
+    )
+  )
+
+  (symbol (id 15) (at 220 160) (name "A4988_DRUM")
+    (uuid "drv2")
+    (property "Reference" "U11")
+    (property "Value" "A4988 collector drum")
+    (pins
+      (pin (name "STEP") (type input))   ; <- STM32 TIM8_CH1
+      (pin (name "DIR")  (type input))   ; <- STM32 TIM8_CH2
+      (pin (name "EN")   (type input))
+      (pin (name "A1")   (type output))  ; -> NEMA8 coil A
+      (pin (name "A2")   (type output))
+      (pin (name "B1")   (type output))  ; -> NEMA8 coil B
+      (pin (name "B2")   (type output))
+      (pin (name "VDD")  (type power_in))
+      (pin (name "GND")  (type power_in))
+    )
+  )
+
+  ; ====== NEMA8 steppers ======
+  (symbol (id 16) (at 270 130) (name "NEMA8_SYRINGE")
+    (uuid "mot1")
+    (property "Reference" "M1")
+    (property "Value" "NEMA8 syringe pump")
+    (pins (pin (name "A+") (type input)) (pin (name "A-") (type input))
+          (pin (name "B+") (type input)) (pin (name "B-") (type input)))
+  )
+
+  (symbol (id 17) (at 270 160) (name "NEMA8_DRUM")
+    (uuid "mot2")
+    (property "Reference" "M2")
+    (property "Value" "NEMA8 drum collector")
+    (pins (pin (name "A+") (type input)) (pin (name "A-") (type input))
+          (pin (name "B+") (type input)) (pin (name "B-") (type input)))
+  )
+
+  ; ====== I2C sensors: BME280 + SSD1306 ======
+  (symbol (id 18) (at 220 40) (name "BME280")
+    (uuid "env1")
+    (property "Reference" "U12")
+    (property "Value" "BME280 temp/humidity")
+    (pins (pin (name "VDD") (type power_in)) (pin (name "GND") (type power_in))
+          (pin (name "SCL") (type input)) (pin (name "SDA") (type bidirectional)))
+  )
+
+  (symbol (id 19) (at 220 70) (name "SSD1306_OLED")
+    (uuid "oled1")
+    (property "Reference" "U13")
+    (property "Value" "SSD1306 0.96in 128x64 I2C")
+    (pins (pin (name "VCC") (type power_in)) (pin (name "GND") (type power_in))
+          (pin (name "SCL") (type input)) (pin (name "SDA") (type bidirectional)))
+  )
+
+  ; ====== microSD ======
+  (symbol (id 20) (at 160 40) (name "MicroSD_socket")
+    (uuid "sd1")
+    (property "Reference" "U14")
+    (property "Value" "MicroSD FAT32")
+    (pins (pin (name "VCC") (type power_in)) (pin (name "GND") (type power_in))
+          (pin (name "CS") (type input)) (pin (name "CLK") (type input))
+          (pin (name "MISO")(type output)) (pin (name "MOSI")(type input))
+          (pin (name "DET") (type output)))
+  )
+
+  ; ====== Safety sensors ======
+  (symbol (id 21) (at 30 170) (name "REED_INTERLOCK")
+    (uuid "saf1")
+    (property "Reference" "SW1")
+    (property "Value" "Reed door interlock")
+    (pins (pin (name "1") (type bidirectional)) (pin (name "2") (type bidirectional)))
+  )
+
+  (symbol (id 22) (at 30 190) (name "TILT_SENSOR")
+    (uuid "saf2")
+    (property "Reference" "SW2")
+    (property "Value" "Tilt/bump sensor 30°")
+    (pins (pin (name "1") (type bidirectional)) (pin (name "2") (type bidirectional)))
+  )
+
+  ; ====== USB-C charging ======
+  (symbol (id 23) (at 30 70) (name "USB-C")
+    (uuid "usb1")
+    (property "Reference" "J1")
+    (property "Value" "USB-C 2.0")
+    (pins (pin (name "VBUS") (type power_out)) (pin (name "D+") (type bidirectional))
+          (pin (name "D-") (type bidirectional)) (pin (name "GND") (type power_in)))
+  )
+
+  ; ====== Nets ======
+  (net (code 1) (name "V_BAT")  (node "bat1.+") (node "chg1.BAT") (node "prot1.BAT+"))
+  (net (code 2) (name "V_5V")   (node "usb1.VBUS") (node "chg1.VIN"))
+  (net (code 3) (name "V_3V3")  (node "ldo1.VOUT") (node "stm32-main.VDD")
+                            (node "esp32c3-radio.3V3") (node "env1.VDD")
+                            (node "oled1.VCC") (node "sd1.VCC")
+                            (node "adc1.VDD") (node "tia1.VDD")
+                            (node "cmp1.VDD"))
+  (net (code 4) (name "V_3V3A") (node "stm32-main.VDDA") (node "tia1.VDD")
+                            (node "adc1.VDD"))
+  (net (code 5) (name "GND")    (node "bat1.-") (node "chg1.GND") (node "prot1.GND")
+                            (node "ldo1.GND") (node "stm32-main.GND")
+                            (node "esp32c3-radio.GND") (node "env1.GND")
+                            (node "oled1.GND") (node "sd1.GND")
+                            (node "adc1.GND") (node "tia1.VSS")
+                            (node "cmp1.GND") (node "mos1.S")
+                            (node "mos1.GND") (node "cw1.GND")
+                            (node "usb1.GND") (node "drv1.GND")
+                            (node "drv2.GND"))
+
+  ; Flyback + CW HV path
+  (net (code 6)  (name "PRI_PLUS")  (node "bat1.+") (node "tx1.PRI+"))
+  (net (code 7)  (name "PRI_MINUS") (node "tx1.PRI-") (node "mos1.D"))
+  (net (code 8)  (name "MOSFET_GATE")(node "mos1.G") (node "stm32-main.PA4/HRTIM_CHA1"))
+  (net (code 9)  (name "SEC_OUT")   (node "tx1.SEC+") (node "cw1.AC_IN"))
+  (net (code 10) (name "HV_OUT")    (node "cw1.HV_OUT") (node "div1.HV"))
+  (net (code 11) (name "HV_SENSE")  (node "div1.SENSE") (node "adc1.AIN1"))
+
+  ; Jet current path
+  (net (code 12) (name "COLLECTOR") (node "tia1.IN-") (node "rfb1.1"))
+  (net (code 13) (name "TIA_FB")    (node "rfb1.2") (node "tia1.OUT"))
+  (net (code 14) (name "TIA_OUT")   (node "tia1.OUT") (node "cmp1.IN+"))
+  (net (code 15) (name "ADC_I")     (node "tia1.OUT") (node "adc1.AIN0"))
+
+  ; ADS122U04 SPI3
+  (net (code 16) (name "SPI3_SCK")  (node "stm32-main.PB6/SPI3_SCK") (node "adc1.SCLK"))
+  (net (code 17) (name "SPI3_MISO") (node "stm32-main.PB7/SPI3_MISO")(node "adc1.DOUT"))
+  (net (code 18) (name "SPI3_MOSI") (node "stm32-main.PB8/SPI3_MOSI")(node "adc1.DIN"))
+  (net (code 19) (name "SPI3_CS")   (node "stm32-main.PB9/SPI3_NSS") (node "adc1.CS"))
+
+  ; Syringe pump stepper
+  (net (code 20) (name "SYR_STEP")  (node "stm32-main.PA6/TIM1_CH1") (node "drv1.STEP"))
+  (net (code 21) (name "SYR_DIR")   (node "stm32-main.PA7/TIM1_CH2") (node "drv1.DIR"))
+  (net (code 22) (name "SYR_A1")    (node "drv1.A1") (node "mot1.A+"))
+  (net (code 23) (name "SYR_A2")    (node "drv1.A2") (node "mot1.A-"))
+  (net (code 24) (name "SYR_B1")    (node "drv1.B1") (node "mot1.B+"))
+  (net (code 25) (name "SYR_B2")    (node "drv1.B2") (node "mot1.B-"))
+
+  ; Drum collector stepper
+  (net (code 26) (name "DRM_STEP")  (node "stm32-main.PA8/TIM8_CH1") (node "drv2.STEP"))
+  (net (code 27) (name "DRM_DIR")   (node "stm32-main.PA9/TIM8_CH2") (node "drv2.DIR"))
+  (net (code 28) (name "DRM_A1")    (node "drv2.A1") (node "mot2.A+"))
+  (net (code 29) (name "DRM_A2")    (node "drv2.A2") (node "mot2.A-"))
+  (net (code 30) (name "DRM_B1")    (node "drv2.B1") (node "mot2.B+"))
+  (net (code 31) (name "DRM_B2")    (node "drv2.B2") (node "mot2.B-"))
+
+  ; I2C bus
+  (net (code 32) (name "I2C_SCL")   (node "stm32-main.PB0/I2C1_SCL") (node "env1.SCL")
+                                 (node "oled1.SCL"))
+  (net (code 33) (name "I2C_SDA")   (node "stm32-main.PB1/I2C1_SDA") (node "env1.SDA")
+                                 (node "oled1.SDA"))
+
+  ; SPI2 microSD
+  (net (code 34) (name "SD_SCK")    (node "stm32-main.PB2/SPI2_SCK") (node "sd1.CLK"))
+  (net (code 35) (name "SD_MISO")   (node "stm32-main.PB3/SPI2_MISO")(node "sd1.MISO"))
+  (net (code 36) (name "SD_MOSI")   (node "stm32-main.PB4/SPI2_MOSI")(node "sd1.MOSI"))
+  (net (code 37) (name "SD_CS")     (node "stm32-main.PB5/SPI2_NSS") (node "sd1.CS"))
+  (net (code 38) (name "SD_DET")    (node "stm32-main.PC14/SD_DET")  (node "sd1.DET"))
+
+  ; UART to ESP32-C3
+  (net (code 39) (name "STM_TX")    (node "stm32-main.PA2/USART2_TX") (node "esp32c3-radio.GPIO2/RX0"))
+  (net (code 40) (name "STM_RX")    (node "stm32-main.PA3/USART2_RX") (node "esp32c3-radio.GPIO3/TX0"))
+
+  ; Safety
+  (net (code 41) (name "DOOR_INT")  (node "stm32-main.PA12/DOOR") (node "saf1.1"))
+  (net (code 42) (name "TILT_SENSE")(node "stm32-main.PA13/TILT") (node "saf2.1"))
+  (net (code 43) (name "HV_CUTOFF") (node "stm32-main.PA11/HV_CUT") (node "cmp1.OUT")
+                              (node "saf1.2") (node "saf2.2"))
+  (net (code 44) (name "HV_EN")     (node "stm32-main.PA10/HV_EN"))
+  (net (code 45) (name "SYR_LIMIT") (node "stm32-main.PA14/SYR_LIM"))
+  (net (code 46) (name "BTN")       (node "stm32-main.PA15/BUTTON"))
+  (net (code 47) (name "CHG_STAT")  (node "stm32-main.PB10/CHG") (node "chg1.CHG"))
+  (net (code 48) (name "STATUS_LED")(node "stm32-main.PB11/LED"))
+  (net (code 49) (name "SAFE_LED")  (node "stm32-main.PB12/SAFE_LED"))
+  (net (code 50) (name "ESP_WAKE")  (node "esp32c3-radio.GPIO8/WAKE"))
+  (net (code 51) (name "ESP_LED")   (node "esp32c3-radio.GPIO7/LED"))
+  (net (code 52) (name "BAT_MON")   (node "stm32-main.PA1/ADC1"))
+
+  (sheet_instances)

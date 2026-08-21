@@ -1,0 +1,19 @@
+(kicad_project (version 20230621)
+
+  (general
+    (project_name "volt-scribe")
+    (project_description "Portable Electrochemical Workstation - Potentiostat/Galvanostat")
+    (project_author "SoC Device Inventions")
+  )
+
+  (pcb_new
+    (page "A4")
+    (paper_size "A4")
+  )
+
+  (eeschema
+    (lib_dirs
+      "$KICAD_SYMBOL_DIR"
+    )
+  )
+)

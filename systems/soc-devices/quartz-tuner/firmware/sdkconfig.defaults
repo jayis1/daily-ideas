@@ -1,0 +1,23 @@
+# Quartz Tuner — sdkconfig defaults (mapped to STM32 HAL defines)
+#
+# STM32G491RET6 @ 170 MHz, 512 KB flash, 128 KB SRAM
+# HSI16 + PLL: 16 MHz × 10.625 = 170 MHz system clock
+# I2C1 @ 400 kHz (Si5351A + AD5933 + OLED + MAX17048)
+# SPI1 @ 25 MHz (microSD)
+# TIM2 + TIM3 for frequency counter
+# TIM8 CH2 for heater PWM
+# USART2 @ 115200 (debug, USB-CDC alternate)
+# USB CDC device
+# FatFs on SPI SD card
+# FreeRTOS tick 100 Hz
+
+CONFIG_STM32G491=y
+CONFIG_SYSCLK_170MHZ=y
+CONFIG_HSI16_PLL=y
+CONFIG_I2C1_400KHZ=y
+CONFIG_SPI1_25MHZ=y
+CONFIG_USART2_115200=y
+CONFIG_USB_CDC=y
+CONFIG_FATFS_SD=y
+CONFIG_FREERTOS_100HZ=y
+CONFIG_CORTEX_M4_FPU=y

@@ -1,0 +1,280 @@
+(kicad_sch (version 20230121) (generator eeschema)
+
+  (uuid e5a1b2c3-d4e5-f6a7-b8c9-d0e1f2a3b4c5)
+
+  (paper "A4")
+
+  (title_block
+    (title "Flux Ring - Wearable Magnetic Field Explorer")
+    (date "2026-06-14")
+    (rev "1.0")
+    (comment 1 "SoC: nRF52840-QIAA")
+    (comment 2 "Mag: MMC5983MA, Accel: LIS2DH12")
+    (comment 3 "Haptic: DRV2603L, OLED: SSD1306")
+    (comment 4 "jayis1")
+  )
+
+  (lib_symbols)
+
+  ;; =========================================================
+  ;; POWER SECTION
+  ;; =========================================================
+
+  ;; USB-C Connector
+  (symbol (lib_id "Connector:USB_C_Receptacle_16Pin") (at 25.4 25.4) (unit 1)
+    (in_bom yes) (on_board yes)
+    (uuid a1000000-0000-0000-0000-000000000001)
+    (property "Reference" "J1" (at 25.4 15.24) (effects (font (size 1.27 1.27))))
+    (property "Value" "USB_C_16Pin" (at 25.4 17.78) (effects (font (size 1.27 1.27))))
+    (property "Footprint" "Connector_USB:USB_C_Receptacle_GCT_USB4105" (at 25.4 25.4) (effects (font (size 1.27 1.27)) hide))
+    (pin "VBUS" (uuid b1000001))  -> MCP73831 VCC
+    (pin "GND"  (uuid b1000002))  -> GND
+    (pin "DP1"  (uuid b1000003))  -> nRF52840 P0.15
+    (pin "DN1"  (uuid b1000004))  -> nRF52840 P0.16
+    (pin "SBU1" (uuid b1000005))  -> NC
+    (pin "SBU2" (uuid b1000006))  -> NC
+    (pin "CC1"  (uuid b1000007))  -> 5.1k to GND
+    (pin "CC2"  (uuid b1000008))  -> 5.1k to GND
+  )
+
+  ;; MCP73831 LiPo Charger (SOT-23-5)
+  ;; Pin 1: STAT, Pin 2: VSS, Pin 3: VBAT, Pin 4: VCC, Pin 5: PROG
+  (symbol (lib_id "Battery_Management:MCP73831-2-OT") (at 50.8 25.4) (unit 1)
+    (in_bom yes) (on_board yes)
+    (uuid a2000000-0000-0000-0000-000000000001)
+    (property "Reference" "U2" (at 50.8 17.78) (effects (font (size 1.27 1.27))))
+    (property "Value" "MCP73831T-2ACI" (at 50.8 20.32) (effects (font (size 1.27 1.27))))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-5" (at 50.8 25.4) (effects (font (size 1.27 1.27)) hide))
+    ;; STAT -> P0.17 via 1k R
+    ;; VSS -> GND
+    ;; VBAT -> Battery+ and 100uF cap to GND
+    ;; VCC -> USB VBUS and 1uF cap to GND
+    ;; PROG -> 2k R to GND (500mA charge current)
+  )
+
+  ;; TLV73333 LDO (SOT-23-5)
+  ;; Pin 1: EN, Pin 2: IN, Pin 3: GND, Pin 4: NC, Pin 5: OUT
+  (symbol (lib_id "Regulator_Linear:TLV73333PDBV") (at 76.2 25.4) (unit 1)
+    (in_bom yes) (on_board yes)
+    (uuid a3000000-0000-0000-0000-000000000001)
+    (property "Reference" "U3" (at 76.2 17.78) (effects (font (size 1.27 1.27))))
+    (property "Value" "TLV73333PDRL" (at 76.2 20.32) (effects (font (size 1.27 1.27))))
+    (property "Footprint" "Package_TO_SOT_SMD:SOT-23-5" (at 76.2 25.4) (effects (font (size 1.27 1.27)) hide))
+    ;; EN -> Battery+ (always on when battery present)
+    ;; IN -> Battery+
+    ;; GND -> GND
+    ;; OUT -> VDD (3.3V) with 10uF cap to GND
+  )
+
+  ;; LiPo Battery Connector
+  (symbol (lib_id "Connector:Conn_01x02") (at 50.8 50.8) (unit 1)
+    (in_bom yes) (on_board yes)
+    (uuid a4000000-0000-0000-0000-000000000001)
+    (property "Reference" "BT1" (at 50.8 45.72) (effects (font (size 1.27 1.27))))
+    (property "Value" "LiPo_200mAh" (at 50.8 48.26) (effects (font (size 1.27 1.27))))
+    ;; Pin 1 -> Battery+ (MCP73831 VBAT, TLV73333 IN)
+    ;; Pin 2 -> GND
+  )
+
+  ;; =========================================================
+  ;; MAIN SoC
+  ;; =========================================================
+
+  ;; nRF52840-QIAA (QFN-48, 6x6mm)
+  (symbol (lib_id "MCU_Nordic:nRF52840-QIAA") (at 127 76.2) (unit 1)
+    (in_bom yes) (on_board yes)
+    (uuid a5000000-0000-0000-0000-000000000001)
+    (property "Reference" "U1" (at 127 30.48) (effects (font (size 1.27 1.27))))
+    (property "Value" "nRF52840-QIAA" (at 127 33.02) (effects (font (size 1.27 1.27))))
+    (property "Footprint" "Package_DFN_QFN:Nordic_QFN-48-1EP_6x6mm_P0.4mm_EP4.6x4.6mm" (at 127 76.2) (effects (font (size 1.27 1.27)) hide))
+    ;; Key connections:
+    ;; P0.02 = I2C SDA (all sensors)
+    ;; P0.03 = I2C SCL (all sensors)
+    ;; P0.04 = ADC (battery voltage divider)
+    ;; P0.05 = WS2812B data
+    ;; P0.06 = DRV2603L EN
+    ;; P0.07 = UART TX
+    ;; P0.08 = UART RX
+    ;; P0.09 = Touch input
+    ;; P0.11 = MMC5983MA SET/RESET
+    ;; P0.12 = OLED RESET
+    ;; P0.13 = LIS2DH12 INT1
+    ;; P0.14 = LIS2DH12 INT2 (WOM wake)
+    ;; P0.15 = USB D+
+    ;; P0.16 = USB D-
+    ;; P0.17 = CHARGE_STAT LED
+    ;; P0.18 = Mode LED
+    ;; P0.19-22 = SPI (W25Q16)
+    ;; P0.24 = Motor MOSFET
+    ;; P0.25 = Motor current sense
+    ;; P0.26 = Boot button
+    ;; P0.27 = LDO EN
+    ;; P0.28 = MMC5983MA INT
+    ;; P0.29 = MS5837 CSB
+    ;; P0.30 = DRV2603L addr select
+    ;; P0.31 = Power LED
+    ;; DEC1-4 = decoupling caps
+    ;; VDD = 3.3V
+    ;; GND = ground
+    ;; XC1, XC2 = 32MHz crystal + 12pF caps
+  )
+
+  ;; 32MHz Crystal
+  (symbol (lib_id "Device:Crystal") (at 152.4 96.52) (unit 1)
+    (in_bom yes) (on_board yes)
+    (uuid a6000000-0000-0000-0000-000000000001)
+    (property "Reference" "Y1" (at 152.4 91.44) (effects (font (size 1.27 1.27))))
+    (property "Value" "32MHz" (at 152.4 93.98) (effects (font (size 1.27 1.27))))
+    (property "Footprint" "Crystal:Crystal_SMD_2016-4Pin_2.0x1.6mm" (at 152.4 96.52) (effects (font (size 1.27 1.27)) hide))
+  )
+
+  ;; =========================================================
+  ;; SENSORS
+  ;; =========================================================
+
+  ;; MMC5983MA 3-Axis AMR Magnetometer (LGA-16, I2C 0x30)
+  (symbol (lib_id "Sensor_Magnetic:MMC5983MA") (at 203.2 50.8) (unit 1)
+    (in_bom yes) (on_board yes)
+    (uuid a7000000-0000-0000-0000-000000000001)
+    (property "Reference" "U4" (at 203.2 40.64) (effects (font (size 1.27 1.27))))
+    (property "Value" "MMC5983MA" (at 203.2 43.18) (effects (font (size 1.27 1.27))))
+    (property "Footprint" "Package_LGA:LGA-16_3x3mm_P0.5mm" (at 203.2 50.8) (effects (font (size 1.27 1.27)) hide))
+    ;; SDA -> P0.02 (I2C bus, 4.7k pullup)
+    ;; SCL -> P0.03 (I2C bus, 4.7k pullup)
+    ;; SET/RESET -> P0.11
+    ;; INT -> P0.28
+    ;; VDD -> 3.3V + 100nF decoupling
+    ;; GND -> GND
+    ;; A0, A1 -> GND (address 0x30)
+  )
+
+  ;; LIS2DH12 3-Axis Accelerometer (LGA-12, I2C 0x19)
+  (symbol (lib_id "Sensor_Accelerometer:LIS2DH12") (at 254 50.8) (unit 1)
+    (in_bom yes) (on_board yes)
+    (uuid a8000000-0000-0000-0000-000000000001)
+    (property "Reference" "U5" (at 254 40.64) (effects (font (size 1.27 1.27))))
+    (property "Value" "LIS2DH12TR" (at 254 43.18) (effects (font (size 1.27 1.27))))
+    (property "Footprint" "Package_LGA:LGA-12_2x2mm_P0.5mm" (at 254 50.8) (effects (font (size 1.27 1.27)) hide))
+    ;; SDA/SDO -> I2C bus / SA0=VDD (addr 0x19)
+    ;; SCL -> I2C bus
+    ;; INT1 -> P0.13
+    ;; INT2 -> P0.14 (wake-on-motion)
+    ;; VDD -> 3.3V + 100nF
+    ;; GND -> GND
+  )
+
+  ;; MS5837-02BA Barometer (QFN-8, I2C 0x76)
+  (symbol (lib_id "Sensor_Pressure:MS5837-02BA") (at 304.8 50.8) (unit 1)
+    (in_bom yes) (on_board yes)
+    (uuid a9000000-0000-0000-0000-000000000001)
+    (property "Reference" "U6" (at 304.8 40.64) (effects (font (size 1.27 1.27))))
+    (property "Value" "MS5837-02BA01" (at 304.8 43.18) (effects (font (size 1.27 1.27))))
+    (property "Footprint" "Sensor_Pressure:MS5837-02BA" (at 304.8 50.8) (effects (font (size 1.27 1.27)) hide))
+    ;; SDA -> I2C bus
+    ;; SCL -> I2C bus
+    ;; CSB -> P0.29 (active low)
+    ;; VDD -> 3.3V + 100nF
+    ;; GND -> GND
+  )
+
+  ;; =========================================================
+  ;; OUTPUT DEVICES
+  ;; =========================================================
+
+  ;; WS2812B-2020 RGB LED
+  (symbol (lib_id "LED:WS2812B-2020") (at 203.2 101.6) (unit 1)
+    (in_bom yes) (on_board yes)
+    (uuid b1000000-0000-0000-0000-000000000001)
+    (property "Reference" "D1" (at 203.2 93.98) (effects (font (size 1.27 1.27))))
+    (property "Value" "WS2812B-2020" (at 203.2 96.52) (effects (font (size 1.27 1.27))))
+    (property "Footprint" "LED_SMD:LED_WS2812B-2020_2.0x2.0mm" (at 203.2 101.6) (effects (font (size 1.27 1.27)) hide))
+    ;; DIN -> P0.05 via 1k series R
+    ;; VDD -> 3.3V + 100nF
+    ;; GND -> GND
+  )
+
+  ;; DRV2603L Haptic Driver (WSON-8, I2C 0x5A)
+  (symbol (lib_id "Driver_Haptic:DRV2603L") (at 254 101.6) (unit 1)
+    (in_bom yes) (on_board yes)
+    (uuid b2000000-0000-0000-0000-000000000001)
+    (property "Reference" "U7" (at 254 93.98) (effects (font (size 1.27 1.27))))
+    (property "Value" "DRV2603L" (at 254 96.52) (effects (font (size 1.27 1.27))))
+    (property "Footprint" "Package_SON:WSON-8-1EP_2x2mm_P0.5mm_EP0.9x1.6mm" (at 254 101.6) (effects (font (size 1.27 1.27)) hide))
+    ;; SDA -> I2C bus
+    ;; SCL -> I2C bus
+    ;; EN -> P0.06
+    ;; OUT+ -> Motor +
+    ;; OUT- -> Motor -
+    ;; VDD -> 3.3V
+    ;; GND -> GND
+  )
+
+  ;; SSD1306 OLED Display (I2C 0x3C)
+  (symbol (lib_id "Display:SSD1306_32x64") (at 304.8 101.6) (unit 1)
+    (in_bom yes) (on_board yes)
+    (uuid b3000000-0000-0000-0000-000000000001)
+    (property "Reference" "U8" (at 304.8 93.98) (effects (font (size 1.27 1.27))))
+    (property "Value" "SSD1306_32x64_OLED" (at 304.8 96.52) (effects (font (size 1.27 1.27))))
+    ;; SDA -> I2C bus
+    ;; SCL -> I2C bus
+    ;; RESET -> P0.12
+    ;; VDD -> 3.3V
+    ;; GND -> GND
+  )
+
+  ;; Vibration Motor (ERM coin type)
+  (symbol (lib_id "Motor:Vibration_Motor") (at 203.2 127) (unit 1)
+    (in_bom yes) (on_board yes)
+    (uuid b4000000-0000-0000-0000-000000000001)
+    (property "Reference" "M1" (at 203.2 121.92) (effects (font (size 1.27 1.27))))
+    (property "Value" "ERM_6x2.7mm" (at 203.2 124.46) (effects (font (size 1.27 1.27))))
+    ;; + -> DRV2603L OUT+
+    ;; - -> DRV2603L OUT-
+  )
+
+  ;; =========================================================
+  ;; SPI FLASH
+  ;; =========================================================
+
+  ;; W25Q16JVSIQ 16Mbit SPI Flash (SOIC-8)
+  (symbol (lib_id "Memory_Flash:W25Q16JVSIQ") (at 254 127) (unit 1)
+    (in_bom yes) (on_board yes)
+    (uuid b5000000-0000-0000-0000-000000000001)
+    (property "Reference" "U9" (at 254 119.38) (effects (font (size 1.27 1.27))))
+    (property "Value" "W25Q16JVSIQ" (at 254 121.92) (effects (font (size 1.27 1.27))))
+    (property "Footprint" "Package_SOIC:SOIC-8_3.9x4.9mm_P1.27mm" (at 254 127) (effects (font (size 1.27 1.27)) hide))
+    ;; CS -> P0.22
+    ;; DO (MISO) -> P0.20
+    ;; DI (MOSI) -> P0.21
+    ;; CLK -> P0.19
+    ;; VDD -> 3.3V + 100nF
+    ;; GND -> GND
+    ;; WP -> VDD
+    ;; HOLD -> VDD
+  )
+
+  ;; =========================================================
+  ;; NET LABELS AND CONNECTIONS
+  ;; =========================================================
+
+  ;; I2C Bus (shared by all I2C devices)
+  (symbol (lib_id "power:VDD") (at 10.16 10.16) (unit 1)
+    (uuid c0000001)
+  )
+  (symbol (lib_id "power:GND") (at 10.16 15.24) (unit 1)
+    (uuid c0000002)
+  )
+
+  ;; I2C pull-ups: 4.7k from SDA/SCL to VDD
+  ;; 3 sets of pull-ups (one pair per device group for signal integrity)
+
+  ;; Battery voltage divider: 100k/100k from VBAT to GND, midpoint -> P0.04
+
+  ;; Boot button: P0.26 to GND (active low)
+
+  ;; Mode LED: P0.18 -> 1k R -> Green LED -> GND
+
+  ;; Charge status LED: P0.17 -> 1k R -> Red LED -> GND
+
+  ;; Power LED: P0.31 -> 1k R -> White LED -> GND
+)

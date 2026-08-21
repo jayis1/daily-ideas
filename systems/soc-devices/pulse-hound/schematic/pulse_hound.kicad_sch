@@ -1,0 +1,123 @@
+(kicad_sch
+  (version 20230121)
+  (generator "eeschema")
+  (generator_version "7.0")
+  (uuid "6a5e1a2b-0001-0002-0003-0004pulse0000")
+  (paper "A3")
+  (title_block
+    (title "Pulse Hound — RF Signal Hunter")
+    (date "2026-06-18")
+    (rev "1.0")
+    (company "SoC Device Inventions")
+    (comment 1 "ESP32-S3 + AD8318 RF detector + 28BYJ-48 stepper DF")
+    (comment 2 "MIT License")
+  )
+
+  (lib_symbols
+    ; ESP32-S3-WROOM-1
+    (symbol "ESP32-S3-WROOM-1"
+      (pin_power_in (0 -25) (name "3V3") (length 0))
+      (pin_power_in (0 -27) (name "GND") (length 0))
+      (pin_bidirectional (0 -5) (name "GPIO0/BOOT") (length 0))
+      (pin_bidirectional (0 -7) (name "GPIO1/SDA") (length 0))
+      (pin_bidirectional (0 -9) (name "GPIO2/SCL") (length 0))
+      (pin_bidirectional (0 -11) (name "GPIO3") (length 0))
+      (pin_bidirectional (0 -13) (name "GPIO4") (length 0))
+      (pin_bidirectional (0 -15) (name "GPIO5") (length 0))
+      (pin_bidirectional (0 -17) (name "GPIO6") (length 0))
+      (pin_bidirectional (0 -19) (name "GPIO7") (length 0))
+      (pin_bidirectional (0 -21) (name "GPIO8") (length 0))
+      (pin_bidirectional (0 -23) (name "GPIO9/PWM") (length 0))
+      (pin_bidirectional (0 5) (name "GPIO10/MOSI") (length 0))
+      (pin_bidirectional (0 7) (name "GPIO11/MISO") (length 0))
+      (pin_bidirectional (0 9) (name "GPIO12/SCK") (length 0))
+      (pin_bidirectional (0 11) (name "GPIO13/CS") (length 0))
+      (pin_bidirectional (0 13) (name "GPIO14") (length 0))
+      (pin_bidirectional (0 15) (name "GPIO15") (length 0))
+      (pin_bidirectional (0 17) (name "GPIO16") (length 0))
+      (pin_bidirectional (0 19) (name "GPIO17") (length 0))
+      (pin_bidirectional (0 21) (name "GPIO18") (length 0))
+      (pin_bidirectional (0 23) (name "GPIO19") (length 0))
+      (pin_bidirectional (0 25) (name "GPIO21") (length 0))
+    )
+    ; AD8318 RF Log Detector
+    (symbol "AD8318"
+      (pin_input (0 0) (name "RFIN") (length 0))
+      (pin_output (0 -2) (name "VOUT/RSSI") (length 0))
+      (pin_output (0 -4) (name "TEMP") (length 0))
+      (pin_input (0 -6) (name "PWDN") (length 0))
+      (pin_input (0 -8) (name "CLPF") (length 0))
+      (pin_power_in (0 -10) (name "VPOS") (length 0))
+      (pin_power_in (0 -12) (name "GND") (length 0))
+    )
+    ; ADS1115 16-bit ADC
+    (symbol "ADS1115"
+      (pin_input (0 0) (name "AIN0") (length 0))
+      (pin_input (0 -2) (name "AIN1") (length 0))
+      (pin_bidirectional (0 -4) (name "SDA") (length 0))
+      (pin_bidirectional (0 -6) (name "SCL") (length 0))
+      (pin_input (0 -8) (name "ADDR") (length 0))
+      (pin_power_in (0 -10) (name "VDD") (length 0))
+      (pin_power_in (0 -12) (name "GND") (length 0))
+    )
+  )
+
+  ; ---- Sheet instances ----
+  (sheet_instances
+    (path "/" (page "1"))
+  )
+
+  ; ---- Schematic notes (text annotations describing the design) ----
+  (text "Pulse Hound — RF Signal Hunter Schematic"
+    (at 25 20) (font (size 3 3)))
+  (text "SoC: ESP32-S3-WROOM-1 | RF: AD8318 (1MHz-8GHz) | ADC: ADS1115 16-bit"
+    (at 25 30) (font (size 1.5 1.5)))
+  (text "DF: 28BYJ-48 stepper + ULN2003 | Audio: LM386 PWM | Display: SSD1306 OLED"
+    (at 25 37) (font (size 1.5 1.5)))
+  (text "Power: TP4056 + 1000mAh LiPo + MCP1700 3.3V + MAX17048 gauge"
+    (at 25 44) (font (size 1.5 1.5)))
+
+  ; ---- Net labels ----
+  (net_label "I2C_SDA" (at 100 50) (font (size 1.5 1.5)))
+  (net_label "I2C_SCL" (at 100 55) (font (size 1.5 1.5)))
+  (net_label "RSSI_VOUT" (at 100 65) (font (size 1.5 1.5)))
+  (net_label "TEMP_VOUT" (at 100 70) (font (size 1.5 1.5)))
+  (net_label "AD8318_PWDN" (at 100 75) (font (size 1.5 1.5)))
+  (net_label "AFE_EN" (at 100 80) (font (size 1.5 1.5)))
+  (net_label "SPI_MOSI" (at 100 90) (font (size 1.5 1.5)))
+  (net_label "SPI_MISO" (at 100 95) (font (size 1.5 1.5)))
+  (net_label "SPI_SCK" (at 100 100) (font (size 1.5 1.5)))
+  (net_label "SD_CS" (at 100 105) (font (size 1.5 1.5)))
+  (net_label "STEPPER_IN1" (at 100 115) (font (size 1.5 1.5)))
+  (net_label "STEPPER_IN2" (at 100 120) (font (size 1.5 1.5)))
+  (net_label "STEPPER_IN3" (at 100 125) (font (size 1.5 1.5)))
+  (net_label "STEPPER_IN4" (at 100 130) (font (size 1.5 1.5)))
+  (net_label "STEPPER_PWR" (at 100 135) (font (size 1.5 1.5)))
+  (net_label "AUDIO_PWM" (at 100 145) (font (size 1.5 1.5)))
+  (net_label "AMP_SHDN" (at 100 150) (font (size 1.5 1.5)))
+  (net_label "BTN_MODE" (at 100 160) (font (size 1.5 1.5)))
+  (net_label "BTN_SCAN" (at 100 165) (font (size 1.5 1.5)))
+  (net_label "BTN_DF" (at 100 170) (font (size 1.5 1.5)))
+  (net_label "LED_GREEN" (at 100 180) (font (size 1.5 1.5)))
+  (net_label "LED_RED" (at 100 185) (font (size 1.5 1.5)))
+  (net_label "CHRG_STAT" (at 100 190) (font (size 1.5 1.5)))
+  (net_label "HOME_SENSOR" (at 100 195) (font (size 1.5 1.5)))
+
+  ; ---- Component placement notes ----
+  (text "U1 ESP32-S3-WROOM-1: center of PCB, USB-C at bottom edge"
+    (at 25 55) (font (size 1.2 1.2)))
+  (text "U2 AD8318: top of PCB near SMA, 50-ohm microstrip from SMA to RFIN"
+    (at 25 62) (font (size 1.2 1.2)))
+  (text "U3 ADS1115: adjacent to AD8318, short traces to VOUT/TEMP"
+    (at 25 69) (font (size 1.2 1.2)))
+  (text "U4 LM386: bottom-left, audio output to speaker via 100uF cap"
+    (at 25 76) (font (size 1.2 1.2)))
+  (text "U8 ULN2003: bottom-right, 4 traces to stepper connector"
+    (at 25 83) (font (size 1.2 1.2)))
+  (text "Power: TP4056 + MCP1700 bottom-center, USB-C at bottom edge"
+    (at 25 90) (font (size 1.2 1.2)))
+  (text "Layer stack: L1=signal, L2=GND, L3=PWR(3V3), L4=signal"
+    (at 25 97) (font (size 1.2 1.2)))
+  (text "RF path: SMA -> C1(1nF) -> AD8318 RFIN (50-ohm controlled impedance)"
+    (at 25 104) (font (size 1.2 1.2)))
+)

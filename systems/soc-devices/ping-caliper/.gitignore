@@ -1,0 +1,30 @@
+# Build artifacts
+build/
+*.o
+*.elf
+*.bin
+*.hex
+*.map
+*.list
+
+# ESP-IDF
+sdkconfig.old
+managed_components/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# KiCad
+*.bak
+*-backups/
+fp-info-cache
+*.net
+*.sch-bak
+*.kicad_pcb-bak
+gerbers/
+
+# OS
+.DS_Store
+Thumbs.db

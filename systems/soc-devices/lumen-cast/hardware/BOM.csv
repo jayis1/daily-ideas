@@ -1,0 +1,33 @@
+Ref,Qty,Part,Manufacturer,MPN,Package,Unit_USD,Source,Notes
+U1,1,STM32G491RET6,STMicroelectronics,STM32G491RET6,LQFP-64,5.50,Mouser,Cortex-M4F 170MHz 512KB flash 112KB SRAM CORDIC+FMAC
+U2,1,ESP32-C3-MINI-1,Espressif,ESP32-C3-MINI-1,module,2.80,Mouser,BLE5 WiFi4 bridge MCU
+U3,1,OPT3001DNPT,Texas Instruments,OPT3001DNPT,USON-6,4.20,Digi-Key,Precision photopic illuminance sensor 0.045-188k lux
+U4,1,TCS34725,ams,AMS-TCS34725,FN-6,4.50,Digi-Key,RGB+Clear color sensor with IR filter
+U5,1,SH1106 OLED 1.3",Generic,SH1106-1.3-128x64,PCB,3.50,AliExpress,128x64 monochrome OLED I2C display
+U6,1,W25Q128JVIQ,Winbond,W25Q128JVIQ,SOIC-8,1.20,Digi-Key,16MB SPI flash for scan logging
+U7,1,MCP73831T-2ACI/MC,Microchip,MCP73831,DFN-8,0.60,Digi-Key,USB-C LiPo charger 4.2V 500mA
+U8,1,TPS63020DSJR,Texas Instruments,TPS63020,SON-14,3.90,Digi-Key,3.3V buck-boost 2A
+U9,1,TLV70033DDCR,Texas Instruments,TLV70033,SOT-23-5,0.50,Digi-Key,3.3V LDO for sensor low-noise rail
+U10,1,DW01A,Sileic,DW01A,SOT-23-6,0.10,Digi-Key,Battery protection IC
+U11,1,FS8205A,Fairchild,FS8205A,SOT-23-6,0.20,Digi-Key,Dual MOSFET for DW01A
+U12,1,DS3231SN,Maxim,DS3231SN,SOIC-16W,2.50,Digi-Key,TCXO RTC for scan timestamping
+U13,1,TMC2209 v1.2,Trinamic,TMC2209-Q1,module,3.50,AliExpress,Stepper driver 2A stealthChop 256 microstep
+MOT1,1,NEMA8 stepper 20mm,Generic,NEMA8-20mm,NEMA8,8.00,AliExpress,200 step/rev 0.28A bipolar stepper
+SERVO1,1,SG90 servo,TowerPro,SG90,mini,3.00,AliExpress,180° micro servo for elevation
+LED1,1,WS2812B,Worldsemi,WS2812B,5050,0.20,AliExpress,RGB LED status indicator
+LED2,1,Green LED 0603,Generic,LTST-C193KGKT,0603,0.10,Digi-Key,Status LED
+J1,1,USB-C 2.0 receptacle,Amphenol,12401610E4#2A,USB-C,0.50,Digi-Key,USB-C 16-pin charging + USB-CDC
+J2,1,JST-PH 2-pin,JST,S2B-PH-K,2mm,0.20,Digi-Key,Battery connector
+J3,1,6-pin SWD header,Generic,SWD-6,1.27mm,0.15,Digi-Key,ST-Link SWD programming header
+SW1,1,Tactile 6x6mm,Generic,TS-6x6,6x6mm,0.15,AliExpress,SCAN button
+SW2,1,Tactile 6x6mm,Generic,TS-6x6,6x6mm,0.15,AliExpress,MODE button
+L1,1,2.2µH inductor 3A,Coilcraft,XAL4040-222MEB,4x4mm,0.80,Digi-Key,Inductor for TPS63020 buck-boost
+Y1,1,8MHz crystal,Abracon,ABM3-8.000MHZ,3.2x2.5mm,0.30,Digi-Key,Optional external crystal for STM32G491
+MECH1,1,Rotating ring assembly,custom,custom,custom,8.00,3D printed,Bearing-mounted rotating ring + arm
+MECH2,1,Source cradle,custom,custom,custom,3.00,3D printed,Center mount for DUT
+MECH3,1,Dark cloth shroud,custom,custom,fabric,2.00,fabric,Nylon blackout cloth enclosure
+BAT1,1,LiPo 2200mAh 603450,Generic,LP603450,60x34x5mm,5.50,BatteryJunction,3.7V 2200mAh
+MISC,1,Passives kit,Various,,mixed,5.00,Digi-Key,R/C/L 0402/0603 pull-ups decoupling
+PCB,1,4-layer PCB,PCBWay,custom,90x60mm,5.00,PCBWay,4-layer ENIG main PCB
+CASE,1,3D-printed case,custom,PLA-case,custom,4.00,custom,PLA 3D printed enclosure + shroud frame
+TOTAL,,,,,,~77.00,,Approximate BOM cost (excl. mechanical: ~$62)

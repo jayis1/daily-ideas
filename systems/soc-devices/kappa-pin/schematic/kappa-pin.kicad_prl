@@ -1,0 +1,16 @@
+(kicad_prl
+  (version "1.0")
+  (meta (filename "kappa-pin.kicad_prl"))
+  (board
+    (active_layer "F.Cu")
+    (visible_layers "F.Cu" "B.Cu" "F.SilkS" "B.SilkS" "F.Mask" "B.Mask" "Edge.Cuts")
+    (hidden_layers "Dwgs.User" "Cmts.User" "Eco1.User" "Eco2.User")
+    (plot_setup
+      (output_format "gerber")
+      (layers "F.Cu" "B.Cu" "F.SilkS" "B.SilkS" "F.Mask" "B.Mask" "Edge.Cuts")
+      (use_gerber_extensions true)
+      (use_gerber_x2_attributes true)
+      (subtract_solder_mask true)))
+  (schematic
+    (selection_filter
+      (enabled_items "wire" "junction" "label" "global_label" "text" "symbol" "power"))))

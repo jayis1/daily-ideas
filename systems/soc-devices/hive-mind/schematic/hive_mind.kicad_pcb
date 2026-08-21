@@ -1,0 +1,71 @@
+(kicad_pcb (version 20240108) (generator "pcbnew")
+  (uuid "a2b3c4d5-e6f7-8901-bcde-f01234567890")
+
+  (general
+    (thickness 1.6)
+  )
+
+  (paper "A3")
+
+  (title_block
+    (title "Hive Mind")
+    (date "2026-06-15")
+    (rev "1.0")
+    (company "jayis1")
+  )
+
+  (layers
+    (0 "F.Cu" signal)
+    (31 "B.Cu" signal)
+    (32 "B.Adhes" user)
+    (33 "F.Adhes" user)
+    (34 "B.Paste" user)
+    (35 "F.Paste" user)
+    (36 "B.Silk" user)
+    (37 "F.Silk" user)
+    (38 "B.Mask" user)
+    (39 "F.Mask" user)
+    (40 "Dwgs.User" user)
+    (41 "Cmts.User" user)
+    (42 "Eco1.User" user)
+    (43 "Eco2.User" user)
+    (44 "Edge.Cuts" user)
+    (45 "Margin" user)
+    (46 "B.CrtYd" user)
+    (47 "F.CrtYd" user)
+    (48 "B.Fab" user)
+    (49 "F.Fab" user)
+  )
+
+  (setup
+    (stackup
+      (layer "F.Cu" cu "COPPER" (thickness 0.035))
+      (layer "Core" dielectric "FR4" (thickness 0.2))
+      (layer "In1.Cu" cu "COPPER" (thickness 0.035))
+      (layer "Core" dielectric "FR4" (thickness 0.9))
+      (layer "In2.Cu" cu "COPPER" (thickness 0.035))
+      (layer "Core" dielectric "FR4" (thickness 0.2))
+      (layer "B.Cu" cu "COPPER" (thickness 0.035))
+    )
+  )
+
+  ;; PCB: 100mm x 70mm, 4-layer FR4
+  ;; Layer stack: Signal/Ground/Power/Signal
+  ;; RF section: 50-ohm coplanar waveguide for sub-GHz antenna trace
+
+  (gr_text "Hive Mind v1.0" (at 50 35) (layer "F.Silk"))
+  (gr_text "STM32WL55JC" (at 50 38) (layer "F.Silk"))
+  (gr_text "SoC Device Inventions" (at 50 41) (layer "F.Silk"))
+
+  ;; Board outline: 100x70mm rectangle
+  (gr_line (start 0 0) (end 100 0) (layer "Edge.Cuts") (width 0.15))
+  (gr_line (start 100 0) (end 100 70) (layer "Edge.Cuts") (width 0.15))
+  (gr_line (start 100 70) (end 0 70) (layer "Edge.Cuts") (width 0.15))
+  (gr_line (start 0 70) (end 0 0) (layer "Edge.Cuts") (width 0.15))
+
+  ;; Mounting holes: 4x M5 (5.5mm diameter) at corners
+  (gr_circle (center 5 5) (end 7.75 5) (layer "Edge.Cuts") (width 0.15))
+  (gr_circle (center 95 5) (end 97.75 5) (layer "Edge.Cuts") (width 0.15))
+  (gr_circle (center 95 65) (end 97.75 65) (layer "Edge.Cuts") (width 0.15))
+  (gr_circle (center 5 65) (end 7.75 65) (layer "Edge.Cuts") (width 0.15))
+)

@@ -1,0 +1,41 @@
+Item,Part Number,Description,Quantity,Unit Price (USD),Total Price (USD),Supplier,Package/Footprint
+1,STM32G474RET6,Main MCU - 170 MHz Cortex-M4F with CORDIC+FMAC,1,5.80,5.80,ST/LCSC,LQFP64
+2,ESP32-C3-MINI-1,Wireless module - BLE 5.0 + WiFi,1,2.60,2.60,Espressif/LCSC,SMD module
+3,ADL-65005TL,650 nm 5 mW laser diode TO-18,1,1.20,1.20,Adafruit/Generic,TO-18-3
+4,NPBS-650-10,Non-polarizing 50:50 beamsplitter cube 650 nm 10mm,1,3.50,3.50,Thorlabs/AliExpress,10mm cube
+5,QWP-650,Quarter-wave plate 650 nm λ/4,1,2.20,2.20,Thorlabs/AliExpress,25mm round
+6,PBS-650,Polarizing beamsplitter cube 650 nm 10mm,1,3.80,3.80,Thorlabs/AliExpress,10mm cube
+7,TEMD5010,PIN silicon photodiode 570-740 nm,2,1.10,2.20,Vishay/DigiKey,TO-18-2
+8,OPA380,Transimpedance amplifier 90 MHz GBW,2,1.80,3.60,TI/DigiKey,SOT-23-6
+9,AL8805,LED/laser diode constant-current driver 36V 1A,1,0.80,0.80,DiodesInc/DigiKey,SOT-23-5
+10,SH1106-1.3,1.3 inch OLED display 128x64 I2C,1,2.80,2.80,Solomon/Generic,module
+11,MicroSD-socket,MicroSD card socket push-push,1,0.60,0.60,Amphenol/DigiKey,SMD
+12,ICM-42688-P,6-axis IMU accelerometer+gyro,1,2.40,2.40,TDK/InvenSense/DigiKey,QFN-14
+13,DS18B20,Digital temperature sensor ±0.5°C,1,0.80,0.80,Maxim/DigiKey,TO-92
+14,BME280,Temperature/humidity/pressure sensor,1,1.20,1.20,Bosch/LCSC,SMD LGA
+15,MAX98357A,I2S class-D audio amplifier 3.2W,1,1.60,1.60,Maxim/DigiKey,QFN-16
+16,DRV8833,Dual H-bridge motor driver (shutter),1,0.80,0.80,TI/DigiKey,SOIC-16
+17,Shutter-solenoid,5V push-type solenoid for laser shutter,1,1.20,1.20,AliExpress,15mm
+18,Reed-switch,Magnetic reed switch for lid interlock,1,0.15,0.15,Generic/LCSC,glass
+19,LP403450,3.7V 1500mAh LiPo battery,1,3.80,3.80,Generic/AliExpress,40x34x5mm
+20,MCP73831T-2ACI,Single-cell LiPo charge controller 500mA,1,0.70,0.70,Microchip/DigiKey,SOT-23-5
+21,TPS63020,3.3V buck-boost converter 2A,1,2.10,2.10,TI/DigiKey,QFN-14
+22,TPS7A4700,Low-noise LDO 3.3V for analog rail,1,0.90,0.90,TI/DigiKey,TO-263
+23,MT3601,DC-DC boost converter 5-28V for laser supply,1,0.50,0.50,Generic/LCSC,SOT-23-6
+24,USB-C-16P,USB Type-C receptacle 16-pin,1,0.40,0.40,Generic/LCSC,SMD
+25,Crystal-32.768,32.768 kHz crystal for RTC,1,0.15,0.15,Generic/LCSC,SMD 3215
+26,STM32-Header,SWD programming header 2x5 1.27mm,1,0.10,0.10,Generic/LCSC,SMD
+27,Button-tact,6x6mm tactile buttons,2,0.10,0.20,Generic/LCSC,SMD
+28,LED-RGB,RGB LED 5050 common cathode,1,0.15,0.15,Generic/LCSC,SMD
+29,Fixed-mirror,λ/20 protected-aluminum mirror 12.7mm,1,2.20,2.20,Thorlabs/AliExpress,12.7mm
+30,Achromat-lens,Achromatic doublet f=20mm 650nm AR-coated,1,3.20,3.20,Thorlabs/AliExpress,12mm
+31,Focus-adjust,Adjustable focus lens mount (collimator body),1,2.50,2.50,AliExpress,30mm
+32,SMA-connector,Edge-mount SMA for photodiode access (optional),2,0.40,0.80,Amphenol/LCSC,edge
+33,0603 passives,Resistors/capacitors/ferrite beads set,55,0.02,1.10,Generic/LCSC,0603
+34,PCB-4layer,4-layer PCB 70x35mm,5,0.30,1.50,JLCPCB,custom
+35,Enclosure-3D,3D-printed PETG flashlight enclosure + optic mount,1,0.00,0.00,DIY,custom
+36,M2-screws,M2 stainless screws/nuts set,16,0.02,0.32,AliExpress,M2
+37,Pin-header-2.54,2.54mm pin headers for breakouts,1,0.20,0.20,Generic/LCSC,through-hole
+38,Speaker-20mm,20mm 8Ω mylar speaker for audio,1,0.50,0.50,AliExpress,20mm
+39,Headphone-jack,3.5mm TRS headphone jack,1,0.40,0.40,CUI/LCSC,SMD
+,,TOTAL,,,74.27,

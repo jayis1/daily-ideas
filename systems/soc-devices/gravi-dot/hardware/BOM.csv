@@ -1,0 +1,35 @@
+Ref,Qty,Part,Manufacturer,MPN,Package,Unit_USD,Source,Notes
+U1,1,STM32G474RET6,STMicroelectronics,STM32G474RET6,LQFP64,7.20,Digi-Key,Main MCU Cortex-M4 170MHz
+U2,1,ESP32-C3-MINI-1,Espressif,ESP32-C3-MINI-1,module,2.70,Mouser,BLE + WiFi + GPS bridge
+U3,1,ADXL355BCCZ,Analog Devices,ADXL355BCCZ,LCC-14,18.50,Digi-Key,Ultra-low-noise 3-axis MEMS accelerometer
+U4,1,SCL3300-D01,Murata,SCL3300-D01,SOIC-16,9.80,Digi-Key,Precision inclinometer 0.001°
+U5,1,MS5837-02BA,TE Connectivity,MS5837-02BA,metal-can,5.40,Mouser,Barometric pressure 24-bit
+U6,1,NEO-M9N,u-blox,NEO-M9N-00B,module,14.00,Digi-Key,72-channel L1 GPS
+U7,1,SH1106 OLED 1.3",Generic,SH1106-1.3-128x64,PCB,3.50,AliExpress,128×64 monochrome OLED
+U8,1,MCP73831T-2ACI/MC,Microchip,MCP73831,DFN-8,0.60,Digi-Key,USB-C LiPo charger 4.2V
+U9,1,TPS63020DSJR,Texas Instruments,TPS63020,SON-14,3.90,Digi-Key,3.3V buck-boost 2A
+U10,1,TPS63031DSKR,Texas Instruments,TPS63031,SON-10,3.40,Digi-Key,5.0V buck-boost 1A
+U11,1,DRV8833PWP,Texas Instruments,DRV8833,HTSSOP-16,1.80,Digi-Key,Dual H-bridge for Peltier
+U12,1,DW01A,Sileic,DW01A,SOT-23-6,0.10,Digi-Key,Battery protection IC
+U13,1,FS8205A,Fairchild,FS8205A,SOT-23-6,0.20,Digi-Key,Dual MOSFET for DW01A
+Q1-Q4,4,DS18B20,Maxim/Analog,DS18B20,TO-92,1.20,Digi-Key,Digital temperature sensor 1-Wire
+M1,1,TEC1-03004,Marlow,TEC1-03004,3×3mm,2.50,Digi-Key,Mini Peltier thermoelectric cooler
+BAT1,1,LiPo 2000mAh 503040,Generic,LP503040,50×30×4mm,6.00,BatteryJunction,3.7V 2000mAh
+J1,1,USB-C 2.0 receptacle,Amphenol,12401610E4#2A,USB-C,0.50,Digi-Key,USB-C 16-pin
+J2,1,microSD socket,Hirose,DM3D-SF,socket,0.80,Digi-Key,microSD push-push SPI
+SW1,1,Tactile 6×6mm,Generic,TS-6×6,6×6mm,0.15,AliExpress,STATION button
+SW2,1,Tactile 6×6mm,Generic,TS-6×6,6×6mm,0.15,AliExpress,BASE button
+SW3,1,Tactile 6×6mm,Generic,TS-6×6,6×6mm,0.15,AliExpress,MENU button
+ENC1,1,EC11 rotary encoder,Generic,EC11-E24,10×10mm,0.80,AliExpress,Rotary encoder with push
+Y1,1,8 MHz crystal,Abracon,ABM3-8.000MHz,3.2×2.5mm,0.40,Digi-Key,HSE for STM32
+Y2,1,32.768 kHz crystal,Epson,X1A-32768.768,SMD,0.50,Digi-Key,LSE for RTC
+LED1,1,Green LED 0603,Generic,LTST-C193KGKT,0603,0.10,Digi-Key,Status green
+LED2,1,Red LED 0603,Generic,LTST-C193KRKT,0603,0.10,Digi-Key,Status red
+LED3,1,Blue LED 0603,Generic,LTST-C193TBKT,0603,0.10,Digi-Key,BLE status
+MISC,1,Passives kit,Various,,mixed,5.00,Digi-Key,R/C/L 0402/0603
+PCB,1,4-layer PCB,PCBWay,custom,50×50mm,8.00,PCBWay,4-layer ENIG
+HEATSINK,1,Copper thermal block,custom,30×30×15mm,4.00,custom,40g copper mass
+ENCLOSURE,1,Aluminium enclosure,custom,106×55×28mm,12.00,custom,CNC aluminium anodized
+LEVEL,1,Bullseye bubble level,Generic,bullseye-25mm,1.20,AliExpress,Circular spirit level
+FEET,3,Adjustable levelling feet,Generic,M3-thumb,1.00,AliExpress,M3 adjustable feet
+TOTAL,,,,,,~97.00,,Approximate BOM cost

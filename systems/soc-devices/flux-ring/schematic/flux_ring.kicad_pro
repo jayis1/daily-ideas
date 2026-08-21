@@ -1,0 +1,8 @@
+(kicad_project (version 20230121)
+  (general
+    (name "flux_ring")
+  )
+  (pcb_new
+    (last_sheet "flux_ring.kicad_sch")
+  )
+)
