@@ -10,6 +10,7 @@ The projects remain deliberately independent: open any dated directory, read one
 
 - **105 runnable projects** grouped into seven searchable categories.
 - **One launcher** for browsing, inspecting, selecting, and running every app.
+- **Full-screen Command Center** with search, filters, random picks, app details, and one-key launching.
 - **No framework lock-in**: most apps use only the Python standard library.
 - **Terminal-native experiences** including curses interfaces, ANSI animation, audio generation, interactive games, and scriptable CLI tools.
 - **Safe process isolation** so apps can control the terminal and signals without affecting the launcher.
@@ -35,6 +36,7 @@ git clone https://github.com/jayis1/daily-ideas.git
 cd daily-ideas
 python3 -m pip install -e .
 daily-ideas doctor
+daily-ideas browse
 daily-ideas list
 daily-ideas search dungeon
 daily-ideas info terminal-roguelike
@@ -55,6 +57,7 @@ PYTHONPATH=src python3 -m daily_ideas.cli list
 
 | Command | Purpose |
 |---|---|
+| `browse` | Open the full-screen Terminal Command Center |
 | `list` | Browse apps, optionally filtered by category or interface |
 | `search` | Search IDs, titles, descriptions, categories, and tags |
 | `info` | Show an app's entrypoint, requirements, and metadata |
@@ -65,6 +68,23 @@ PYTHONPATH=src python3 -m daily_ideas.cli list
 Set `DAILY_IDEAS_ROOT` when invoking an installed launcher outside the source checkout. App-specific writable data locations are exposed through `DAILY_IDEAS_APP_DATA`.
 
 ## Usage examples
+
+Open the interactive Command Center:
+
+```bash
+daily-ideas browse
+```
+
+| Key | Action |
+|---|---|
+| `↑` / `↓` or `j` / `k` | Move through apps |
+| `Page Up` / `Page Down` | Move ten entries |
+| `Enter` | Launch the selected app and return afterward |
+| `/` | Search the catalog |
+| `c` / `C` | Cycle categories forward/backward |
+| `r` | Select a random matching app |
+| `Esc` | Clear all filters |
+| `q` | Leave the Command Center |
 
 Browse by category or interaction style:
 
@@ -147,7 +167,8 @@ daily-ideas/
 │   ├── apps.json                 # Committed canonical catalog
 │   ├── catalog.py                # Loading, validation, and search
 │   ├── cli.py                    # User-facing commands
-│   └── runner.py                 # Isolated app execution
+│   ├── runner.py                 # Isolated app execution
+│   └── tui.py                    # Full-screen Command Center
 ├── tools/                        # Discovery, docs, validation, smoke checks
 ├── tests/                        # Shared integration tests
 ├── .github/workflows/            # Collection-wide CI

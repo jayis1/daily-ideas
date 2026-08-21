@@ -87,6 +87,7 @@ def build_parser() -> argparse.ArgumentParser:
     choose.add_argument("--run", action="store_true")
     choose.add_argument("--seed", type=int)
     commands.add_parser("doctor", help="check the catalog and local capabilities")
+    commands.add_parser("browse", help="open the full-screen command center")
     return parser
 
 
@@ -105,6 +106,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             _info(_find(apps, args.app))
         elif args.command == "doctor":
             return _doctor(apps, root)
+        elif args.command == "browse":
+            if not root:
+                raise ValueError("app sources not found; run from a source checkout")
+            from .tui import browse
+            return browse(apps, root)
         elif args.command in {"run", "random"}:
             if not root:
                 raise ValueError("app sources not found; run from a source checkout")
