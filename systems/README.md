@@ -1,17 +1,19 @@
-# Four-Node Platform
+# Unified SoC Node System
 
-This is the unifying system for the complete [SoC Device Inventions repository](https://github.com/jayis1/SoC-Device-Inventions). It turns all 57 independent hardware designs into one interoperable family of sensors, scientific instruments, controllers, interfaces, and network nodes.
+This is the unifying system for the complete [SoC Device Inventions repository](https://github.com/jayis1/SoC-Device-Inventions). **Each of its 57 hardware designs is a node in the greater system.** Together they form one interoperable family of sensors, scientific instruments, controllers, interfaces, and network nodes.
 
 The two repositories have distinct responsibilities:
 
 | Repository | Responsibility |
 |---|---|
 | [SoC Device Inventions](https://github.com/jayis1/SoC-Device-Inventions) | Canonical device designs: schematics, firmware, BOMs, host tools, assembly instructions, and device-level documentation |
-| [Daily Ideas Unified System](https://github.com/jayis1/daily-ideas) | Fleet registry, common protocol, four-node roles, composition rules, validation, and the larger system interface |
+| [Daily Ideas Unified System](https://github.com/jayis1/daily-ideas) | Node registry, common protocol, four functional roles, composition rules, validation, and the larger system interface |
 
 No device is replaced or hidden by this system. Each remains independently buildable in the source collection and also gains a defined place in the unified architecture.
 
-## The four nodes
+## The 57 nodes and four roles
+
+The device inventions are the nodes. **Observe, Reason, Act, and Coordinate are roles those nodes perform**, not four additional devices. A node can perform one role or several roles depending on its sensors, processing, actuators, and communications.
 
 ```text
                      findings
@@ -35,13 +37,35 @@ No device is replaced or hidden by this system. Each remains independently build
 | Act | Perform guarded physical work and close the feedback loop | Mycelium Node, Therma Weave, Levia Forge, Glyph Press |
 | Coordinate | Connect users, history, policies, and groups of deployments | Hive Mind, Soil Whisper, Tremor Tile, Sap Watch |
 
-These are logical roles, not four mandatory circuit boards. A small deployment may place several roles on one SoC; a larger deployment can replicate each node and connect many devices. The stable boundary is the [Unified Device Protocol](./protocol/), so hardware can evolve without rebuilding the entire system.
+These roles are logical capabilities, not four mandatory circuit boards. A small deployment may place several roles on one SoC node; a larger deployment can connect and replicate many device nodes. The stable boundary is the [Unified Device Protocol](./protocol/), so hardware can evolve without rebuilding the entire system.
 
 ## One fleet, all 57 designs
 
 Every imported design is registered in [`devices.json`](./devices.json), including instruments, monitors, creative interfaces, controllers, and fabrication tools. A device can serve several roles: for example, Mycelium Node observes its chamber, reasons over environmental state, acts through PID-controlled equipment, and coordinates remote monitoring.
 
 The registry is deliberately separate from firmware. Each design retains its native real-time implementation while a thin adapter publishes the shared protocol. This lets the greater system combine devices by capability instead of forcing 57 firmware projects onto one hardware stack.
+
+### The unified interconnection fabric
+
+All nodes join the same logical message fabric. They do not need bespoke pairwise integrations:
+
+```text
+57 SoC device nodes
+        │
+        ├── publish: telemetry, findings, feedback, health
+        └── consume: commands, policy, relevant findings
+                            │
+                            ▼
+                 Unified Device Protocol
+                            │
+              identity + routing + contracts
+                            │
+          BLE / Wi-Fi / MQTT / LoRaWAN / UART / SD
+```
+
+Role-based routing creates the interconnections. Observe output routes to any compatible Reason node; Reason output routes to Act and Coordinate nodes; Act feedback returns to Observe and Reason; Coordinate policy returns to Reason and Act. Each physical node advertises its roles and device type from the registry, allowing the system to discover valid routes instead of hard-coding device pairs.
+
+This creates a many-node system while keeping local safety and real-time control inside each SoC. Network loss may interrupt coordination, but it must never bypass an Act node's hardware interlocks or local limits.
 
 ### How every device is linked
 
@@ -86,15 +110,15 @@ The result can range from a single multi-role SoC to a replicated network contai
 ## Try it
 
 ```bash
-daily-ideas system list
+daily-ideas system roles
 daily-ideas system info observe
-daily-ideas system devices
-daily-ideas system devices --node act
-daily-ideas system devices --domain analytical-chemistry
+daily-ideas system nodes
+daily-ideas system nodes --role act
+daily-ideas system nodes --domain analytical-chemistry
 daily-ideas system doctor
 ```
 
-The canonical topology is [`platform.json`](./platform.json). `system doctor` checks that it contains exactly four uniquely named nodes, that every link resolves, and that all 57 device directories appear exactly once in the unified registry.
+The canonical topology is [`platform.json`](./platform.json). `system doctor` checks that it contains exactly four uniquely named roles, that every role link resolves, and that all 57 device-node directories appear exactly once in the unified registry.
 
 ## From invention to system
 

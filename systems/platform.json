@@ -1,10 +1,10 @@
 {
-  "name": "Daily Ideas Four-Node Platform",
+  "name": "SoC Unified Node System",
   "version": 1,
   "source_repository": "https://github.com/jayis1/SoC-Device-Inventions",
   "device_registry": "devices.json",
   "protocol": "protocol/README.md",
-  "nodes": [
+  "roles": [
     {
       "id": "observe",
       "title": "Observe Node",

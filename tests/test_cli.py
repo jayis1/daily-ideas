@@ -34,11 +34,17 @@ class CliTests(unittest.TestCase):
         self.assertIn("observe", output)
         self.assertIn("coordinate", output)
 
+    def test_system_nodes_lists_soc_nodes(self):
+        code, output = self.invoke("system", "nodes", "--role", "coordinate")
+        self.assertEqual(0, code)
+        self.assertIn("canopy-listener", output)
+        self.assertIn("connected device nodes", output)
+
     def test_system_doctor(self):
         code, output = self.invoke("system", "doctor")
         self.assertEqual(0, code)
-        self.assertIn("4 nodes", output)
-        self.assertIn("57 devices", output)
+        self.assertIn("57 device nodes", output)
+        self.assertIn("4 roles", output)
 
     def test_system_devices_can_filter_by_node(self):
         code, output = self.invoke("system", "devices", "--node", "act")

@@ -11,7 +11,7 @@ from .catalog import repository_root
 
 
 @dataclass(frozen=True)
-class Node:
+class Role:
     id: str
     title: str
     role: str
@@ -32,7 +32,7 @@ class Platform:
     name: str
     version: int
     source_repository: str
-    nodes: Tuple[Node, ...]
+    roles: Tuple[Role, ...]
     links: Tuple[Link, ...]
 
 
@@ -52,13 +52,13 @@ def platform_path(root: Optional[Path] = None) -> Path:
 
 def load_platform(path: Optional[Path] = None) -> Platform:
     raw = json.loads((path or platform_path()).read_text(encoding="utf-8"))
-    nodes = tuple(Node(
+    roles = tuple(Role(
         id=item["id"], title=item["title"], role=item["role"],
         inputs=tuple(item["inputs"]), outputs=tuple(item["outputs"]),
         reference_devices=tuple(item["reference_devices"]),
-    ) for item in raw["nodes"])
+    ) for item in raw["roles"])
     links = tuple(Link(item["from"], item["to"], item["contract"]) for item in raw["links"])
-    return Platform(raw["name"], raw["version"], raw["source_repository"], nodes, links)
+    return Platform(raw["name"], raw["version"], raw["source_repository"], roles, links)
 
 
 def load_devices(path: Path) -> Tuple[Device, ...]:
@@ -68,11 +68,11 @@ def load_devices(path: Path) -> Tuple[Device, ...]:
 
 def validate_platform(platform: Platform, root: Optional[Path] = None) -> List[str]:
     errors: List[str] = []
-    ids = [node.id for node in platform.nodes]
-    if len(platform.nodes) != 4:
-        errors.append(f"platform must define exactly 4 nodes, found {len(platform.nodes)}")
+    ids = [role.id for role in platform.roles]
+    if len(platform.roles) != 4:
+        errors.append(f"platform must define exactly 4 roles, found {len(platform.roles)}")
     if len(ids) != len(set(ids)):
-        errors.append("duplicate node id")
+        errors.append("duplicate role id")
     known = set(ids)
     for link in platform.links:
         if link.source not in known or link.target not in known:
@@ -97,8 +97,8 @@ def validate_platform(platform: Platform, root: Optional[Path] = None) -> List[s
                 errors.append(f"{device.id}: no system role")
             if unknown_roles:
                 errors.append(f"{device.id}: unknown roles {', '.join(unknown_roles)}")
-        for node in platform.nodes:
-            for device in node.reference_devices:
+        for role in platform.roles:
+            for device in role.reference_devices:
                 if device not in registered:
-                    errors.append(f"{node.id}: missing reference device {device}")
+                    errors.append(f"{role.id}: missing reference device {device}")
     return errors

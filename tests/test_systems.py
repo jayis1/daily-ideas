@@ -7,9 +7,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PlatformTests(unittest.TestCase):
-    def test_four_node_platform_is_valid(self):
+    def test_four_role_platform_is_valid(self):
         platform = load_platform(ROOT / "systems" / "platform.json")
-        self.assertEqual(4, len(platform.nodes))
+        self.assertEqual(4, len(platform.roles))
         self.assertEqual([], validate_platform(platform, ROOT))
 
     def test_control_loop_is_closed(self):
