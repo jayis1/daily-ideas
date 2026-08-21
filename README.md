@@ -21,7 +21,7 @@ The projects remain deliberately independent: open any dated directory, read one
 
 ## Beyond standalone ideas
 
-The collection now has a second scale. Every design from the [SoC Device Inventions repository](https://github.com/jayis1/SoC-Device-Inventions) remains independently buildable and becomes one of 57 nodes in the [Unified SoC Node System](./systems/). Four functional roles connect the full collection into larger working systems:
+The collection now has a second scale. Every design from the [SoC Device Inventions repository](https://github.com/jayis1/SoC-Device-Inventions) remains independently buildable and becomes one of 57 nodes in [unified TREE](https://github.com/jayis1/unified-TREE). Four functional roles connect the full collection into larger working systems:
 
 ```text
 Observe ──telemetry──► Reason ──commands──► Act
@@ -30,7 +30,7 @@ Observe ──telemetry──► Reason ──commands──► Act
                          └── Coordinate ◄───┘
 ```
 
-All 57 hardware designs are connected through a [unified registry](./systems/devices.json) and [shared device protocol](./systems/protocol/). The [complete unification guide](./systems/README.md) explains repository ownership, device roles, message contracts, deployment composition, and how every design participates. Use `daily-ideas system list` to see the roles, `daily-ideas system devices` to browse the complete fleet, and `daily-ideas system doctor` to prove that no imported design is missing.
+All 57 hardware designs are connected through the [unified TREE registry](https://github.com/jayis1/unified-TREE/blob/main/devices.json) and [shared device protocol](https://github.com/jayis1/unified-TREE/tree/main/protocol). Its [complete front-page unification guide](https://github.com/jayis1/unified-TREE) explains repository ownership, device roles, message contracts, deployment composition, and how every design participates. This monorepo retains a synchronized integration under [`systems/`](./systems/).
 
 ## Requirements
 

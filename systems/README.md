@@ -1,13 +1,15 @@
-# Unified SoC Node System
+# unified TREE
 
-This is the unifying system for the complete [SoC Device Inventions repository](https://github.com/jayis1/SoC-Device-Inventions). **Each of its 57 hardware designs is a node in the greater system.** Together they form one interoperable family of sensors, scientific instruments, controllers, interfaces, and network nodes.
+The canonical home of this system is [github.com/jayis1/unified-TREE](https://github.com/jayis1/unified-TREE). This directory is its integration inside Daily Ideas.
+
+**unified TREE** is the unifying system for the complete [SoC Device Inventions repository](https://github.com/jayis1/SoC-Device-Inventions). **Each of its 57 hardware designs is a node in the greater system.** Together they form one interoperable family of sensors, scientific instruments, controllers, interfaces, and network nodes.
 
 The two repositories have distinct responsibilities:
 
 | Repository | Responsibility |
 |---|---|
 | [SoC Device Inventions](https://github.com/jayis1/SoC-Device-Inventions) | Canonical device designs: schematics, firmware, BOMs, host tools, assembly instructions, and device-level documentation |
-| [Daily Ideas Unified System](https://github.com/jayis1/daily-ideas) | Node registry, common protocol, four functional roles, composition rules, validation, and the larger system interface |
+| [unified TREE](https://github.com/jayis1/unified-TREE) | Node registry, common protocol, four functional roles, composition rules, validation, and the larger system interface |
 
 No device is replaced or hidden by this system. Each remains independently buildable in the source collection and also gains a defined place in the unified architecture.
 
@@ -135,4 +137,4 @@ This keeps each invention independently buildable while allowing several inventi
 - Browse the imported device tree in this monorepo: [`soc-devices/`](./soc-devices/)
 - Inspect the complete connection registry: [`devices.json`](./devices.json)
 - Read the shared protocol: [`protocol/`](./protocol/)
-- Return to the unified repository front page: [Daily Ideas](https://github.com/jayis1/daily-ideas)
+- Open the canonical unified repository: [unified TREE](https://github.com/jayis1/unified-TREE)
