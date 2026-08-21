@@ -1,13 +1,40 @@
 # Daily Ideas
 
-AI-generated terminal projects, unified by a searchable catalog and safe launcher. Each project remains self-contained while shared tooling provides discovery, execution, validation, and CI.
+> A growing arcade, laboratory, and creative workshop for the terminal—105 standalone Python projects under one searchable launcher.
 
-## Quick start
+Daily Ideas is an autonomously grown collection of terminal games, simulations, generators, puzzles, audio experiments, science visualizations, and utilities. Every project begins as a new idea, then passes through enhancement and bug-hunting stages before joining the collection.
 
-Python 3.8 or newer is required.
+The projects remain deliberately independent: open any dated directory, read one approachable Python program, and run it directly. The shared `daily-ideas` command makes the whole collection feel like one product without tightly coupling the applications.
+
+## Highlights
+
+- **105 runnable projects** grouped into seven searchable categories.
+- **One launcher** for browsing, inspecting, selecting, and running every app.
+- **No framework lock-in**: most apps use only the Python standard library.
+- **Terminal-native experiences** including curses interfaces, ANSI animation, audio generation, interactive games, and scriptable CLI tools.
+- **Safe process isolation** so apps can control the terminal and signals without affecting the launcher.
+- **Deterministic metadata** generated from the source tree and committed to Git.
+- **Automated quality gates** for catalog validity, compilation, tests, and bounded smoke checks.
+- **Learning-friendly layout** where every project retains its own source, tests, and documentation.
+
+## Requirements
+
+- Python 3.8 or newer.
+- Linux, macOS, or Windows for ordinary CLI applications.
+- A real, Unicode-capable terminal for curses and full-screen applications.
+- Optional dependencies are app-specific; `daily-ideas doctor` reports detected support.
+
+Windows users may need `windows-curses` for full-screen apps. Audio playback support varies by platform, although audio-generating projects can generally export files without live playback.
+
+## Installation and quick start
+
+Clone the repository and install its launcher in editable mode:
 
 ```bash
+git clone https://github.com/jayis1/daily-ideas.git
+cd daily-ideas
 python3 -m pip install -e .
+daily-ideas doctor
 daily-ideas list
 daily-ideas search dungeon
 daily-ideas info terminal-roguelike
@@ -17,6 +44,12 @@ daily-ideas doctor
 ```
 
 Apps run as isolated child processes from their own directories, so interactive input, curses, signals, and relative assets continue to work. Arguments after `--` are passed directly to the selected app.
+
+Installation is optional. From a checkout, the equivalent command is:
+
+```bash
+PYTHONPATH=src python3 -m daily_ideas.cli list
+```
 
 ## Commands
 
@@ -30,6 +63,106 @@ Apps run as isolated child processes from their own directories, so interactive 
 | `doctor` | Validate the catalog and report terminal/dependency support |
 
 Set `DAILY_IDEAS_ROOT` when invoking an installed launcher outside the source checkout. App-specific writable data locations are exposed through `DAILY_IDEAS_APP_DATA`.
+
+## Usage examples
+
+Browse by category or interaction style:
+
+```bash
+daily-ideas list --category puzzle
+daily-ideas list --category science
+daily-ideas list --interface curses
+```
+
+Search across app IDs, titles, descriptions, categories, and tags:
+
+```bash
+daily-ideas search dungeon
+daily-ideas search terminal puzzle
+daily-ideas search music
+```
+
+Inspect an app before launching it, then forward app-specific options after `--`:
+
+```bash
+daily-ideas info ascii-dungeon-generator
+daily-ideas run ascii-dungeon-generator -- --help
+daily-ideas run ascii-dungeon-generator -- --seed 42 --width 80 --height 30
+```
+
+Choose an app at random, with optional reproducibility and filtering:
+
+```bash
+daily-ideas random
+daily-ideas random --category creative --seed 42
+daily-ideas random --category puzzle --run
+```
+
+Every project remains directly runnable:
+
+```bash
+cd 2026-06-12-terminal-roguelike
+python3 roguelike.py
+```
+
+## How the integration works
+
+The launcher is a control plane, not a shared application runtime:
+
+```text
+src/daily_ideas/apps.json
+          │
+          ▼
+ searchable catalog ──► capability report
+          │
+          ▼
+     safe runner ──► isolated Python subprocess
+                          │
+                          ├── app working directory
+                          ├── original stdin/stdout/TTY
+                          ├── forwarded arguments
+                          └── app-specific data location
+```
+
+This boundary matters because the collection contains programs that manage curses state, ANSI rendering, keyboard input, timers, signals, audio, saves, and generated files. Child processes preserve that behavior and prevent global state from leaking between applications.
+
+### Runtime environment
+
+| Variable | Meaning |
+|---|---|
+| `DAILY_IDEAS_APP_ID` | Stable catalog ID of the running application |
+| `DAILY_IDEAS_APP_DATA` | App-specific writable data directory |
+| `DAILY_IDEAS_DATA_HOME` | Optional override for the launcher's data root |
+| `DAILY_IDEAS_ROOT` | Optional source-checkout path when running outside the repository |
+
+Existing apps need not use these variables. New apps can use `DAILY_IDEAS_APP_DATA` to keep saves and generated state outside the Git checkout.
+
+## Repository layout
+
+```text
+daily-ideas/
+├── README.md                     # Landing page and generated app index
+├── pyproject.toml                # Installable launcher package
+├── src/daily_ideas/
+│   ├── apps.json                 # Committed canonical catalog
+│   ├── catalog.py                # Loading, validation, and search
+│   ├── cli.py                    # User-facing commands
+│   └── runner.py                 # Isolated app execution
+├── tools/                        # Discovery, docs, validation, smoke checks
+├── tests/                        # Shared integration tests
+├── .github/workflows/            # Collection-wide CI
+└── YYYY-MM-DD-project-name/      # Independent app, README, and tests
+```
+
+## Interface types
+
+| Interface | What to expect |
+|---|---|
+| `cli` | Bounded, script-friendly output and command-line options |
+| `interactive` | Prompts and ordinary line-oriented keyboard input |
+| `curses` | Full-screen terminal control; requires a real TTY |
+| `animation` | ANSI rendering, timed frames, or direct keyboard interaction |
+| `audio` | Audio synthesis, playback, or export behavior |
 
 ## Application catalog
 
@@ -205,8 +338,81 @@ python3 -m unittest discover -s tests -v
 python3 tools/smoke_apps.py
 ```
 
-A canonical app directory must be named `YYYY-MM-DD-lowercase-slug`, contain a Python entrypoint, and have a README. Optional dependencies and terminal capabilities are recorded in `src/daily_ideas/apps.json`.
+A canonical app directory must:
+
+- Be named `YYYY-MM-DD-lowercase-slug`.
+- Contain at least one runnable Python entrypoint.
+- Include a project-level `README.md` with usage examples.
+- Keep tests and assets inside its own directory.
+- Avoid assuming the repository root is its working directory.
+- Prefer a bounded `--help` or other non-interactive smoke path.
+
+The discovery tool finds the likely entrypoint, extracts documentation, classifies the interface, assigns search tags, and records safe smoke arguments. Review the generated metadata whenever an app has multiple executables or unusual runtime requirements.
 
 ## Pipeline model
 
-The autonomous generator, enhancer, and bug hunter can continue producing independent apps. The integration contract adds a final validation step: regenerate metadata, run catalog validation, run bounded smoke checks, and update this README before committing.
+The autonomous generator, enhancer, and bug hunter can continue producing independent apps. A final integration gate turns those projects into a coherent collection:
+
+| Stage | Responsibility |
+|---|---|
+| Generator | Conceive a distinct idea and build a complete runnable first version |
+| Enhancer | Add meaningful features, improve usability and documentation, and extend tests |
+| Bug hunter | Execute real workflows, probe edge cases, fix failures, and verify behavior |
+| Integration gate | Regenerate metadata, validate structure, compile sources, run tests and smoke checks, and update this page |
+
+Apps do not depend on launcher internals. Their shared contract is discoverable structure and executable behavior, allowing every project to remain understandable and portable.
+
+## Testing and quality
+
+Collection-wide verification uses several layers:
+
+1. Python compilation catches syntax errors across shared tooling and app sources.
+2. Catalog validation ensures IDs are unique and every entrypoint exists.
+3. Shared tests cover search, command dispatch, argument forwarding, and subprocess safety.
+4. Smoke checks invoke safe `--help` paths with timeouts and disabled stdin.
+5. Individual project test suites exercise each application's domain logic.
+
+GitHub Actions runs the shared checks on pushes and pull requests. Full-screen apps are not blindly launched in non-interactive CI; they use bounded CLI paths or project-specific unit tests.
+
+## Troubleshooting
+
+### The launcher cannot find the app sources
+
+Run it from the checkout or point it at the repository:
+
+```bash
+export DAILY_IDEAS_ROOT=/path/to/daily-ideas
+daily-ideas run terminal-roguelike
+```
+
+### A curses app fails or renders incorrectly
+
+Use a real terminal, enlarge the window, and ensure `TERM` is configured correctly. On Windows, install `windows-curses` if your Python distribution does not provide curses.
+
+### An optional dependency is missing
+
+Run `daily-ideas doctor` to inspect detected packages. Install only what the desired app requires instead of adding every optional dependency globally.
+
+### Generated files appear in the checkout
+
+New applications should write persistent state beneath `DAILY_IDEAS_APP_DATA`. Some older self-contained apps may continue writing relative to their own directories until migrated.
+
+### The catalog or README index is stale
+
+```bash
+python3 tools/discover_apps.py
+python3 tools/update_readme.py
+python3 tools/discover_apps.py --check
+```
+
+## Contributing
+
+Contributions can improve an existing app, add a new idea, or strengthen the shared launcher. Keep changes scoped and preserve the independence of unrelated projects.
+
+For new apps, favor deterministic options such as `--seed` where appropriate, clear terminal requirements, safe output paths, a bounded non-interactive mode, and tests that do not require manual input. Before opening a pull request, run the maintenance commands above and confirm `daily-ideas doctor` reports a valid catalog.
+
+## Status and scope
+
+Daily Ideas is an experimental, continuously evolving collection. Projects favor creativity, readability, and terminal-native fun over a uniform internal API. The launcher unifies discovery and execution while leaving room for each idea to have its own personality.
+
+Unless an individual project says otherwise, treat generated outputs and simulations as entertainment or educational material—not professional, scientific, financial, or safety-critical advice.
