@@ -1,42 +1,60 @@
 # Keyboard Heatmap Analyzer
 
-Keyboard Heatmap Analyzer is a small terminal utility that turns any text into a visual map of which keys you use most on a QWERTY keyboard. It is part typing microscope, part ergonomic curiosity, and part fun text visualizer.
+Keyboard Heatmap Analyzer is a dependency-free Python CLI that turns text into a keyboard-shaped usage map. Feed it prose, code, logs, or piped stdin and it will show which QWERTY keys get hammered most, how balanced the typing pattern is, and where awkward finger travel appears.
 
 ## What it does
 
-Given direct text, a text file, or a built-in preset, the program:
+The tool normalizes text onto a US QWERTY layout, then reports:
 
-- counts how often each keyboard key is used
-- renders an ANSI-colored keyboard heatmap in the terminal
-- summarizes row usage, hand balance, and finger hotspots
-- reports the most common keys and bigrams
-- highlights same-finger bigrams, which are often awkward to type
+- per-key frequencies rendered as a terminal heatmap
+- row, hand, and finger usage totals
+- top keys and bigrams
+- same-finger bigrams that may feel awkward to type
+- row-jump bigrams that indicate more finger travel
+- an approximate ergonomic effort score
+- optional JSON output for scripting and further analysis
 
-It works with standard letters, digits, punctuation, and spaces using a normalized US QWERTY layout.
+It is useful for quickly inspecting:
+
+- writing style differences between prose and code
+- ergonomic hotspots in generated text
+- keyboard patterns in datasets or logs
+- terminal demos and teaching material about typing patterns
 
 ## Features
 
-- Pure Python, no dependencies
-- Colorful terminal heatmap
-- File input support
-- Built-in presets for quick demos
-- Useful typing statistics
-- Easy to extend for other layouts
+- Pure Python, standard library only
+- ANSI-colored terminal heatmap
+- Works with inline text, files, presets, and stdin
+- `--json` output for automation
+- Ergonomic summary with effort, hand alternation, same-finger share, and row-jump share
+- Built-in demo presets for quick exploration
+- `--help` and `--version` CLI support
+- Automated tests with pytest
+
+## Project files
+
+- `keyboard_heatmap.py` — main CLI application
+- `test_keyboard_heatmap.py` — tests for analysis and CLI behavior
+- `README.md` — documentation
+
+## Requirements
+
+- Python 3.11+ recommended
+- `pytest` only if you want to run the test suite
 
 ## Installation
 
-Python 3.11+ is recommended.
-
 ```bash
 cd ~/daily-ideas/2026-08-22-keyboard-heatmap-analyzer
-python3 -m pip install pytest  # optional, only for running tests
+python3 -m pip install pytest  # optional
 ```
 
-The app itself needs only the Python standard library.
+The application itself has no external dependencies.
 
 ## How to run
 
-### Analyze a custom sentence
+### Analyze direct text
 
 ```bash
 python3 keyboard_heatmap.py "the quick brown fox jumps over the lazy dog"
@@ -48,56 +66,84 @@ python3 keyboard_heatmap.py "the quick brown fox jumps over the lazy dog"
 python3 keyboard_heatmap.py --file README.md
 ```
 
-### Run a built-in demo preset
+### Use a built-in preset
 
 ```bash
-python3 keyboard_heatmap.py --preset code
+python3 keyboard_heatmap.py --preset pangram
 ```
 
-### Disable ANSI colors
+### Read from stdin
+
+```bash
+echo "vim motions meet midnight poetry" | python3 keyboard_heatmap.py --stdin --no-color
+```
+
+If stdin is piped in and no other input source is given, the tool will read it automatically.
+
+### Emit JSON for another tool
+
+```bash
+python3 keyboard_heatmap.py --json --preset code
+```
+
+## CLI usage
+
+```text
+usage: keyboard_heatmap.py [-h] [--file FILE] [--preset {code,pangram,poem}] [--stdin] [--top TOP] [--json] [--no-color] [--version] [text ...]
+```
+
+### Arguments and options
+
+- `text` — free-form text to analyze
+- `--file FILE` — read UTF-8 text from a file
+- `--preset {code,pangram,poem}` — analyze a built-in sample
+- `--stdin` — explicitly include standard input as a source
+- `--top TOP` — number of top items shown in reports
+- `--json` — print structured JSON instead of the human-readable report
+- `--no-color` — disable ANSI colors
+- `--version` — print the program version and exit
+- `-h, --help` — show help text
+
+## Example workflows
+
+### 1. Inspect a source file for typing hotspots
+
+```bash
+python3 keyboard_heatmap.py --file keyboard_heatmap.py --top 5
+```
+
+This prints the heatmap plus a report showing the busiest keys, row distribution, finger hotspots, and common bigrams.
+
+### 2. Compare prose-like input with code-like input manually
 
 ```bash
 python3 keyboard_heatmap.py --preset poem --no-color
+python3 keyboard_heatmap.py --preset code --no-color
 ```
 
-## Usage
+You can quickly see differences in punctuation use, space share, hand balance, and same-finger patterns.
 
-```text
-usage: keyboard_heatmap.py [-h] [--file FILE] [--preset {code,pangram,poem}] [--top TOP] [--no-color] [text ...]
+### 3. Pipe into jq or save metrics
+
+```bash
+python3 keyboard_heatmap.py --json "hello keyboard world" > analysis.json
 ```
 
-### Options
-
-- `text`: free-form text to analyze
-- `--file`: load UTF-8 text from a file
-- `--preset`: analyze one of the included demo texts
-- `--top`: number of top keys/bigrams/fingers to list
-- `--no-color`: print a plain-text heatmap without ANSI colors
+The JSON output includes raw counts and a summary block with top keys, top bigrams, hand alternation percentage, row-jump percentage, and effort per 100 keys.
 
 ## Example output
 
-```bash
-python3 keyboard_heatmap.py --preset pangram --no-color
-```
+Human-readable mode prints:
 
-This prints:
+- a keyboard-shaped count table
+- input and mapped totals
+- ergonomic summary metrics
+- row and hand balance tables
+- finger hotspots
+- top keys and bigrams
+- unmapped characters, if any
 
-- a keyboard-shaped table where hot keys have larger counts
-- totals for mapped characters and unique keys
-- row usage percentages
-- left/right hand balance
-- the busiest fingers
-- the most common keys and bigrams
-
-## Project structure
-
-- `keyboard_heatmap.py` — main CLI program
-- `test_keyboard_heatmap.py` — lightweight automated tests
-- `README.md` — project documentation
-
-## Why it is interesting
-
-Most text tools show frequencies as plain lists. This project places those frequencies back onto the physical keyboard, which makes writing style and ergonomic patterns immediately visible. Code samples, poetry, and prose all produce noticeably different heat signatures.
+JSON mode prints a structured object containing the full analysis and derived summary metrics.
 
 ## Running tests
 
@@ -105,9 +151,10 @@ Most text tools show frequencies as plain lists. This project places those frequ
 pytest -q
 ```
 
-## Ideas for extension
+## Notes on the ergonomic score
 
-- add Dvorak or Colemak layouts
-- compare two texts side by side
-- export heatmaps as HTML
-- score text for typing comfort
+The effort score is an approximate heuristic, not a medical or scientific measure. It weights home-row usage as cheaper than number-row or pinky-heavy usage, which makes it useful for relative comparisons between texts.
+
+## Why this project is interesting
+
+Most frequency analyzers stop at histograms. This project maps statistics back onto the physical keyboard, which makes typing behavior much easier to spot visually. Poetry, command lines, and source code all produce distinct heat signatures, and the ergonomic summary makes those differences easier to reason about.
