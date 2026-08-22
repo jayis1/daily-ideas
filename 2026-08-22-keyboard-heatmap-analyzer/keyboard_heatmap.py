@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 RESET = "\033[0m"
 LEVEL_COLORS = [
     "\033[38;5;238m",  # very low
@@ -28,7 +28,7 @@ LEVEL_COLORS = [
 ]
 
 KEY_ROWS = [
-    list("1234567890-="),
+    list("`1234567890-="),
     list("qwertyuiop[]\\"),
     list("asdfghjkl;'"),
     list("zxcvbnm,./"),
@@ -69,6 +69,7 @@ ROW_NAMES = {
 
 # Approximate QWERTY touch-typing assignments. These power ergonomic summaries.
 KEY_META = {
+    "`": (0, "left", "left pinky"),
     "1": (0, "left", "left pinky"),
     "2": (0, "left", "left ring"),
     "3": (0, "left", "left middle"),
@@ -399,6 +400,8 @@ def read_text_file(path_str: str) -> str:
         raise SystemExit(f"error: expected a file, got directory: {path}") from exc
     except UnicodeDecodeError as exc:
         raise SystemExit(f"error: could not decode UTF-8 from file: {path}") from exc
+    except OSError as exc:
+        raise SystemExit(f"error: could not read file {path}: {exc.strerror or exc}") from exc
 
 
 def stdin_has_data() -> bool:

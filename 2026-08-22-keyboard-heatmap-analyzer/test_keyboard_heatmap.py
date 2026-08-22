@@ -14,6 +14,7 @@ def test_normalize_char_maps_shifted_symbols():
     assert normalize_char("A") == "a"
     assert normalize_char("!") == "1"
     assert normalize_char("?") == "/"
+    assert normalize_char("~") == "`"
 
 
 def test_analysis_counts_rows_hands_and_bigrams():
@@ -75,4 +76,27 @@ def test_cli_version_flag():
         text=True,
         check=True,
     )
-    assert "1.1.0" in result.stdout
+    assert "1.1.1" in result.stdout
+
+
+def test_cli_handles_tilde_input_without_crashing():
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "~", "--no-color"],
+        cwd=PROJECT_DIR,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "`:1" in result.stdout
+    assert "mapped keys:" in result.stdout
+
+
+def test_cli_reports_read_errors_cleanly():
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--file", "/proc/1/mem"],
+        cwd=PROJECT_DIR,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "error: could not read file /proc/1/mem" in result.stderr
