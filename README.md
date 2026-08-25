@@ -208,7 +208,7 @@ daily-ideas/
 ## Application catalog
 
 <!-- APP_INDEX_START -->
-**105 apps** across 7 categories. This section is generated.
+**107 apps** across 7 categories. This section is generated.
 
 <details><summary>Audio (4)</summary>
 
@@ -221,7 +221,7 @@ daily-ideas/
 
 </details>
 
-<details><summary>Creative (50)</summary>
+<details><summary>Creative (51)</summary>
 
 | App | Interface | Description |
 |---|---|---|
@@ -275,6 +275,7 @@ daily-ideas/
 | [Terminal Semaphore Flag Signaler](./2026-08-13-terminal-semaphore-signaler/) | animation | A CLI tool that translates text into maritime flag semaphore positions and visualizes them as animated ASCII stick figures holding flags. Each letter of the alphabet is represen... |
 | [ASCII Stereogram Generator SIRDS](./2026-08-16-ascii-stereogram-generator/) | cli | > Generate single-image random dot stereograms in the terminal using ASCII characters. Hidden 3D shapes pop out when you relax or cross your eyes. |
 | [ASCII Morse Broadcasting Station](./2026-08-19-ascii-morse-broadcasting/) | animation | A terminal-based vintage shortwave radio station simulator that broadcasts Morse code in real time — doubled as a practical Morse code utility toolkit. Watch as it cycles throug... |
+| [Keyboard Heatmap Analyzer](./2026-08-22-keyboard-heatmap-analyzer/) | animation | Keyboard Heatmap Analyzer is a small Python CLI that turns text into a keyboard-shaped usage report for a US QWERTY layout. It can inspect inline text, files, presets, or piped... |
 
 </details>
 
@@ -324,7 +325,7 @@ daily-ideas/
 
 </details>
 
-<details><summary>Simulation (18)</summary>
+<details><summary>Simulation (19)</summary>
 
 | App | Interface | Description |
 |---|---|---|
@@ -346,6 +347,7 @@ daily-ideas/
 | [Terminal Aurora Borealis Simulator](./2026-07-26-terminal-aurora-simulator/) | animation | A self-contained Python program that paints a procedurally-animated aurora |
 | [Terminal Pendulum Wave Simulator](./2026-08-04-pendulum-wave-simulator/) | animation | A physics-based ASCII animation of the pendulum wave — one of the most |
 | [Domino Chain Simulator](./2026-08-10-domino-chain-simulator/) | animation | A terminal-based domino chain reaction simulator written in pure Python. Set up dominoes with varied heights and spacings, trigger any domino, and watch the cascade ripple acros... |
+| [Firefly Sync Garden](./2026-08-25-firefly-sync-garden/) | animation | Firefly Sync Garden is a terminal animation that simulates a drifting colony of pulse-coupled fireflies. Each firefly moves through a tiny ASCII night garden, blinks on its own... |
 
 </details>
 

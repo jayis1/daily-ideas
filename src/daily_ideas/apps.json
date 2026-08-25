@@ -2040,6 +2040,46 @@
       "smoke_args": [
         "--help"
       ]
+    },
+    {
+      "id": "keyboard-heatmap-analyzer",
+      "title": "Keyboard Heatmap Analyzer",
+      "description": "Keyboard Heatmap Analyzer is a small Python CLI that turns text into a keyboard-shaped usage report for a US QWERTY layout. It can inspect inline text, files, presets, or piped...",
+      "date": "2026-08-22",
+      "path": "2026-08-22-keyboard-heatmap-analyzer",
+      "entrypoint": "keyboard_heatmap.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "analyzer",
+        "creative",
+        "heatmap",
+        "keyboard"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "firefly-sync-garden",
+      "title": "Firefly Sync Garden",
+      "description": "Firefly Sync Garden is a terminal animation that simulates a drifting colony of pulse-coupled fireflies. Each firefly moves through a tiny ASCII night garden, blinks on its own...",
+      "date": "2026-08-25",
+      "path": "2026-08-25-firefly-sync-garden",
+      "entrypoint": "firefly_sync_garden.py",
+      "category": "simulation",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "firefly",
+        "garden",
+        "simulation",
+        "sync"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
     }
   ]
 }
