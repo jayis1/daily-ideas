@@ -8,14 +8,16 @@ night garden and gradually synchronizing their flashes.
 from __future__ import annotations
 
 import argparse
+import csv
 import math
 import random
 import sys
 import time
 from dataclasses import dataclass
-from typing import Iterable, Sequence
+from pathlib import Path
+from typing import Any, Iterable, Mapping, Sequence
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 RESET = "\033[0m"
 HIDE_CURSOR = "\033[?25l"
 SHOW_CURSOR = "\033[?25h"
@@ -30,6 +32,26 @@ PALETTES: dict[str, list[str]] = {
 BACKGROUND_STARS = ("·", "˙", "•", "✦")
 GLOW_CHARS = [" ", "·", "•", "o", "O", "@"]
 ASCII_GLOW_CHARS = [" ", ".", ":", "o", "O", "*"]
+DEFAULTS: dict[str, Any] = {
+    "width": 72,
+    "height": 22,
+    "count": 36,
+    "steps": 180,
+    "fps": 18,
+    "coupling": 0.18,
+    "radius": 7.0,
+    "speed": 0.65,
+    "jitter": 0.06,
+    "phase_step": 0.04,
+    "warmup": 100,
+    "palette": "amber",
+}
+PRESETS: dict[str, dict[str, Any]] = {
+    "classic": {},
+    "calm": {"count": 24, "coupling": 0.26, "radius": 9.0, "speed": 0.45, "jitter": 0.03, "palette": "mint", "fps": 14},
+    "swarm": {"count": 60, "coupling": 0.14, "radius": 6.0, "speed": 0.9, "jitter": 0.10, "palette": "ocean", "fps": 22},
+    "storm": {"count": 48, "coupling": 0.32, "radius": 10.0, "speed": 0.8, "jitter": 0.08, "palette": "violet", "fps": 20},
+}
 
 
 @dataclass
@@ -78,6 +100,21 @@ class SimConfig:
     phase_step: float = 0.04
 
 
+@dataclass
+class AnalysisSummary:
+    steps: int
+    total_flashes: int
+    peak_flashes: int
+    average_order: float
+    max_order: float
+    average_synced_ratio: float
+    max_synced_ratio: float
+    final_order: float
+    final_synced_ratio: float
+    final_mean_phase: float
+    first_sync_frame: int | None
+
+
 def clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
 
@@ -93,6 +130,7 @@ def wrap_position(value: float, limit: int) -> float:
 
 
 def create_state(width: int, height: int, count: int, rng: random.Random, speed: float) -> GardenState:
+    """Create a randomized garden with drifting fireflies."""
     fireflies: list[Firefly] = []
     for _ in range(count):
         angle = rng.uniform(0.0, math.tau)
@@ -140,23 +178,36 @@ def count_synced(phases: Sequence[float], tolerance: float = 0.08) -> float:
     return close / len(phases)
 
 
-def distance(a: Firefly, b: Firefly) -> float:
-    return math.hypot(a.x - b.x, a.y - b.y)
+def toroidal_distance(a: Firefly, b: Firefly, width: int, height: int) -> float:
+    """Measure distance with screen wrapping so edge neighbors still interact."""
+    dx = abs(a.x - b.x)
+    dy = abs(a.y - b.y)
+    if width > 0:
+        dx = min(dx, width - dx)
+    if height > 0:
+        dy = min(dy, height - dy)
+    return math.hypot(dx, dy)
 
 
-def apply_flash_coupling(fireflies: Sequence[Firefly], flash_indices: Iterable[int], coupling: float, radius: float) -> None:
+def apply_flash_coupling(
+    state: GardenState,
+    flash_indices: Iterable[int],
+    coupling: float,
+    radius: float,
+) -> None:
+    """Nudge nearby oscillators forward when fireflies flash."""
     if coupling <= 0 or radius <= 0:
         return
     flashers = list(flash_indices)
     if not flashers:
         return
-    for index, firefly in enumerate(fireflies):
+    for index, firefly in enumerate(state.fireflies):
         boost = 0.0
         for flasher_index in flashers:
             if flasher_index == index:
                 continue
-            flasher = fireflies[flasher_index]
-            gap = distance(firefly, flasher)
+            flasher = state.fireflies[flasher_index]
+            gap = toroidal_distance(firefly, flasher, state.width, state.height)
             if gap > radius:
                 continue
             influence = 1.0 - (gap / radius)
@@ -166,6 +217,7 @@ def apply_flash_coupling(fireflies: Sequence[Firefly], flash_indices: Iterable[i
 
 
 def advance_firefly(firefly: Firefly, width: int, height: int, rng: random.Random, config: SimConfig) -> bool:
+    """Move a firefly one step and report whether it flashed."""
     firefly.vx += rng.uniform(-config.jitter, config.jitter)
     firefly.vy += rng.uniform(-config.jitter, config.jitter)
     speed = math.hypot(firefly.vx, firefly.vy)
@@ -192,19 +244,24 @@ def advance_firefly(firefly: Firefly, width: int, height: int, rng: random.Rando
 
 
 def step_state(state: GardenState, rng: random.Random, config: SimConfig) -> StepStats:
+    """Advance the garden by one frame and compute synchronization metrics."""
     flash_indices: list[int] = []
     for index, firefly in enumerate(state.fireflies):
         if advance_firefly(firefly, state.width, state.height, rng, config):
             flash_indices.append(index)
-    apply_flash_coupling(state.fireflies, flash_indices, config.coupling, config.radius)
+
+    apply_flash_coupling(state, flash_indices, config.coupling, config.radius)
+
+    flashed_set = set(flash_indices)
     secondary_flashes: list[int] = []
     for index, firefly in enumerate(state.fireflies):
-        if index in flash_indices:
+        if index in flashed_set:
             continue
         if firefly.phase >= 0.995:
             firefly.phase = 0.0
             firefly.flash_timer = config.flash_length
             secondary_flashes.append(index)
+
     all_flashes = flash_indices + secondary_flashes
     phases = [firefly.phase for firefly in state.fireflies]
     state.frame += 1
@@ -236,7 +293,6 @@ def render_frame(state: GardenState, stats: StepStats, config: RenderConfig) -> 
     height = state.height
     grid = background_field(width, height, state.frame, config.unicode)
     intensities = [[0 for _ in range(width)] for _ in range(height)]
-    max_intensity = 0
     glyphs = GLOW_CHARS if config.unicode else ASCII_GLOW_CHARS
     phases = [firefly.phase for firefly in state.fireflies]
     mean_phase = circular_mean(phases)
@@ -249,7 +305,6 @@ def render_frame(state: GardenState, stats: StepStats, config: RenderConfig) -> 
         if firefly.flash_timer > 0:
             brightness = len(glyphs) - 1
         intensities[y][x] = max(intensities[y][x], brightness)
-        max_intensity = max(max_intensity, intensities[y][x])
         if firefly.flash_timer > 0:
             for dy in (-1, 0, 1):
                 for dx in (-1, 0, 1):
@@ -259,7 +314,6 @@ def render_frame(state: GardenState, stats: StepStats, config: RenderConfig) -> 
                         continue
                     splash = max(len(glyphs) - 3, 1)
                     intensities[ny][nx] = max(intensities[ny][nx], splash)
-                    max_intensity = max(max_intensity, intensities[ny][nx])
 
     palette = PALETTES[config.palette]
     lines: list[str] = []
@@ -289,10 +343,99 @@ def render_frame(state: GardenState, stats: StepStats, config: RenderConfig) -> 
 
 
 def simulate_snapshot(state: GardenState, rng: random.Random, sim_config: SimConfig, warmup: int) -> StepStats:
-    stats = StepStats(flashes=0, order=phase_order([fly.phase for fly in state.fireflies]), synced_ratio=0.0, mean_phase=0.0)
+    """Advance the simulation a few frames and return a still snapshot state."""
+    stats = StepStats(
+        flashes=0,
+        order=phase_order([fly.phase for fly in state.fireflies]),
+        synced_ratio=count_synced([fly.phase for fly in state.fireflies]),
+        mean_phase=circular_mean([fly.phase for fly in state.fireflies]),
+    )
     for _ in range(max(warmup, 0)):
         stats = step_state(state, rng, sim_config)
     return stats
+
+
+def run_analysis(
+    state: GardenState,
+    rng: random.Random,
+    sim_config: SimConfig,
+    steps: int,
+) -> tuple[list[dict[str, float]], AnalysisSummary]:
+    """Run a headless analysis and collect per-frame metrics."""
+    history: list[dict[str, float]] = []
+    total_flashes = 0
+    peak_flashes = 0
+    order_sum = 0.0
+    synced_sum = 0.0
+    max_order = 0.0
+    max_synced_ratio = 0.0
+    first_sync_frame: int | None = None
+    final_stats = StepStats(flashes=0, order=0.0, synced_ratio=0.0, mean_phase=0.0)
+
+    for _ in range(steps):
+        final_stats = step_state(state, rng, sim_config)
+        row = {
+            "frame": float(state.frame),
+            "flashes": float(final_stats.flashes),
+            "order": final_stats.order,
+            "synced_ratio": final_stats.synced_ratio,
+            "mean_phase": final_stats.mean_phase,
+        }
+        history.append(row)
+        total_flashes += final_stats.flashes
+        peak_flashes = max(peak_flashes, final_stats.flashes)
+        order_sum += final_stats.order
+        synced_sum += final_stats.synced_ratio
+        max_order = max(max_order, final_stats.order)
+        max_synced_ratio = max(max_synced_ratio, final_stats.synced_ratio)
+        if first_sync_frame is None and final_stats.synced_ratio >= 0.9:
+            first_sync_frame = state.frame
+
+    divisor = max(steps, 1)
+    summary = AnalysisSummary(
+        steps=steps,
+        total_flashes=total_flashes,
+        peak_flashes=peak_flashes,
+        average_order=order_sum / divisor,
+        max_order=max_order,
+        average_synced_ratio=synced_sum / divisor,
+        max_synced_ratio=max_synced_ratio,
+        final_order=final_stats.order,
+        final_synced_ratio=final_stats.synced_ratio,
+        final_mean_phase=final_stats.mean_phase,
+        first_sync_frame=first_sync_frame,
+    )
+    return history, summary
+
+
+def save_analysis_csv(path: str, history: Sequence[Mapping[str, float]]) -> Path:
+    destination = Path(path).expanduser()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with destination.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["frame", "flashes", "order", "synced_ratio", "mean_phase"])
+        writer.writeheader()
+        writer.writerows(history)
+    return destination
+
+
+def format_summary(summary: AnalysisSummary) -> str:
+    sync_frame = "not reached" if summary.first_sync_frame is None else str(summary.first_sync_frame)
+    return "\n".join(
+        [
+            "Firefly Sync Garden analysis",
+            f"steps: {summary.steps}",
+            f"total flashes: {summary.total_flashes}",
+            f"peak flashes/frame: {summary.peak_flashes}",
+            f"average order: {summary.average_order:.3f}",
+            f"max order: {summary.max_order:.3f}",
+            f"average synced ratio: {summary.average_synced_ratio:.3f}",
+            f"max synced ratio: {summary.max_synced_ratio:.3f}",
+            f"final order: {summary.final_order:.3f}",
+            f"final synced ratio: {summary.final_synced_ratio:.3f}",
+            f"final mean phase: {summary.final_mean_phase:.3f}",
+            f"first 90% sync frame: {sync_frame}",
+        ]
+    )
 
 
 def positive_int(value: str) -> int:
@@ -309,28 +452,57 @@ def nonnegative_int(value: str) -> int:
     return parsed
 
 
+def positive_float(value: str) -> float:
+    parsed = float(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("value must be positive")
+    return parsed
+
+
+def nonnegative_float(value: str) -> float:
+    parsed = float(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("value must be non-negative")
+    return parsed
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Animate drifting fireflies that gradually synchronize their flashes in your terminal.",
     )
-    parser.add_argument("--width", type=positive_int, default=72, help="garden width in characters")
-    parser.add_argument("--height", type=positive_int, default=22, help="garden height in rows")
-    parser.add_argument("--count", type=positive_int, default=36, help="number of fireflies")
-    parser.add_argument("--steps", type=positive_int, default=180, help="frames to animate")
-    parser.add_argument("--fps", type=positive_int, default=18, help="frames per second")
+    parser.add_argument("--width", type=positive_int, default=DEFAULTS["width"], help="garden width in characters")
+    parser.add_argument("--height", type=positive_int, default=DEFAULTS["height"], help="garden height in rows")
+    parser.add_argument("--count", type=positive_int, default=None, help="number of fireflies")
+    parser.add_argument("--steps", type=positive_int, default=None, help="frames to animate or analyze")
+    parser.add_argument("--fps", type=positive_int, default=None, help="frames per second")
     parser.add_argument("--seed", type=int, default=None, help="random seed for reproducible gardens")
-    parser.add_argument("--coupling", type=float, default=0.18, help="flash influence on nearby fireflies")
-    parser.add_argument("--radius", type=float, default=7.0, help="flash influence radius")
-    parser.add_argument("--speed", type=float, default=0.65, help="maximum drift speed")
-    parser.add_argument("--jitter", type=float, default=0.06, help="random steering jitter")
-    parser.add_argument("--warmup", type=nonnegative_int, default=100, help="simulation steps before snapshot output")
+    parser.add_argument("--coupling", type=nonnegative_float, default=None, help="flash influence on nearby fireflies")
+    parser.add_argument("--radius", type=nonnegative_float, default=None, help="flash influence radius")
+    parser.add_argument("--speed", type=positive_float, default=None, help="maximum drift speed")
+    parser.add_argument("--jitter", type=nonnegative_float, default=None, help="random steering jitter")
+    parser.add_argument("--phase-step", type=positive_float, default=None, help="base oscillator advancement per frame")
+    parser.add_argument("--warmup", type=nonnegative_int, default=DEFAULTS["warmup"], help="simulation steps before snapshot output")
     parser.add_argument("--snapshot", action="store_true", help="print one still frame instead of animating")
-    parser.add_argument("--palette", choices=sorted(PALETTES), default="amber", help="color palette")
+    parser.add_argument("--analyze", action="store_true", help="run headless analysis and print synchronization metrics")
+    parser.add_argument("--csv", help="write analysis metrics to a CSV file (use with --analyze)")
+    parser.add_argument("--summary-only", action="store_true", help="omit the snapshot frame in analysis mode")
+    parser.add_argument("--preset", choices=sorted(PRESETS), default="classic", help="apply a curated simulation preset")
+    parser.add_argument("--palette", choices=sorted(PALETTES), default=None, help="color palette")
     parser.add_argument("--ascii", action="store_true", help="use ASCII-only glow characters")
     parser.add_argument("--no-color", action="store_true", help="disable ANSI colors")
     parser.add_argument("--no-status", action="store_true", help="hide the status line")
     parser.add_argument("--version", action="version", version=f"Firefly Sync Garden {VERSION}")
     return parser
+
+
+def resolve_options(args: argparse.Namespace) -> dict[str, Any]:
+    resolved = dict(DEFAULTS)
+    resolved.update(PRESETS[args.preset])
+    for key in ("count", "steps", "fps", "coupling", "radius", "speed", "jitter", "phase_step", "palette"):
+        value = getattr(args, key)
+        if value is not None:
+            resolved[key] = value
+    return resolved
 
 
 def animate(state: GardenState, rng: random.Random, sim_config: SimConfig, render_config: RenderConfig, steps: int, fps: int) -> int:
@@ -359,29 +531,53 @@ def animate(state: GardenState, rng: random.Random, sim_config: SimConfig, rende
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.snapshot and args.analyze:
+        parser.error("--snapshot and --analyze are mutually exclusive")
+    if args.csv and not args.analyze:
+        parser.error("--csv requires --analyze")
     if args.width < 10 or args.height < 5:
         parser.error("width must be at least 10 and height at least 5")
+
+    options = resolve_options(args)
     rng = random.Random(args.seed)
     sim_config = SimConfig(
-        coupling=clamp(args.coupling, 0.0, 1.0),
-        radius=max(args.radius, 0.0),
-        jitter=max(args.jitter, 0.0),
-        speed=max(args.speed, 0.05),
+        coupling=clamp(options["coupling"], 0.0, 1.0),
+        radius=max(options["radius"], 0.0),
+        jitter=max(options["jitter"], 0.0),
+        speed=max(options["speed"], 0.05),
+        phase_step=max(options["phase_step"], 0.001),
     )
     render_config = RenderConfig(
-        palette=args.palette,
+        palette=options["palette"],
         use_color=not args.no_color,
         unicode=not args.ascii,
         show_status=not args.no_status,
     )
-    state = create_state(args.width, args.height, args.count, rng, sim_config.speed)
+    state = create_state(args.width, args.height, options["count"], rng, sim_config.speed)
 
     if args.snapshot:
         stats = simulate_snapshot(state, rng, sim_config, args.warmup)
         print(render_frame(state, stats, render_config))
         return 0
 
-    return animate(state, rng, sim_config, render_config, args.steps, args.fps)
+    if args.analyze:
+        history, summary = run_analysis(state, rng, sim_config, options["steps"])
+        if not args.summary_only:
+            last_stats = StepStats(
+                flashes=int(history[-1]["flashes"]) if history else 0,
+                order=summary.final_order,
+                synced_ratio=summary.final_synced_ratio,
+                mean_phase=summary.final_mean_phase,
+            )
+            print(render_frame(state, last_stats, render_config))
+            print()
+        print(format_summary(summary))
+        if args.csv:
+            destination = save_analysis_csv(args.csv, history)
+            print(f"csv: {destination}")
+        return 0
+
+    return animate(state, rng, sim_config, render_config, options["steps"], options["fps"])
 
 
 if __name__ == "__main__":
