@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 RESET = "\033[0m"
 HIDE_CURSOR = "\033[?25l"
 SHOW_CURSOR = "\033[?25h"
@@ -418,6 +418,13 @@ def save_analysis_csv(path: str, history: Sequence[Mapping[str, float]]) -> Path
     return destination
 
 
+def validate_csv_path(path: str) -> None:
+    """Reject CSV destinations that cannot sensibly be written as files."""
+    destination = Path(path).expanduser()
+    if destination.exists() and destination.is_dir():
+        raise argparse.ArgumentTypeError("csv destination must be a file path, not a directory")
+
+
 def format_summary(summary: AnalysisSummary) -> str:
     sync_frame = "not reached" if summary.first_sync_frame is None else str(summary.first_sync_frame)
     return "\n".join(
@@ -535,6 +542,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("--snapshot and --analyze are mutually exclusive")
     if args.csv and not args.analyze:
         parser.error("--csv requires --analyze")
+    if args.csv:
+        try:
+            validate_csv_path(args.csv)
+        except argparse.ArgumentTypeError as exc:
+            parser.error(str(exc))
     if args.width < 10 or args.height < 5:
         parser.error("width must be at least 10 and height at least 5")
 
@@ -573,7 +585,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             print()
         print(format_summary(summary))
         if args.csv:
-            destination = save_analysis_csv(args.csv, history)
+            try:
+                destination = save_analysis_csv(args.csv, history)
+            except OSError as exc:
+                print(f"error: unable to write csv to {Path(args.csv).expanduser()}: {exc}", file=sys.stderr)
+                return 1
             print(f"csv: {destination}")
         return 0
 

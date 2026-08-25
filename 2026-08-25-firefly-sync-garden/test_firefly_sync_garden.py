@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import argparse
 import csv
+import io
 import random
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -71,6 +74,20 @@ class FireflySyncGardenTests(unittest.TestCase):
         self.assertEqual(["frame", "flashes", "order", "synced_ratio", "mean_phase"], list(rows[0].keys()))
         self.assertEqual("2.0", rows[0]["flashes"])
         self.assertEqual("0.10", f"{float(rows[1]['mean_phase']):.2f}")
+
+    def test_validate_csv_path_rejects_directory(self):
+        with TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(argparse.ArgumentTypeError, "file path, not a directory"):
+                garden.validate_csv_path(tmpdir)
+
+    def test_main_reports_friendly_error_for_directory_csv_target(self):
+        with TemporaryDirectory() as tmpdir:
+            stderr = io.StringIO()
+            with redirect_stderr(stderr), self.assertRaises(SystemExit) as exc:
+                garden.main(["--analyze", "--steps", "5", "--csv", tmpdir])
+
+        self.assertEqual(2, exc.exception.code)
+        self.assertIn("csv destination must be a file path, not a directory", stderr.getvalue())
 
     def test_resolve_options_applies_preset_and_overrides(self):
         parser = garden.build_parser()
