@@ -2064,7 +2064,7 @@
     {
       "id": "firefly-sync-garden",
       "title": "Firefly Sync Garden",
-      "description": "Firefly Sync Garden is a terminal animation that simulates a drifting colony of pulse-coupled fireflies. Each firefly moves through a tiny ASCII night garden, blinks on its own...",
+      "description": "Firefly Sync Garden is a terminal-based Python simulation of drifting, pulse-coupled fireflies. Each firefly moves through a wraparound night sky, advances its own flashing phas...",
       "date": "2026-08-25",
       "path": "2026-08-25-firefly-sync-garden",
       "entrypoint": "firefly_sync_garden.py",
@@ -2076,6 +2076,26 @@
         "garden",
         "simulation",
         "sync"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "metro-map-puzzler",
+      "title": "Metro Map Puzzler",
+      "description": "Metro Map Puzzler is a standard-library Python project that procedurally generates a fictional subway network, renders it as an ASCII transit diagram, and turns the result into...",
+      "date": "2026-08-28",
+      "path": "2026-08-28-metro-map-puzzler",
+      "entrypoint": "metro_map_puzzler.py",
+      "category": "creative",
+      "interface": "animation",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "map",
+        "metro",
+        "puzzler"
       ],
       "smoke_args": [
         "--help"
