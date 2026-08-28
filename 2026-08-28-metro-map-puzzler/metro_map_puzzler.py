@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import argparse
 import collections
+import difflib
 import heapq
+import json
 import random
 import sys
 from dataclasses import dataclass, field
@@ -101,6 +103,23 @@ class Route:
     def line_names(self, metro: MetroMap) -> list[str]:
         line_lookup = {line.id: line.name for line in metro.lines}
         return [line_lookup[line_id] for line_id in self.lines]
+
+
+@dataclass(frozen=True)
+class SearchWeights:
+    """Priority weights used when selecting a route.
+
+    The search still tracks both stops and transfers, but the priority tuple lets
+    the CLI choose whether to optimize primarily for shortest journeys or fewest
+    line changes.
+    """
+
+    prioritize_transfers: bool = False
+
+    def priority(self, stops: int, transfers: int, station_id: str) -> tuple[int, int, str]:
+        if self.prioritize_transfers:
+            return (transfers, stops, station_id)
+        return (stops, transfers, station_id)
 
 
 @dataclass
@@ -268,6 +287,22 @@ def build_metro(seed: int, width: int, height: int, line_count: int) -> MetroMap
     return metro
 
 
+def build_metro_with_retries(seed: int, width: int, height: int, line_count: int, retries: int = 8) -> MetroMap:
+    """Generate a metro map, retrying with adjacent seeds if needed.
+
+    The generator is usually stable, but retries make the CLI more robust when a
+    particular seed leads to an awkward layout.
+    """
+
+    last_error: Exception | None = None
+    for attempt in range(retries):
+        try:
+            return build_metro(seed + attempt, width, height, line_count)
+        except GenerationError as error:
+            last_error = error
+    raise GenerationError(f"could not generate metro after {retries} attempts: {last_error}")
+
+
 def is_connected(metro: MetroMap) -> bool:
     if not metro.stations:
         return True
@@ -283,15 +318,17 @@ def is_connected(metro: MetroMap) -> bool:
     return len(seen) == len(metro.stations)
 
 
-def shortest_route(metro: MetroMap, start: str, goal: str) -> Route:
-    heap: list[SearchState] = [SearchState((0, 0, start), 0, 0, start, None)]
-    best: dict[tuple[str, str | None], tuple[int, int]] = {(start, None): (0, 0)}
+def shortest_route(metro: MetroMap, start: str, goal: str, *, prioritize_transfers: bool = False) -> Route:
+    weights = SearchWeights(prioritize_transfers=prioritize_transfers)
+    heap: list[SearchState] = [SearchState(weights.priority(0, 0, start), 0, 0, start, None)]
+    best: dict[tuple[str, str | None], tuple[int, int, str]] = {(start, None): weights.priority(0, 0, start)}
+    metrics: dict[tuple[str, str | None], tuple[int, int]] = {(start, None): (0, 0)}
     previous: dict[tuple[str, str | None], tuple[tuple[str, str | None] | None, str | None]] = {(start, None): (None, None)}
     goal_state: tuple[str, str | None] | None = None
     while heap:
         state = heapq.heappop(heap)
         key = (state.station_id, state.line_id)
-        if best.get(key) != (state.stops, state.transfers):
+        if best.get(key) != weights.priority(state.stops, state.transfers, state.station_id):
             continue
         if state.station_id == goal:
             goal_state = key
@@ -301,11 +338,21 @@ def shortest_route(metro: MetroMap, start: str, goal: str) -> Route:
             extra_transfer = 0 if state.line_id in (None, edge.line) else 1
             next_transfers = state.transfers + extra_transfer
             next_key = (edge.target, edge.line)
-            cost = (next_stops, next_transfers)
-            if cost < best.get(next_key, (10**9, 10**9)):
+            cost = weights.priority(next_stops, next_transfers, edge.target)
+            if cost < best.get(next_key, (10**9, 10**9, "~")):
                 best[next_key] = cost
+                metrics[next_key] = (next_stops, next_transfers)
                 previous[next_key] = (key, edge.line)
-                heapq.heappush(heap, SearchState((next_stops, next_transfers, edge.target), next_stops, next_transfers, edge.target, edge.line))
+                heapq.heappush(
+                    heap,
+                    SearchState(
+                        weights.priority(next_stops, next_transfers, edge.target),
+                        next_stops,
+                        next_transfers,
+                        edge.target,
+                        edge.line,
+                    ),
+                )
     if goal_state is None:
         raise ValueError(f"no route from {start} to {goal}")
     station_path: list[str] = []
@@ -323,7 +370,7 @@ def shortest_route(metro: MetroMap, start: str, goal: str) -> Route:
     for line_id in line_path:
         if not normalized_lines or normalized_lines[-1] != line_id:
             normalized_lines.append(line_id)
-    stops, transfers = best[goal_state]
+    stops, transfers = metrics[goal_state]
     return Route(stations=station_path, lines=normalized_lines, stops=stops, transfers=transfers)
 
 
@@ -369,6 +416,70 @@ def route_summary(route: Route, metro: MetroMap) -> str:
         f"Stops: {route.stops} | Transfers: {route.transfers}\n"
         + "\n".join(segments)
     )
+
+
+def network_stats(metro: MetroMap) -> dict[str, str | int]:
+    memberships = station_line_membership(metro)
+    interchanges = [station_id for station_id, lines in memberships.items() if len(lines) > 1]
+    busiest_station_id = max(memberships, key=lambda station_id: (len(memberships[station_id]), metro.stations[station_id].name))
+    longest_line = max(metro.lines, key=lambda line: len(line.stations))
+    return {
+        "stations": len(metro.stations),
+        "lines": len(metro.lines),
+        "interchanges": len(interchanges),
+        "busiest_station": metro.stations[busiest_station_id].name,
+        "busiest_station_lines": len(memberships[busiest_station_id]),
+        "longest_line": longest_line.name,
+        "longest_line_stations": len(longest_line.stations),
+    }
+
+
+def describe_network(metro: MetroMap) -> str:
+    stats = network_stats(metro)
+    return (
+        "Network summary\n"
+        "---------------\n"
+        f"Stations: {stats['stations']}\n"
+        f"Lines: {stats['lines']}\n"
+        f"Interchanges: {stats['interchanges']}\n"
+        f"Busiest interchange: {stats['busiest_station']} ({stats['busiest_station_lines']} lines)\n"
+        f"Longest line: {stats['longest_line']} ({stats['longest_line_stations']} stations)\n"
+    )
+
+
+def station_listing(metro: MetroMap) -> str:
+    memberships = station_line_membership(metro)
+    line_names = {line.id: line.name for line in metro.lines}
+    lines = ["Stations", "--------"]
+    for station in sorted(metro.stations.values(), key=lambda item: item.name):
+        served_by = ", ".join(line_names[line_id] for line_id in memberships.get(station.id, []))
+        lines.append(f"{station.name:<24} ({station.x:>2},{station.y:>2})  {served_by}")
+    return "\n".join(lines) + "\n"
+
+
+def export_network(metro: MetroMap, destination: Path, seed: int) -> None:
+    payload = {
+        "seed": seed,
+        "width": metro.width,
+        "height": metro.height,
+        "stations": [
+            {"id": station.id, "name": station.name, "x": station.x, "y": station.y}
+            for station in sorted(metro.stations.values(), key=lambda item: item.id)
+        ],
+        "lines": [
+            {
+                "id": line.id,
+                "name": line.name,
+                "color": line.color,
+                "glyph": line.glyph,
+                "stations": line.stations,
+            }
+            for line in metro.lines
+        ],
+        "stats": network_stats(metro),
+    }
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
 def render_map(metro: MetroMap, *, color: bool = True, legend: bool = True) -> str:
@@ -459,6 +570,8 @@ def write_snapshot(metro: MetroMap, seed: int, color: bool) -> str:
     puzzle = pick_puzzle(metro, seed + 404, difficulty=3)
     return (
         render_map(metro, color=color)
+        + "\n"
+        + describe_network(metro)
         + "\nPuzzle\n------\n"
         + puzzle.question
         + "\n\nBest route\n----------\n"
@@ -476,6 +589,10 @@ def parse_station(metro: MetroMap, query: str) -> str:
     if len(partial) == 1:
         return partial[0]
     if not partial:
+        names = [station.name for station in metro.stations.values()]
+        suggestions = difflib.get_close_matches(query, names, n=3, cutoff=0.45)
+        if suggestions:
+            raise SystemExit(f"unknown station: {query}. Did you mean: {', '.join(suggestions)}?")
         raise SystemExit(f"unknown station: {query}")
     names = ", ".join(metro.stations[station_id].name for station_id in partial[:8])
     raise SystemExit(f"station name is ambiguous: {query} -> {names}")
@@ -490,6 +607,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--snapshot", action="store_true", help="print a generated map, puzzle, and answer")
     parser.add_argument("--quiz", type=int, metavar="ROUNDS", help="play an interactive route quiz")
     parser.add_argument("--solve", nargs=2, metavar=("FROM", "TO"), help="solve a route between two station names")
+    parser.add_argument(
+        "--route-mode",
+        choices=("balanced", "transfers"),
+        default="balanced",
+        help="optimize for fewest stops first (balanced) or fewest transfers first",
+    )
+    parser.add_argument("--list-stations", action="store_true", help="print the generated station list")
+    parser.add_argument("--stats", action="store_true", help="print a compact network summary")
+    parser.add_argument("--export", type=Path, metavar="PATH", help="export the generated metro network as JSON")
     parser.add_argument("--no-color", action="store_true", help="disable ANSI colors")
     parser.add_argument("--version", action="store_true", help="print version and exit")
     return parser
@@ -511,16 +637,28 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Metro Map Puzzler {VERSION}")
         return 0
     validate_args(args, parser)
-    metro = build_metro(args.seed, args.width, args.height, args.lines)
+    metro = build_metro_with_retries(args.seed, args.width, args.height, args.lines)
     use_color = (not args.no_color) and sys.stdout.isatty()
+    if args.export:
+        export_network(metro, args.export, args.seed)
     if args.solve:
         start = parse_station(metro, args.solve[0])
         goal = parse_station(metro, args.solve[1])
-        route = shortest_route(metro, start, goal)
+        route = shortest_route(metro, start, goal, prioritize_transfers=args.route_mode == "transfers")
         print(render_map(metro, color=use_color))
+        print(describe_network(metro))
         print("Solved route")
         print("------------")
         print(route_summary(route, metro))
+        return 0
+    if args.list_stations:
+        print(render_map(metro, color=use_color, legend=False))
+        print(station_listing(metro))
+        if args.stats:
+            print(describe_network(metro))
+        return 0
+    if args.stats:
+        print(describe_network(metro))
         return 0
     if args.quiz is not None:
         return quiz(metro, args.quiz, args.seed)

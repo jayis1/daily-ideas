@@ -1,37 +1,39 @@
 # Metro Map Puzzler
 
-Metro Map Puzzler is a standard-library Python project that procedurally generates a fictional subway network, renders it as an ASCII transit diagram, and turns the result into route-finding puzzles. Every seed creates a different miniature city with named stations, multiple colored lines, transfer hubs, and an optimal trip to discover.
-
-## Features
-
-- Procedural metro-map generation with reproducible seeds
-- Multiple named train lines with transfer stations
-- ASCII map rendering with optional ANSI colors
-- Automatic route solving using fewest-stops, fewest-transfers search
-- Snapshot mode that prints a map, a puzzle prompt, and the optimal answer
-- Interactive quiz mode for playing several trip-planning rounds
-- Direct solve mode for routing between any two station names on the generated map
-- Standard-library-only implementation
-- Unit tests for generation, rendering, puzzle selection, and solving
+Metro Map Puzzler is a standard-library Python CLI that generates a fictional subway network, renders it as ASCII art, and turns the map into route-planning puzzles. Each seed creates a small but connected transit system with named stations, colored lines, transfer hubs, and solvable journeys.
 
 ## What it does
 
-The program builds a tiny fictional transit system by laying down several subway lines across a grid. Stations get memorable names like `Silver Market` or `Moon Yard`, some of them become transfer points shared by multiple lines, and the resulting network is guaranteed to be connected.
+The app builds a miniature metro network on a grid, then lets you:
 
-Once the network exists, the app can:
+- inspect the generated map and station legend
+- view a featured puzzle and its optimal answer
+- solve routes between arbitrary stations
+- choose whether routing should prefer fewer stops or fewer transfers
+- list all stations in alphabetical order
+- print a compact network summary
+- export the generated system to JSON for reuse elsewhere
+- play an interactive quiz mode
 
-1. print the map and a featured puzzle
-2. challenge you interactively to name the best route
-3. solve any trip between two stations
-4. show how many stops and transfers the optimal trip requires
+## Features
 
-The route solver treats each ride segment as one stop and uses transfers as a tie-breaker, so solutions feel like realistic quick-trip recommendations for a tiny subway.
+- Reproducible procedural metro generation with `--seed`
+- Connected multi-line transit networks with shared interchange stations
+- ASCII rendering with optional ANSI colors
+- Route solving with two optimization modes:
+  - `balanced`: fewest stops first, then fewer transfers
+  - `transfers`: fewest transfers first, then fewer stops
+- Built-in station search with partial matching and typo suggestions
+- Network statistics including interchange count and longest line
+- JSON export for generated maps
+- Interactive quiz mode for trip-planning challenges
+- Unit tests covering generation, solving, rendering, station parsing, and export
+- No third-party dependencies
 
 ## Requirements
 
-- Python 3.11 or newer
-- A terminal for the interactive quiz experience
-- No third-party packages required
+- Python 3.11+
+- A terminal if you want to use quiz mode interactively
 
 ## Installation
 
@@ -39,7 +41,7 @@ The route solver treats each ride segment as one stop and uses transfers as a ti
 cd ~/daily-ideas/2026-08-28-metro-map-puzzler
 ```
 
-That is enough to run the project.
+No package install is required.
 
 ## How to run
 
@@ -49,28 +51,24 @@ That is enough to run the project.
 python3 metro_map_puzzler.py
 ```
 
-### Generate a different city
+This prints:
+
+- the metro map
+- a station legend
+- a network summary
+- a featured puzzle
+- the best route answer
+
+### Show help
 
 ```bash
-python3 metro_map_puzzler.py --seed 77
+python3 metro_map_puzzler.py --help
 ```
 
-### Interactive quiz mode
+### Show version
 
 ```bash
-python3 metro_map_puzzler.py --quiz 3
-```
-
-### Solve a specific trip
-
-```bash
-python3 metro_map_puzzler.py --seed 77 --solve "Grand Bridge" "Moon Depot"
-```
-
-### Monochrome output
-
-```bash
-python3 metro_map_puzzler.py --seed 77 --no-color
+python3 metro_map_puzzler.py --version
 ```
 
 ## Usage
@@ -78,47 +76,94 @@ python3 metro_map_puzzler.py --seed 77 --no-color
 ```text
 usage: metro_map_puzzler.py [-h] [--seed SEED] [--width WIDTH] [--height HEIGHT]
                              [--lines LINES] [--snapshot] [--quiz ROUNDS]
-                             [--solve FROM TO] [--no-color] [--version]
+                             [--solve FROM TO]
+                             [--route-mode {balanced,transfers}]
+                             [--list-stations] [--stats] [--export PATH]
+                             [--no-color] [--version]
 ```
 
-## Options
+## Command-line options
 
-- `--seed` — reproducible random seed for the generated transit network
-- `--width` / `--height` — map dimensions; use at least `24x12`
-- `--lines` — number of train lines to generate, from `2` to `7`
-- `--snapshot` — explicitly request the default map+puzzle output
-- `--quiz ROUNDS` — play an interactive routing quiz
-- `--solve FROM TO` — compute the best route between two named stations
-- `--no-color` — disable ANSI colors even in a TTY
-- `--version` — print the current version
+- `--seed SEED` — use a reproducible random seed
+- `--width WIDTH` — map width in characters
+- `--height HEIGHT` — map height in characters
+- `--lines LINES` — number of lines to generate, from `2` to `7`
+- `--snapshot` — explicitly print the default map + puzzle view
+- `--quiz ROUNDS` — play an interactive quiz for the given number of rounds
+- `--solve FROM TO` — solve a route between two station names
+- `--route-mode {balanced,transfers}` — pick the optimization strategy for `--solve`
+- `--list-stations` — print an alphabetical station index
+- `--stats` — print a compact network summary
+- `--export PATH` — write the generated metro network to a JSON file
+- `--no-color` — disable ANSI color output
+- `--version` — print the program version
 
-## Usage examples
+## Examples
 
-### Print a compact planning puzzle
+### Generate a different city
 
 ```bash
-python3 metro_map_puzzler.py --seed 12 --width 48 --height 18
+python3 metro_map_puzzler.py --seed 77
 ```
 
-### Build a denser network with more lines
+### Solve a route with the default stop-first planner
 
 ```bash
-python3 metro_map_puzzler.py --seed 145 --lines 6 --width 60 --height 22
+python3 metro_map_puzzler.py --seed 77 --solve "Grand Bridge" "Moon Depot"
 ```
 
-### Ask for a route after reading the station legend
+### Solve a route while prioritizing fewer transfers
 
 ```bash
-python3 metro_map_puzzler.py --seed 12 --solve "Harbor Garden" "Signal Arcade"
+python3 metro_map_puzzler.py --seed 77 --solve "Grand Bridge" "Moon Depot" --route-mode transfers
 ```
 
-### Play a short challenge set
+### Print only network stats
 
 ```bash
-python3 metro_map_puzzler.py --seed 12 --quiz 2
+python3 metro_map_puzzler.py --seed 77 --stats
 ```
 
-Answer quiz prompts by typing the station names in order, separated by commas. You can also type `hint`, `show`, or `quit`.
+### List all stations alphabetically
+
+```bash
+python3 metro_map_puzzler.py --seed 77 --list-stations
+```
+
+### Export a generated network to JSON
+
+```bash
+python3 metro_map_puzzler.py --seed 77 --export exports/metro_seed_77.json --stats
+```
+
+### Play quiz mode
+
+```bash
+python3 metro_map_puzzler.py --seed 77 --quiz 3
+```
+
+In quiz mode, enter station names separated by commas. You can also type:
+
+- `hint` — reveal the best route
+- `show` — same as `hint`
+- `quit` — stop the session early
+
+## Output notes
+
+- Station names change with the seed, so solve examples should be run after checking the legend or station list.
+- If you mistype a station name, the CLI suggests close matches when possible.
+- Colors are shown only on TTY output unless `--no-color` is used.
+- The generator retries nearby seeds automatically if a particular layout attempt fails.
+
+## JSON export format
+
+The exported file contains:
+
+- seed
+- map width and height
+- all stations with coordinates
+- line definitions and station order
+- computed network statistics
 
 ## Running tests
 
@@ -126,14 +171,8 @@ Answer quiz prompts by typing the station names in order, separated by commas. Y
 python3 -m unittest -v test_metro_map_puzzler.py
 ```
 
-## File overview
+## Project files
 
-- `metro_map_puzzler.py` — generator, renderer, puzzle engine, and CLI
-- `test_metro_map_puzzler.py` — automated tests
+- `metro_map_puzzler.py` — generator, renderer, puzzle engine, route solver, CLI
+- `test_metro_map_puzzler.py` — unit tests
 - `README.md` — project documentation
-
-## Notes
-
-- Station names depend on the random seed, so solve examples should be run after inspecting the generated station legend.
-- Different seeds produce different puzzle difficulty and transfer patterns.
-- ANSI colors appear only when output is attached to a TTY unless you force monochrome with `--no-color`.
