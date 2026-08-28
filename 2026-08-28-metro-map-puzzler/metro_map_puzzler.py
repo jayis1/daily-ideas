@@ -458,6 +458,8 @@ def station_listing(metro: MetroMap) -> str:
 
 
 def export_network(metro: MetroMap, destination: Path, seed: int) -> None:
+    if destination.exists() and destination.is_dir():
+        raise OSError(f"export path is a directory: {destination}")
     payload = {
         "seed": seed,
         "width": metro.width,
@@ -544,7 +546,11 @@ def quiz(metro: MetroMap, rounds: int, seed: int) -> int:
         print()
         print(f"Round {round_index + 1}/{rounds}")
         print(puzzle.question)
-        answer = input("> ").strip()
+        try:
+            answer = input("> ").strip()
+        except EOFError:
+            print("Input closed. Ending quiz early.")
+            break
         if answer.lower() == "quit":
             break
         if answer.lower() in {"hint", "show"}:
@@ -582,6 +588,8 @@ def write_snapshot(metro: MetroMap, seed: int, color: bool) -> str:
 
 def parse_station(metro: MetroMap, query: str) -> str:
     query_norm = query.strip().lower()
+    if not query_norm:
+        raise SystemExit("station name cannot be empty")
     exact = [station.id for station in metro.stations.values() if station.name.lower() == query_norm]
     if exact:
         return exact[0]
@@ -637,10 +645,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Metro Map Puzzler {VERSION}")
         return 0
     validate_args(args, parser)
-    metro = build_metro_with_retries(args.seed, args.width, args.height, args.lines)
+    try:
+        metro = build_metro_with_retries(args.seed, args.width, args.height, args.lines)
+    except GenerationError as error:
+        parser.exit(1, f"error: {error}\n")
     use_color = (not args.no_color) and sys.stdout.isatty()
     if args.export:
-        export_network(metro, args.export, args.seed)
+        try:
+            export_network(metro, args.export, args.seed)
+        except OSError as error:
+            parser.exit(1, f"error: could not export network: {error}\n")
     if args.solve:
         start = parse_station(metro, args.solve[0])
         goal = parse_station(metro, args.solve[1])

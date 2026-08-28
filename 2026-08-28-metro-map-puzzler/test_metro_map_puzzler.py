@@ -127,6 +127,12 @@ class MetroMapPuzzlerTests(unittest.TestCase):
             parse_station(metro, "Alpha Markit")
         self.assertIn("Did you mean", str(context.exception))
 
+    def test_parse_station_rejects_empty_name(self):
+        metro = self.make_manual_map()
+        with self.assertRaises(SystemExit) as context:
+            parse_station(metro, "   ")
+        self.assertIn("cannot be empty", str(context.exception))
+
     def test_export_network_writes_json_with_stats(self):
         metro = build_metro(seed=7, width=48, height=18, line_count=4)
         target = Path("test_export_network.json")
@@ -136,6 +142,20 @@ class MetroMapPuzzlerTests(unittest.TestCase):
         stats = network_stats(metro)
         self.assertIn('"seed": 7', text)
         self.assertIn(stats["busiest_station"], text)
+
+    def test_export_network_rejects_directory_destination(self):
+        metro = build_metro(seed=7, width=48, height=18, line_count=4)
+        with self.assertRaises(OSError) as context:
+            export_network(metro, Path("."), seed=7)
+        self.assertIn("directory", str(context.exception))
+
+    def test_quiz_exits_cleanly_on_eof(self):
+        metro = build_metro(seed=7, width=48, height=18, line_count=4)
+        from unittest.mock import patch
+
+        with patch("builtins.input", side_effect=EOFError), patch("sys.stdout.write"):
+            result = __import__("metro_map_puzzler").quiz(metro, rounds=2, seed=7)
+        self.assertEqual(result, 0)
 
 
 if __name__ == "__main__":
