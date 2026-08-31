@@ -18,6 +18,10 @@ def test_unicode_and_inner_punctuation_are_tokenized():
     assert [s.word for s in analyze("Café, don't stop—café!")] == ["café", "don't", "stop", "café"][:3]
 
 
+def test_composed_and_decomposed_unicode_are_equivalent():
+    assert [s.word for s in analyze("cafe\u0301 café")] == ["café"]
+
+
 def test_render_has_requested_canvas():
     output = render(analyze("one two", seed=1), 30, 8)
     assert len(output.splitlines()) == 10

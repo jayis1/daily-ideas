@@ -9,11 +9,12 @@ import math
 import random
 import re
 import sys
+import unicodedata
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Dict, List, Optional, Sequence, Set
 
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 _SYMBOLS = "✦✧✺❋✿○◇"
 _WORD_RE = re.compile(r"[^\W_]+(?:['’\-][^\W_]+)*", re.UNICODE)
 
@@ -28,12 +29,18 @@ class Signal:
     symbol: str
 
 
-def _words(text: str) -> list[str]:
-    """Extract words without accidentally keeping surrounding punctuation."""
-    return [match.group(0).lower() for match in _WORD_RE.finditer(text)]
+def _words(text: str) -> List[str]:
+    """Extract words without accidentally keeping surrounding punctuation.
+
+    NFC normalization keeps canonically equivalent spellings (for example,
+    ``cafe\u0301`` and ``café``) together and prevents combining accents from
+    being silently discarded by the token regular expression.
+    """
+    normalized = unicodedata.normalize("NFC", text)
+    return [match.group(0).lower() for match in _WORD_RE.finditer(normalized)]
 
 
-def analyze(text: str, seed: Optional[int] = None) -> list[Signal]:
+def analyze(text: str, seed: Optional[int] = None) -> List[Signal]:
     """Create one signal per distinct word, preserving first-seen order.
 
     With no seed, the complete input text is hashed, so repeated runs are
@@ -42,8 +49,8 @@ def analyze(text: str, seed: Optional[int] = None) -> list[Signal]:
     words = _words(text)
     default_seed = int(hashlib.sha256(text.encode("utf-8")).hexdigest()[:12], 16)
     rng = random.Random(default_seed if seed is None else seed)
-    seen: set[str] = set()
-    result: list[Signal] = []
+    seen: Set[str] = set()
+    result: List[Signal] = []
     for word in words:
         if word in seen:
             continue
@@ -53,7 +60,7 @@ def analyze(text: str, seed: Optional[int] = None) -> list[Signal]:
     return result
 
 
-def summarize(signals: Sequence[Signal]) -> dict[str, object]:
+def summarize(signals: Sequence[Signal]) -> Dict[str, object]:
     """Return useful, machine-friendly aggregate information."""
     if not signals:
         return {"unique_signals": 0, "total_strength": 0, "average_strength": 0.0, "strongest": None}

@@ -1,24 +1,24 @@
 # Signal Garden
 
-Signal Garden turns text into deterministic terminal art. Each distinct word becomes a signal flower with a hash-derived symbol and strength, plus a repeatable phase that determines where it rises above the waveform. It is a small, dependency-free CLI for exploring text, making reproducible terminal keepsakes, and exporting data for other tools.
+Signal Garden is a dependency-free Python CLI that turns text into deterministic Unicode terminal art. Each distinct word becomes a signal flower: its SHA-256 hash selects a symbol and strength, while a repeatable phase places it on a waveform. It is intended for text exploration, reproducible terminal keepsakes, and machine-readable exports—not linguistic analysis.
 
 ## Features
 
-- Extracts Unicode words and preserves first-seen order.
-- Normalizes case, removes surrounding punctuation, and keeps useful inner apostrophes and hyphens.
-- Deduplicates repeated words.
-- Produces stable output for the same text; `--seed` lets you choose the phase pattern.
-- Renders a bordered Unicode waveform with stems, symbols, and labels.
-- Validates canvas dimensions before rendering.
-- Reports the number of signals and strongest word.
-- Optionally prints total and average strength with `--stats`.
-- Exports a self-describing JSON document containing signals and aggregate statistics.
-- Supports `--help` and `--version`.
-- Uses only the Python standard library at runtime.
+- Unicode-aware word extraction with surrounding punctuation removed.
+- Preserves useful inner apostrophes and hyphens, such as `don't` and `well-known`.
+- NFC-normalizes Unicode, so composed and decomposed spellings such as `café` and `café` are treated equivalently.
+- Lowercases and deduplicates words while preserving first-seen order.
+- Deterministic output for the same input; `--seed` selects a reproducible phase pattern.
+- Bordered waveform rendering with stems, symbols, and labels.
+- Configurable canvas dimensions with validation.
+- Summary output plus optional total and average strength statistics.
+- JSON export containing the original text, version, summary, and signal records.
+- `--help` and `--version` flags.
+- Python standard library only.
 
 ## Requirements and installation
 
-Python 3.8 or newer is required. There are no packages to install. Clone the collection, then run the script from this directory:
+Python 3.8 or newer is required. No package installation is needed. From the repository checkout:
 
 ```bash
 cd 2026-08-31-signal-garden
@@ -33,46 +33,50 @@ Pass text as one or more arguments:
 python3 signal_garden.py "the moon remembers every river"
 ```
 
-When no text arguments are supplied, Signal Garden reads one sentence from standard input. This works well in a pipeline and avoids an interactive prompt in scripts:
+With no positional text, input is read from standard input:
 
 ```bash
 echo "rain on glass" | python3 signal_garden.py --seed 12
 ```
 
-Use a fixed seed and custom dimensions for reproducible art:
+Use a fixed seed and custom dimensions:
 
 ```bash
 python3 signal_garden.py moon river moon --seed 7 --width 50 --height 12
 ```
 
-Show aggregate strength statistics:
+Print aggregate strength statistics:
 
 ```bash
 python3 signal_garden.py "quiet signals grow" --stats
 ```
 
-Export the analysis. Parent directories are created when necessary:
+Export JSON; missing parent directories are created automatically:
 
 ```bash
 python3 signal_garden.py "rain on glass" --seed 12 --json exports/rain.json
 ```
 
-Inspect the available options and version:
+Inspect options and version:
 
 ```bash
 python3 signal_garden.py --help
 python3 signal_garden.py --version
 ```
 
-The canvas must be at least 24 columns wide and 6 rows high. Invalid dimensions are reported as command-line errors instead of producing a partial drawing.
+The canvas must be at least 24 columns wide and 6 rows high. To pass text beginning with a dash, use `--` before the text:
 
-## JSON format
+```bash
+python3 signal_garden.py -- --quiet
+```
 
-An export contains the original text, the tool version, a summary, and one object per distinct word:
+## Output and JSON format
+
+The terminal output contains the bordered canvas, a count of unique signals, and the strongest word. `--stats` adds total and average strength. An export has this shape:
 
 ```json
 {
-  "version": "1.1.0",
+  "version": "1.1.1",
   "text": "rain on glass",
   "summary": {
     "unique_signals": 3,
@@ -86,13 +90,13 @@ An export contains the original text, the tool version, a summary, and one objec
 }
 ```
 
-The exact values depend on the input and seed. The `signals` array can be consumed without parsing the terminal rendering.
+Exact signal values depend on the input and seed. The `signals` array can be consumed without parsing terminal art.
 
 ## How it works
 
-Words are extracted with a Unicode-aware regular expression. Each word is hashed with SHA-256: one byte selects a strength from 2 through 9 and another selects a flower symbol. A local pseudo-random generator assigns each signal a phase from 0 through 7. Without `--seed`, the generator seed is derived from the full input text, making runs reproducible. With a seed, only the phases change; word-derived symbols and strengths remain stable.
+Words are NFC-normalized and extracted with a Unicode-aware regular expression. Each word is hashed with SHA-256: one byte selects a strength from 2 through 9 and another selects a flower symbol. A local pseudo-random generator assigns each signal a phase from 0 through 7. Without `--seed`, the generator seed is derived from the complete input text; with a seed, only phases change.
 
-The renderer places flowers across a horizontal baseline. Their strength controls vertical amplitude, their phase controls the sine-wave position, and a stem connects each flower to the baseline.
+The renderer places flowers across a horizontal baseline. Strength controls vertical amplitude, phase controls the sine-wave position, and a stem connects each flower to the baseline.
 
 ## Testing
 
@@ -102,14 +106,21 @@ Run the project tests with pytest:
 python3 -m pytest -q
 ```
 
-The suite covers deterministic deduplication, Unicode tokenization, canvas validation, empty-input summaries, CLI statistics, nested JSON export, and version output.
+The tests cover deterministic analysis, deduplication, Unicode punctuation, canonical Unicode equivalence, canvas validation, empty input, CLI statistics, nested JSON export, and version output.
 
-## Project files
+## Known limitations
 
-```text
-signal_garden.py       # CLI, analysis engine, renderer, and JSON export
- test_signal_garden.py  # unit and subprocess tests
- README.md             # usage and implementation notes
-```
+- Rendering measures Python characters rather than terminal display-cell width, so some terminals may align wide East Asian glyphs imperfectly.
+- Very many distinct words can cause nearby labels to overlap because the canvas is intentionally compact.
+- The tool does not provide linguistic stemming, transliteration, or statistical meaning analysis.
 
-Signal Garden is an art and text-exploration toy, not a linguistic or statistical analysis tool.
+## Changelog
+
+### 1.1.1 — bug fixes
+
+- NFC-normalized input before tokenization so combining accents are not silently dropped and canonically equivalent words deduplicate correctly.
+- Replaced Python 3.9-only generic type syntax with `typing` equivalents, making the documented Python 3.8 minimum accurate.
+
+### 1.1.0
+
+- Added robust CLI options, statistics, nested JSON export, Unicode tokenization, and expanded tests.
