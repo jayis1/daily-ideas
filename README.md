@@ -208,7 +208,7 @@ daily-ideas/
 ## Application catalog
 
 <!-- APP_INDEX_START -->
-**108 apps** across 7 categories. This section is generated.
+**109 apps** across 7 categories. This section is generated.
 
 <details><summary>Audio (4)</summary>
 
@@ -276,7 +276,7 @@ daily-ideas/
 | [ASCII Stereogram Generator SIRDS](./2026-08-16-ascii-stereogram-generator/) | cli | > Generate single-image random dot stereograms in the terminal using ASCII characters. Hidden 3D shapes pop out when you relax or cross your eyes. |
 | [ASCII Morse Broadcasting Station](./2026-08-19-ascii-morse-broadcasting/) | animation | A terminal-based vintage shortwave radio station simulator that broadcasts Morse code in real time — doubled as a practical Morse code utility toolkit. Watch as it cycles throug... |
 | [Keyboard Heatmap Analyzer](./2026-08-22-keyboard-heatmap-analyzer/) | animation | Keyboard Heatmap Analyzer is a small Python CLI that turns text into a keyboard-shaped usage report for a US QWERTY layout. It can inspect inline text, files, presets, or piped... |
-| [Metro Map Puzzler](./2026-08-28-metro-map-puzzler/) | animation | Metro Map Puzzler is a standard-library Python project that procedurally generates a fictional subway network, renders it as an ASCII transit diagram, and turns the result into... |
+| [Metro Map Puzzler](./2026-08-28-metro-map-puzzler/) | animation | Metro Map Puzzler is a pure-Python CLI that generates small fictional subway systems, renders them as ASCII maps, and turns each network into route-planning puzzles. |
 
 </details>
 
@@ -326,7 +326,7 @@ daily-ideas/
 
 </details>
 
-<details><summary>Simulation (19)</summary>
+<details><summary>Simulation (20)</summary>
 
 | App | Interface | Description |
 |---|---|---|
@@ -349,6 +349,7 @@ daily-ideas/
 | [Terminal Pendulum Wave Simulator](./2026-08-04-pendulum-wave-simulator/) | animation | A physics-based ASCII animation of the pendulum wave — one of the most |
 | [Domino Chain Simulator](./2026-08-10-domino-chain-simulator/) | animation | A terminal-based domino chain reaction simulator written in pure Python. Set up dominoes with varied heights and spacings, trigger any domino, and watch the cascade ripple acros... |
 | [Firefly Sync Garden](./2026-08-25-firefly-sync-garden/) | animation | Firefly Sync Garden is a terminal-based Python simulation of drifting, pulse-coupled fireflies. Each firefly moves through a wraparound night sky, advances its own flashing phas... |
+| [Signal Garden](./2026-08-31-signal-garden/) | interactive | Signal Garden is a tiny terminal visualization that turns a sentence into a living-looking ASCII waveform. Each distinct word becomes a signal flower: its hash determines the fl... |
 
 </details>
 

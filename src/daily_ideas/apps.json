@@ -2084,7 +2084,7 @@
     {
       "id": "metro-map-puzzler",
       "title": "Metro Map Puzzler",
-      "description": "Metro Map Puzzler is a standard-library Python project that procedurally generates a fictional subway network, renders it as an ASCII transit diagram, and turns the result into...",
+      "description": "Metro Map Puzzler is a pure-Python CLI that generates small fictional subway systems, renders them as ASCII maps, and turns each network into route-planning puzzles.",
       "date": "2026-08-28",
       "path": "2026-08-28-metro-map-puzzler",
       "entrypoint": "metro_map_puzzler.py",
@@ -2096,6 +2096,25 @@
         "map",
         "metro",
         "puzzler"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "signal-garden",
+      "title": "Signal Garden",
+      "description": "Signal Garden is a tiny terminal visualization that turns a sentence into a living-looking ASCII waveform. Each distinct word becomes a signal flower: its hash determines the fl...",
+      "date": "2026-08-31",
+      "path": "2026-08-31-signal-garden",
+      "entrypoint": "signal_garden.py",
+      "category": "simulation",
+      "interface": "interactive",
+      "dependencies": [],
+      "tags": [
+        "garden",
+        "signal",
+        "simulation"
       ],
       "smoke_args": [
         "--help"
