@@ -1,22 +1,23 @@
 # Memory Palace
 
-Memory Palace turns plain-text notes into a small, navigable knowledge graph. Each paragraph becomes a room (or, for a single paragraph, each sentence becomes a room), useful words become room labels, and shared words become weighted doors between rooms.
+Memory Palace is a dependency-free Python CLI that turns UTF-8 plain-text notes into a small, navigable knowledge graph. Each paragraph becomes a room; a single paragraph is split into sentences. Frequent content words label rooms, and shared keywords create weighted links between them.
 
-It is a transparent, deterministic command-line tool for finding threads in journals, research notes, meeting dumps, story outlines, and other text—without external packages or an AI service.
+It is useful for finding recurring threads in journals, research notes, meeting dumps, story outlines, and other text without an AI service or external runtime package.
 
 ## Features
 
-- Splits notes into rooms on blank lines, with sentence fallback for single-paragraph prose.
-- Extracts frequent, non-stopword keywords with deterministic alphabetical tie-breaking.
-- Configures how many keywords are retained per room with `--keywords`.
+- Splits notes on blank lines, with sentence fallback for a single paragraph.
+- Preserves Unicode words such as `café`, `naïve`, and `résumé`.
+- Extracts frequent non-stopword keywords with deterministic alphabetical tie-breaking.
+- Controls the number of retained keywords with `--keywords`.
 - Builds weighted, bidirectional links from shared keywords.
-- Filters noisy links with `--min-shared`.
-- Renders a readable terminal map showing rooms, doors, and shared threads.
-- Provides an interactive browser with room-number lookup and seeded random jumps.
-- Searches all room text with `--find`, ranking rooms by matching query terms and showing excerpts.
-- Exports JSON containing rooms, links, and graph statistics.
+- Filters links with `--min-shared`.
+- Prints a readable terminal map with rooms, doors, and shared threads.
+- Provides an interactive browser with room lookup and seeded random jumps.
+- Searches original room text with `--find`, including terms omitted from keyword lists.
+- Exports rooms, links, and graph statistics as JSON.
 - Handles missing files, invalid options, empty input, EOF, and Ctrl-C cleanly.
-- Includes a standard-library test suite.
+- Includes automated tests using pytest.
 
 ## Requirements and installation
 
@@ -28,13 +29,13 @@ cd daily-ideas/2026-09-03-memory-palace
 python3 memory_palace.py --help
 ```
 
-Run tests with `pytest` if it is available:
+Run the test suite:
 
 ```bash
 python3 -m pytest -q
 ```
 
-## Quick start
+## Usage
 
 Use the built-in example interactively:
 
@@ -42,7 +43,7 @@ Use the built-in example interactively:
 python3 memory_palace.py
 ```
 
-Use your own UTF-8 notes. Blank lines make room boundaries explicit:
+Read a UTF-8 notes file (blank lines define room boundaries):
 
 ```bash
 python3 memory_palace.py notes.txt
@@ -54,33 +55,36 @@ Print a non-interactive map:
 python3 memory_palace.py notes.txt --map
 ```
 
-Require at least two shared keywords and retain seven keywords per room:
+Require two shared keywords and retain seven keywords per room:
 
 ```bash
 python3 memory_palace.py research.txt --map --min-shared 2 --keywords 7
 ```
 
-Search for rooms related to several words:
+Search for rooms containing one or more query terms. Results are ranked by the number of matching terms:
 
 ```bash
 python3 memory_palace.py notes.txt --find "harbor storm"
 ```
 
-Export the complete graph for another program:
+Export the graph for another program:
 
 ```bash
 python3 memory_palace.py notes.txt --json > palace.json
 ```
 
-Check the installed script version:
+Make random interactive jumps reproducible and inspect the version:
 
 ```bash
+python3 memory_palace.py --seed 42
 python3 memory_palace.py --version
 ```
 
+`--json`, `--find`, and `--map` are non-interactive output modes. If more than one is supplied, JSON takes precedence, followed by search, then map.
+
 ## Example
 
-Given this `notes.txt`:
+Given:
 
 ```text
 The baker keeps a notebook of sourdough experiments.
@@ -90,7 +94,7 @@ The notebook mentions a warm oven and a blue ceramic bowl.
 A blue bowl sits beside the garden seeds.
 ```
 
-`python3 memory_palace.py notes.txt --map` produces a map like:
+`python3 memory_palace.py notes.txt --map` produces output like:
 
 ```text
 MEMORY PALACE
@@ -108,15 +112,13 @@ SHARED THREADS
 #2 <-> #3: blue, bowl
 ```
 
-In interactive mode, enter a room number to read its original text, `random` to jump to a room, or `q` to exit. Piping input or pressing Ctrl-C exits instead of leaving an exception on the terminal.
-
-A search such as `--find "blue bowl"` lists matching rooms, their matched terms, and a short excerpt. Search terms are normalized with the same lightweight tokenizer used for keywords.
+In interactive mode, enter a room number to read its original text, `random` to jump to a room, or `q` to exit. Piped input and Ctrl-C exit without a traceback.
 
 ## JSON format
 
-The JSON export has:
+The JSON export contains:
 
-- `version`: export schema version.
+- `version`: export schema version (`1`).
 - `rooms`: room number, generated title, original text, and extracted keywords.
 - `links`: room endpoints, sorted shared keywords, and link weight.
 - `stats`: `room_count` and `link_count`.
@@ -125,13 +127,25 @@ Room numbers follow source order, so exports can be referenced consistently by o
 
 ## How it works
 
-Words are lowercased and extracted with a small English-oriented regular expression. A built-in stopword list removes common connective words. The most frequent remaining words are retained per room; ties are alphabetical. Two rooms receive a link when their retained keyword sets share at least `--min-shared` terms. Link weight equals the number of shared terms.
+Words are lowercased and extracted with a Unicode-aware regular expression. Letters may contain internal apostrophes or hyphens; digits and underscores are not treated as keywords. A built-in English stopword list removes common connective words. The most frequent remaining words are retained per room, with alphabetical tie-breaking. Two rooms receive a link when their retained keyword sets share at least `--min-shared` terms; link weight is the number of shared terms.
 
-Search scans the original room text rather than only retained keywords, so `--find` can locate a term that did not make a room's keyword shortlist.
+Search scans original room text rather than only retained keywords, so `--find` can locate a term that did not make a room's keyword shortlist.
 
-## Limitations
+## Known limitations
 
-This is deliberately lightweight: it does not understand synonyms, spelling variants, stemming, or semantics. “Ship” and “boat” will not connect unless the source repeats a word they share. The tokenizer is primarily English-oriented, and very short notes may have no keywords or doors.
+This is deliberately lightweight: it does not understand synonyms, spelling variants, stemming, or semantics. “Ship” and “boat” will not connect unless the source repeats a word they share. The stopword list is English-oriented, and very short notes may have no keywords or doors.
+
+## Changelog
+
+### 1.1.1
+
+- Fixed loss of accented and other Unicode letters in keywords and generated titles.
+- Added regression coverage for Unicode parsing and title rendering.
+- Documented output-mode precedence and current limitations.
+
+### 1.1.0
+
+- Added ranked `--find` search, configurable keyword limits, `--version`, JSON statistics, validation, and safer interactive behavior.
 
 ## License
 

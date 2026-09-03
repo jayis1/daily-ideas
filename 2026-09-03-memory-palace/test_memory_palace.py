@@ -62,3 +62,10 @@ def test_cli_supports_version_and_custom_keyword_limit():
     payload = json.loads(result.stdout)
     assert all(len(room["keywords"]) <= 2 for room in payload["rooms"])
     assert payload["stats"]["room_count"] == len(payload["rooms"])
+
+
+def test_unicode_words_and_titles_are_preserved():
+    rooms, _ = mp.build_palace("Café naïve résumé")
+
+    assert rooms[0].title == "Café Naïve Résumé"
+    assert rooms[0].keywords == ["café", "naïve", "résumé"]

@@ -18,7 +18,10 @@ STOPWORDS = {
     "its", "of", "on", "or", "our", "that", "the", "their", "this", "to", "was",
     "we", "were", "will", "with", "you", "your", "not", "they", "them", "there",
 }
-WORD_RE = re.compile(r"[A-Za-z][A-Za-z'-]{2,}")
+# Start with a Unicode word character, then allow letters plus internal
+# apostrophes/hyphens.  The explicit exclusions keep digits and underscores
+# from becoming keywords while allowing notes such as "café" and "naïve".
+WORD_RE = re.compile(r"[^\W\d_][^\W\d_'-]{2,}", re.UNICODE)
 
 
 @dataclass
@@ -52,7 +55,7 @@ def split_rooms(text: str) -> list[str]:
 
 
 def title_for(text: str, number: int) -> str:
-    first = re.sub(r"[^A-Za-z0-9 ]", "", text.splitlines()[0]).strip()
+    first = re.sub(r"[^\w\s]|_", "", text.splitlines()[0], flags=re.UNICODE).strip()
     return " ".join(first.split()[:5]).title() or f"Room {number}"
 
 
