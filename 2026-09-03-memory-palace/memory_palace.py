@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import random
 import re
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
+
+__version__ = "1.1.0"
 
 STOPWORDS = {
     "a", "an", "and", "are", "as", "at", "be", "been", "but", "by", "for",
@@ -37,6 +38,7 @@ class Link:
 
 
 def words(text: str) -> list[str]:
+    """Return normalized words, retaining apostrophes and hyphens inside words."""
     return [w.lower().strip("'-") for w in WORD_RE.findall(text)]
 
 
@@ -55,6 +57,9 @@ def title_for(text: str, number: int) -> str:
 
 
 def keywords_for(text: str, limit: int = 5) -> list[str]:
+    """Select the most frequent non-stopwords, with deterministic tie-breaking."""
+    if limit < 1:
+        return []
     counts: dict[str, int] = {}
     for word in words(text):
         if word not in STOPWORDS:
@@ -62,13 +67,21 @@ def keywords_for(text: str, limit: int = 5) -> list[str]:
     return [w for w, _ in sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:limit]]
 
 
-def build_palace(text: str, min_shared: int = 1) -> tuple[list[Room], list[Link]]:
-    rooms = [Room(i + 1, title_for(block, i + 1), block, keywords_for(block))
-             for i, block in enumerate(split_rooms(text))]
+def build_palace(text: str, min_shared: int = 1, keyword_limit: int = 5) -> tuple[list[Room], list[Link]]:
+    """Build rooms and links; room numbers remain stable in source order."""
+    if min_shared < 1:
+        raise ValueError("min_shared must be at least 1")
+    if keyword_limit < 1:
+        raise ValueError("keyword_limit must be at least 1")
+    rooms = [
+        Room(i + 1, title_for(block, i + 1), block, keywords_for(block, keyword_limit))
+        for i, block in enumerate(split_rooms(text))
+    ]
     links: list[Link] = []
     for left in range(len(rooms)):
+        left_keys = set(rooms[left].keywords)
         for right in range(left + 1, len(rooms)):
-            shared = sorted(set(rooms[left].keywords) & set(rooms[right].keywords))
+            shared = sorted(left_keys & set(rooms[right].keywords))
             if len(shared) >= min_shared:
                 links.append(Link(left + 1, right + 1, shared, len(shared)))
     return rooms, links
@@ -93,15 +106,52 @@ def render_map(rooms: list[Room], links: list[Link]) -> str:
     return "\n".join(lines)
 
 
+def find_rooms(rooms: list[Room], query: str) -> list[tuple[Room, list[str]]]:
+    """Find rooms containing all query terms, ranked by number of matching terms."""
+    terms = set(words(query))
+    if not terms:
+        return []
+    matches = []
+    for room in rooms:
+        room_words = set(words(room.text))
+        found = sorted(terms & room_words)
+        if found:
+            matches.append((room, found))
+    return sorted(matches, key=lambda item: (-len(item[1]), item[0].number))
+
+
+def render_search(rooms: list[Room], query: str) -> str:
+    matches = find_rooms(rooms, query)
+    if not matches:
+        return f'No rooms matched "{query}".'
+    lines = [f'SEARCH: "{query}"', "=" * 60]
+    for room, found in matches:
+        excerpt = " ".join(room.text.split())
+        if len(excerpt) > 140:
+            excerpt = excerpt[:137].rstrip() + "..."
+        lines.append(f"#{room.number:02d} {room.title} (matched: {', '.join(found)})")
+        lines.append(f"     {excerpt}")
+    return "\n".join(lines)
+
+
 def export_data(rooms: list[Room], links: list[Link]) -> dict:
-    return {"rooms": [asdict(room) for room in rooms], "links": [asdict(link) for link in links]}
+    return {
+        "version": 1,
+        "rooms": [asdict(room) for room in rooms],
+        "links": [asdict(link) for link in links],
+        "stats": {"room_count": len(rooms), "link_count": len(links)},
+    }
 
 
 def interactive(rooms: list[Room], links: list[Link]) -> None:
     by_number = {room.number: room for room in rooms}
     while True:
         print("\n" + render_map(rooms, links))
-        answer = input("\nEnter a room number, 'random', or 'q': ").strip().lower()
+        try:
+            answer = input("\nEnter a room number, 'random', or 'q': ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
         if answer in {"q", "quit", "exit"}:
             return
         if answer == "random":
@@ -129,12 +179,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("file", nargs="?", type=Path, help="text file; omit to use the built-in example")
     parser.add_argument("--min-shared", type=int, default=1, metavar="N", help="keywords required to make a door (default: 1)")
+    parser.add_argument("--keywords", type=int, default=5, metavar="N", help="keywords retained per room (default: 5)")
     parser.add_argument("--map", action="store_true", help="print the palace and exit")
     parser.add_argument("--json", action="store_true", help="export the palace as JSON")
+    parser.add_argument("--find", metavar="QUERY", help="search room text for query terms and exit")
     parser.add_argument("--seed", type=int, help="seed random room selection")
+    parser.add_argument("--version", action="version", version=f"memory-palace {__version__}")
     args = parser.parse_args(argv)
-    if args.min_shared < 1:
-        parser.error("--min-shared must be at least 1")
+    if args.min_shared < 1 or args.keywords < 1:
+        parser.error("--min-shared and --keywords must be at least 1")
     if args.seed is not None:
         random.seed(args.seed)
     try:
@@ -142,12 +195,14 @@ def main(argv: list[str] | None = None) -> int:
     except OSError as exc:
         print(f"memory-palace: {exc}", file=sys.stderr)
         return 2
-    rooms, links = build_palace(text, args.min_shared)
+    rooms, links = build_palace(text, args.min_shared, args.keywords)
     if not rooms:
         print("memory-palace: no rooms found", file=sys.stderr)
         return 2
     if args.json:
         print(json.dumps(export_data(rooms, links), indent=2))
+    elif args.find is not None:
+        print(render_search(rooms, args.find))
     elif args.map:
         print(render_map(rooms, links))
     else:
