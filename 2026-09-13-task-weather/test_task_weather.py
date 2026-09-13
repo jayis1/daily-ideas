@@ -1,5 +1,5 @@
 import json
-from datetime import date, timedelta
+from datetime import date
 
 from task_weather import forecast, parse_tasks, render
 
@@ -36,3 +36,14 @@ def test_render_contains_task_and_forecast():
     assert "TASK WEATHER" in output
     assert "Read a book" in output
     assert output.startswith("┌") and output.endswith("┘")
+
+
+def test_invalid_dates_are_not_reported_as_due_dates():
+    task = parse_tasks("- [ ] Impossible date 2026-02-30")[0]
+    assert task.due is None
+
+
+def test_forecast_can_be_pinned_to_a_reference_date():
+    tasks = parse_tasks("- [ ] Ship 2026-01-02")
+    assert forecast(tasks, date(2026, 1, 1))["pressure"] == 5
+    assert forecast(tasks, date(2026, 1, 10))["pressure"] == 7
