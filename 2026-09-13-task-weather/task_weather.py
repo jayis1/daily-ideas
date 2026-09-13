@@ -11,10 +11,13 @@ from datetime import date
 from pathlib import Path
 from typing import Iterable, List, Optional
 
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 
 TASK_RE = re.compile(r"^\s*[-*+]\s+\[(?P<done>[ xX])\]\s+(?P<title>.+?)\s*$")
 DATE_RE = re.compile(r"\b(?:due[: ]*)?(\d{4}-\d{2}-\d{2})\b", re.I)
+# Markdown may come from untrusted exports.  Do not let terminal control
+# characters embedded in a task title alter the user's terminal when rendered.
+CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
 
 @dataclass
 class Task:
@@ -65,7 +68,8 @@ def parse_tasks(text: str) -> List[Task]:
             except ValueError:
                 due = None
         tags = list(dict.fromkeys(re.findall(r"(?<!\w)#([\w-]+)", title)))
-        clean = re.sub(r"\s+", " ", title).strip()
+        clean = CONTROL_RE.sub("", title)
+        clean = re.sub(r"\s+", " ", clean).strip()
         tasks.append(Task(clean, done, priority, due, tags))
     return tasks
 
@@ -124,7 +128,7 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     try:
         text = Path(args.file).read_text(encoding="utf-8") if args.file else sys.stdin.read()
-    except OSError as exc:
+    except (OSError, UnicodeError) as exc:
         parser.error(str(exc))
     as_of = None
     if args.as_of:

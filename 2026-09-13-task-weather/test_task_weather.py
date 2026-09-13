@@ -47,3 +47,9 @@ def test_forecast_can_be_pinned_to_a_reference_date():
     tasks = parse_tasks("- [ ] Ship 2026-01-02")
     assert forecast(tasks, date(2026, 1, 1))["pressure"] == 5
     assert forecast(tasks, date(2026, 1, 10))["pressure"] == 7
+
+
+def test_control_characters_are_removed_from_renderable_titles():
+    task = parse_tasks("- [ ] Ring\x1b[31m alarm\x07")[0]
+    assert task.title == "Ring[31m alarm"
+    assert "\x1b" not in render([task], forecast([task]))

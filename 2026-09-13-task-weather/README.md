@@ -1,42 +1,56 @@
 # Task Weather
 
-Task Weather is a dependency-free Python command-line tool that reads a Markdown checklist and turns the unfinished work into a small weather forecast. It is useful for a quick terminal check, a README dashboard, or a script that needs structured task data. It never edits the input file or sends its contents over the network.
+Task Weather is a dependency-free Python CLI that reads a Markdown checklist and turns unfinished work into a small workload forecast. It is suitable for a terminal check, a README dashboard, or a script consuming JSON. The input is read-only and is never sent over the network.
 
 ## Features
 
-- Parses `- [ ]`, `* [ ]`, and `+ [ ]` Markdown task lines, including indented lists.
-- Recognizes completed tasks (`[x]` or `[X]`), up to three `!` priority marks, ISO dates, and `#tags`.
-- Rejects impossible calendar dates instead of reporting them as due dates.
-- Scores open work from task status, priority, and due-date urgency.
-- Maps total pressure to five conditions: clear skies, mostly clear, scattered clouds, heavy rain, or thunderstorm.
+- Parses indented `- [ ]`, `* [ ]`, and `+ [ ]` task lines.
+- Recognizes completed tasks with `[x]` or `[X]`.
+- Derives priority from up to three exclamation marks.
+- Extracts valid ISO due dates and `#tags`; impossible calendar dates are ignored.
+- Scores open work by status, priority, and due-date urgency.
+- Maps pressure to clear skies, mostly clear, scattered clouds, heavy rain, or thunderstorm.
 - Renders a compact Unicode dashboard with per-task pressure bars.
-- Provides JSON output with task scores, totals, and counts of open tasks by tag.
-- Supports reproducible date evaluation with `--as-of`.
-- Can hide completed tasks with `--open-only`.
-- Includes `--help` and `--version` flags.
-- Has tests covering parsing, date validation, scoring, forecasting, and rendering.
+- Emits JSON containing tasks, scores, totals, and open-task tag counts.
+- Supports deterministic scoring with `--as-of` and filtering with `--open-only`.
+- Removes terminal control characters from titles before display, preventing checklist content from issuing terminal control sequences.
+- Handles missing, unreadable, and invalid UTF-8 input files with a CLI error instead of a traceback.
+- Provides `--help` and `--version`.
 
 ## Requirements
 
 - Python 3.8 or newer
-- No third-party runtime dependencies
-- UTF-8 terminal for the icons and box drawing (use `--json` in other environments)
+- No third-party runtime dependency
+- `pytest` is needed only to run the test suite
 
 ## Installation
 
-Clone or copy this directory. There is nothing to install:
+There is nothing to install. Clone or copy the project, then run it directly:
 
 ```bash
 cd 2026-09-13-task-weather
 python3 task_weather.py --help
 ```
 
-For direct execution:
+Or make it executable:
 
 ```bash
 chmod +x task_weather.py
 ./task_weather.py todo.md
 ```
+
+## Input format
+
+```markdown
+# Launch checklist
+
+- [ ] Fix the leaking pipe!!! 2026-09-14 #home
+- [x] Buy a wrench
+* [ ] Write notes #planning
++ [ ] Ship release due: 2026-09-20 #release
+```
+
+Dates must use `YYYY-MM-DD`. Only valid calendar dates are retained. Each open task starts with two pressure points. Each `!` contributes two points, capped at three marks. A due date adds five points when overdue, three when due today or tomorrow, one when due within three days, and zero otherwise. Completed tasks do not contribute to total pressure.
 
 ## Usage
 
@@ -53,48 +67,32 @@ printf '%s\n' '- [ ] Fix the leaking pipe!!! 2026-09-14 #home' '- [x] Buy a wren
   | python3 task_weather.py
 ```
 
-Show only unfinished tasks, while retaining the full forecast totals:
+Show only unfinished tasks while retaining full forecast totals:
 
 ```bash
 python3 task_weather.py todo.md --open-only
 ```
 
-Pin date-sensitive scoring for a repeatable report:
+Pin date-sensitive scoring for repeatable output:
 
 ```bash
 python3 task_weather.py todo.md --as-of 2026-09-13
 ```
 
-Use JSON in another program:
+Produce machine-readable output:
 
 ```bash
 python3 task_weather.py todo.md --json --as-of 2026-09-13
 ```
 
-Use a narrower dashboard:
+Use a narrower dashboard or inspect the version:
 
 ```bash
 python3 task_weather.py todo.md --width 44
-```
-
-Check the installed script version:
-
-```bash
 python3 task_weather.py --version
 ```
 
-## Input format
-
-```markdown
-# Launch checklist
-
-- [ ] Fix the leaking pipe!!! 2026-09-14 #home
-- [x] Buy a wrench
-* [ ] Write notes #planning
-+ [ ] Ship release due: 2026-09-20 #release
-```
-
-Dates must use `YYYY-MM-DD`; only valid calendar dates are retained. Each open task starts with two pressure points. Each `!` contributes two points, capped at three exclamation marks. A due date adds five points when overdue, three when due today or tomorrow, and one when due within three days. Completed tasks contribute no total pressure.
+The `--width` value is clamped to a usable minimum of 36 columns. `--open-only` affects displayed tasks only; the forecast still describes all parsed tasks.
 
 ## Forecast levels
 
@@ -106,28 +104,25 @@ Dates must use `YYYY-MM-DD`; only valid calendar dates are retained. Each open t
 | 10–17 | heavy rain |
 | 18+ | thunderstorm |
 
-## Example output
-
-```text
-┌────────────────────────────────────────────────────────┐
-│ TASK WEATHER                                           │
-│  🌧  HEAVY RAIN                                        │
-│  pressure 12  •  2 open / 3 total                     │
-├────────────────────────────────────────────────────────┤
-│  • Fix the leaking pipe!!! 2026-09-14 #home            │
-│  ████████████  pressure 12                             │
-│  ✓ Buy a wrench                                        │
-└────────────────────────────────────────────────────────┘
-```
-
-The exact score for a due date depends on the evaluation date. The `--as-of` option makes it deterministic for automation and tests.
-
 ## Tests
 
-From this directory, run:
+From this directory:
 
 ```bash
 python3 -m pytest -q
 ```
 
-The suite uses only the standard library and pytest's test discovery conventions; install pytest separately if it is not already available.
+The tests cover parsing, date validation, pinned-date scoring, rendering, and terminal-control-character handling.
+
+## Changelog
+
+### 1.1.1
+
+- Removed C0/C1 control characters from parsed titles so rendered task text cannot alter terminal state.
+- Converted invalid UTF-8 file errors into normal argparse errors.
+- Added regression coverage for unsafe control characters.
+
+### 1.1.0
+
+- Added reproducible `--as-of` scoring, `--open-only`, `--version`, and open-task tag counts.
+- Added impossible-date validation and expanded tests.
