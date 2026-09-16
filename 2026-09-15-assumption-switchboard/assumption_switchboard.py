@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 
+VERSION = "1.1.0"
 
 def load_decision(path: Path) -> dict:
     try:
@@ -22,7 +24,8 @@ def load_decision(path: Path) -> dict:
     for name, weight in criteria.items():
         if not isinstance(name, str) or not name.strip():
             raise ValueError("criterion names must be non-empty strings")
-        if not isinstance(weight, (int, float)) or isinstance(weight, bool) or weight < 0:
+        if (not isinstance(weight, (int, float)) or isinstance(weight, bool)
+                or not math.isfinite(weight) or weight < 0):
             raise ValueError(f"weight for {name!r} must be a non-negative number")
         weights[name] = float(weight)
     if sum(weights.values()) <= 0:
@@ -34,7 +37,8 @@ def load_decision(path: Path) -> dict:
         scores = option.get("scores")
         if not isinstance(scores, dict) or set(scores) != set(weights):
             raise ValueError(f"{option.get('name', 'option')!r} must score every criterion exactly once")
-        if any(not isinstance(scores[c], (int, float)) or isinstance(scores[c], bool) for c in scores):
+        if any(not isinstance(scores[c], (int, float)) or isinstance(scores[c], bool)
+               or not math.isfinite(scores[c]) for c in scores):
             raise ValueError(f"scores for {option['name']!r} must be numbers")
         options.append({"name": option["name"], "scores": {c: float(scores[c]) for c in weights}})
     if not options:
@@ -63,7 +67,8 @@ def analyze(data: dict, steps: tuple[float, ...] = (0.25, 0.5, 2.0, 4.0)) -> dic
             altered_rank = ranking(data, altered)
             if altered_rank[0][0] != winner:
                 changes.append({"criterion": criterion, "multiplier": multiplier, "winner": altered_rank[0][0]})
-    return {"baseline": baseline, "winner": winner, "changes": changes, "tested": len(base) * len(steps)}
+    return {"baseline": baseline, "winner": winner, "changes": changes,
+            "steps": steps, "tested": len(base) * len(steps)}
 
 
 def render(report: dict) -> str:
@@ -77,16 +82,30 @@ def render(report: dict) -> str:
             lines.append(f"  {change['criterion']}: x{change['multiplier']:g} -> {change['winner']}")
     else:
         lines.append("No winner changes in the tested adjustments.")
-    lines.append(f"Tested {report['tested']} one-criterion adjustments; this is not a guarantee outside them.")
+    steps = ", ".join(f"x{step:g}" for step in report["steps"])
+    lines.append(f"Tested {report['tested']} one-criterion adjustments ({steps}); this is not a guarantee outside them.")
     return "\n".join(lines)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Reveal whether a weighted decision is sensitive to its assumptions.")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
     parser.add_argument("input", type=Path, help="JSON decision file")
+    parser.add_argument(
+        "--multipliers",
+        default="0.25,0.5,2,4",
+        help="comma-separated positive weight multipliers (default: 0.25,0.5,2,4)",
+    )
     args = parser.parse_args(argv)
     try:
-        print(render(analyze(load_decision(args.input))))
+        steps = tuple(float(value.strip()) for value in args.multipliers.split(","))
+        if not steps or any(not math.isfinite(step) or step <= 0 for step in steps):
+            raise ValueError("must be a comma-separated list of positive numbers")
+    except (TypeError, ValueError) as exc:
+        print(f"error: invalid multipliers: {exc}", file=sys.stderr)
+        return 2
+    try:
+        print(render(analyze(load_decision(args.input), steps)))
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

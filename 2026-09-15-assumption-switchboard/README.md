@@ -1,90 +1,75 @@
 # Assumption Switchboard
 
-Assumption Switchboard is a dependency-free Python CLI for seeing whether a weighted decision is fragile. Give it a small JSON file of options, criterion weights, and scores; it prints the baseline ranking and reports which tested weight changes make a different option win.
+Assumption Switchboard is a dependency-free Python command-line tool for testing whether a weighted decision is sensitive to its assumptions. It ranks options from a JSON file, then changes one criterion weight at a time and reports when a different option becomes the winner.
+
+The project is authored by jayis1 and inherits the licensing terms of the parent repository.
 
 ## Features
 
-- Weighted, normalized ranking with transparent scores.
-- One-at-a-time sensitivity checks for every criterion.
-- Helpful validation for missing scores, invalid weights, malformed JSON, ties, and empty options.
-- Deterministic output and no network access or data uploads.
-- A bundled synthetic travel example and unit tests.
+- Computes a deterministic, normalized weighted ranking.
+- Tests each criterion independently with configurable positive multipliers.
+- Uses stable alphabetical ordering to break equal-score ties.
+- Rejects malformed JSON, missing scores, unknown criteria, invalid weights, non-finite numbers, and empty option lists with a useful error and exit code 2.
+- Provides `--help` and `--version` flags.
+- Runs entirely locally with no network access or data uploads.
 
 ## Requirements
 
-- Python 3.8 or newer.
-- No third-party package is required to run the CLI. `pytest` is needed only for the test command.
+- Python 3.9 or newer.
+- No runtime dependencies. `pytest` is needed only to run the test suite.
 
 ## Installation
 
-Clone the repository and enter this project directory:
+Clone the repository and enter the project directory:
 
-```bash
-git clone https://github.com/jayis1/daily-ideas.git
-cd daily-ideas/2026-09-15-assumption-switchboard
-```
+    git clone https://github.com/jayis1/daily-ideas.git
+    cd daily-ideas/2026-09-15-assumption-switchboard
 
-There is no package installation step. The script uses only the Python standard library.
+No package installation is required; the program uses the Python standard library.
 
-## Run
+## Quick start
 
-```bash
-python3 assumption_switchboard.py example.json
-```
+Run the bundled example:
 
-Actual output from the bundled example:
+    python3 assumption_switchboard.py example.json
 
-```text
-Baseline winner: Night train
+The output includes the baseline ranking and the tested sensitivity scenarios. To inspect all available options:
 
-Ranking:
-  1. Night train          6.60
-  2. Road trip            5.90
-  3. Budget flight        4.90
+    python3 assumption_switchboard.py --help
+    python3 assumption_switchboard.py --version
 
-Winner changes when one weight is adjusted:
-  cost: x0.25 -> Road trip
-  cost: x0.5 -> Road trip
-  comfort: x4 -> Road trip
-  adventure: x2 -> Road trip
-  adventure: x4 -> Road trip
-Tested 12 one-criterion adjustments; this is not a guarantee outside them.
-```
+Try a narrower or more extreme sensitivity sweep by supplying your own comma-separated multipliers:
 
-Use `--help` for command-line help. Invalid files produce an actionable error and exit with status 2.
+    python3 assumption_switchboard.py --multipliers 0.1,0.5,2,10 example.json
+
+Multipliers must be finite numbers greater than zero. The default is `0.25,0.5,2,4`.
 
 ## Input format
 
-Each criterion has a non-negative weight. Every option must provide a numeric score for every criterion:
+The input must be a JSON object with a non-empty `criteria` object and an `options` list. Every option must score every criterion exactly once. Scores may use any consistent numeric scale.
 
-```json
-{
-  "criteria": {"speed": 4, "price": 2},
-  "options": [
-    {"name": "Fast", "scores": {"speed": 10, "price": 3}},
-    {"name": "Cheap", "scores": {"speed": 6, "price": 10}}
-  ]
-}
-```
+    {
+      "criteria": {"speed": 4, "price": 2},
+      "options": [
+        {"name": "Fast", "scores": {"speed": 10, "price": 3}},
+        {"name": "Cheap", "scores": {"speed": 6, "price": 10}}
+      ]
+    }
 
-Scores can use any consistent scale. The tool divides each weighted total by the sum of weights, so multiplying every weight by the same number does not change the ranking.
+Criteria weights must be non-negative, with at least one positive weight. The score for an option is the sum of `score × weight`, divided by the sum of all weights. Multiplying every weight by the same number therefore does not change the ranking.
 
-## What it does
+## How sensitivity analysis works
 
-The baseline winner is computed from the supplied weights. Then each criterion is independently multiplied by 0.25, 0.5, 2, and 4 while the other weights remain unchanged. A reported change means that scenario produced a different winner. This is a bounded sensitivity check, not a prediction or a guarantee of decision quality.
+First, the tool calculates the baseline winner from the supplied weights. It then adjusts each criterion independently by every requested multiplier while leaving the other weights unchanged. A reported change means that scenario produced a different winner. This is a bounded exploration of the supplied assumptions, not a guarantee that the scores are fair, accurate, or complete.
 
 ## Tests
 
-From this directory, install `pytest` if it is not already available and run:
+From this directory, run:
 
-```bash
-python3 -m pytest -q
-```
+    python3 -m pytest -q
+
+The tests cover baseline ranking, weight normalization, malformed input, custom multipliers, and the version flag.
 
 ## Limitations and privacy
 
-The report tests only four fixed multipliers and does not search every possible weighting. It does not know whether scores are fair or accurate. Input is read locally and never sent anywhere; use synthetic data in shared repositories.
-
-## License
-
-This project is authored by jayis1 and inherits the licensing terms of the parent repository.
+The tool does not search every possible weighting, infer whether a score is reasonable, or validate decision quality. Input files are read locally and never sent anywhere. Avoid committing sensitive decision data to a shared repository.
