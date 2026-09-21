@@ -17,6 +17,12 @@ python3 assumption_switchboard.py example.json
 
 Browse the dated directories to find terminal games, generators, simulations, puzzles, visualizations, utilities, and hardware explorations. Each project README documents its exact requirements and launch command. Most Python projects run directly with Python 3.8+; check the local README for exceptions.
 
+## Beyond standalone ideas
+
+The collection also includes an expandable physical-computing platform. Every current and future design from the [SoC Device Inventions repository](https://github.com/jayis1/SoC-Device-Inventions) remains independently buildable while becoming a node in [unified TREE](https://github.com/jayis1/unified-TREE). The growing fleet interoperates through four functional roles: **Observe, Reason, Act, and Coordinate**.
+
+All registered hardware designs connect through the [unified TREE registry](https://github.com/jayis1/unified-TREE/blob/main/devices.json) and [shared device protocol](https://github.com/jayis1/unified-TREE/tree/main/protocol). Explore the [installable PWA dashboard](https://jayis1.github.io/unified-TREE/), use the [Home Assistant integration](https://github.com/jayis1/unified-TREE/tree/main/custom_components/unified_tree), or read the [complete unification guide](https://github.com/jayis1/unified-TREE). This repository retains a synchronized integration under [`systems/`](./systems/).
+
 ## Repository layout
 
 ```text
