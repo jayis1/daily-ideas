@@ -8,7 +8,18 @@ import math
 import sys
 from pathlib import Path
 
-VERSION = "1.1.0"
+VERSION = "1.1.1"
+
+
+def _is_finite_number(value: object) -> bool:
+    """Return whether a JSON number can be safely converted to a finite float."""
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
+
 
 def load_decision(path: Path) -> dict:
     try:
@@ -24,8 +35,7 @@ def load_decision(path: Path) -> dict:
     for name, weight in criteria.items():
         if not isinstance(name, str) or not name.strip():
             raise ValueError("criterion names must be non-empty strings")
-        if (not isinstance(weight, (int, float)) or isinstance(weight, bool)
-                or not math.isfinite(weight) or weight < 0):
+        if not _is_finite_number(weight) or weight < 0:
             raise ValueError(f"weight for {name!r} must be a non-negative number")
         weights[name] = float(weight)
     if sum(weights.values()) <= 0:
@@ -44,8 +54,7 @@ def load_decision(path: Path) -> dict:
         scores = option.get("scores")
         if not isinstance(scores, dict) or set(scores) != set(weights):
             raise ValueError(f"{option.get('name', 'option')!r} must score every criterion exactly once")
-        if any(not isinstance(scores[c], (int, float)) or isinstance(scores[c], bool)
-               or not math.isfinite(scores[c]) for c in scores):
+        if any(not _is_finite_number(scores[c]) for c in scores):
             raise ValueError(f"scores for {option['name']!r} must be numbers")
         options.append({"name": name, "scores": {c: float(scores[c]) for c in weights}})
     if not options:

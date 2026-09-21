@@ -33,6 +33,16 @@ def test_rejects_missing_score(tmp_path: Path):
         load_decision(path)
 
 
+def test_rejects_huge_integer_without_traceback(tmp_path: Path):
+    path = tmp_path / "huge.json"
+    path.write_text(json.dumps({
+        "criteria": {"speed": 10**1000},
+        "options": [{"name": "x", "scores": {"speed": 1}}],
+    }))
+    with pytest.raises(ValueError, match="weight"):
+        load_decision(path)
+
+
 def test_rejects_duplicate_option_names(tmp_path: Path):
     path = tmp_path / "duplicate.json"
     path.write_text(json.dumps({
@@ -58,7 +68,7 @@ def test_cli_version():
         capture_output=True, text=True, check=False,
     )
     assert result.returncode == 0
-    assert result.stdout.strip().endswith("1.1.0")
+    assert result.stdout.strip().endswith("1.1.1")
 
 
 def test_json_report_is_machine_readable():
