@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "daily-ideas"
 version = "0.1.0"
-description = "A unified launcher and catalog for the Daily Ideas terminal app collection"
+description = "A launcher and catalog for funny Daily Ideas tech projects"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
-authors = [{name = "Daily Ideas contributors"}]
+authors = [{name = "jayis1"}]
 dependencies = []
 
 [project.scripts]

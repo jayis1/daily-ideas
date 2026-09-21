@@ -2104,17 +2104,74 @@
     {
       "id": "signal-garden",
       "title": "Signal Garden",
-      "description": "Signal Garden is a tiny terminal visualization that turns a sentence into a living-looking ASCII waveform. Each distinct word becomes a signal flower: its hash determines the fl...",
+      "description": "Signal Garden is a dependency-free Python CLI that turns text into deterministic Unicode terminal art. Each distinct word becomes a signal flower: its SHA-256 hash selects a sym...",
       "date": "2026-08-31",
       "path": "2026-08-31-signal-garden",
       "entrypoint": "signal_garden.py",
       "category": "simulation",
-      "interface": "interactive",
+      "interface": "cli",
       "dependencies": [],
       "tags": [
         "garden",
         "signal",
         "simulation"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "memory-palace",
+      "title": "Memory Palace",
+      "description": "Memory Palace is a dependency-free Python CLI that turns UTF-8 plain-text notes into a small, navigable knowledge graph. Each paragraph becomes a room; a single paragraph is spl...",
+      "date": "2026-09-03",
+      "path": "2026-09-03-memory-palace",
+      "entrypoint": "memory_palace.py",
+      "category": "creative",
+      "interface": "interactive",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "memory",
+        "palace"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "task-weather",
+      "title": "Task Weather",
+      "description": "Task Weather is a dependency-free Python CLI that reads a Markdown checklist and turns unfinished work into a small workload forecast. It is suitable for a terminal check, a REA...",
+      "date": "2026-09-13",
+      "path": "2026-09-13-task-weather",
+      "entrypoint": "task_weather.py",
+      "category": "creative",
+      "interface": "cli",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "task",
+        "weather"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "assumption-switchboard",
+      "title": "Assumption Switchboard",
+      "description": "Assumption Switchboard is a dependency-free Python CLI for checking whether a weighted decision changes when one criterion becomes more or less important. It ranks options from...",
+      "date": "2026-09-15",
+      "path": "2026-09-15-assumption-switchboard",
+      "entrypoint": "assumption_switchboard.py",
+      "category": "creative",
+      "interface": "cli",
+      "dependencies": [],
+      "tags": [
+        "assumption",
+        "creative",
+        "switchboard"
       ],
       "smoke_args": [
         "--help"
