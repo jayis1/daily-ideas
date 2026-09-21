@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from assumption_switchboard import analyze, load_decision, ranking
+from assumption_switchboard import analyze, json_report, load_decision, ranking
 
 
 def sample():
@@ -33,6 +33,19 @@ def test_rejects_missing_score(tmp_path: Path):
         load_decision(path)
 
 
+def test_rejects_duplicate_option_names(tmp_path: Path):
+    path = tmp_path / "duplicate.json"
+    path.write_text(json.dumps({
+        "criteria": {"speed": 1},
+        "options": [
+            {"name": "Same", "scores": {"speed": 1}},
+            {"name": " same ", "scores": {"speed": 2}},
+        ],
+    }))
+    with pytest.raises(ValueError, match="duplicate"):
+        load_decision(path)
+
+
 def test_custom_multipliers_are_reported():
     report = analyze(sample(), (0.1, 10.0))
     assert report["steps"] == (0.1, 10.0)
@@ -46,3 +59,9 @@ def test_cli_version():
     )
     assert result.returncode == 0
     assert result.stdout.strip().endswith("1.1.0")
+
+
+def test_json_report_is_machine_readable():
+    report = json.loads(json_report(analyze(sample(), (2.0,))))
+    assert report["winner"] == "Night train"
+    assert report["baseline"][0]["name"] == "Night train"

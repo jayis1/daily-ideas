@@ -1,22 +1,24 @@
 # Assumption Switchboard
 
-Assumption Switchboard is a dependency-free Python command-line tool for testing whether a weighted decision is sensitive to its assumptions. It ranks options from a JSON file, then changes one criterion weight at a time and reports when a different option becomes the winner.
+Assumption Switchboard is a dependency-free Python CLI for checking whether a weighted decision changes when one criterion becomes more or less important. It ranks options from a JSON file, runs a bounded sensitivity sweep, and reports both human-readable and machine-readable results.
 
-The project is authored by jayis1 and inherits the licensing terms of the parent repository.
+Authored by jayis1. The project inherits the licensing terms of the parent repository.
 
 ## Features
 
-- Computes a deterministic, normalized weighted ranking.
+- Calculates a normalized weighted score for every option.
+- Uses deterministic, case-insensitive alphabetical tie-breaking.
 - Tests each criterion independently with configurable positive multipliers.
-- Uses stable alphabetical ordering to break equal-score ties.
-- Rejects malformed JSON, missing scores, unknown criteria, invalid weights, non-finite numbers, and empty option lists with a useful error and exit code 2.
-- Provides `--help` and `--version` flags.
-- Runs entirely locally with no network access or data uploads.
+- Emits a readable report or structured JSON with `--json`.
+- Validates malformed JSON, missing or extra scores, invalid weights, non-finite numbers, empty names, duplicate option names, and empty option lists.
+- Includes `--help` and `--version` flags.
+- Runs locally with no network access or data uploads.
 
 ## Requirements
 
 - Python 3.9 or newer.
-- No runtime dependencies. `pytest` is needed only to run the test suite.
+- No runtime dependencies.
+- `pytest` is needed only for the test suite.
 
 ## Installation
 
@@ -25,7 +27,7 @@ Clone the repository and enter the project directory:
     git clone https://github.com/jayis1/daily-ideas.git
     cd daily-ideas/2026-09-15-assumption-switchboard
 
-No package installation is required; the program uses the Python standard library.
+No package installation is required.
 
 ## Quick start
 
@@ -33,20 +35,24 @@ Run the bundled example:
 
     python3 assumption_switchboard.py example.json
 
-The output includes the baseline ranking and the tested sensitivity scenarios. To inspect all available options:
+Inspect available options:
 
     python3 assumption_switchboard.py --help
     python3 assumption_switchboard.py --version
 
-Try a narrower or more extreme sensitivity sweep by supplying your own comma-separated multipliers:
+Use a custom sensitivity sweep:
 
     python3 assumption_switchboard.py --multipliers 0.1,0.5,2,10 example.json
+
+Produce JSON for another program to consume:
+
+    python3 assumption_switchboard.py --json example.json
 
 Multipliers must be finite numbers greater than zero. The default is `0.25,0.5,2,4`.
 
 ## Input format
 
-The input must be a JSON object with a non-empty `criteria` object and an `options` list. Every option must score every criterion exactly once. Scores may use any consistent numeric scale.
+Input is a JSON object with a non-empty `criteria` object and an `options` list. Every option must score every criterion exactly once. Scores may use any consistent numeric scale.
 
     {
       "criteria": {"speed": 4, "price": 2},
@@ -56,11 +62,17 @@ The input must be a JSON object with a non-empty `criteria` object and an `optio
       ]
     }
 
-Criteria weights must be non-negative, with at least one positive weight. The score for an option is the sum of `score × weight`, divided by the sum of all weights. Multiplying every weight by the same number therefore does not change the ranking.
+Criteria weights must be non-negative, with at least one positive weight. Option names are trimmed and must be unique without regard to case. The score is the sum of `score × weight`, divided by the sum of all weights.
 
 ## How sensitivity analysis works
 
-First, the tool calculates the baseline winner from the supplied weights. It then adjusts each criterion independently by every requested multiplier while leaving the other weights unchanged. A reported change means that scenario produced a different winner. This is a bounded exploration of the supplied assumptions, not a guarantee that the scores are fair, accurate, or complete.
+The tool first calculates the baseline winner. It then adjusts each criterion independently by every requested multiplier while leaving other weights unchanged. A reported change means that scenario produced a different winner. This is a bounded exploration of the supplied assumptions, not a guarantee that the scores are fair, accurate, or complete.
+
+The JSON report contains `baseline`, `winner`, `changes`, `steps`, and `tested` fields. Baseline entries are objects with `name` and `score` fields so the output is straightforward to consume from scripts.
+
+## Errors and exit codes
+
+Invalid input or multipliers are written to standard error and return exit code 2. Successful reports return 0. `--help` and `--version` do not read the input file.
 
 ## Tests
 
@@ -68,7 +80,7 @@ From this directory, run:
 
     python3 -m pytest -q
 
-The tests cover baseline ranking, weight normalization, malformed input, custom multipliers, and the version flag.
+The tests cover ranking, weight normalization, malformed input, duplicate-name validation, custom multipliers, JSON serialization, and the version flag.
 
 ## Limitations and privacy
 

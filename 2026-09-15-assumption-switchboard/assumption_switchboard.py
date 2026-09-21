@@ -31,16 +31,23 @@ def load_decision(path: Path) -> dict:
     if sum(weights.values()) <= 0:
         raise ValueError("at least one criterion weight must be positive")
     options = []
+    option_names = set()
     for option in data["options"]:
         if not isinstance(option, dict) or not isinstance(option.get("name"), str):
             raise ValueError("each option needs a string 'name'")
+        name = option["name"].strip()
+        if not name:
+            raise ValueError("option names must not be empty")
+        if name.casefold() in option_names:
+            raise ValueError(f"duplicate option name: {name!r}")
+        option_names.add(name.casefold())
         scores = option.get("scores")
         if not isinstance(scores, dict) or set(scores) != set(weights):
             raise ValueError(f"{option.get('name', 'option')!r} must score every criterion exactly once")
         if any(not isinstance(scores[c], (int, float)) or isinstance(scores[c], bool)
                or not math.isfinite(scores[c]) for c in scores):
             raise ValueError(f"scores for {option['name']!r} must be numbers")
-        options.append({"name": option["name"], "scores": {c: float(scores[c]) for c in weights}})
+        options.append({"name": name, "scores": {c: float(scores[c]) for c in weights}})
     if not options:
         raise ValueError("at least one option is required")
     return {"criteria": weights, "options": options}
@@ -87,6 +94,16 @@ def render(report: dict) -> str:
     return "\n".join(lines)
 
 
+def json_report(report: dict) -> str:
+    """Serialize a report for scripts without exposing Python tuple syntax."""
+    serializable = dict(report)
+    serializable["baseline"] = [
+        {"name": name, "score": score} for name, score in report["baseline"]
+    ]
+    serializable["steps"] = list(report["steps"])
+    return json.dumps(serializable, indent=2, sort_keys=True)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Reveal whether a weighted decision is sensitive to its assumptions.")
     parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
@@ -95,6 +112,11 @@ def main(argv: list[str] | None = None) -> int:
         "--multipliers",
         default="0.25,0.5,2,4",
         help="comma-separated positive weight multipliers (default: 0.25,0.5,2,4)",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="emit the complete report as JSON instead of human-readable text",
     )
     args = parser.parse_args(argv)
     try:
@@ -105,7 +127,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: invalid multipliers: {exc}", file=sys.stderr)
         return 2
     try:
-        print(render(analyze(load_decision(args.input), steps)))
+        report = analyze(load_decision(args.input), steps)
+        print(json_report(report) if args.json else render(report))
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
