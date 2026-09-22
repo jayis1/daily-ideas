@@ -4,18 +4,18 @@ A growing collection of small, runnable coding projects by jayis1. Each dated di
 
 ## Latest project
 
-### Assumption Switchboard — `2026-09-15-assumption-switchboard/`
+### Punctuation Orchestra — `2026-09-22-punctuation-orchestra/`
 
-A standard-library Python CLI that ranks options using weighted criteria and exposes how the winner changes when one assumption is adjusted. It includes deterministic example data, validation, and tests.
+A standard-library Python CLI that turns letters into a melody and punctuation into percussion, producing a deterministic ASCII orchestra score or JSON data.
 
 ```bash
-cd 2026-09-15-assumption-switchboard
-python3 assumption_switchboard.py example.json
+cd 2026-09-22-punctuation-orchestra
+python3 punctuation_orchestra.py "Hello, world!"
 ```
 
 ## Running projects
 
-Browse the dated directories to find terminal games, generators, simulations, puzzles, visualizations, utilities, and hardware explorations. Each project README documents its exact requirements and launch command. Most Python projects run directly with Python 3.8+; check the local README for exceptions.
+Browse the dated directories to find terminal games, generators, simulations, puzzles, visualizations, and utilities. Each project README documents its exact requirements and launch command. Most Python projects run directly with Python 3.8+; check the local README for exceptions.
 
 ## Repository layout
 
