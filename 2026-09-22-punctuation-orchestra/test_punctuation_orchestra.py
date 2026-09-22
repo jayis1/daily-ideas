@@ -59,6 +59,13 @@ def test_max_hits_keeps_original_positions():
     assert payload["hits"][0]["position"] == 1
 
 
+def test_zero_max_hits_returns_no_hits():
+    result = run("a,b!", "--json", "--max-hits", "0")
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["hits"] == []
+
+
 def test_file_and_text_inputs_cannot_be_combined(tmp_path):
     source = tmp_path / "phrase.txt"
     source.write_text("hello!", encoding="utf-8")

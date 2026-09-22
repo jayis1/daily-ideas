@@ -43,6 +43,8 @@ def extract_hits(text: str, limit: int | None = None) -> list[Hit]:
     """
     if limit is not None and limit < 0:
         raise ValueError("max-hits must be zero or greater")
+    if limit == 0:
+        return []
     hits = []
     for position, symbol in enumerate(text):
         if symbol in PERCUSSION:
