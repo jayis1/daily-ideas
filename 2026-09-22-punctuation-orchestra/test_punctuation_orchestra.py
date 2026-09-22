@@ -43,3 +43,25 @@ def test_width_is_validated():
     result = run("Hi!", "--width", "10")
     assert result.returncode == 2
     assert "width must be at least 20" in result.stdout
+
+
+def test_version_is_available_without_input():
+    result = run("--version")
+    assert result.returncode == 0
+    assert result.stdout.strip().endswith("1.1.0")
+
+
+def test_max_hits_keeps_original_positions():
+    result = run("a,b;c!", "--json", "--max-hits", "1")
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert len(payload["hits"]) == 1
+    assert payload["hits"][0]["position"] == 1
+
+
+def test_file_and_text_inputs_cannot_be_combined(tmp_path):
+    source = tmp_path / "phrase.txt"
+    source.write_text("hello!", encoding="utf-8")
+    result = run("also", "--file", str(source))
+    assert result.returncode == 2
+    assert "not allowed with argument" in result.stderr

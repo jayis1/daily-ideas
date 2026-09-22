@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Iterable
 
 
+VERSION = "1.1.0"
+
 PERCUSSION = {
     ".": ("kick", "boom"),
     ",": ("hat", "tss"),
@@ -33,13 +35,21 @@ class Hit:
     sound: str
 
 
-def extract_hits(text: str) -> list[Hit]:
-    """Return punctuation hits in source order, with zero-based positions."""
+def extract_hits(text: str, limit: int | None = None) -> list[Hit]:
+    """Return punctuation hits in source order, optionally capped.
+
+    A cap keeps a pasted essay from producing an unwieldy score while still
+    preserving the original character positions in the returned hits.
+    """
+    if limit is not None and limit < 0:
+        raise ValueError("max-hits must be zero or greater")
     hits = []
     for position, symbol in enumerate(text):
         if symbol in PERCUSSION:
             instrument, sound = PERCUSSION[symbol]
             hits.append(Hit(position, symbol, instrument, sound))
+            if limit is not None and len(hits) >= limit:
+                break
     return hits
 
 
@@ -49,11 +59,11 @@ def melody(text: str) -> str:
     return "-".join(notes[:16]) or "(no melody)"
 
 
-def render(text: str, width: int = 64) -> str:
+def render(text: str, width: int = 64, max_hits: int | None = None) -> str:
     """Render a human-readable score without terminal control codes."""
     if width < 20:
         raise ValueError("width must be at least 20")
-    hits = extract_hits(text)
+    hits = extract_hits(text, max_hits)
     title = text.strip().replace("\n", " ") or "(silent manuscript)"
     title = title[:width]
     lines = ["PUNCTUATION ORCHESTRA", f'"{title}"', ""]
@@ -69,9 +79,9 @@ def render(text: str, width: int = 64) -> str:
     return "\n".join(lines)
 
 
-def as_json(text: str) -> str:
+def as_json(text: str, max_hits: int | None = None) -> str:
     """Return the score as stable, machine-readable JSON."""
-    hits = extract_hits(text)
+    hits = extract_hits(text, max_hits)
     payload = {
         "text": text,
         "melody": melody(text),
@@ -94,10 +104,18 @@ def read_input(args: argparse.Namespace) -> str:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("text", nargs="*", help="phrase to arrange")
-    parser.add_argument("--file", help="read the phrase from a UTF-8 text file")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
+    inputs = parser.add_mutually_exclusive_group()
+    inputs.add_argument("text", nargs="*", help="phrase to arrange")
+    inputs.add_argument("--file", help="read the phrase from a UTF-8 text file")
     parser.add_argument("--json", action="store_true", help="emit JSON instead of the score")
     parser.add_argument("--width", type=int, default=64, help="title width (minimum 20)")
+    parser.add_argument(
+        "--max-hits",
+        type=int,
+        metavar="N",
+        help="include at most N percussion hits (default: all)",
+    )
     return parser
 
 
@@ -105,7 +123,11 @@ def main(argv: Iterable[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         text = read_input(args)
-        output = as_json(text) if args.json else render(text, args.width)
+        output = (
+            as_json(text, args.max_hits)
+            if args.json
+            else render(text, args.width, args.max_hits)
+        )
     except (OSError, ValueError) as exc:
         print(f"error: {exc}")
         return 2
