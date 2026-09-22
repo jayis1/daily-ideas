@@ -36,7 +36,7 @@ def test_json_preserves_positions():
 def test_missing_input_is_a_friendly_error():
     result = run()
     assert result.returncode == 2
-    assert "provide TEXT or --file PATH" in result.stdout
+    assert "provide TEXT, --file PATH, or --stdin" in result.stdout
 
 
 def test_width_is_validated():
@@ -48,7 +48,22 @@ def test_width_is_validated():
 def test_version_is_available_without_input():
     result = run("--version")
     assert result.returncode == 0
-    assert result.stdout.strip().endswith("1.1.0")
+    assert result.stdout.strip().endswith("1.2.0")
+
+
+def test_stdin_input_can_be_piped():
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--stdin", "--json"],
+        cwd=ROOT,
+        input="pipe?!",
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["text"] == "pipe?!"
+    assert [hit["symbol"] for hit in payload["hits"]] == ["?", "!"]
 
 
 def test_max_hits_keeps_original_positions():

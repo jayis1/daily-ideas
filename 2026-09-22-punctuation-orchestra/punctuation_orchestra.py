@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Iterable
 
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 
 PERCUSSION = {
     ".": ("kick", "boom"),
@@ -97,11 +97,18 @@ def as_json(text: str, max_hits: int | None = None) -> str:
 
 
 def read_input(args: argparse.Namespace) -> str:
+    """Read exactly one selected input source, including a UTF-8 stdin stream."""
     if args.file:
         return Path(args.file).read_text(encoding="utf-8")
+    if args.stdin:
+        # Using sys.stdin keeps this mode composable with shell pipelines while
+        # leaving the existing positional and file interfaces unchanged.
+        import sys
+
+        return sys.stdin.read()
     if args.text:
         return " ".join(args.text)
-    raise ValueError("provide TEXT or --file PATH")
+    raise ValueError("provide TEXT, --file PATH, or --stdin")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -110,6 +117,7 @@ def build_parser() -> argparse.ArgumentParser:
     inputs = parser.add_mutually_exclusive_group()
     inputs.add_argument("text", nargs="*", help="phrase to arrange")
     inputs.add_argument("--file", help="read the phrase from a UTF-8 text file")
+    inputs.add_argument("--stdin", action="store_true", help="read the phrase from standard input")
     parser.add_argument("--json", action="store_true", help="emit JSON instead of the score")
     parser.add_argument("--width", type=int, default=64, help="title width (minimum 20)")
     parser.add_argument(
