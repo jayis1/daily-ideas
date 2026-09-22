@@ -2,24 +2,29 @@
 
 Punctuation Orchestra is a small, offline Python command-line program that turns text into a deterministic ASCII orchestra score. Letters become melody notes, and selected punctuation marks conduct percussion hits. Authored by jayis1.
 
+## What it does
+
+The program scans a phrase from left to right, turns the first sixteen supported letters into a melody, and turns punctuation into percussion. It is deliberately text-only: the result is a readable score or machine-readable JSON, not audio.
+
 ## Features
 
 - Maps letters A through G, case-insensitively, to melody notes.
-- Maps `.`, `,`, `!`, `?`, `:`, `;`, and `-` to named percussion instruments and sounds.
+- Maps `.`, `,`, `!`, `?`, `:`, `;`, and `-` to named instruments and sounds.
 - Reports each punctuation hit's zero-based character position in JSON.
-- Accepts text arguments, a UTF-8 file, or piped standard input.
+- Accepts positional text, a UTF-8 file, or piped standard input.
 - Renders a readable terminal score or stable, indented JSON.
 - Limits output with `--max-hits` while preserving source positions; `0` produces no hits.
-- Rejects simultaneous text and file/stdin input sources.
-- Provides `--help` and `--version`.
+- Rejects conflicting text, file, and standard-input sources.
+- Reports missing files and invalid UTF-8 as concise command-line errors instead of tracebacks.
+- Provides `--help` and `--version` (version 1.3.0).
 - Uses only the Python standard library and makes no network requests.
 
 ## Requirements and installation
 
 - Python 3.10 or newer
-- No third-party packages
+- No third-party packages are required to run the program.
 
-There is nothing to install. From this directory, verify the script with:
+There is nothing to install. From this directory, check the source with:
 
 ```bash
 python3 -m py_compile punctuation_orchestra.py
@@ -66,23 +71,7 @@ python3 punctuation_orchestra.py --version
 
 ## Output and behavior
 
-The program scans characters from left to right. The first sixteen supported melody letters become notes. Each supported punctuation mark becomes a percussion hit unless `--max-hits N` limits collection. Positions in JSON are zero-based Python character positions. Whitespace, unsupported punctuation, and other characters do not produce instruments.
-
-A phrase with no letters or punctuation renders as a silent manuscript. An empty text argument is valid in JSON mode. Missing input, unreadable files, invalid width, and negative hit limits exit with status `2`; successful output, `--help`, and `--version` exit with status `0`. Standard-input mode reads until EOF and is useful for composing the tool with other command-line programs.
-
-Percussion mapping:
-
-| Symbol | Instrument | Sound |
-| --- | --- | --- |
-| `.` | kick | `boom` |
-| `,` | hat | `tss` |
-| `!` | crash | `KRAK` |
-| `?` | bell | `ding` |
-| `:` | rim | `tik` |
-| `;` | tom | `tok` |
-| `-` | shaker | `sha` |
-
-Example human-readable output:
+A human-readable score looks like this:
 
 ```text
 PUNCTUATION ORCHESTRA
@@ -96,7 +85,21 @@ Conductor's notes:
   beat 13: crash   KRAK
 ```
 
-JSON output contains `text`, `melody`, and a `hits` array. Each hit contains `position`, `symbol`, `instrument`, and `sound`.
+The supported percussion mapping is:
+
+| Symbol | Instrument | Sound |
+| --- | --- | --- |
+| `.` | kick | `boom` |
+| `,` | hat | `tss` |
+| `!` | crash | `KRAK` |
+| `?` | bell | `ding` |
+| `:` | rim | `tik` |
+| `;` | tom | `tok` |
+| `-` | shaker | `sha` |
+
+JSON output contains `text`, `melody`, and a `hits` array. Each hit contains `position`, `symbol`, `instrument`, and `sound`. Positions are zero-based Python character positions. Whitespace, unsupported punctuation, and other characters do not produce instruments.
+
+An empty phrase is valid and produces a silent manuscript. Missing input, unreadable files, invalid UTF-8, invalid width, and negative hit limits exit with status `2`; successful output, `--help`, and `--version` exit with status `0`. Standard-input mode reads until EOF, so it works with shell pipelines.
 
 ## Testing
 
@@ -106,7 +109,7 @@ Run the focused test suite:
 python3 -m pytest -q test_punctuation_orchestra.py
 ```
 
-The tests cover rendering, JSON positions, missing input, width validation, version output, piped stdin, hit limits including zero, conflicting input sources, and UTF-8 file handling.
+The tests cover rendering, JSON positions, missing input, width validation, version output, piped stdin, hit limits including zero, conflicting input sources, and invalid UTF-8 file handling.
 
 ## Known limitations
 

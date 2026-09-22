@@ -48,7 +48,7 @@ def test_width_is_validated():
 def test_version_is_available_without_input():
     result = run("--version")
     assert result.returncode == 0
-    assert result.stdout.strip().endswith("1.2.0")
+    assert result.stdout.strip().endswith("1.3.0")
 
 
 def test_stdin_input_can_be_piped():
@@ -87,3 +87,12 @@ def test_file_and_text_inputs_cannot_be_combined(tmp_path):
     result = run("also", "--file", str(source))
     assert result.returncode == 2
     assert "not allowed with argument" in result.stderr
+
+
+def test_invalid_utf8_file_is_a_friendly_error(tmp_path):
+    source = tmp_path / "not-utf8.txt"
+    source.write_bytes(b"hello!\xff")
+    result = run("--file", str(source))
+    assert result.returncode == 2
+    assert "utf-8" in result.stdout.lower()
+    assert "traceback" not in result.stderr.lower()

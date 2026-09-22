@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Iterable
 
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 
 PERCUSSION = {
     ".": ("kick", "boom"),
@@ -138,7 +138,7 @@ def main(argv: Iterable[str] | None = None) -> int:
             if args.json
             else render(text, args.width, args.max_hits)
         )
-    except (OSError, ValueError) as exc:
+    except (OSError, UnicodeError, ValueError) as exc:
         print(f"error: {exc}")
         return 2
     print(output)
