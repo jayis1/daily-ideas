@@ -66,7 +66,12 @@ def render(text: str, width: int = 64, max_hits: int | None = None) -> str:
     if width < 20:
         raise ValueError("width must be at least 20")
     hits = extract_hits(text, max_hits)
-    title = text.strip().replace("\n", " ") or "(silent manuscript)"
+    # Keep terminal control characters out of the human-readable score.  Input
+    # text may come from an arbitrary file or pipe, so display only printable
+    # characters and normalize whitespace before putting it in the title.
+    title = " ".join(
+        "".join(char if char.isprintable() else " " for char in text).split()
+    ) or "(silent manuscript)"
     title = title[:width]
     lines = ["PUNCTUATION ORCHESTRA", f'"{title}"', ""]
     lines.append(f"Melody : {melody(text)}")

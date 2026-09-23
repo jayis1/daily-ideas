@@ -81,6 +81,13 @@ def test_zero_max_hits_returns_no_hits():
     assert payload["hits"] == []
 
 
+def test_title_removes_terminal_control_characters():
+    result = run("safe\x1b[31m title\r\n")
+    assert result.returncode == 0
+    assert "\x1b" not in result.stdout
+    assert "safe [31m title" in result.stdout
+
+
 def test_file_and_text_inputs_cannot_be_combined(tmp_path):
     source = tmp_path / "phrase.txt"
     source.write_text("hello!", encoding="utf-8")
