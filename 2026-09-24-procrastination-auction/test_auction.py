@@ -1,7 +1,7 @@
 import unittest
 import random
 
-from auction import Task, auction, parse_task
+from auction import Task, auction, format_report, parse_task
 
 
 class AuctionTests(unittest.TestCase):
@@ -42,6 +42,12 @@ class AuctionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unique"):
             auction([Task("same", 5, 5, 5), Task("same", 4, 4, 5)], 5,
                     random.Random(1))
+
+    def test_report_bar_represents_requested_minutes(self):
+        tasks = [Task("a", 10, 10, 10)]
+        result = auction(tasks, 4, random.Random(1), round_minutes=2)
+        report = format_report(tasks, result)
+        self.assertIn("a                        bid 100  ████······ 4 min", report)
 
 
 if __name__ == "__main__":

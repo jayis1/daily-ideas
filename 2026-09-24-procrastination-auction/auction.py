@@ -82,7 +82,7 @@ def format_report(tasks: list[Task], result: dict) -> str:
     lines = ["PROCRASTINATION AUCTION", "=" * 24, "The tasks have made their case.", ""]
     for task in tasks:
         awarded = result["allocations"][task.name]
-        bar = "█" * awarded + "·" * max(0, task.minutes + awarded - awarded)
+        bar = "█" * awarded + "·" * max(0, task.minutes - awarded)
         lines.append(f"{task.name:<24} bid {task.bid:>3}  {bar} {awarded} min")
     lines += ["", f"Unused focus: {result['unused_minutes']} min"]
     if result["rounds"]:
