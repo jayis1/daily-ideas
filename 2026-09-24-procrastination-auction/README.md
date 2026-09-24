@@ -6,9 +6,11 @@ A tiny terminal game where your tasks compete in an auction for a limited supply
 
 - Play immediately with a funny built-in set of tasks.
 - Add your own tasks with urgency, dread, and estimated minutes.
-- Spend focus in five-minute auction rounds until the time runs out.
+- Spend focus in configurable auction rounds (five minutes by default).
+- Reject invalid values and duplicate task names with readable command-line errors.
 - Use `--seed` for repeatable auctions.
-- Use `--json` when you want to pipe the ruling into another tool.
+- Use `--json` for machine-readable allocations and round results.
+- Use `--help` and `--version` to discover the command-line interface.
 - Uses only the Python standard library and makes no network requests.
 
 ## Installation
@@ -23,17 +25,18 @@ No virtual environment or third-party packages are needed.
 
 ## How to Run
 
-Try the default auction in ten seconds:
+Try the default auction:
 
 ```bash
 python3 auction.py --minutes 20 --seed 7
 ```
 
-Provide tasks as `name,urgency,dread,minutes`, repeating `--task` as needed:
+Provide tasks as `name,urgency,dread,minutes`, repeating `--task` as needed. Urgency and dread must be 1–10, and requested minutes must be positive:
 
 ```bash
 python3 auction.py \
   --minutes 12 \
+  --round-minutes 2 \
   --seed 4 \
   --task "reply to Sam,9,3,10" \
   --task "water the office fern,3,8,5" \
@@ -46,7 +49,17 @@ For scripts, request JSON:
 python3 auction.py --json --minutes 10 --seed 1
 ```
 
-## Usage Examples
+Inspect the installed version:
+
+```bash
+python3 auction.py --version
+```
+
+## What It Does
+
+The bid for a task is calculated from its urgency and dread. The auction awards up to the configured number of minutes per round to the highest-scoring active task, with a random bonus of 0–12 points. A task stops bidding when its requested minutes have been awarded or the focus budget is empty. Task names must be unique so every allocation remains unambiguous.
+
+The program reports each task's allocation, unused focus, and the task that won the final round. Supplying `--seed` makes the chaos bonus repeatable; leaving it out gives each auction a fresh roll.
 
 A normal run prints a compact ruling:
 
@@ -64,18 +77,12 @@ Unused focus: 0 min
 Final ruling: answer the email got the last word.
 ```
 
-The exact winner can change without `--seed`, because every auction contains a small chaos bonus.
-
-## What It Does
-
-The bid for a task is calculated from its urgency and dread. The auction then awards up to five minutes per round to the highest-scoring active task, with a random bonus of 0–12 points. A task stops bidding when its requested minutes have been awarded or the focus budget is empty. The program reports each task's allocation and the final round winner.
-
-Urgency and dread are both rated from 1 (mild) to 10 (catastrophic). Minutes must be positive. Invalid task specifications produce a clear command-line error instead of a traceback.
-
 ## Development
 
-Run the built-in tests from this directory:
+Run the tests from this directory:
 
 ```bash
 python3 -m unittest -v test_auction.py
 ```
+
+The tests cover parsing and validation, budget limits, non-mutating auctions, deterministic seeds, custom round sizes, and duplicate-name protection.

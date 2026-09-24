@@ -8,6 +8,9 @@ import random
 from dataclasses import asdict, dataclass
 
 
+VERSION = "1.1.0"
+
+
 @dataclass
 class Task:
     name: str
@@ -35,10 +38,24 @@ def parse_task(spec: str) -> Task:
     return Task(parts[0], urgency, dread, minutes)
 
 
-def auction(tasks: list[Task], focus_minutes: int, rng: random.Random) -> dict:
-    """Allocate focus in rounds, with a small chaos bonus for the underdog."""
+def auction(
+    tasks: list[Task],
+    focus_minutes: int,
+    rng: random.Random,
+    round_minutes: int = 5,
+) -> dict:
+    """Allocate focus in rounds, with a small chaos bonus for the underdog.
+
+    ``tasks`` are copied before bidding, so callers can safely reuse their
+    original task definitions for another auction.
+    """
     if focus_minutes < 1:
         raise ValueError("focus minutes must be positive")
+    if not 1 <= round_minutes <= 60:
+        raise ValueError("round minutes must be between 1 and 60")
+    names = [task.name for task in tasks]
+    if len(names) != len(set(names)):
+        raise ValueError("task names must be unique")
     remaining = focus_minutes
     original_minutes = {task.name: task.minutes for task in tasks}
     working = [Task(task.name, task.urgency, task.dread, task.minutes) for task in tasks]
@@ -50,7 +67,7 @@ def auction(tasks: list[Task], focus_minutes: int, rng: random.Random) -> dict:
             break
         scores = {task.name: task.bid + rng.randint(0, 12) for task in active}
         winner = max(active, key=lambda task: (scores[task.name], task.urgency))
-        awarded = min(5, winner.minutes, remaining)
+        awarded = min(round_minutes, winner.minutes, remaining)
         winner.minutes -= awarded
         remaining -= awarded
         rounds.append({"winner": winner.name, "minutes": awarded, "score": scores[winner.name]})
@@ -84,9 +101,12 @@ def default_tasks() -> list[Task]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Auction your focus minutes to competing tasks.")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
     parser.add_argument("--task", action="append", metavar="NAME,URGENCY,DREAD,MINUTES",
                         help="task specification; repeat for multiple tasks")
     parser.add_argument("--minutes", type=int, default=20, help="focus minutes available (default: 20)")
+    parser.add_argument("--round-minutes", type=int, default=5,
+                        help="maximum minutes awarded per round (default: 5)")
     parser.add_argument("--seed", type=int, help="seed chaos for repeatable results")
     parser.add_argument("--json", action="store_true", help="emit machine-readable results")
     args = parser.parse_args()
@@ -94,7 +114,7 @@ def main() -> int:
         tasks = [parse_task(spec) for spec in args.task] if args.task else default_tasks()
         if not tasks:
             raise ValueError("provide at least one task")
-        result = auction(tasks, args.minutes, random.Random(args.seed))
+        result = auction(tasks, args.minutes, random.Random(args.seed), args.round_minutes)
     except ValueError as exc:
         parser.error(str(exc))
     if args.json:
