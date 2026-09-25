@@ -4,14 +4,16 @@ A growing collection of small, runnable coding projects by jayis1. Each dated di
 
 ## Latest project
 
-### Punctuation Orchestra — `2026-09-22-punctuation-orchestra/`
+### Paperwork Panic — `2026-09-25-paperwork-panic/`
 
-A standard-library Python CLI that turns letters into a melody and punctuation into percussion, producing a deterministic ASCII orchestra score or JSON data.
+A standard-library Python terminal game about routing absurd forms through the correct offices before a deadline. Move each form to its destination, then spend its rubber stamp to approve it.
 
 ```bash
-cd 2026-09-22-punctuation-orchestra
-python3 punctuation_orchestra.py "Hello, world!"
+cd 2026-09-25-paperwork-panic
+python3 paperwork_panic.py
 ```
+
+Previous project: [Procrastination Auction](2026-09-24-procrastination-auction/), a focus-time bidding game.
 
 ## Running projects
 
