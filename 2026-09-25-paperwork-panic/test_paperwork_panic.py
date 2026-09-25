@@ -1,6 +1,7 @@
 import io
 import unittest
 from contextlib import redirect_stdout
+from unittest.mock import patch
 
 from paperwork_panic import Form, apply_command, make_forms, play, render_board
 
@@ -9,6 +10,23 @@ class PaperworkPanicTests(unittest.TestCase):
     def test_seed_is_repeatable(self):
         self.assertEqual(make_forms(25), make_forms(25))
         self.assertNotEqual(make_forms(25), make_forms(26))
+
+    def test_form_count_is_configurable_and_bounded(self):
+        self.assertEqual(len(make_forms(25, count=1)), 1)
+        with self.assertRaises(ValueError):
+            make_forms(25, count=0)
+        with self.assertRaises(ValueError):
+            make_forms(25, count=7)
+
+    def test_version_flag(self):
+        from paperwork_panic import main
+
+        output = io.StringIO()
+        with self.assertRaises(SystemExit) as exit_info:
+            with patch("sys.stdout", output):
+                main(["--version"])
+        self.assertEqual(exit_info.exception.code, 0)
+        self.assertIn("paperwork-panic", output.getvalue())
 
     def test_move_then_stamp(self):
         forms = [Form("Test", "STAMP", "ARCHIVE")]

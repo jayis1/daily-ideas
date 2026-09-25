@@ -1,23 +1,21 @@
 # Paperwork Panic
 
-A tiny, offline terminal game about routing ridiculous government forms through the correct offices before the deadline. You have one rubber stamp per form, and every form must visit its destination office before it can be approved.
-
-## Why this is interesting
-
-The game turns a simple two-step workflow into a miniature logistics puzzle: moving a form to the wrong place wastes a turn, while the silly form names make the bureaucracy feel oddly alive.
+Paperwork Panic is a tiny, offline terminal game about routing ridiculous government forms through the correct offices before the deadline. Move each form to its destination, then spend one rubber stamp to approve it before bureaucracy wins.
 
 ## Features
 
-- Deterministic form decks with `--seed`, so puzzles can be replayed.
-- Three randomly selected absurd forms per game.
-- A compact terminal board showing every form's current office and destination.
-- Input validation for invalid forms, offices, and premature stamps.
-- A `--demo` mode for inspecting a board without entering the game.
-- Python standard library only.
+- Six absurd form types, with a deterministic deck selected by `--seed`.
+- One to six forms per game via `--forms`, so a quick puzzle can stay quick.
+- A compact board showing each form's current office and destination.
+- Strict input validation for unknown commands, form numbers, offices, and premature stamps.
+- A configurable deadline via `--turns`.
+- `--demo` mode for inspecting a board without entering the game.
+- `--help` and `--version` flags for discoverable CLI usage.
+- Python standard library only; no network access or external services.
 
 ## Install
 
-Python 3.8 or newer is required. No third-party packages are needed.
+Python 3.8 or newer is required. No package installation is needed.
 
 ```bash
 cd 2026-09-25-paperwork-panic
@@ -25,32 +23,38 @@ cd 2026-09-25-paperwork-panic
 
 ## Run
 
-Start a game:
+Start the default three-form game:
 
 ```bash
 python3 paperwork_panic.py
 ```
 
-Print a deterministic board without starting an interactive session:
+Play a smaller, repeatable puzzle:
 
 ```bash
-python3 paperwork_panic.py --seed 25 --demo
+python3 paperwork_panic.py --seed 25 --forms 2 --turns 8
 ```
 
-Use `--turns` to make the deadline tighter or more forgiving:
+Print a board without starting an interactive session:
 
 ```bash
-python3 paperwork_panic.py --seed 7 --turns 8
+python3 paperwork_panic.py --seed 25 --forms 4 --demo
 ```
 
-## Usage examples
+Inspect all command-line options or the current version:
 
-A typical turn looks like this:
+```bash
+python3 paperwork_panic.py --help
+python3 paperwork_panic.py --version
+```
+
+## How to play
+
+Each form starts at an office and names the office it needs to visit. A successful move uses one turn; once the form reaches its destination, stamp it to approve it.
 
 ```text
 1. Application for Emergency Biscuits: CAFETERIA -> STAMP
 2. Temporary Moonlight Permit: ARCHIVE -> APPEALS
-3. Request to Rename a Pigeon: STAMP -> ARCHIVE
 
 > move 1 stamp
 Moved form 1 to STAMP.
@@ -59,23 +63,23 @@ Moved form 1 to STAMP.
 Stamped form 1. A tiny choir sings.
 ```
 
-The commands are:
+Commands:
 
-- `move <form> <office>` — move a form from its current office to its destination.
+- `move <form> <office>` — move a form to its destination.
 - `stamp <form>` — approve a form that has reached its destination.
 - `quit` — leave the desk and concede defeat.
 
-## What it does
-
-`make_forms()` selects a repeatable set of forms from a small catalogue. Each form has a current office and a destination office. A successful `move` advances the form to its destination; a successful `stamp` marks it `DONE` and consumes one stamp. The game ends when all forms are approved or the turn limit is reached.
+The game ends when every form is approved, the turn limit is reached, or you quit. A seed makes the selected forms repeatable, which is useful for sharing a particularly cursed desk with a friend.
 
 ## Tests
 
-Run the included unit tests from this directory:
+Run the standard-library unit tests from this directory:
 
 ```bash
 python3 -m unittest -v
 ```
+
+The tests cover repeatable decks, configurable form counts, CLI version output, valid moves and stamps, invalid offices, board rendering, and a scripted win.
 
 ## Author
 

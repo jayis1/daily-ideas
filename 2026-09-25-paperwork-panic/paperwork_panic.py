@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 
 OFFICES = ("STAMP", "ARCHIVE", "APPEALS", "CAFETERIA")
+VERSION = "1.1.0"
 FORMS = (
     ("Request to Rename a Pigeon", "STAMP", "ARCHIVE"),
     ("Temporary Moonlight Permit", "ARCHIVE", "APPEALS"),
@@ -28,8 +29,10 @@ class Form:
 
 
 def make_forms(seed: int, count: int = 3) -> list[Form]:
+    if not 1 <= count <= len(FORMS):
+        raise ValueError(f"count must be between 1 and {len(FORMS)}")
     rng = random.Random(seed)
-    chosen = rng.sample(FORMS, k=min(count, len(FORMS)))
+    chosen = rng.sample(FORMS, k=count)
     return [Form(name, origin, destination) for name, origin, destination in chosen]
 
 
@@ -74,8 +77,8 @@ def apply_command(forms: list[Form], command: str, stamps: int) -> tuple[str, in
     return "Try move <form> <office> or stamp <form>.", stamps
 
 
-def play(seed: int, max_turns: int = 12, input_fn=input, output_fn=print) -> bool:
-    forms = make_forms(seed)
+def play(seed: int, max_turns: int = 12, count: int = 3, input_fn=input, output_fn=print) -> bool:
+    forms = make_forms(seed, count)
     stamps = len(forms)
     output_fn(render_board(forms, stamps, 1, max_turns))
     for turn in range(1, max_turns + 1):
@@ -100,17 +103,21 @@ def play(seed: int, max_turns: int = 12, input_fn=input, output_fn=print) -> boo
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--version", action="version", version=f"paperwork-panic {VERSION}")
     parser.add_argument("--seed", type=int, default=25, help="repeatable form selection (default: 25)")
     parser.add_argument("--turns", type=int, default=12, help="maximum turns (default: 12)")
+    parser.add_argument("--forms", type=int, default=3, metavar="N", help="number of forms, 1-6 (default: 3)")
     parser.add_argument("--demo", action="store_true", help="print a board without starting the game")
     args = parser.parse_args(argv)
     if args.turns < 1:
         parser.error("--turns must be positive")
-    forms = make_forms(args.seed)
+    if not 1 <= args.forms <= len(FORMS):
+        parser.error(f"--forms must be between 1 and {len(FORMS)}")
+    forms = make_forms(args.seed, args.forms)
     if args.demo:
         print(render_board(forms, len(forms), 1, args.turns))
         return 0
-    return 0 if play(args.seed, args.turns) else 1
+    return 0 if play(args.seed, args.turns, args.forms) else 1
 
 
 if __name__ == "__main__":
