@@ -1,25 +1,32 @@
 # Paperwork Panic
 
-Paperwork Panic is a tiny, offline terminal game about routing ridiculous government forms through the correct offices before the deadline. Move each form to its destination, then spend one rubber stamp to approve it before bureaucracy wins.
+Paperwork Panic is a small, offline Python terminal game by jayis1. Route absurd government forms to their required offices, then spend a rubber stamp on each one before the deadline.
 
 ## Features
 
-- Six absurd form types, with a deterministic deck selected by `--seed`.
-- One to six forms per game via `--forms`, so a quick puzzle can stay quick.
-- A compact board showing each form's current office and destination.
-- Strict input validation for unknown commands, form numbers, offices, and premature stamps.
-- A configurable deadline via `--turns`.
-- `--demo` mode for inspecting a board without entering the game.
-- `--help` and `--version` flags for discoverable CLI usage.
-- Python standard library only; no network access or external services.
+- Six absurd form types selected deterministically with `--seed`.
+- One to six forms per game with `--forms`.
+- A board showing every form's current office and destination.
+- Turn-limited play with `--turns`.
+- Validated commands for moving, stamping, quitting, form numbers, and office names.
+- `--demo` mode for printing a board without starting an interactive game.
+- `--help` and `--version` CLI options.
+- Deterministic, standard-library-only implementation with no network access or external services.
 
 ## Install
 
-Python 3.8 or newer is required. No package installation is needed.
+Requirements:
+
+- Python 3.8 or newer.
+- No third-party packages.
+
+From the repository root:
 
 ```bash
 cd 2026-09-25-paperwork-panic
 ```
+
+There is nothing else to install.
 
 ## Run
 
@@ -29,32 +36,31 @@ Start the default three-form game:
 python3 paperwork_panic.py
 ```
 
-Play a smaller, repeatable puzzle:
+Run a small, repeatable puzzle:
 
 ```bash
 python3 paperwork_panic.py --seed 25 --forms 2 --turns 8
 ```
 
-Print a board without starting an interactive session:
+Print a board without entering interactive play:
 
 ```bash
-python3 paperwork_panic.py --seed 25 --forms 4 --demo
+python3 paperwork_panic.py --seed 25 --forms 4 --turns 10 --demo
 ```
 
-Inspect all command-line options or the current version:
+Show all command-line options or the current version:
 
 ```bash
 python3 paperwork_panic.py --help
 python3 paperwork_panic.py --version
 ```
 
-## How to play
+## Usage
 
-Each form starts at an office and names the office it needs to visit. A successful move uses one turn; once the form reaches its destination, stamp it to approve it.
+Each form displays its current office and the destination it needs. Move a form to its destination, then stamp it. For example:
 
 ```text
 1. Application for Emergency Biscuits: CAFETERIA -> STAMP
-2. Temporary Moonlight Permit: ARCHIVE -> APPEALS
 
 > move 1 stamp
 Moved form 1 to STAMP.
@@ -65,22 +71,38 @@ Stamped form 1. A tiny choir sings.
 
 Commands:
 
-- `move <form> <office>` — move a form to its destination.
-- `stamp <form>` — approve a form that has reached its destination.
-- `quit` — leave the desk and concede defeat.
+- `move <form> <office>` moves a form to its required destination. The office name is case-insensitive.
+- `stamp <form>` approves a form that has reached its destination and uses one stamp.
+- `quit` leaves the desk and concedes defeat.
 
-The game ends when every form is approved, the turn limit is reached, or you quit. A seed makes the selected forms repeatable, which is useful for sharing a particularly cursed desk with a friend.
+The game ends when all forms are approved, the turn limit is reached, or you quit. A seed makes the selected forms repeatable for sharing a particular puzzle.
 
 ## Tests
 
-Run the standard-library unit tests from this directory:
+Run the unit tests from this directory:
 
 ```bash
 python3 -m unittest -v
 ```
 
-The tests cover repeatable decks, configurable form counts, CLI version output, valid moves and stamps, invalid offices, board rendering, and a scripted win.
+The tests cover deterministic selection, form-count validation, version output, valid moves and stamps, invalid offices, board rendering, scripted wins, winning on the final allowed turn, and invalid turn limits.
 
-## Author
+## Known issues
 
-Created by jayis1 as part of the Daily Ideas collection.
+None known. Interactive play requires a terminal that can provide input; an unexpected end-of-file is treated as a loss without corrupting files or other state.
+
+## Changelog
+
+### 1.1.1
+
+- Fixed games that completed on the final allowed turn being reported as deadline failures.
+- Added validation for non-positive turn limits when `play` is called directly.
+- Added regression tests for both fixes.
+- Rewrote this README with current installation, usage, testing, and known-issue guidance.
+
+### 1.1.0
+
+- Added configurable form counts with `--forms`.
+- Added `--version`.
+- Added CLI validation for form counts and turn limits.
+- Added demo mode and expanded tests.

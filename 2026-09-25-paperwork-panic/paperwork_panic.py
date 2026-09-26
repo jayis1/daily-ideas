@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 
 OFFICES = ("STAMP", "ARCHIVE", "APPEALS", "CAFETERIA")
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 FORMS = (
     ("Request to Rename a Pigeon", "STAMP", "ARCHIVE"),
     ("Temporary Moonlight Permit", "ARCHIVE", "APPEALS"),
@@ -78,6 +78,8 @@ def apply_command(forms: list[Form], command: str, stamps: int) -> tuple[str, in
 
 
 def play(seed: int, max_turns: int = 12, count: int = 3, input_fn=input, output_fn=print) -> bool:
+    if max_turns < 1:
+        raise ValueError("max_turns must be positive")
     forms = make_forms(seed, count)
     stamps = len(forms)
     output_fn(render_board(forms, stamps, 1, max_turns))
@@ -97,6 +99,9 @@ def play(seed: int, max_turns: int = 12, count: int = 3, input_fn=input, output_
             output_fn("You abandon the desk. The forms will remember this.")
             return False
         output_fn(message)
+        if all(form.current == "DONE" for form in forms):
+            output_fn("\nALL FORMS APPROVED. You are now Deputy Assistant to the Assistant.")
+            return True
     output_fn("\nDEADLINE MISSED. The forms have unionized.")
     return False
 

@@ -62,6 +62,20 @@ class PaperworkPanicTests(unittest.TestCase):
         self.assertTrue(won)
         self.assertIn("ALL FORMS APPROVED", output.getvalue())
 
+    def test_play_can_win_on_final_turn(self):
+        form = make_forms(25, count=1)[0]
+        commands = iter([f"move 1 {form.destination.lower()}", "stamp 1"])
+        output = io.StringIO()
+        with redirect_stdout(output):
+            won = play(25, max_turns=2, count=1, input_fn=lambda _prompt: next(commands))
+        self.assertTrue(won)
+        self.assertIn("ALL FORMS APPROVED", output.getvalue())
+        self.assertNotIn("DEADLINE MISSED", output.getvalue())
+
+    def test_play_rejects_non_positive_turn_limit(self):
+        with self.assertRaises(ValueError):
+            play(25, max_turns=0)
+
 
 if __name__ == "__main__":
     unittest.main()
