@@ -2161,7 +2161,7 @@
     {
       "id": "assumption-switchboard",
       "title": "Assumption Switchboard",
-      "description": "Assumption Switchboard is a dependency-free Python CLI for checking whether a weighted decision changes when one criterion becomes more or less important. It ranks options from...",
+      "description": "Assumption Switchboard is a small, dependency-free Python CLI for finding out whether a weighted decision changes when one criterion becomes more or less important. Give it a JS...",
       "date": "2026-09-15",
       "path": "2026-09-15-assumption-switchboard",
       "entrypoint": "assumption_switchboard.py",
@@ -2172,6 +2172,63 @@
         "assumption",
         "creative",
         "switchboard"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "punctuation-orchestra",
+      "title": "Punctuation Orchestra",
+      "description": "Punctuation Orchestra is a small, offline Python command-line program by jayis1 that turns text into a deterministic ASCII orchestra score. Letters become melody notes, and sele...",
+      "date": "2026-09-22",
+      "path": "2026-09-22-punctuation-orchestra",
+      "entrypoint": "punctuation_orchestra.py",
+      "category": "creative",
+      "interface": "interactive",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "orchestra",
+        "punctuation"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "procrastination-auction",
+      "title": "Procrastination Auction",
+      "description": "Author: jayis1",
+      "date": "2026-09-24",
+      "path": "2026-09-24-procrastination-auction",
+      "entrypoint": "auction.py",
+      "category": "creative",
+      "interface": "cli",
+      "dependencies": [],
+      "tags": [
+        "auction",
+        "creative",
+        "procrastination"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
+      "id": "paperwork-panic",
+      "title": "Paperwork Panic",
+      "description": "Paperwork Panic is a small, offline Python terminal game by jayis1. Route absurd government forms to their required offices, then spend a rubber stamp on each one before the dea...",
+      "date": "2026-09-25",
+      "path": "2026-09-25-paperwork-panic",
+      "entrypoint": "paperwork_panic.py",
+      "category": "creative",
+      "interface": "cli",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "panic",
+        "paperwork"
       ],
       "smoke_args": [
         "--help"
