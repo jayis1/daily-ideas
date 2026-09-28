@@ -2235,6 +2235,26 @@
       ]
     },
     {
+      "id": "calendar-gap-finder",
+      "title": "Calendar Gap Finder",
+      "description": "Calendar Gap Finder is a dependency-free Python CLI that compares compact busy-time lists and prints the windows when everyone is free. Calendar data stays local, and no account...",
+      "date": "2026-09-28",
+      "path": "2026-09-28-calendar-gap-finder",
+      "entrypoint": "calendar_gap_finder.py",
+      "category": "creative",
+      "interface": "cli",
+      "dependencies": [],
+      "tags": [
+        "calendar",
+        "creative",
+        "finder",
+        "gap"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
       "id": "receipt-recomposer",
       "title": "Receipt Recomposer",
       "description": "Receipt Recomposer is a dependency-free Python CLI that finds which groups of receipt items exactly equal a mystery subtotal. It uses integer cents rather than floating-point ar...",

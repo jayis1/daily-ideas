@@ -4,16 +4,16 @@ A growing collection of small, runnable coding projects by jayis1. Each dated di
 
 ## Latest project
 
-### Receipt Recomposer — `2026-09-28-receipt-recomposer/`
+### Calendar Gap Finder — `2026-09-28-calendar-gap-finder/`
 
-A dependency-free Python CLI that finds the combinations of receipt items that exactly match a mystery subtotal, using integer cents for exact results.
+A dependency-free Python CLI that finds shared free time from compact busy-window descriptions, without calendar accounts or network access.
 
 ```bash
-cd 2026-09-28-receipt-recomposer
-python3 receipt_recomposer.py --target 5.00 'Tea=2.50' 'Cake=3.75' 'Pen=1.25'
+cd 2026-09-28-calendar-gap-finder
+python3 calendar_gap_finder.py --person 'Ada=09:00-10:00,13:00-14:00' --person 'Grace=10:30-11:30,13:30-15:00' --minutes 45
 ```
 
-Previous project: [Paperwork Panic](2026-09-25-paperwork-panic/), an absurd form-routing terminal game.
+Previous project: [Receipt Recomposer](2026-09-28-receipt-recomposer/), an exact-subtotal finder for itemized receipts.
 
 ## Running projects
 
