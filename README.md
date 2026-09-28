@@ -4,16 +4,16 @@ A growing collection of small, runnable coding projects by jayis1. Each dated di
 
 ## Latest project
 
-### Path Collision Scout — `2026-09-28-path-collision-scout/`
+### Argument X-Ray — `2026-09-28-argument-xray/`
 
-A dependency-free Python CLI that predicts filename collisions caused by case folding, Unicode normalization, portable-name trimming, or flattening directories.
+A dependency-free Python CLI that exposes exact argument boundaries, byte lengths, invisible characters, and a safely quoted POSIX replay command.
 
 ```bash
-cd 2026-09-28-path-collision-scout
-python3 path_collision_scout.py --flatten 'draft/Logo.svg' 'final/logo.svg' 'final/banner.svg'
+cd 2026-09-28-argument-xray
+python3 argument_xray.py --command demo '' 'two words' '*.txt' "can't"
 ```
 
-Previous project: [Calendar Gap Finder](2026-09-28-calendar-gap-finder/), a local shared-availability finder for compact busy schedules.
+Previous project: [Path Collision Scout](2026-09-28-path-collision-scout/), a preflight checker for filename collisions during migrations.
 
 ## Running projects
 

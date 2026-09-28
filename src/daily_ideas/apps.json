@@ -2235,6 +2235,25 @@
       ]
     },
     {
+      "id": "argument-xray",
+      "title": "Argument X-Ray",
+      "description": "Argument X-Ray is a dependency-free Python CLI that reveals exactly which strings survive shell parsing into a program's argument vector. It makes empty values, whitespace, cont...",
+      "date": "2026-09-28",
+      "path": "2026-09-28-argument-xray",
+      "entrypoint": "argument_xray.py",
+      "category": "creative",
+      "interface": "cli",
+      "dependencies": [],
+      "tags": [
+        "argument",
+        "creative",
+        "xray"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
       "id": "calendar-gap-finder",
       "title": "Calendar Gap Finder",
       "description": "Calendar Gap Finder is a dependency-free Python CLI that compares compact busy-time lists and prints the windows when everyone is free. Calendar data stays local, and no account...",
