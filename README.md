@@ -4,16 +4,16 @@ A growing collection of small, runnable coding projects by jayis1. Each dated di
 
 ## Latest project
 
-### Argument X-Ray — `2026-09-28-argument-xray/`
+### Retry Budget Planner — `2026-09-28-retry-budget-planner/`
 
-A dependency-free Python CLI that exposes exact argument boundaries, byte lengths, invisible characters, and a safely quoted POSIX replay command.
+A dependency-free Python CLI that turns retry and exponential-backoff settings into a concrete timeline bounded by a deadline.
 
 ```bash
-cd 2026-09-28-argument-xray
-python3 argument_xray.py --command demo '' 'two words' '*.txt' "can't"
+cd 2026-09-28-retry-budget-planner
+python3 retry_budget_planner.py --deadline 30 --attempt-timeout 2 --initial-delay 1 --max-delay 8
 ```
 
-Previous project: [Path Collision Scout](2026-09-28-path-collision-scout/), a preflight checker for filename collisions during migrations.
+Previous project: [Argument X-Ray](2026-09-28-argument-xray/), an inspector for exact command-line argument boundaries and safe POSIX replay commands.
 
 ## Running projects
 

@@ -2311,6 +2311,26 @@
       "smoke_args": [
         "--help"
       ]
+    },
+    {
+      "id": "retry-budget-planner",
+      "title": "Retry Budget Planner",
+      "description": "Retry Budget Planner is a dependency-free Python CLI that lays out an exponential-backoff retry schedule and shows how many complete attempts fit before a deadline.",
+      "date": "2026-09-28",
+      "path": "2026-09-28-retry-budget-planner",
+      "entrypoint": "retry_budget_planner.py",
+      "category": "creative",
+      "interface": "cli",
+      "dependencies": [],
+      "tags": [
+        "budget",
+        "creative",
+        "planner",
+        "retry"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
     }
   ]
 }
