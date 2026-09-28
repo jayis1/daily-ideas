@@ -2233,6 +2233,25 @@
       "smoke_args": [
         "--help"
       ]
+    },
+    {
+      "id": "receipt-recomposer",
+      "title": "Receipt Recomposer",
+      "description": "Receipt Recomposer is a dependency-free Python CLI that finds which groups of receipt items exactly equal a mystery subtotal. It uses integer cents rather than floating-point ar...",
+      "date": "2026-09-28",
+      "path": "2026-09-28-receipt-recomposer",
+      "entrypoint": "receipt_recomposer.py",
+      "category": "creative",
+      "interface": "cli",
+      "dependencies": [],
+      "tags": [
+        "creative",
+        "receipt",
+        "recomposer"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
     }
   ]
 }

@@ -4,16 +4,16 @@ A growing collection of small, runnable coding projects by jayis1. Each dated di
 
 ## Latest project
 
-### Paperwork Panic — `2026-09-25-paperwork-panic/`
+### Receipt Recomposer — `2026-09-28-receipt-recomposer/`
 
-A standard-library Python terminal game about routing absurd forms through the correct offices before a deadline. Move each form to its destination, then spend its rubber stamp to approve it.
+A dependency-free Python CLI that finds the combinations of receipt items that exactly match a mystery subtotal, using integer cents for exact results.
 
 ```bash
-cd 2026-09-25-paperwork-panic
-python3 paperwork_panic.py
+cd 2026-09-28-receipt-recomposer
+python3 receipt_recomposer.py --target 5.00 'Tea=2.50' 'Cake=3.75' 'Pen=1.25'
 ```
 
-Previous project: [Procrastination Auction](2026-09-24-procrastination-auction/), a focus-time bidding game.
+Previous project: [Paperwork Panic](2026-09-25-paperwork-panic/), an absurd form-routing terminal game.
 
 ## Running projects
 
