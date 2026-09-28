@@ -2255,6 +2255,26 @@
       ]
     },
     {
+      "id": "path-collision-scout",
+      "title": "Path Collision Scout",
+      "description": "Path Collision Scout is a dependency-free Python CLI that predicts filename collisions before paths are copied, flattened, or moved to a case-insensitive filesystem. It compares...",
+      "date": "2026-09-28",
+      "path": "2026-09-28-path-collision-scout",
+      "entrypoint": "path_collision_scout.py",
+      "category": "creative",
+      "interface": "cli",
+      "dependencies": [],
+      "tags": [
+        "collision",
+        "creative",
+        "path",
+        "scout"
+      ],
+      "smoke_args": [
+        "--help"
+      ]
+    },
+    {
       "id": "receipt-recomposer",
       "title": "Receipt Recomposer",
       "description": "Receipt Recomposer is a dependency-free Python CLI that finds which groups of receipt items exactly equal a mystery subtotal. It uses integer cents rather than floating-point ar...",

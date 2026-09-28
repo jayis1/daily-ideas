@@ -4,16 +4,16 @@ A growing collection of small, runnable coding projects by jayis1. Each dated di
 
 ## Latest project
 
-### Calendar Gap Finder — `2026-09-28-calendar-gap-finder/`
+### Path Collision Scout — `2026-09-28-path-collision-scout/`
 
-A dependency-free Python CLI that finds shared free time from compact busy-window descriptions, without calendar accounts or network access.
+A dependency-free Python CLI that predicts filename collisions caused by case folding, Unicode normalization, portable-name trimming, or flattening directories.
 
 ```bash
-cd 2026-09-28-calendar-gap-finder
-python3 calendar_gap_finder.py --person 'Ada=09:00-10:00,13:00-14:00' --person 'Grace=10:30-11:30,13:30-15:00' --minutes 45
+cd 2026-09-28-path-collision-scout
+python3 path_collision_scout.py --flatten 'draft/Logo.svg' 'final/logo.svg' 'final/banner.svg'
 ```
 
-Previous project: [Receipt Recomposer](2026-09-28-receipt-recomposer/), an exact-subtotal finder for itemized receipts.
+Previous project: [Calendar Gap Finder](2026-09-28-calendar-gap-finder/), a local shared-availability finder for compact busy schedules.
 
 ## Running projects
 
